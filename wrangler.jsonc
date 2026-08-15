@@ -1,0 +1,27 @@
+{
+  // Cloudflare Workers config for the frontend static build.
+  // This is what a "Deploy to Cloudflare" button targets.
+  //
+  // OPEN QUESTION (nitty-gritty to resolve when wiring the real button):
+  // the realtime room server in party/room.ts currently deploys separately
+  // via `npx partykit deploy` (its own control plane on top of Durable
+  // Objects). To get to a single deploy-button flow, either (a) confirm
+  // PartyKit's current Cloudflare-account integration deploys cleanly
+  // alongside this Worker, or (b) port party/room.ts to a plain
+  // `DurableObject` class and bind it directly below via
+  // `durable_objects.bindings`. Don't assume either without checking —
+  // this is exactly the kind of thing to verify against current docs
+  // before publishing the button.
+  "name": "seiza",
+  "compatibility_date": "2026-01-01",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  },
+  "vars": {
+    "SEIZA_WORLD_ID": "default"
+  }
+  // "durable_objects": { "bindings": [ /* if porting party/room.ts here */ ] },
+  // "r2_buckets": [ { "binding": "ASSETS", "bucket_name": "seiza-assets" } ],
+  // "d1_databases": [ { "binding": "DB", "database_name": "seiza-config" } ]
+}

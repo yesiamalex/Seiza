@@ -1,0 +1,38 @@
+{
+  "name": "seiza",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Serverless, deployer-owned reference architecture for self-hostable multiplayer WebXR. AGPL-3.0 with a commercial exemption available — see COMMERCIAL-LICENSE.md.",
+  "license": "AGPL-3.0-or-later",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview",
+    "party:dev": "partykit dev party/room.ts",
+    "party:deploy": "partykit deploy party/room.ts",
+    "fetch-assets": "node scripts/fetch-assets.mjs"
+  },
+  "dependencies": {
+    "@pixiv/three-vrm": "^3.4.2",
+    "@pixiv/three-vrm-animation": "^3.4.2",
+    "@react-three/drei": "^9.114.0",
+    "@react-three/fiber": "^8.17.10",
+    "@react-three/xr": "^6.2.3",
+    "partysocket": "^1.0.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "three": "^0.169.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.11",
+    "@types/react-dom": "^18.3.1",
+    "@types/three": "^0.169.0",
+    "@vitejs/plugin-react": "^4.3.2",
+    "partykit": "^0.0.111",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.9",
+    "wrangler": "^3.80.0"
+  }
+}
