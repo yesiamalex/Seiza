@@ -96,7 +96,13 @@ export default class SeizaRoom implements Party.Server {
         object.position = message.position;
         object.rotationY = message.rotationY;
         this.persistObjects();
-        this.broadcast({ type: "objectMoved", id: message.id, position: message.position, rotationY: message.rotationY }, [sender.id]);
+        // Unlike player position (each client tracks its own via
+        // PlayerRig, independent of the `players` map), an object's
+        // position lives only in synced React state — the sender needs
+        // this echo too, or the next unrelated re-render (e.g. another
+        // player's position update) snaps their drag back to the stale
+        // pre-move value. See src/edit/WorldObjects.tsx.
+        this.broadcast({ type: "objectMoved", id: message.id, position: message.position, rotationY: message.rotationY }, []);
         break;
       }
       case "objectRemove": {
