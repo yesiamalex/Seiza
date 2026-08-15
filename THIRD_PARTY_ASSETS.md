@@ -27,3 +27,22 @@ terms.
    `scripts/fetch-assets.mjs` instead, pointing at the original source.
 4. Either way, a PR adding an asset without a completed row here should
    not be merged (see `CONTRIBUTING.md`).
+
+## User-uploaded avatars (not covered by the table above)
+
+The join screen (`src/ui/JoinScreen.tsx`) lets anyone joining a
+deployment upload their own `.vrm` avatar, stored via `worker/index.ts`
+into that deployment's own R2 bucket. This is fundamentally different
+from the assets tracked above:
+
+- It's **the uploader's responsibility**, not the maintainers' or a given
+  deployer's, to have the rights to the file they upload — the upload
+  form requires an explicit "I have the rights to use/share this" 
+  confirmation before it will submit.
+- It is **not curated or license-checked** by this project or by
+  whoever's running the deployment. A deployer who wants to disable
+  uploads entirely can set `allowAvatarUpload: false` in their
+  `world.json`.
+- Uploaded files are ephemeral, per-deployment content living in that
+  deployer's own Cloudflare account — they are not part of this
+  repository and this table does not track them.

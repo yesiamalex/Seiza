@@ -1,12 +1,57 @@
-import { useRealtimeVoice } from "./useRealtimeVoice";
+import type { VoiceChatState } from "./useVoiceChat";
+import { VOICE_ENABLED } from "./useVoiceChat";
 
-export function VoiceControls() {
-  const voice = useRealtimeVoice();
-  if (!voice.enabled) return null;
+interface VoiceControlsProps {
+  voice: VoiceChatState;
+}
+
+export function VoiceControls({ voice }: VoiceControlsProps) {
+  if (!VOICE_ENABLED) return null;
+
+  if (!voice.enabled) {
+    return (
+      <button onClick={voice.enable} disabled={voice.connecting}>
+        {voice.connecting ? "Connecting mic…" : "Enable voice chat"}
+      </button>
+    );
+  }
+
+  const peerCount = Object.keys(voice.speakingLevels).length;
+  const anyoneSpeaking = Object.values(voice.speakingLevels).some((level) => level > 0.05);
 
   return (
-    <button onClick={voice.toggleMute}>
-      {voice.muted ? "Unmute" : "Mute"} (stub — not yet connected to Cloudflare Realtime)
-    </button>
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <button onClick={voice.toggleMute}>{voice.muted ? "Unmute" : "Mute"}</button>
+        <span
+          title="Your mic level"
+          style={{
+            display: "inline-block",
+            width: 10,
+            height: 10,
+            borderRadius: "50%",
+            background: voice.muted ? "#555" : voice.localSpeaking ? "#4caf50" : "#888",
+          }}
+        />
+        <button onClick={voice.disable}>Leave voice</button>
+        {voice.devices.length > 1 && (
+          <select
+            value={voice.selectedDeviceId ?? ""}
+            onChange={(e) => voice.selectDevice(e.target.value)}
+            title="Microphone"
+          >
+            {voice.devices.map((d) => (
+              <option key={d.deviceId} value={d.deviceId}>
+                {d.label || "Microphone"}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+      <small>
+        {peerCount === 0 ? "No one else in voice yet" : `${peerCount} peer${peerCount === 1 ? "" : "s"} connected`}
+        {anyoneSpeaking ? " — someone's talking" : ""}
+      </small>
+    </div>
   );
 }

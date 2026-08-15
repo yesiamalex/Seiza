@@ -1,12 +1,18 @@
 export interface WorldConfig {
   id: string;
   displayName: string;
-  sceneUrl: string;
+  /** Optional deployer-supplied glTF scene, layered over BaseEnvironment
+   *  (see src/scene/Scene.tsx). Omit to use just the procedural base. */
+  sceneUrl?: string;
   spawnPoint: { x: number; y: number; z: number };
   defaultAvatarUrl: string;
   enabledGestures: string[];
   maxOccupants: number;
   voiceEnabled: boolean;
+  /** Let anyone in the room place/move/remove objects. Default true. */
+  editingEnabled?: boolean;
+  /** Let new joiners upload their own .vrm on the join screen. Default true. */
+  allowAvatarUpload?: boolean;
 }
 
 const WORLD_ID = import.meta.env.VITE_SEIZA_WORLD_ID ?? "default";

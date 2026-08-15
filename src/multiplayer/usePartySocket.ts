@@ -1,29 +1,57 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import PartySocket from "partysocket";
-import type { ClientMessage, PlayerState, ServerMessage } from "./types";
+import type { ClientMessage, PlayerState, ServerMessage, WorldObject } from "./types";
 
 const PARTY_HOST = import.meta.env.VITE_SEIZA_PARTY_HOST ?? "127.0.0.1:1999";
 
 export interface MultiplayerState {
   selfId: string | null;
   players: Record<string, PlayerState>;
+  objects: Record<string, WorldObject>;
   send: (msg: ClientMessage) => void;
+  addObject: (object: Omit<WorldObject, "id" | "ownerId">) => void;
+  moveObject: (id: string, position: [number, number, number], rotationY: number) => void;
+  removeObject: (id: string) => void;
   connected: boolean;
 }
 
 /**
  * Connects to the room server in party/room.ts for a given world/room id.
  * One room = one deployed world instance's shared session.
+ *
+ * `onVoiceSignal` is a ref-stable escape hatch for WebRTC signaling
+ * (see src/voice/useVoiceChat.ts) — those messages are relay-only and
+ * don't belong in `players`/`objects` state, so they're handed off via
+ * callback instead of being buffered here.
  */
-export function usePartySocket(roomId: string, displayName: string, avatarUrl: string): MultiplayerState {
+export function usePartySocket(
+  roomId: string,
+  displayName: string,
+  avatarUrl: string,
+  onVoiceSignal?: (from: string, data: unknown) => void
+): MultiplayerState {
   const socketRef = useRef<PartySocket | null>(null);
   const [selfId, setSelfId] = useState<string | null>(null);
   const [players, setPlayers] = useState<Record<string, PlayerState>>({});
+  const [objects, setObjects] = useState<Record<string, WorldObject>>({});
   const [connected, setConnected] = useState(false);
+  const onVoiceSignalRef = useRef(onVoiceSignal);
+  onVoiceSignalRef.current = onVoiceSignal;
 
   const send = useCallback((msg: ClientMessage) => {
     socketRef.current?.send(JSON.stringify(msg));
   }, []);
+
+  const addObject = useCallback(
+    (object: Omit<WorldObject, "id" | "ownerId">) => send({ type: "objectAdd", object }),
+    [send]
+  );
+  const moveObject = useCallback(
+    (id: string, position: [number, number, number], rotationY: number) =>
+      send({ type: "objectMove", id, position, rotationY }),
+    [send]
+  );
+  const removeObject = useCallback((id: string) => send({ type: "objectRemove", id }), [send]);
 
   useEffect(() => {
     if (!roomId) return;
@@ -42,9 +70,12 @@ export function usePartySocket(roomId: string, displayName: string, avatarUrl: s
       switch (msg.type) {
         case "welcome": {
           setSelfId(msg.selfId);
-          const map: Record<string, PlayerState> = {};
-          for (const p of msg.players) map[p.id] = p;
-          setPlayers(map);
+          const playerMap: Record<string, PlayerState> = {};
+          for (const p of msg.players) playerMap[p.id] = p;
+          setPlayers(playerMap);
+          const objectMap: Record<string, WorldObject> = {};
+          for (const o of msg.objects) objectMap[o.id] = o;
+          setObjects(objectMap);
           break;
         }
         case "playerJoined":
@@ -69,6 +100,24 @@ export function usePartySocket(roomId: string, displayName: string, avatarUrl: s
             return next;
           });
           break;
+        case "objectAdded":
+          setObjects((prev) => ({ ...prev, [msg.object.id]: msg.object }));
+          break;
+        case "objectMoved":
+          setObjects((prev) =>
+            prev[msg.id] ? { ...prev, [msg.id]: { ...prev[msg.id], position: msg.position, rotationY: msg.rotationY } } : prev
+          );
+          break;
+        case "objectRemoved":
+          setObjects((prev) => {
+            const next = { ...prev };
+            delete next[msg.id];
+            return next;
+          });
+          break;
+        case "voiceSignal":
+          onVoiceSignalRef.current?.(msg.from, msg.data);
+          break;
       }
     });
 
@@ -82,5 +131,5 @@ export function usePartySocket(roomId: string, displayName: string, avatarUrl: s
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId]);
 
-  return { selfId, players, send, connected };
+  return { selfId, players, objects, send, addObject, moveObject, removeObject, connected };
 }

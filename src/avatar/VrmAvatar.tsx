@@ -39,10 +39,21 @@ export function VrmAvatar({ url, position = [0, 0, 0], rotationY = 0, onLoaded }
     // Deliberately visible in the console rather than failing silently —
     // very likely on first run, see public/worlds/default/README.md.
     console.error("VRM load failed:", error);
-    return null;
   }
 
-  if (!vrm) return null;
+  if (!vrm) {
+    // No avatar URL, or it failed to load — show a placeholder capsule
+    // rather than making the player invisible. Not a real humanoid rig
+    // (gestures won't play on it), just enough to see where someone is.
+    return (
+      <group position={position} rotation={[0, rotationY, 0]}>
+        <mesh position={[0, 0.9, 0]}>
+          <capsuleGeometry args={[0.3, 1.0, 4, 8]} />
+          <meshStandardMaterial color="#999999" />
+        </mesh>
+      </group>
+    );
+  }
 
   return <primitive object={vrm.scene} position={position} rotation={[0, rotationY, 0]} />;
 }

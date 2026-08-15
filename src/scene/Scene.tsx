@@ -1,36 +1,51 @@
-import { Suspense } from "react";
+import { Component, Suspense, type ReactNode } from "react";
 import { useGLTF, Environment } from "@react-three/drei";
+import { BaseEnvironment } from "./BaseEnvironment";
 
 interface SceneProps {
-  sceneUrl: string;
+  sceneUrl?: string;
 }
 
-function SceneModel({ sceneUrl }: SceneProps) {
+function SceneModel({ sceneUrl }: { sceneUrl: string }) {
   const { scene } = useGLTF(sceneUrl);
   return <primitive object={scene} />;
+}
+
+/**
+ * useGLTF suspends while loading (Suspense's fallback covers that fine)
+ * but *throws the error* once the fetch rejects — e.g. no scene.glb at
+ * this URL, the common case for a fresh deploy. Suspense alone doesn't
+ * catch that; without this boundary a missing/broken deployer scene
+ * would crash the whole app instead of just falling back to
+ * BaseEnvironment underneath it.
+ */
+class SceneLoadBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch(error: unknown) {
+    console.warn("Deployer-supplied scene failed to load; showing the base environment instead.", error);
+  }
+  render() {
+    return this.state.failed ? null : this.props.children;
+  }
 }
 
 export function Scene({ sceneUrl }: SceneProps) {
   return (
     <>
       <ambientLight intensity={0.6} />
-      <directionalLight position={[5, 10, 5]} intensity={1.2} />
+      <directionalLight position={[5, 10, 5]} intensity={1.2} castShadow />
       <Environment preset="sunset" />
-      <Suspense fallback={<PlaceholderFloor />}>
-        <SceneModel sceneUrl={sceneUrl} />
-      </Suspense>
+      <BaseEnvironment />
+      {sceneUrl && (
+        <SceneLoadBoundary>
+          <Suspense fallback={null}>
+            <SceneModel sceneUrl={sceneUrl} />
+          </Suspense>
+        </SceneLoadBoundary>
+      )}
     </>
-  );
-}
-
-function PlaceholderFloor() {
-  // Visible on first run with no scene.glb supplied — see
-  // public/worlds/default/README.md. Deliberate, not a bug: a silent blank
-  // screen is a worse first-run experience than an obvious placeholder.
-  return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]}>
-      <planeGeometry args={[20, 20]} />
-      <meshStandardMaterial color="#444444" wireframe />
-    </mesh>
   );
 }

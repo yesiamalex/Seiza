@@ -1,10 +1,11 @@
 {
   "id": "default",
   "displayName": "Seiza — Default World",
-  "sceneUrl": "/worlds/default/scene.glb",
-  "spawnPoint": { "x": 0, "y": 0, "z": 2 },
+  "spawnPoint": { "x": 0, "y": 0, "z": 10 },
   "defaultAvatarUrl": "/avatars/default.vrm",
   "enabledGestures": ["bow", "seiza", "wave"],
   "maxOccupants": 16,
-  "voiceEnabled": false
+  "voiceEnabled": true,
+  "editingEnabled": true,
+  "allowAvatarUpload": true
 }

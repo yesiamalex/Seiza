@@ -1,27 +1,33 @@
 {
-  // Cloudflare Workers config for the frontend static build.
+  // Cloudflare Workers config for the frontend + avatar-upload API.
   // This is what a "Deploy to Cloudflare" button targets.
   //
-  // OPEN QUESTION (nitty-gritty to resolve when wiring the real button):
-  // the realtime room server in party/room.ts currently deploys separately
-  // via `npx partykit deploy` (its own control plane on top of Durable
-  // Objects). To get to a single deploy-button flow, either (a) confirm
-  // PartyKit's current Cloudflare-account integration deploys cleanly
-  // alongside this Worker, or (b) port party/room.ts to a plain
-  // `DurableObject` class and bind it directly below via
-  // `durable_objects.bindings`. Don't assume either without checking —
-  // this is exactly the kind of thing to verify against current docs
-  // before publishing the button.
+  // DEPLOY IS STILL TWO PIECES, deliberately: this Worker (static SPA +
+  // POST/GET /api/avatars, backed by the R2 bucket below) deploys via
+  // this file, but the realtime room server (party/room.ts) deploys
+  // separately via `npx partykit deploy` (its own control plane on top
+  // of Durable Objects). Porting party/room.ts into a Durable Object
+  // bound directly here would get to a true single-button deploy, but
+  // hinges on the exact shape of the DO WebSocket Hibernation API, which
+  // this project hasn't verified against current Cloudflare docs — see
+  // party/room.ts's own header comment. Don't attempt that unification
+  // without checking current docs first; two verified pieces beats one
+  // unverified guess.
   "name": "seiza",
   "compatibility_date": "2026-01-01",
+  "main": "worker/index.ts",
   "assets": {
     "directory": "./dist",
+    "binding": "ASSETS",
     "not_found_handling": "single-page-application"
   },
+  "r2_buckets": [
+    // Stores user-uploaded .vrm avatars (see worker/index.ts and
+    // src/ui/JoinScreen.tsx). Create it once per deployment with
+    // `npx wrangler r2 bucket create seiza-avatars` before first deploy.
+    { "binding": "AVATARS", "bucket_name": "seiza-avatars" }
+  ],
   "vars": {
     "SEIZA_WORLD_ID": "default"
   }
-  // "durable_objects": { "bindings": [ /* if porting party/room.ts here */ ] },
-  // "r2_buckets": [ { "binding": "ASSETS", "bucket_name": "seiza-assets" } ],
-  // "d1_databases": [ { "binding": "DB", "database_name": "seiza-config" } ]
 }
