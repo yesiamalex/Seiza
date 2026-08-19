@@ -7,13 +7,13 @@
   "license": "AGPL-3.0-or-later",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && vite build && node scripts/ensure-r2-bucket.mjs",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "party:dev": "partykit dev party/room.ts",
     "party:deploy": "partykit deploy party/room.ts",
     "worker:dev": "wrangler dev",
-    "worker:deploy": "wrangler deploy",
+    "worker:deploy": "npm run build && wrangler deploy",
     "fetch-assets": "node scripts/fetch-assets.mjs"
   },
   "dependencies": {

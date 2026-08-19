@@ -41,11 +41,18 @@ The deploy is two pieces, and that's a deliberate, documented choice
 
 1. **This Worker** (`wrangler.jsonc` / `worker/index.ts`) — serves the
    static frontend and the `/api/avatars` upload endpoint, backed by an
-   R2 bucket. Create the bucket once per deployment, then deploy:
+   R2 bucket. The bucket is created automatically the first time you
+   build (`npm run build` runs `scripts/ensure-r2-bucket.mjs`, which is
+   a no-op if it already exists) — including on Cloudflare's own
+   Git-connected build pipeline (Workers Builds), where there's no
+   chance to run a manual setup command before the first deploy. Locally:
    ```bash
-   npx wrangler r2 bucket create seiza-avatars
-   npm run worker:deploy
+   npm run worker:deploy   # builds, ensures the R2 bucket exists, deploys
    ```
+   If that still fails with an R2 permissions error, create the bucket
+   once yourself (Cloudflare dashboard → R2 → Create bucket →
+   `seiza-avatars`, or `npx wrangler r2 bucket create seiza-avatars` with
+   credentials that can manage R2) and retry.
 2. **The realtime room server** (`party/room.ts`) — deploys separately
    via PartyKit's own control plane on top of Durable Objects:
    ```bash

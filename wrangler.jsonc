@@ -23,8 +23,13 @@
   },
   "r2_buckets": [
     // Stores user-uploaded .vrm avatars (see worker/index.ts and
-    // src/ui/JoinScreen.tsx). Create it once per deployment with
-    // `npx wrangler r2 bucket create seiza-avatars` before first deploy.
+    // src/ui/JoinScreen.tsx). `npm run build` creates this bucket
+    // automatically if it doesn't exist yet (see
+    // scripts/ensure-r2-bucket.mjs — keep bucket_name in sync with that
+    // file's BUCKET_NAME) — `wrangler deploy` on the wrangler version
+    // this project is pinned to only binds to an existing bucket, it
+    // doesn't create one, and a first-time Git-connected Cloudflare
+    // deploy has no other chance to run a setup command before deploy.
     { "binding": "AVATARS", "bucket_name": "seiza-avatars" }
   ],
   "vars": {
