@@ -6,13 +6,15 @@ interface JoinScreenProps {
   onJoin: (displayName: string, avatarUrl: string) => void;
 }
 
-const MAX_AVATAR_BYTES = 25 * 1024 * 1024;
+// Keep in sync with worker/index.ts's MAX_AVATAR_BYTES (KV's per-value
+// limit is 25 MiB — staying under it with headroom, not at the edge).
+const MAX_AVATAR_BYTES = 20 * 1024 * 1024;
 
 /**
  * Pre-join gate: pick a display name and, if the deployment allows it
  * (world.allowAvatarUpload), upload an open-source/self-authored .vrm to
  * use for this session instead of the deployment's default avatar. The
- * upload goes to worker/index.ts's R2-backed /api/avatars endpoint —
+ * upload goes to worker/index.ts's KV-backed /api/avatars endpoint —
  * other players need a URL they can actually fetch, so this can't be a
  * client-only blob: URL.
  */

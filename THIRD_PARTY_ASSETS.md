@@ -32,8 +32,8 @@ terms.
 
 The join screen (`src/ui/JoinScreen.tsx`) lets anyone joining a
 deployment upload their own `.vrm` avatar, stored via `worker/index.ts`
-into that deployment's own R2 bucket. This is fundamentally different
-from the assets tracked above:
+into that deployment's own Cloudflare KV namespace, auto-expiring after
+30 days. This is fundamentally different from the assets tracked above:
 
 - It's **the uploader's responsibility**, not the maintainers' or a given
   deployer's, to have the rights to the file they upload — the upload

@@ -4,21 +4,42 @@
 // (party/room.ts, deployed via PartyKit) — see wrangler.jsonc for why
 // the deploy is still two pieces rather than one.
 //
+// Avatars are stored in Workers KV, not R2. R2 requires a payment
+// method on file to activate at all (even to stay within its free
+// tier); Workers KV doesn't. Since this is meant to be deployable by
+// anyone forking the repo with zero billing setup, KV is the right
+// default here — see the README's deploy section for the tradeoff
+// (KV is eventually consistent, unlike R2's strong read-after-write).
+//
 // Not covered by `npm run typecheck` (root tsconfig only includes
 // `src/`, same as party/) — see worker/tsconfig.json for editor support
-// via @cloudflare/workers-types, and sanity-check R2/Fetcher API shapes
-// against current Cloudflare docs before relying on this in production.
+// via @cloudflare/workers-types, and sanity-check KV API shapes against
+// current Cloudflare docs before relying on this in production.
 
 export interface Env {
   ASSETS: Fetcher;
-  AVATARS: R2Bucket;
+  AVATARS: KVNamespace;
 }
 
-const MAX_AVATAR_BYTES = 25 * 1024 * 1024;
+interface AvatarMetadata {
+  contentType: string;
+}
+
+// KV's per-value limit is 25 MiB — staying comfortably under it rather
+// than sitting right at the boundary (unlike R2, which supports up to
+// 5TiB and had headroom to spare).
+const MAX_AVATAR_BYTES = 20 * 1024 * 1024;
 // .vrm files are glTF-binary (.glb) under the hood — this is the .glb
 // magic header, not a VRM-specific signature. Good enough to reject
 // obviously-wrong uploads without a full glTF/VRM validator.
 const GLTF_MAGIC = [0x67, 0x6c, 0x54, 0x46]; // ASCII "glTF"
+
+// Uploaded avatars are documented as ephemeral, uploader-owned content,
+// not curated by the deployer (see THIRD_PARTY_ASSETS.md) — KV's native
+// per-key TTL makes that literally true instead of just a policy, and
+// keeps long-running deployments comfortably under the 1GB free-tier
+// storage cap without any separate cleanup job.
+const AVATAR_TTL_SECONDS = 30 * 24 * 60 * 60; // 30 days
 
 // Best-effort, per-isolate rate limiting only — this Map is reset
 // whenever Cloudflare recycles the isolate, and provides no protection
@@ -81,7 +102,10 @@ async function handleUpload(request: Request, env: Env): Promise<Response> {
   }
 
   const key = `${crypto.randomUUID()}.vrm`;
-  await env.AVATARS.put(key, buffer, { httpMetadata: { contentType: "model/gltf-binary" } });
+  await env.AVATARS.put(key, buffer, {
+    expirationTtl: AVATAR_TTL_SECONDS,
+    metadata: { contentType: "model/gltf-binary" } satisfies AvatarMetadata,
+  });
 
   return new Response(JSON.stringify({ url: `/api/avatars/${key}` }), {
     status: 201,
@@ -90,13 +114,15 @@ async function handleUpload(request: Request, env: Env): Promise<Response> {
 }
 
 async function handleGetAvatar(key: string, env: Env): Promise<Response> {
-  const object = await env.AVATARS.get(key);
-  if (!object) return new Response("Not found", { status: 404 });
-  return new Response(object.body, {
+  const { value, metadata } = await env.AVATARS.getWithMetadata<AvatarMetadata>(key, "arrayBuffer");
+  if (!value) return new Response("Not found", { status: 404 });
+  return new Response(value, {
     headers: {
-      "content-type": object.httpMetadata?.contentType ?? "model/gltf-binary",
+      "content-type": metadata?.contentType ?? "model/gltf-binary",
       // Keys are random UUIDs, one file per key, never overwritten —
-      // safe to cache aggressively.
+      // safe to cache aggressively. (They do expire after
+      // AVATAR_TTL_SECONDS, but that's a KV-side deletion, not a change
+      // to what's served for this key while it exists.)
       "cache-control": "public, max-age=31536000, immutable",
     },
   });

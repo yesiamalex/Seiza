@@ -7,7 +7,7 @@
   "license": "AGPL-3.0-or-later",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build && node scripts/ensure-r2-bucket.mjs",
+    "build": "tsc --noEmit && vite build && node scripts/ensure-kv-namespace.mjs",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "party:dev": "partykit dev party/room.ts",

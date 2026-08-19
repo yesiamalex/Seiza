@@ -3,7 +3,7 @@
   // This is what a "Deploy to Cloudflare" button targets.
   //
   // DEPLOY IS STILL TWO PIECES, deliberately: this Worker (static SPA +
-  // POST/GET /api/avatars, backed by the R2 bucket below) deploys via
+  // POST/GET /api/avatars, backed by the KV namespace below) deploys via
   // this file, but the realtime room server (party/room.ts) deploys
   // separately via `npx partykit deploy` (its own control plane on top
   // of Durable Objects). Porting party/room.ts into a Durable Object
@@ -21,16 +21,24 @@
     "binding": "ASSETS",
     "not_found_handling": "single-page-application"
   },
-  "r2_buckets": [
+  "kv_namespaces": [
     // Stores user-uploaded .vrm avatars (see worker/index.ts and
-    // src/ui/JoinScreen.tsx). `npm run build` creates this bucket
-    // automatically if it doesn't exist yet (see
-    // scripts/ensure-r2-bucket.mjs — keep bucket_name in sync with that
-    // file's BUCKET_NAME) — `wrangler deploy` on the wrangler version
-    // this project is pinned to only binds to an existing bucket, it
-    // doesn't create one, and a first-time Git-connected Cloudflare
-    // deploy has no other chance to run a setup command before deploy.
-    { "binding": "AVATARS", "bucket_name": "seiza-avatars" }
+    // src/ui/JoinScreen.tsx). KV over R2 specifically because R2
+    // requires a payment method on file to activate at all, even for
+    // free-tier usage — not what a "fork and deploy for free" project
+    // should require. Unlike an R2 bucket_name, a KV namespace is
+    // referenced by an opaque id that has to exist before `wrangler
+    // deploy` can bind to it, so the placeholder below is real: `npm run
+    // build` runs scripts/ensure-kv-namespace.mjs, which looks up (or
+    // creates, on first run) a namespace titled "seiza-avatars" and
+    // patches this file's id in place before the deploy step runs.
+    // That lookup-by-title happens fresh on every build — including a
+    // brand new checkout on Cloudflare's Git-connected pipeline, which
+    // never sees this rewritten value committed back — so it stays
+    // idempotent (reuses the same namespace) without needing to persist
+    // anything to git. You can hardcode your own real id here instead
+    // once you have one; the script no-ops if it finds one already set.
+    { "binding": "AVATARS", "id": "REPLACE_WITH_KV_NAMESPACE_ID" }
   ],
   "vars": {
     "SEIZA_WORLD_ID": "default"

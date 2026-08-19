@@ -24,7 +24,8 @@ Japanese XR conference, April 2027).
   delete; placements persist per-room.
 - **Bring-your-own-avatar** — the join screen lets each person upload
   their own open-source/self-authored `.vrm`, stored in the deployer's
-  own R2 bucket, instead of being stuck with one fixed default avatar.
+  own Cloudflare KV namespace (auto-expiring after 30 days), instead of
+  being stuck with one fixed default avatar.
 - **Gesture playback** — VRMA clips (bow/seiza/wave scaffolded; see
   licensing note below) portable across any uploaded VRM.
 
@@ -40,19 +41,28 @@ The deploy is two pieces, and that's a deliberate, documented choice
 (see the comment in `wrangler.jsonc`), not an oversight:
 
 1. **This Worker** (`wrangler.jsonc` / `worker/index.ts`) — serves the
-   static frontend and the `/api/avatars` upload endpoint, backed by an
-   R2 bucket. The bucket is created automatically the first time you
-   build (`npm run build` runs `scripts/ensure-r2-bucket.mjs`, which is
-   a no-op if it already exists) — including on Cloudflare's own
-   Git-connected build pipeline (Workers Builds), where there's no
-   chance to run a manual setup command before the first deploy. Locally:
+   static frontend and the `/api/avatars` upload endpoint, backed by a
+   Workers KV namespace (chosen over R2 specifically because R2 requires
+   a payment method on file to activate at all, even for free-tier
+   usage — KV doesn't). The namespace is created automatically the first
+   time you build (`npm run build` runs `scripts/ensure-kv-namespace.mjs`,
+   which looks it up by title and reuses it if it already exists) —
+   including on Cloudflare's own Git-connected build pipeline (Workers
+   Builds), where there's no chance to run a manual setup command before
+   the first deploy. Locally:
    ```bash
-   npm run worker:deploy   # builds, ensures the R2 bucket exists, deploys
+   npm run worker:deploy   # builds, ensures the KV namespace exists, deploys
    ```
-   If that still fails with an R2 permissions error, create the bucket
-   once yourself (Cloudflare dashboard → R2 → Create bucket →
-   `seiza-avatars`, or `npx wrangler r2 bucket create seiza-avatars` with
-   credentials that can manage R2) and retry.
+   If that still fails with a permissions error, create the namespace
+   once yourself (Cloudflare dashboard → Workers & Pages → KV → Create
+   namespace → `seiza-avatars`) and paste its id into wrangler.jsonc's
+   `AVATARS` binding, then retry.
+   >  **Tradeoff to know about:** KV is eventually consistent (global
+   >  propagation can lag), unlike R2's strong read-after-write. A
+   >  freshly-uploaded avatar could briefly 404 for someone at a
+   >  different edge location right after upload. Acceptable for this
+   >  project's classroom scale; worth knowing if you're evaluating it
+   >  for something more real-time-critical.
 2. **The realtime room server** (`party/room.ts`) — deploys separately
    via PartyKit's own control plane on top of Durable Objects:
    ```bash
@@ -105,7 +115,7 @@ src/            frontend (React Three Fiber + WebXR + VRM)
   ui/           join screen, HUD
   interactions/ pedagogical interaction modules (gesture-match game, more TBD)
 party/          realtime room server (PartyKit / Durable Objects)
-worker/         Cloudflare Worker: static hosting + avatar upload API (R2)
+worker/         Cloudflare Worker: static hosting + avatar upload API (KV)
 public/worlds/  per-deployment world configs — the customization surface
 scripts/        setup-time asset fetching for non-bundled, license-restricted assets
 ```
