@@ -1,22 +1,27 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { XR, createXRStore } from "@react-three/xr";
+import * as THREE from "three";
 import type { VRM } from "@pixiv/three-vrm";
 import { loadWorldConfig, type WorldConfig } from "./config/worldConfig";
 import { Scene } from "./scene/Scene";
 import { VrmAvatar } from "./avatar/VrmAvatar";
 import { GestureController } from "./avatar/GestureController";
+import { useProceduralGait } from "./avatar/useProceduralGait";
 import { GESTURES } from "./avatar/gestures";
 import { usePartySocket } from "./multiplayer/usePartySocket";
 import { RemotePlayers } from "./multiplayer/RemotePlayers";
-import { PlayerRig } from "./player/PlayerRig";
+import { PlayerRig, type ViewMode } from "./player/PlayerRig";
 import { useVoiceChat } from "./voice/useVoiceChat";
 import { VoiceControls } from "./voice/VoiceControls";
 import { WorldObjects } from "./edit/WorldObjects";
 import { EditToolbar } from "./edit/EditToolbar";
 import { GestureMatchGame } from "./interactions/GestureMatchGame";
+import { ChatPanel } from "./chat/ChatPanel";
 import { HUD } from "./ui/HUD";
 import { JoinScreen } from "./ui/JoinScreen";
+import { CameraViewToggle } from "./ui/CameraViewToggle";
+import { pillButtonStyle } from "./ui/styles";
 import type { WorldObject } from "./multiplayer/types";
 
 const xrStore = createXRStore();
@@ -36,6 +41,9 @@ export default function App() {
   const [activeGesture, setActiveGesture] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>("first");
+  const [chatOpen, setChatOpen] = useState(false);
+  const moveTargetRef = useRef<THREE.Vector3 | null>(null);
 
   useEffect(() => {
     loadWorldConfig().then(setWorld).catch(setWorldError);
@@ -49,7 +57,7 @@ export default function App() {
 
   const voiceSignalHandlerRef = useRef<(from: string, data: unknown) => void>(() => {});
   const roomId = world && joined ? world.id : "";
-  const { selfId, players, objects, send, addObject, moveObject, removeObject, connected } = usePartySocket(
+  const { selfId, players, objects, messages, send, addObject, moveObject, removeObject, sendChat, connected } = usePartySocket(
     roomId,
     joined?.displayName ?? "",
     joined?.avatarUrl ?? "",
@@ -116,6 +124,18 @@ export default function App() {
     setSelectedObjectId(null);
   }, [selectedObjectId, removeObject]);
 
+  // Click-to-move: only in third person (in first person the cursor is
+  // pointer-locked and clicking means something else — look-lock, not a
+  // world-space point) and not while editing (where a floor click should
+  // do nothing rather than yank you away mid-edit).
+  const handleFloorClick = useCallback(
+    (point: THREE.Vector3) => {
+      if (editMode || viewMode !== "third") return;
+      moveTargetRef.current = point.clone();
+    },
+    [editMode, viewMode]
+  );
+
   if (worldError) return <CenteredMessage text={`Couldn't load world: ${worldError.message}`} />;
   if (!world) return <CenteredMessage text="Loading world…" />;
   if (!joined) return <JoinScreen world={world} onJoin={(displayName, avatarUrl) => setJoined({ displayName, avatarUrl })} />;
@@ -127,20 +147,23 @@ export default function App() {
     <div style={{ position: "relative", width: "100vw", height: "100vh" }}>
       <Canvas camera={{ position: [0, 1.6, 4] }} shadows>
         <XR store={xrStore}>
-          <Scene sceneUrl={world.sceneUrl} />
+          <Scene sceneUrl={world.sceneUrl} onFloorClick={handleFloorClick} />
           <PlayerRig
             spawnPoint={[world.spawnPoint.x, world.spawnPoint.y, world.spawnPoint.z]}
             positionRef={positionRef}
             rotationRef={rotationRef}
             pointerLockEnabled={!editMode}
+            viewMode={viewMode}
+            moveTargetRef={moveTargetRef}
           >
             <VrmAvatar url={joined.avatarUrl} onLoaded={setLocalVrm} />
             <GestureController
               vrm={localVrm}
               activeGestureUrl={activeGesture ? GESTURES[activeGesture]?.vrmaUrl ?? null : null}
             />
+            {viewMode === "third" && <LocalGaitController vrm={localVrm} positionRef={positionRef} suppressed={!!activeGesture} />}
           </PlayerRig>
-          <RemotePlayers players={players} selfId={selfId} />
+          <RemotePlayers players={players} selfId={selfId} speakingLevels={voice.speakingLevels} />
           <WorldObjects
             objects={objects}
             editMode={editMode && editingEnabled}
@@ -152,9 +175,13 @@ export default function App() {
       </Canvas>
 
       <HUD connected={connected} worldName={world.displayName}>
-        <button onClick={() => xrStore.enterVR()}>Enter VR</button>
+        <button style={pillButtonStyle} onClick={() => xrStore.enterVR()}>
+          🥽 Enter VR
+        </button>
+        <CameraViewToggle viewMode={viewMode} onToggle={() => setViewMode((v) => (v === "first" ? "third" : "first"))} />
         {voiceVisible && <VoiceControls voice={voice} />}
         <GestureMatchGame activeGesture={activeGesture} onRequestGesture={requestGesture} />
+        <ChatPanel open={chatOpen} onToggle={() => setChatOpen((v) => !v)} messages={messages} selfId={selfId} onSend={sendChat} />
         <EditToolbar
           enabled={editingEnabled}
           editMode={editMode}
@@ -170,6 +197,22 @@ export default function App() {
       </HUD>
     </div>
   );
+}
+
+/** Thin bridge so useProceduralGait (needs useFrame) can run inside the
+ *  Canvas tree while reading the local player's per-frame position from
+ *  the same ref App.tsx already uses for network sync. */
+function LocalGaitController({
+  vrm,
+  positionRef,
+  suppressed,
+}: {
+  vrm: VRM | null;
+  positionRef: React.MutableRefObject<[number, number, number]>;
+  suppressed: boolean;
+}) {
+  useProceduralGait(vrm, () => positionRef.current, suppressed);
+  return null;
 }
 
 function CenteredMessage({ text }: { text: string }) {

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { GESTURES } from "../avatar/gestures";
+import { panelStyle, pillButtonStyle } from "../ui/styles";
 
 interface GestureMatchGameProps {
   activeGesture: string | null;
@@ -15,6 +16,7 @@ interface GestureMatchGameProps {
  * hunt, etc.).
  */
 export function GestureMatchGame({ activeGesture, onRequestGesture }: GestureMatchGameProps) {
+  const [open, setOpen] = useState(false);
   const gestureNames = Object.keys(GESTURES);
   const [target, setTarget] = useState(() => pickRandom(gestureNames));
   const [score, setScore] = useState(0);
@@ -28,17 +30,24 @@ export function GestureMatchGame({ activeGesture, onRequestGesture }: GestureMat
   }, [activeGesture]);
 
   return (
-    <div>
-      <p>
-        Do the gesture: <strong>{GESTURES[target]?.label ?? target}</strong> — score {score}
-      </p>
-      <div style={{ display: "flex", gap: 8 }}>
-        {gestureNames.map((g) => (
-          <button key={g} onClick={() => onRequestGesture(g)}>
-            {GESTURES[g].label}
-          </button>
-        ))}
-      </div>
+    <div style={{ display: "flex", flexDirection: "column-reverse", gap: 8, alignItems: "center" }}>
+      <button style={pillButtonStyle} onClick={() => setOpen((v) => !v)}>
+        🙇 Gestures {score > 0 ? `(${score})` : ""}
+      </button>
+      {open && (
+        <div style={{ ...panelStyle, display: "flex", flexDirection: "column", gap: 8 }}>
+          <p style={{ margin: 0 }}>
+            Do the gesture: <strong>{GESTURES[target]?.label ?? target}</strong> — score {score}
+          </p>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {gestureNames.map((g) => (
+              <button key={g} style={pillButtonStyle} onClick={() => onRequestGesture(g)}>
+                {GESTURES[g].label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

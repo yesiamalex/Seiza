@@ -1,17 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import PartySocket from "partysocket";
-import type { ClientMessage, PlayerState, ServerMessage, WorldObject } from "./types";
+import type { ChatMessage, ClientMessage, PlayerState, ServerMessage, WorldObject } from "./types";
 
 const PARTY_HOST = import.meta.env.VITE_SEIZA_PARTY_HOST ?? "127.0.0.1:1999";
+// Chat isn't persisted server-side (see party/room.ts) — capping how much
+// we keep client-side too, so a long-running session's message list
+// doesn't grow unbounded in memory.
+const MAX_CHAT_MESSAGES = 200;
 
 export interface MultiplayerState {
   selfId: string | null;
   players: Record<string, PlayerState>;
   objects: Record<string, WorldObject>;
+  messages: ChatMessage[];
   send: (msg: ClientMessage) => void;
   addObject: (object: Omit<WorldObject, "id" | "ownerId">) => void;
   moveObject: (id: string, position: [number, number, number], rotationY: number) => void;
   removeObject: (id: string) => void;
+  sendChat: (text: string) => void;
   connected: boolean;
 }
 
@@ -34,6 +40,7 @@ export function usePartySocket(
   const [selfId, setSelfId] = useState<string | null>(null);
   const [players, setPlayers] = useState<Record<string, PlayerState>>({});
   const [objects, setObjects] = useState<Record<string, WorldObject>>({});
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [connected, setConnected] = useState(false);
   const onVoiceSignalRef = useRef(onVoiceSignal);
   onVoiceSignalRef.current = onVoiceSignal;
@@ -52,6 +59,7 @@ export function usePartySocket(
     [send]
   );
   const removeObject = useCallback((id: string) => send({ type: "objectRemove", id }), [send]);
+  const sendChat = useCallback((text: string) => send({ type: "chat", text }), [send]);
 
   useEffect(() => {
     if (!roomId) return;
@@ -115,6 +123,9 @@ export function usePartySocket(
             return next;
           });
           break;
+        case "chat":
+          setMessages((prev) => [...prev, msg.message].slice(-MAX_CHAT_MESSAGES));
+          break;
         case "voiceSignal":
           onVoiceSignalRef.current?.(msg.from, msg.data);
           break;
@@ -131,5 +142,5 @@ export function usePartySocket(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId]);
 
-  return { selfId, players, objects, send, addObject, moveObject, removeObject, connected };
+  return { selfId, players, objects, messages, send, addObject, moveObject, removeObject, sendChat, connected };
 }

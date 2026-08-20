@@ -18,6 +18,14 @@ export interface WorldObject {
   ownerId: string;
 }
 
+export interface ChatMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  text: string;
+  sentAt: number;
+}
+
 export type ClientMessage =
   | { type: "join"; displayName: string; avatarUrl: string }
   | { type: "state"; position: [number, number, number]; rotationY: number }
@@ -25,6 +33,7 @@ export type ClientMessage =
   | { type: "objectAdd"; object: Omit<WorldObject, "id" | "ownerId"> }
   | { type: "objectMove"; id: string; position: [number, number, number]; rotationY: number }
   | { type: "objectRemove"; id: string }
+  | { type: "chat"; text: string }
   // Opaque WebRTC signaling payload (SDP offer/answer or ICE candidate),
   // relayed peer-to-peer through the room server. The server never
   // inspects `data` — it just forwards it to the connection named `to`.
@@ -39,4 +48,5 @@ export type ServerMessage =
   | { type: "objectAdded"; object: WorldObject }
   | { type: "objectMoved"; id: string; position: [number, number, number]; rotationY: number }
   | { type: "objectRemoved"; id: string }
+  | { type: "chat"; message: ChatMessage }
   | { type: "voiceSignal"; from: string; data: unknown };

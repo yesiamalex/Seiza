@@ -111,6 +111,25 @@ export default class SeizaRoom implements Party.Server {
         this.broadcast({ type: "objectRemoved", id: message.id }, []);
         break;
       }
+      case "chat": {
+        const player = this.players.get(sender.id);
+        if (!player) return;
+        const text = message.text.trim().slice(0, 500);
+        if (!text) return;
+        // Ephemeral by design — chat isn't persisted to party.storage like
+        // objects are, so history doesn't carry across a reconnect. A
+        // reasonable future improvement, not a bug: keeping a room's
+        // entire chat log forever raises different data-retention
+        // questions than "some placed boxes" does.
+        this.broadcast(
+          {
+            type: "chat",
+            message: { id: crypto.randomUUID(), senderId: sender.id, senderName: player.displayName, text, sentAt: Date.now() },
+          },
+          []
+        );
+        break;
+      }
       case "voiceSignal": {
         // Pure relay for WebRTC mesh signaling — see src/voice/useVoiceChat.ts.
         // The server never looks at `data`, just forwards it to the named peer.

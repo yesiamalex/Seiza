@@ -15,19 +15,35 @@ Japanese XR conference, April 2027).
 - **A real default room out of the box** — procedurally generated
   (floor, walls, pillars, seating), no bundled 3D assets required. A
   deployer can layer their own glTF scene on top via `world.json`.
-- **Movement** — desktop WASD + mouse-look, VR thumbstick locomotion.
+- **Movement** — desktop WASD + mouse-look (hold Shift to run), VR
+  thumbstick locomotion, click-to-move in third person. First/third-person
+  camera toggle with scroll-wheel zoom (FOV in first person, distance in
+  third).
 - **Peer-to-peer voice chat** — WebRTC mesh, signaled through the same
-  room server used for position sync. No separate media infrastructure;
-  see the Status section below for the scaling ceiling this implies.
+  room server used for position sync, with a 3D speaking indicator and
+  distance-based volume falloff. No separate media infrastructure; see
+  the Status section below for the scaling ceiling this implies.
 - **In-world editing** — anyone in a room can toggle Edit Mode and place
   primitives or paste in a custom glTF model URL, with drag-to-move and
   delete; placements persist per-room.
-- **Bring-your-own-avatar** — the join screen lets each person upload
-  their own open-source/self-authored `.vrm`, stored in the deployer's
-  own Cloudflare KV namespace (auto-expiring after 30 days), instead of
-  being stuck with one fixed default avatar.
+- **Text chat** — a lightweight room-wide chat panel alongside voice,
+  relayed through the same room server (not persisted across reconnects).
+- **Name tags** above every player, highlighting when that player is
+  speaking.
+- **Bring-your-own-avatar** — the join screen shows a live, rotatable
+  3D preview (drag to orbit, scroll to zoom, drag-and-drop a file) and
+  lets each person upload their own open-source/self-authored `.vrm`,
+  stored in the deployer's own Cloudflare KV namespace (auto-expiring
+  after 30 days), instead of being stuck with one fixed default avatar.
+  An optional client-side optimization pass (via
+  [glTF-Transform](https://github.com/donmccurdy/glTF-Transform),
+  texture-only — see `src/avatar/optimizeVrm.ts` for why) can shrink
+  oversized avatar files before upload, and silently no-ops rather than
+  forcing a change if it wouldn't help.
 - **Gesture playback** — VRMA clips (bow/seiza/wave scaffolded; see
-  licensing note below) portable across any uploaded VRM.
+  licensing note below) portable across any uploaded VRM, plus a
+  procedural (not mocap — see `src/avatar/useProceduralGait.ts`)
+  walk/run cycle driven by actual movement speed.
 
 ## Deploy your own instance
 
@@ -153,3 +169,18 @@ deliberate limitations (paper Section 7 has the fuller discussion):
   sized rooms.
 - **No physics/collision.** Movement bounds are a simple radius clamp,
   not real collision with walls or placed objects.
+- **The walk/run cycle is procedural, not a real animation clip.** No
+  redistribution-clear "universal rig" mocap walk/run VRMA exists in this
+  repo to bundle — same THIRD_PARTY_ASSETS.md diligence that applies to
+  gestures. `useProceduralGait.ts`'s sine-wave limb swing is a stand-in;
+  its bone-swing sign/axis conventions haven't been visually verified
+  against a real uploaded VRM in a running browser, only reasoned about
+  from the VRM normalized-bone spec.
+- **Chat has no history.** Room text chat is relay-only, not persisted —
+  reconnecting or a new joiner starts with an empty chat panel.
+- **Avatar optimization is texture-only, by design.** It resizes/re-encodes
+  oversized textures via glTF-Transform, but deliberately never touches
+  mesh/node/accessor structure, because no VRM extension package exists
+  for glTF-Transform to safely reason about humanoid bone references or
+  blend shapes during structural transforms — see the reasoning in
+  `src/avatar/optimizeVrm.ts`.

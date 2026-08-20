@@ -17,6 +17,8 @@
     "fetch-assets": "node scripts/fetch-assets.mjs"
   },
   "dependencies": {
+    "@gltf-transform/core": "^4.4.2",
+    "@gltf-transform/functions": "^4.4.2",
     "@pixiv/three-vrm": "^3.4.2",
     "@pixiv/three-vrm-animation": "^3.4.2",
     "@react-three/drei": "^9.114.0",

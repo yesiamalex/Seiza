@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { WorldObject } from "../multiplayer/types";
+import { panelStyle, pillButtonActiveStyle, pillButtonStyle } from "../ui/styles";
 
 interface EditToolbarProps {
   enabled: boolean;
@@ -30,34 +31,33 @@ export function EditToolbar({
   if (!enabled) return null;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <button onClick={onToggleEditMode}>{editMode ? "Exit edit mode" : "Edit world"}</button>
+    <div style={{ display: "flex", flexDirection: "column-reverse", gap: 8, alignItems: "center" }}>
+      <button style={editMode ? pillButtonActiveStyle : pillButtonStyle} onClick={onToggleEditMode}>
+        🛠 {editMode ? "Exit edit mode" : "Edit world"}
+      </button>
       {editMode && (
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 6,
-            background: "rgba(0,0,0,0.45)",
-            padding: 8,
-            borderRadius: 6,
-            maxWidth: 280,
-          }}
-        >
-          <small>Click an object to select it, drag the gizmo to move it.</small>
+        <div style={{ ...panelStyle, display: "flex", flexDirection: "column", gap: 8, width: 280 }}>
+          <small style={{ opacity: 0.8 }}>Click an object to select it, drag the gizmo to move it.</small>
           <div style={{ display: "flex", gap: 6 }}>
-            <button onClick={() => onSpawn("box")}>+ Box</button>
-            <button onClick={() => onSpawn("sphere")}>+ Sphere</button>
-            <button onClick={() => onSpawn("cylinder")}>+ Cylinder</button>
+            <button style={pillButtonStyle} onClick={() => onSpawn("box")}>
+              + Box
+            </button>
+            <button style={pillButtonStyle} onClick={() => onSpawn("sphere")}>
+              + Sphere
+            </button>
+            <button style={pillButtonStyle} onClick={() => onSpawn("cylinder")}>
+              + Cylinder
+            </button>
           </div>
           <div style={{ display: "flex", gap: 6 }}>
             <input
               placeholder="https://…/model.glb"
               value={modelUrl}
               onChange={(e) => setModelUrl(e.target.value)}
-              style={{ flex: 1, minWidth: 0 }}
+              style={{ flex: 1, minWidth: 0, borderRadius: 6, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.08)", color: "white", padding: "6px 8px" }}
             />
             <button
+              style={pillButtonStyle}
               disabled={!modelUrl}
               onClick={() => {
                 onSpawn("model", modelUrl);
@@ -70,8 +70,12 @@ export function EditToolbar({
           {selectedId && (
             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
               <span>1 object selected</span>
-              <button onClick={onDeleteSelected}>Delete</button>
-              <button onClick={onDeselect}>Deselect</button>
+              <button style={pillButtonStyle} onClick={onDeleteSelected}>
+                Delete
+              </button>
+              <button style={pillButtonStyle} onClick={onDeselect}>
+                Deselect
+              </button>
             </div>
           )}
         </div>

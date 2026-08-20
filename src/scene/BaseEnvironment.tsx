@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import type { ThreeEvent } from "@react-three/fiber";
 
 // Original, procedurally-generated geometry only — no bundled 3D assets,
 // so there's nothing to track in THIRD_PARTY_ASSETS.md. This is what a
@@ -16,10 +17,17 @@ const FLOOR_COLOR = "#7a6a53";
 const WALL_COLOR = "#c9bfa8";
 const ACCENT_COLOR = "#8f7a5c";
 
-export function BaseEnvironment() {
+interface BaseEnvironmentProps {
+  /** Click-to-move (see PlayerRig's moveTargetRef) — only wired up by
+   *  App.tsx while in third person and not editing; undefined otherwise,
+   *  in which case the floor just isn't clickable. */
+  onFloorClick?: (point: THREE.Vector3) => void;
+}
+
+export function BaseEnvironment({ onFloorClick }: BaseEnvironmentProps) {
   return (
     <group>
-      <Floor />
+      <Floor onFloorClick={onFloorClick} />
       <PerimeterWalls />
       <Pillars />
       <BenchSemicircle />
@@ -27,9 +35,16 @@ export function BaseEnvironment() {
   );
 }
 
-function Floor() {
+function Floor({ onFloorClick }: { onFloorClick?: (point: THREE.Vector3) => void }) {
+  const handleClick = onFloorClick
+    ? (e: ThreeEvent<MouseEvent>) => {
+        e.stopPropagation();
+        onFloorClick(e.point);
+      }
+    : undefined;
+
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+    <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow onClick={handleClick}>
       <circleGeometry args={[ROOM_HALF_SIZE - 0.5, 48]} />
       <meshStandardMaterial color={FLOOR_COLOR} roughness={0.9} />
     </mesh>
