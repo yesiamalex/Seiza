@@ -120,6 +120,25 @@ in-world editing (`editingEnabled: false`) or avatar uploads
 (`allowAvatarUpload: false`) for a given deployment without touching
 code.
 
+### Restricting who can edit
+
+By default, if `editingEnabled` is true, *anyone* in the room can place,
+move, or delete objects — there's no per-user permission system (see
+Status below). To require a shared password before Edit Mode actually
+does anything, set a Worker secret (never commit this to the repo):
+
+```bash
+npx wrangler secret put SEIZA_EDITOR_PASSWORD
+```
+
+For local dev, put the same value in a `.dev.vars` file (gitignored) as
+`SEIZA_EDITOR_PASSWORD=whatever`. Leaving it unset keeps editing open to
+everyone, unchanged from before this existed. This is one shared
+password, not per-user accounts or roles — intentionally the leanest
+thing that could plausibly work for a self-hosted classroom room; see
+worker/room.ts's comment on `MAX_AUTH_ATTEMPTS` for the (limited) abuse
+protection this does and doesn't provide.
+
 ## Project layout
 
 ```
@@ -159,9 +178,14 @@ deliberate limitations (paper Section 7 has the fuller discussion):
   large open events. No TURN server is configured by default — only
   Cloudflare's public STUN — so voice may not connect for peers behind
   restrictive NATs unless a deployer sets `VITE_SEIZA_TURN_URLS`.
-- **No permissions system.** Anyone connected to a room can edit the
-  world (place/move/delete objects) or, currently, join at all — there's
-  no moderation, host role, or room password yet.
+- **Permissions are one shared password, at most.** With
+  `SEIZA_EDITOR_PASSWORD` unset (the default), anyone can edit. With it
+  set, editing requires that one password — still not per-user accounts,
+  roles, or moderation, and anyone can join a room at all regardless.
+  Room-wide guardrails that ARE enforced server-side regardless of
+  permissions: a cap on total placed objects, per-connection chat rate
+  limiting, and pasted model URLs are restricted to http(s) (see
+  `worker/room.ts`).
 - **Avatar-upload rate limiting is best-effort.** `worker/index.ts` uses
   a per-isolate in-memory counter, not Cloudflare's real Rate Limiting
   rules — adequate for low-traffic self-hosted use, not for a deployment
@@ -186,3 +210,13 @@ deliberate limitations (paper Section 7 has the fuller discussion):
   for glTF-Transform to safely reason about humanoid bone references or
   blend shapes during structural transforms — see the reasoning in
   `src/avatar/optimizeVrm.ts`.
+- **Click-to-move walks in a straight line, not around obstacles.** No
+  navmesh — a player can path directly into a wall/pillar/placed object
+  and just stop there rather than routing around it. A real fix would be
+  [recast-navigation](https://github.com/isaac-mason/recast-navigation-js)
+  (WASM Recast/Detour, can generate a navmesh directly from the existing
+  procedural `BaseEnvironment` geometry at runtime) rather than
+  `three-pathfinding` (donmccurdy, lighter, but expects a pre-authored
+  navmesh file — awkward for geometry that's generated in code, not
+  authored in Blender). Not implemented — noted as the concrete next step
+  if this becomes worth doing.

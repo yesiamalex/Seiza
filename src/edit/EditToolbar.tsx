@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { WorldObject } from "../multiplayer/types";
-import { panelStyle, pillButtonActiveStyle, pillButtonStyle } from "../ui/styles";
+import { inputStyle, panelStyle, pillButtonActiveStyle, pillButtonStyle } from "../ui/styles";
 import { EditIcon } from "../ui/icons";
 
 interface EditToolbarProps {
@@ -18,13 +18,22 @@ interface EditToolbarProps {
   selectedId: string | null;
   onDeselect: () => void;
   onDeleteSelected: () => void;
+  /** Whether this deployment has a shared editor password configured at
+   *  all (worker/room.ts's SEIZA_EDITOR_PASSWORD) — if not, editing is
+   *  open and none of the auth props below matter. */
+  editorPasswordRequired: boolean;
+  isEditor: boolean;
+  editorAuthPending: boolean;
+  editorAuthFailed: boolean;
+  onAuthEditor: (password: string) => void;
 }
 
 /**
- * No permission system yet — anyone in the room who toggles edit mode
- * can place, move, or delete any object (see worker/room.ts). Fine for
- * the trusted-classroom-room scale this targets; a documented limitation,
- * not an oversight — see README's Status section.
+ * Editing is open to everyone by default (no permission system) unless
+ * the deployer sets a shared editor password — see worker/room.ts. Fine
+ * either way for the trusted-classroom-room scale this targets; a
+ * documented limitation when unset, not an oversight — see README's
+ * Status section.
  */
 export function EditToolbar({
   enabled,
@@ -35,16 +44,47 @@ export function EditToolbar({
   selectedId,
   onDeselect,
   onDeleteSelected,
+  editorPasswordRequired,
+  isEditor,
+  editorAuthPending,
+  editorAuthFailed,
+  onAuthEditor,
 }: EditToolbarProps) {
   const [modelUrl, setModelUrl] = useState("");
+  const [passwordDraft, setPasswordDraft] = useState("");
   if (!enabled) return null;
+
+  const needsAuth = editorPasswordRequired && !isEditor;
 
   return (
     <div style={{ display: "flex", flexDirection: "column-reverse", gap: 8, alignItems: "center" }}>
       <button style={editMode ? pillButtonActiveStyle : pillButtonStyle} onClick={onToggleEditMode}>
         <EditIcon /> {editMode ? "Exit edit mode" : "Edit world"}
       </button>
-      {editMode && (
+      {editMode && needsAuth && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (passwordDraft) onAuthEditor(passwordDraft);
+          }}
+          style={{ ...panelStyle, display: "flex", flexDirection: "column", gap: 8, width: 240 }}
+        >
+          <small style={{ opacity: 0.8 }}>This world requires an editor password.</small>
+          <input
+            type="password"
+            value={passwordDraft}
+            onChange={(e) => setPasswordDraft(e.target.value)}
+            placeholder="Editor password"
+            style={inputStyle}
+            autoFocus
+          />
+          {editorAuthFailed && <small style={{ color: "#ff8a80" }}>Wrong password.</small>}
+          <button type="submit" style={pillButtonStyle} disabled={editorAuthPending || !passwordDraft}>
+            {editorAuthPending ? "Checking…" : "Unlock editing"}
+          </button>
+        </form>
+      )}
+      {editMode && !needsAuth && (
         <div style={{ ...panelStyle, display: "flex", flexDirection: "column", gap: 8, width: 280 }}>
           {!connected && (
             <small style={{ color: "#ffb347" }}>

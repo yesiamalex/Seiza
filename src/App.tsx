@@ -58,7 +58,24 @@ export default function App() {
 
   const voiceSignalHandlerRef = useRef<(from: string, data: unknown) => void>(() => {});
   const roomId = world && joined ? world.id : "";
-  const { selfId, players, objects, messages, send, addObject, moveObject, removeObject, sendChat, connected, connectionState } = useRoomSocket(
+  const {
+    selfId,
+    players,
+    objects,
+    messages,
+    send,
+    addObject,
+    moveObject,
+    removeObject,
+    sendChat,
+    connected,
+    connectionState,
+    editorPasswordRequired,
+    isEditor,
+    editorAuthPending,
+    editorAuthFailed,
+    authEditor,
+  } = useRoomSocket(
     roomId,
     joined?.displayName ?? "",
     joined?.avatarUrl ?? "",
@@ -145,7 +162,7 @@ export default function App() {
   const voiceVisible = world.voiceEnabled;
 
   return (
-    <div style={{ position: "relative", width: "100vw", height: "100vh" }}>
+    <div style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden" }}>
       <Canvas camera={{ position: [0, 1.6, 4] }} shadows>
         <XR store={xrStore}>
           <Scene sceneUrl={world.sceneUrl} onFloorClick={handleFloorClick} />
@@ -167,7 +184,7 @@ export default function App() {
           <RemotePlayers players={players} selfId={selfId} speakingLevels={voice.speakingLevels} />
           <WorldObjects
             objects={objects}
-            editMode={editMode && editingEnabled}
+            editMode={editMode && editingEnabled && isEditor}
             selectedId={selectedObjectId}
             onSelect={setSelectedObjectId}
             onMove={moveObject}
@@ -202,6 +219,11 @@ export default function App() {
           selectedId={selectedObjectId}
           onDeselect={() => setSelectedObjectId(null)}
           onDeleteSelected={handleDeleteSelected}
+          editorPasswordRequired={editorPasswordRequired}
+          isEditor={isEditor}
+          editorAuthPending={editorAuthPending}
+          editorAuthFailed={editorAuthFailed}
+          onAuthEditor={authEditor}
         />
       </HUD>
     </div>
@@ -230,9 +252,14 @@ function CenteredMessage({ text }: { text: string }) {
       style={{
         display: "grid",
         placeItems: "center",
-        width: "100vw",
-        height: "100vh",
+        width: "100%",
+        height: "100%",
+        padding: 16,
+        boxSizing: "border-box",
+        color: "white",
+        background: "#0c0e16",
         fontFamily: "system-ui, sans-serif",
+        textAlign: "center",
       }}
     >
       <p>{text}</p>

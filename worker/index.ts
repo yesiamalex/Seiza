@@ -24,6 +24,10 @@ export interface Env {
   ASSETS: Fetcher;
   AVATARS: KVNamespace;
   ROOMS: DurableObjectNamespace<SeizaRoom>;
+  /** Optional shared editor password — see worker/room.ts. Set via
+   *  `wrangler secret put SEIZA_EDITOR_PASSWORD`, never committed to the
+   *  repo. Undefined means editing stays open to everyone (the default). */
+  SEIZA_EDITOR_PASSWORD?: string;
 }
 
 export { SeizaRoom };
@@ -32,10 +36,15 @@ interface AvatarMetadata {
   contentType: string;
 }
 
-// KV's per-value limit is 25 MiB — staying comfortably under it rather
-// than sitting right at the boundary (unlike R2, which supports up to
-// 5TiB and had headroom to spare).
-const MAX_AVATAR_BYTES = 20 * 1024 * 1024;
+// KV's per-value limit is 25 MiB, hard — this isn't a policy choice we
+// can relax, KV will reject the write above it regardless of what this
+// code does. Staying at 24MB for a small safety margin rather than
+// sitting right at the literal boundary. (Unlike R2, which supports up
+// to 5TiB and had headroom to spare — see the KV-vs-R2 tradeoff note
+// elsewhere in this file.) The client (JoinScreen.tsx) warns well below
+// this for "this is a large file" reasons that aren't about hitting the
+// technical ceiling — that's a separate, softer threshold.
+const MAX_AVATAR_BYTES = 24 * 1024 * 1024;
 // .vrm files are glTF-binary (.glb) under the hood — this is the .glb
 // magic header, not a VRM-specific signature. Good enough to reject
 // obviously-wrong uploads without a full glTF/VRM validator.

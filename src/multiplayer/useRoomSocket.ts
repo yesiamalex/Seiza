@@ -26,6 +26,15 @@ export interface MultiplayerState {
   sendChat: (text: string) => void;
   connected: boolean;
   connectionState: ConnectionState;
+  /** Whether this deployment has SEIZA_EDITOR_PASSWORD set at all — if
+   *  false, editing is open and there's nothing to authenticate. */
+  editorPasswordRequired: boolean;
+  /** Whether *this* connection has successfully entered the password
+   *  (or editorPasswordRequired is false, in which case always true). */
+  isEditor: boolean;
+  editorAuthPending: boolean;
+  editorAuthFailed: boolean;
+  authEditor: (password: string) => void;
 }
 
 /**
@@ -57,6 +66,10 @@ export function useRoomSocket(
   const [objects, setObjects] = useState<Record<string, WorldObject>>({});
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [connectionState, setConnectionState] = useState<ConnectionState>("connecting");
+  const [editorPasswordRequired, setEditorPasswordRequired] = useState(false);
+  const [isEditor, setIsEditor] = useState(false);
+  const [editorAuthPending, setEditorAuthPending] = useState(false);
+  const [editorAuthFailed, setEditorAuthFailed] = useState(false);
   const onVoiceSignalRef = useRef(onVoiceSignal);
   onVoiceSignalRef.current = onVoiceSignal;
 
@@ -75,6 +88,14 @@ export function useRoomSocket(
   );
   const removeObject = useCallback((id: string) => send({ type: "objectRemove", id }), [send]);
   const sendChat = useCallback((text: string) => send({ type: "chat", text }), [send]);
+  const authEditor = useCallback(
+    (password: string) => {
+      setEditorAuthPending(true);
+      setEditorAuthFailed(false);
+      send({ type: "authEditor", password });
+    },
+    [send]
+  );
 
   useEffect(() => {
     if (!roomId) return;
@@ -114,6 +135,8 @@ export function useRoomSocket(
             const objectMap: Record<string, WorldObject> = {};
             for (const o of msg.objects) objectMap[o.id] = o;
             setObjects(objectMap);
+            setEditorPasswordRequired(msg.editorPasswordRequired);
+            setIsEditor(!msg.editorPasswordRequired);
             break;
           }
           case "playerJoined":
@@ -156,6 +179,11 @@ export function useRoomSocket(
           case "chat":
             setMessages((prev) => [...prev, msg.message].slice(-MAX_CHAT_MESSAGES));
             break;
+          case "editorAuthResult":
+            setEditorAuthPending(false);
+            setIsEditor(msg.granted);
+            setEditorAuthFailed(!msg.granted);
+            break;
           case "voiceSignal":
             onVoiceSignalRef.current?.(msg.from, msg.data);
             break;
@@ -189,5 +217,10 @@ export function useRoomSocket(
     sendChat,
     connected: connectionState === "connected",
     connectionState,
+    editorPasswordRequired,
+    isEditor,
+    editorAuthPending,
+    editorAuthFailed,
+    authEditor,
   };
 }

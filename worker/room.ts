@@ -3,10 +3,34 @@ import type { ClientMessage, PlayerState, ServerMessage, WorldObject } from "../
 import type { Env } from "./index";
 
 const OBJECTS_STORAGE_KEY = "objects";
+// No permission system yet (see class doc below) — these are the actual
+// abuse guards for an open room: a cap on total placed objects (storage
+// growth + everyone's render load) and a per-connection minimum gap
+// between chat messages (spam). Neither is configurable per-deployment
+// yet; if that turns out to matter, it belongs in world.json alongside
+// editingEnabled/allowAvatarUpload.
+const MAX_OBJECTS = 300;
+const CHAT_MIN_INTERVAL_MS = 400;
+const VALID_OBJECT_KINDS = new Set(["box", "sphere", "cylinder", "model"]);
+const BOUNDS_LIMIT = 100; // generous outer bound — BaseEnvironment's own radius is smaller; this just rejects nonsense values, not enforcing gameplay bounds
+// A shared password, not per-user accounts — this project's "lean,
+// anyone-can-self-deploy" constraint rules out standing up real auth
+// infrastructure for a small self-hosted room. Deployers set this via
+// `wrangler secret put SEIZA_EDITOR_PASSWORD` (a Worker secret, never
+// committed to the repo — see README). Undefined = editing stays open to
+// everyone, the original/default behavior. A brute-force attempt on one
+// WebSocket connection gets cut off after MAX_AUTH_ATTEMPTS; this is a
+// deterrent, not a guarantee — nothing stops opening many connections —
+// appropriate for the classroom-scale threat model this targets, not a
+// claim of real security hardening.
+const MAX_AUTH_ATTEMPTS = 5;
 
 interface ConnectionAttachment {
   connId: string;
   player: PlayerState | null; // null until this connection sends "join"
+  lastChatAt?: number;
+  isEditor?: boolean;
+  authAttempts?: number;
 }
 
 /**
@@ -91,6 +115,7 @@ export class SeizaRoom extends DurableObject<Env> {
           selfId: attachment.connId,
           players: this.listPlayers(),
           objects: Array.from(this.objects.values()),
+          editorPasswordRequired: !!this.env.SEIZA_EDITOR_PASSWORD,
         };
         ws.send(JSON.stringify(welcome));
         this.broadcast({ type: "playerJoined", player }, attachment.connId);
@@ -114,16 +139,47 @@ export class SeizaRoom extends DurableObject<Env> {
         this.broadcast({ type: "playerGesture", id: attachment.connId, gesture: message.gesture }, attachment.connId);
         break;
       }
+      case "authEditor": {
+        if (!attachment.player) return;
+        const required = this.env.SEIZA_EDITOR_PASSWORD;
+        if (!required) {
+          // No password configured on this deployment — editing is open
+          // to everyone anyway, so there's nothing to grant.
+          ws.send(JSON.stringify({ type: "editorAuthResult", granted: true } satisfies ServerMessage));
+          break;
+        }
+        const attempts = attachment.authAttempts ?? 0;
+        if (attempts >= MAX_AUTH_ATTEMPTS) {
+          ws.send(JSON.stringify({ type: "editorAuthResult", granted: false } satisfies ServerMessage));
+          break;
+        }
+        const granted = message.password === required;
+        attachment.isEditor = granted || attachment.isEditor;
+        attachment.authAttempts = granted ? attempts : attempts + 1;
+        ws.serializeAttachment(attachment);
+        ws.send(JSON.stringify({ type: "editorAuthResult", granted } satisfies ServerMessage));
+        break;
+      }
       case "objectAdd": {
-        // No auth/permission system yet — any connected client can edit
-        // the shared world. Documented MVP limitation, see README.
-        const object: WorldObject = { ...message.object, id: crypto.randomUUID(), ownerId: attachment.connId };
+        // Gated on isEditor only when a password is actually configured
+        // (this.env.SEIZA_EDITOR_PASSWORD) — the default, no-password
+        // deployment keeps editing open to everyone, same as before this
+        // feature existed. What's ALWAYS enforced regardless: a room-wide
+        // object cap and basic shape/range validation, since those aren't
+        // permission questions — they're "don't let one client wedge the
+        // room for everyone."
+        if (this.env.SEIZA_EDITOR_PASSWORD && !attachment.isEditor) return;
+        if (this.objects.size >= MAX_OBJECTS) return;
+        const validated = validateNewObject(message.object);
+        if (!validated) return;
+        const object: WorldObject = { ...validated, id: crypto.randomUUID(), ownerId: attachment.connId };
         this.objects.set(object.id, object);
         this.persistObjects();
         this.broadcast({ type: "objectAdded", object });
         break;
       }
       case "objectMove": {
+        if (this.env.SEIZA_EDITOR_PASSWORD && !attachment.isEditor) return;
         const object = this.objects.get(message.id);
         if (!object) return;
         object.position = message.position;
@@ -138,6 +194,7 @@ export class SeizaRoom extends DurableObject<Env> {
         break;
       }
       case "objectRemove": {
+        if (this.env.SEIZA_EDITOR_PASSWORD && !attachment.isEditor) return;
         if (!this.objects.delete(message.id)) return;
         this.persistObjects();
         this.broadcast({ type: "objectRemoved", id: message.id });
@@ -145,13 +202,17 @@ export class SeizaRoom extends DurableObject<Env> {
       }
       case "chat": {
         if (!attachment.player) return;
+        const now = Date.now();
+        if (attachment.lastChatAt && now - attachment.lastChatAt < CHAT_MIN_INTERVAL_MS) return;
         const text = message.text.trim().slice(0, 500);
         if (!text) return;
+        attachment.lastChatAt = now;
+        ws.serializeAttachment(attachment);
         // Ephemeral by design — not persisted to ctx.storage like
         // objects are, so history doesn't carry across a reconnect.
         this.broadcast({
           type: "chat",
-          message: { id: crypto.randomUUID(), senderId: attachment.connId, senderName: attachment.player.displayName, text, sentAt: Date.now() },
+          message: { id: crypto.randomUUID(), senderId: attachment.connId, senderName: attachment.player.displayName, text, sentAt: now },
         });
         break;
       }
@@ -209,4 +270,46 @@ export class SeizaRoom extends DurableObject<Env> {
     // sync). Revisit if editing gets busy enough to matter.
     void this.ctx.storage.put(OBJECTS_STORAGE_KEY, Array.from(this.objects.values()));
   }
+}
+
+/**
+ * `message` came from `JSON.parse` on a client-controlled string, cast to
+ * `ClientMessage` with no runtime check — the TypeScript type is a
+ * compile-time assertion, not a guarantee about what's actually on the
+ * wire. This is the one place that actually validates shape/range before
+ * anything gets stored and broadcast to everyone in the room, including
+ * restricting pasted model URLs to http(s) — the paste-a-URL feature
+ * (src/edit/EditToolbar.tsx) means any connected client can make every
+ * other client's browser fetch an arbitrary URL, so at minimum that
+ * can't be a `javascript:`/`data:`/`file:` scheme.
+ */
+function validateNewObject(input: unknown): Omit<WorldObject, "id" | "ownerId"> | null {
+  if (typeof input !== "object" || input === null) return null;
+  const obj = input as Record<string, unknown>;
+
+  if (typeof obj.kind !== "string" || !VALID_OBJECT_KINDS.has(obj.kind)) return null;
+  const kind = obj.kind as WorldObject["kind"];
+
+  if (typeof obj.color !== "string" || obj.color.length === 0 || obj.color.length > 32) return null;
+
+  if (!Array.isArray(obj.position) || obj.position.length !== 3 || !obj.position.every(isFiniteInBounds)) return null;
+  const position = obj.position as [number, number, number];
+
+  if (typeof obj.rotationY !== "number" || !Number.isFinite(obj.rotationY)) return null;
+
+  if (typeof obj.scale !== "number" || !Number.isFinite(obj.scale)) return null;
+  const scale = Math.min(20, Math.max(0.05, obj.scale));
+
+  let modelUrl: string | undefined;
+  if (kind === "model") {
+    if (typeof obj.modelUrl !== "string" || obj.modelUrl.length === 0 || obj.modelUrl.length > 2000) return null;
+    if (!/^https:\/\//i.test(obj.modelUrl) && !/^http:\/\//i.test(obj.modelUrl)) return null;
+    modelUrl = obj.modelUrl;
+  }
+
+  return { kind, modelUrl, color: obj.color, position, rotationY: obj.rotationY, scale };
+}
+
+function isFiniteInBounds(n: unknown): n is number {
+  return typeof n === "number" && Number.isFinite(n) && Math.abs(n) <= BOUNDS_LIMIT;
 }

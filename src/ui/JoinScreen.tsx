@@ -9,13 +9,20 @@ interface JoinScreenProps {
   onJoin: (displayName: string, avatarUrl: string) => void;
 }
 
-// Keep in sync with worker/index.ts's MAX_AVATAR_BYTES (KV's per-value
-// limit is 25 MiB — staying under it with headroom, not at the edge).
-const MAX_AVATAR_BYTES = 20 * 1024 * 1024;
-// Files up to this size are still accepted at pick-time even though
-// they're over MAX_AVATAR_BYTES, on the chance optimization shrinks them
-// under the real limit — re-checked for real right before upload.
+// KV's real technical ceiling is 25 MiB per value — this project can't
+// exceed that no matter what (KV will reject the write), so this stays
+// a hard block. Keep in sync with worker/index.ts's MAX_AVATAR_BYTES.
+const HARD_MAX_AVATAR_BYTES = 24 * 1024 * 1024;
+// Above this, picking a file still works — optimization might shrink it
+// under HARD_MAX_AVATAR_BYTES, checked for real at upload time — but
+// it's clearly too big for optimization to realistically save, so reject
+// it at pick time instead of wasting the user's time.
 const PICK_TIME_CEILING_BYTES = 60 * 1024 * 1024;
+// Below this, no warning. Above it, still allowed — just a heads-up:
+// everyone in the room downloads your avatar, and it eats into this
+// deployment's free KV storage tier faster. Not a technical limit, a
+// courtesy one.
+const LARGE_FILE_WARNING_BYTES = 8 * 1024 * 1024;
 
 function formatMB(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
@@ -58,6 +65,7 @@ export function JoinScreen({ world, onJoin }: JoinScreenProps) {
   const [rightsConfirmed, setRightsConfirmed] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragActive, setDragActive] = useState(false);
@@ -103,8 +111,10 @@ export function JoinScreen({ world, onJoin }: JoinScreenProps) {
         );
       }
 
-      if (uploadFile.size > MAX_AVATAR_BYTES) {
-        throw new Error(`File is too large even after optimization (max ${formatMB(MAX_AVATAR_BYTES)}).`);
+      if (uploadFile.size > HARD_MAX_AVATAR_BYTES) {
+        throw new Error(
+          `File is too large even after optimization (max ${formatMB(HARD_MAX_AVATAR_BYTES)} — a Cloudflare KV limit, not adjustable).`
+        );
       }
 
       setStatusMessage((prev) => prev ?? "Uploading…");
@@ -125,12 +135,20 @@ export function JoinScreen({ world, onJoin }: JoinScreenProps) {
 
   function pickFile(picked: File | null) {
     setError(null);
+    setWarning(null);
     setStatusMessage(null);
     if (picked && picked.size > PICK_TIME_CEILING_BYTES) {
-      setError(`That file is too large (max ${formatMB(PICK_TIME_CEILING_BYTES)}).`);
+      setError(`That file is too large (max ${formatMB(PICK_TIME_CEILING_BYTES)}, even before optimization).`);
       setFile(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
       return;
+    }
+    if (picked && picked.size > HARD_MAX_AVATAR_BYTES) {
+      setWarning(
+        `This is ${formatMB(picked.size)}, over the ${formatMB(HARD_MAX_AVATAR_BYTES)} limit — optimization will need to shrink it before you can upload. Leave "Optimize" checked below.`
+      );
+    } else if (picked && picked.size > LARGE_FILE_WARNING_BYTES) {
+      setWarning(`Heads up: ${formatMB(picked.size)} is a large avatar — it'll take longer for everyone in the room to load.`);
     }
     setFile(picked);
     setRightsConfirmed(false);
@@ -138,18 +156,36 @@ export function JoinScreen({ world, onJoin }: JoinScreenProps) {
 
   return (
     <div
+      className="seiza-join-screen"
       style={{
         position: "relative",
         display: "grid",
         placeItems: "center",
-        width: "100vw",
-        height: "100vh",
+        width: "100%",
         fontFamily: "system-ui, sans-serif",
         color: "white",
         background: "radial-gradient(120% 100% at 50% 0%, #1b2030 0%, #0c0e16 55%, #060709 100%)",
-        overflow: "hidden",
+        overflowX: "hidden",
+        overflowY: "auto",
+        boxSizing: "border-box",
+        padding: "16px",
       }}
     >
+      {/* Real CSS (not inline styles) so this can express a viewport-height
+          fallback (svh isn't supported everywhere yet) and breakpoints —
+          neither is possible with plain React style objects. */}
+      <style>{`
+        .seiza-join-screen { height: 100vh; height: 100svh; }
+        .seiza-join-form { width: min(760px, 100%); }
+        @media (max-width: 620px) {
+          .seiza-join-form { padding: 18px !important; gap: 18px !important; }
+          .seiza-join-title { font-size: 21px !important; }
+        }
+        @media (max-width: 420px) {
+          .seiza-join-form { padding: 14px !important; }
+        }
+      `}</style>
+
       <div
         aria-hidden
         style={{ position: "absolute", inset: 0, backgroundImage: STAR_DOTS_FAR, backgroundSize: "100% 100%", opacity: 0.9 }}
@@ -161,12 +197,12 @@ export function JoinScreen({ world, onJoin }: JoinScreenProps) {
 
       <form
         onSubmit={handleSubmit}
+        className="seiza-join-form"
         style={{
           position: "relative",
           display: "flex",
           flexWrap: "wrap",
           gap: 28,
-          width: "min(760px, 92vw)",
           padding: "28px 32px",
           background: "rgba(16,17,24,0.72)",
           backdropFilter: "blur(14px)",
@@ -174,20 +210,23 @@ export function JoinScreen({ world, onJoin }: JoinScreenProps) {
           borderRadius: 16,
           border: "1px solid rgba(255,255,255,0.08)",
           boxShadow: "0 24px 60px rgba(0,0,0,0.5)",
+          boxSizing: "border-box",
         }}
       >
-        <div style={{ flex: "1 1 260px", minWidth: 260, display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ flex: "1 1 260px", minWidth: 0, display: "flex", flexDirection: "column", gap: 14 }}>
           <div>
             <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: ACCENT_COLOR, opacity: 0.85 }}>
               Seiza · 星座
             </div>
-            <h1 style={{ margin: "2px 0 0", fontSize: 26, fontWeight: 600, letterSpacing: "-0.01em" }}>{world.displayName}</h1>
+            <h1 className="seiza-join-title" style={{ margin: "2px 0 0", fontSize: 26, fontWeight: 600, letterSpacing: "-0.01em" }}>
+              {world.displayName}
+            </h1>
             <div style={{ width: 40, height: 2, marginTop: 10, background: `linear-gradient(90deg, ${ACCENT_COLOR}, transparent)` }} />
           </div>
           <AvatarPreview url={previewUrl ?? world.defaultAvatarUrl} />
         </div>
 
-        <div style={{ flex: "1 1 280px", minWidth: 260, display: "flex", flexDirection: "column", gap: 14, alignSelf: "center" }}>
+        <div style={{ flex: "1 1 280px", minWidth: 0, display: "flex", flexDirection: "column", gap: 14, alignSelf: "center" }}>
           <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, opacity: 0.85 }}>
             Display name
             <input
@@ -228,7 +267,7 @@ export function JoinScreen({ world, onJoin }: JoinScreenProps) {
                   type="file"
                   accept=".vrm"
                   onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
-                  style={{ fontSize: 12 }}
+                  style={{ fontSize: 12, maxWidth: "100%" }}
                 />
               </label>
               {file && (
@@ -250,6 +289,7 @@ export function JoinScreen({ world, onJoin }: JoinScreenProps) {
             </label>
           )}
 
+          {warning && <p style={{ color: "#f2c14e", margin: 0, fontSize: 12 }}>{warning}</p>}
           {statusMessage && <p style={{ opacity: 0.7, margin: 0, fontSize: 12 }}>{statusMessage}</p>}
           {error && <p style={{ color: "#ff8a80", margin: 0, fontSize: 12 }}>{error}</p>}
 
