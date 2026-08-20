@@ -1,6 +1,7 @@
 import type { VoiceChatState } from "./useVoiceChat";
 import { VOICE_ENABLED } from "./useVoiceChat";
 import { panelStyle, pillButtonActiveStyle, pillButtonStyle } from "../ui/styles";
+import { MicIcon, MicOffIcon } from "../ui/icons";
 
 interface VoiceControlsProps {
   voice: VoiceChatState;
@@ -12,7 +13,7 @@ export function VoiceControls({ voice }: VoiceControlsProps) {
   if (!voice.enabled) {
     return (
       <button style={pillButtonStyle} onClick={voice.enable} disabled={voice.connecting}>
-        🎙 {voice.connecting ? "Connecting mic…" : "Enable voice chat"}
+        <MicIcon /> {voice.connecting ? "Connecting mic…" : "Enable voice chat"}
       </button>
     );
   }
@@ -23,7 +24,7 @@ export function VoiceControls({ voice }: VoiceControlsProps) {
   return (
     <div style={{ display: "flex", flexDirection: "column-reverse", gap: 8, alignItems: "center" }}>
       <button style={voice.muted ? pillButtonStyle : pillButtonActiveStyle} onClick={voice.toggleMute}>
-        {voice.muted ? "🔇 Unmute" : "🎙 Mute"}
+        {voice.muted ? <MicOffIcon /> : <MicIcon />} {voice.muted ? "Unmute" : "Mute"}
       </button>
       <div style={{ ...panelStyle, display: "flex", flexDirection: "column", gap: 6 }}>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>

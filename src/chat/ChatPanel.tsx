@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChatMessage } from "../multiplayer/types";
 import { panelStyle, pillButtonActiveStyle, pillButtonStyle } from "../ui/styles";
+import { ChatIcon } from "../ui/icons";
 
 interface ChatPanelProps {
   open: boolean;
@@ -8,11 +9,12 @@ interface ChatPanelProps {
   messages: ChatMessage[];
   selfId: string | null;
   onSend: (text: string) => void;
+  connected: boolean;
 }
 
 const MAX_MESSAGE_LENGTH = 500;
 
-export function ChatPanel({ open, onToggle, messages, selfId, onSend }: ChatPanelProps) {
+export function ChatPanel({ open, onToggle, messages, selfId, onSend, connected }: ChatPanelProps) {
   const [draft, setDraft] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -25,7 +27,7 @@ export function ChatPanel({ open, onToggle, messages, selfId, onSend }: ChatPane
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const text = draft.trim();
-    if (!text) return;
+    if (!text || !connected) return;
     onSend(text);
     setDraft("");
   }
@@ -33,7 +35,7 @@ export function ChatPanel({ open, onToggle, messages, selfId, onSend }: ChatPane
   return (
     <div style={{ display: "flex", flexDirection: "column-reverse", gap: 8, alignItems: "center" }}>
       <button style={open ? pillButtonActiveStyle : pillButtonStyle} onClick={onToggle}>
-        💬 Chat{!open && messages.length > 0 ? ` (${messages.length})` : ""}
+        <ChatIcon /> Chat{!open && messages.length > 0 ? ` (${messages.length})` : ""}
       </button>
       {open && (
         <div style={{ ...panelStyle, display: "flex", flexDirection: "column", width: 280, maxHeight: 320, padding: 0, overflow: "hidden" }}>
@@ -49,14 +51,18 @@ export function ChatPanel({ open, onToggle, messages, selfId, onSend }: ChatPane
               </div>
             ))}
           </div>
+          {!connected && (
+            <small style={{ color: "#ffb347", padding: "0 10px 6px" }}>Not connected — messages won't send until you reconnect.</small>
+          )}
           <form onSubmit={handleSubmit} style={{ display: "flex", borderTop: "1px solid rgba(255,255,255,0.15)" }}>
             <input
               value={draft}
               onChange={(e) => setDraft(e.target.value.slice(0, MAX_MESSAGE_LENGTH))}
               placeholder="Message…"
+              disabled={!connected}
               style={{ flex: 1, border: "none", padding: "8px 10px", background: "transparent", color: "white" }}
             />
-            <button type="submit" disabled={!draft.trim()} style={{ ...pillButtonStyle, borderRadius: 0, border: "none" }}>
+            <button type="submit" disabled={!connected || !draft.trim()} style={{ ...pillButtonStyle, borderRadius: 0, border: "none" }}>
               Send
             </button>
           </form>

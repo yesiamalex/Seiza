@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { WorldConfig } from "../config/worldConfig";
 import { optimizeVrmAvatar } from "../avatar/optimizeVrm";
 import { AvatarPreview } from "./AvatarPreview";
-import { pillButtonStyle } from "./styles";
+import { ACCENT_COLOR, inputStyle, primaryButtonStyle } from "./styles";
 
 interface JoinScreenProps {
   world: WorldConfig;
@@ -20,6 +20,25 @@ const PICK_TIME_CEILING_BYTES = 60 * 1024 * 1024;
 function formatMB(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }
+
+// A hand-placed (not random-generated-at-runtime) star field, two depths
+// — cheap, no images, no external font/asset loading (this project is
+// meant to run entirely on infrastructure the deployer owns; pulling a
+// font from a third-party CDN on the one screen every visitor sees first
+// would be a strange thing to do in that context).
+const STAR_DOTS_FAR = [
+  [6, 12], [18, 4], [33, 22], [47, 8], [61, 18], [74, 6], [88, 24], [95, 14],
+  [10, 38], [26, 46], [41, 34], [58, 42], [70, 52], [84, 38], [92, 58],
+  [14, 66], [29, 74], [45, 62], [63, 70], [77, 80], [90, 68],
+  [8, 88], [22, 92], [37, 84], [52, 94], [68, 88], [82, 96], [96, 84],
+]
+  .map(([x, y]) => `radial-gradient(1px 1px at ${x}% ${y}%, rgba(255,255,255,0.55), transparent 100%)`)
+  .join(",");
+const STAR_DOTS_NEAR = [
+  [12, 20], [44, 10], [67, 30], [83, 15], [24, 55], [58, 60], [90, 45], [36, 85], [72, 78], [15, 95],
+]
+  .map(([x, y]) => `radial-gradient(1.6px 1.6px at ${x}% ${y}%, rgba(240,210,154,0.85), transparent 100%)`)
+  .join(",");
 
 /**
  * Pre-join gate: pick a display name, preview and optionally optimize an
@@ -120,91 +139,124 @@ export function JoinScreen({ world, onJoin }: JoinScreenProps) {
   return (
     <div
       style={{
+        position: "relative",
         display: "grid",
         placeItems: "center",
         width: "100vw",
         height: "100vh",
         fontFamily: "system-ui, sans-serif",
-        background: "#111",
         color: "white",
+        background: "radial-gradient(120% 100% at 50% 0%, #1b2030 0%, #0c0e16 55%, #060709 100%)",
+        overflow: "hidden",
       }}
     >
+      <div
+        aria-hidden
+        style={{ position: "absolute", inset: 0, backgroundImage: STAR_DOTS_FAR, backgroundSize: "100% 100%", opacity: 0.9 }}
+      />
+      <div
+        aria-hidden
+        style={{ position: "absolute", inset: 0, backgroundImage: STAR_DOTS_NEAR, backgroundSize: "100% 100%" }}
+      />
+
       <form
         onSubmit={handleSubmit}
         style={{
+          position: "relative",
           display: "flex",
-          flexDirection: "column",
-          gap: 12,
-          width: 380,
-          padding: 24,
-          background: "#1c1c1c",
-          borderRadius: 12,
+          flexWrap: "wrap",
+          gap: 28,
+          width: "min(760px, 92vw)",
+          padding: "28px 32px",
+          background: "rgba(16,17,24,0.72)",
+          backdropFilter: "blur(14px)",
+          WebkitBackdropFilter: "blur(14px)",
+          borderRadius: 16,
+          border: "1px solid rgba(255,255,255,0.08)",
+          boxShadow: "0 24px 60px rgba(0,0,0,0.5)",
         }}
       >
-        <h1 style={{ margin: 0, fontSize: 20 }}>{world.displayName}</h1>
-
-        <AvatarPreview url={previewUrl ?? world.defaultAvatarUrl} />
-
-        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          Display name
-          <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} maxLength={32} required />
-        </label>
-
-        {allowUpload && (
-          <div
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDragActive(true);
-            }}
-            onDragLeave={() => setDragActive(false)}
-            onDrop={(e) => {
-              e.preventDefault();
-              setDragActive(false);
-              pickFile(e.dataTransfer.files?.[0] ?? null);
-            }}
-            style={{
-              border: `1px dashed ${dragActive ? "#7CFF9E" : "rgba(255,255,255,0.3)"}`,
-              borderRadius: 8,
-              padding: 10,
-              display: "flex",
-              flexDirection: "column",
-              gap: 6,
-            }}
-          >
-            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              Avatar (.vrm, optional — uses the default if skipped, or drag a file here)
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".vrm"
-                onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
-              />
-            </label>
-            {file && (
-              <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12 }}>
-                <input type="checkbox" checked={optimize} onChange={(e) => setOptimize(e.target.checked)} />
-                Optimize file size before uploading (shrinks large textures; skipped automatically if it wouldn't help)
-              </label>
-            )}
+        <div style={{ flex: "1 1 260px", minWidth: 260, display: "flex", flexDirection: "column", gap: 14 }}>
+          <div>
+            <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: ACCENT_COLOR, opacity: 0.85 }}>
+              Seiza · 星座
+            </div>
+            <h1 style={{ margin: "2px 0 0", fontSize: 26, fontWeight: 600, letterSpacing: "-0.01em" }}>{world.displayName}</h1>
+            <div style={{ width: 40, height: 2, marginTop: 10, background: `linear-gradient(90deg, ${ACCENT_COLOR}, transparent)` }} />
           </div>
-        )}
+          <AvatarPreview url={previewUrl ?? world.defaultAvatarUrl} />
+        </div>
 
-        {file && (
-          <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13 }}>
-            <input type="checkbox" checked={rightsConfirmed} onChange={(e) => setRightsConfirmed(e.target.checked)} />
-            <span>
-              I have the rights to use and share this avatar file. It will be visible to everyone in this room —
-              this deployment's maintainer does not curate or license-check uploaded avatars.
-            </span>
+        <div style={{ flex: "1 1 280px", minWidth: 260, display: "flex", flexDirection: "column", gap: 14, alignSelf: "center" }}>
+          <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, opacity: 0.85 }}>
+            Display name
+            <input
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              maxLength={32}
+              required
+              style={inputStyle}
+            />
           </label>
-        )}
 
-        {statusMessage && <p style={{ opacity: 0.75, margin: 0, fontSize: 13 }}>{statusMessage}</p>}
-        {error && <p style={{ color: "#ff6b6b", margin: 0 }}>{error}</p>}
+          {allowUpload && (
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragActive(true);
+              }}
+              onDragLeave={() => setDragActive(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragActive(false);
+                pickFile(e.dataTransfer.files?.[0] ?? null);
+              }}
+              style={{
+                border: `1px dashed ${dragActive ? ACCENT_COLOR : "rgba(255,255,255,0.2)"}`,
+                borderRadius: 10,
+                padding: 12,
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+                background: dragActive ? "rgba(232,195,122,0.06)" : "transparent",
+              }}
+            >
+              <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, opacity: 0.85 }}>
+                Avatar (.vrm, optional — drag a file here or browse)
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".vrm"
+                  onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
+                  style={{ fontSize: 12 }}
+                />
+              </label>
+              {file && (
+                <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, opacity: 0.8 }}>
+                  <input type="checkbox" checked={optimize} onChange={(e) => setOptimize(e.target.checked)} />
+                  Optimize file size before uploading (skipped automatically if it wouldn't help)
+                </label>
+              )}
+            </div>
+          )}
 
-        <button type="submit" style={pillButtonStyle} disabled={!canSubmit}>
-          {uploading ? "Joining…" : "Enter world"}
-        </button>
+          {file && (
+            <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 12, opacity: 0.85 }}>
+              <input type="checkbox" checked={rightsConfirmed} onChange={(e) => setRightsConfirmed(e.target.checked)} style={{ marginTop: 2 }} />
+              <span>
+                I have the rights to use and share this avatar file. It will be visible to everyone in this room —
+                this deployment's maintainer does not curate or license-check uploaded avatars.
+              </span>
+            </label>
+          )}
+
+          {statusMessage && <p style={{ opacity: 0.7, margin: 0, fontSize: 12 }}>{statusMessage}</p>}
+          {error && <p style={{ color: "#ff8a80", margin: 0, fontSize: 12 }}>{error}</p>}
+
+          <button type="submit" style={primaryButtonStyle} disabled={!canSubmit}>
+            {uploading ? "Joining…" : "Enter world"}
+          </button>
+        </div>
       </form>
     </div>
   );

@@ -9,7 +9,7 @@ import { VrmAvatar } from "./avatar/VrmAvatar";
 import { GestureController } from "./avatar/GestureController";
 import { useProceduralGait } from "./avatar/useProceduralGait";
 import { GESTURES } from "./avatar/gestures";
-import { usePartySocket } from "./multiplayer/usePartySocket";
+import { useRoomSocket } from "./multiplayer/useRoomSocket";
 import { RemotePlayers } from "./multiplayer/RemotePlayers";
 import { PlayerRig, type ViewMode } from "./player/PlayerRig";
 import { useVoiceChat } from "./voice/useVoiceChat";
@@ -22,6 +22,7 @@ import { HUD } from "./ui/HUD";
 import { JoinScreen } from "./ui/JoinScreen";
 import { CameraViewToggle } from "./ui/CameraViewToggle";
 import { pillButtonStyle } from "./ui/styles";
+import { VrHeadsetIcon } from "./ui/icons";
 import type { WorldObject } from "./multiplayer/types";
 
 const xrStore = createXRStore();
@@ -57,7 +58,7 @@ export default function App() {
 
   const voiceSignalHandlerRef = useRef<(from: string, data: unknown) => void>(() => {});
   const roomId = world && joined ? world.id : "";
-  const { selfId, players, objects, messages, send, addObject, moveObject, removeObject, sendChat, connected } = usePartySocket(
+  const { selfId, players, objects, messages, send, addObject, moveObject, removeObject, sendChat, connected, connectionState } = useRoomSocket(
     roomId,
     joined?.displayName ?? "",
     joined?.avatarUrl ?? "",
@@ -174,16 +175,24 @@ export default function App() {
         </XR>
       </Canvas>
 
-      <HUD connected={connected} worldName={world.displayName}>
+      <HUD connectionState={connectionState} worldName={world.displayName}>
         <button style={pillButtonStyle} onClick={() => xrStore.enterVR()}>
-          🥽 Enter VR
+          <VrHeadsetIcon /> Enter VR
         </button>
         <CameraViewToggle viewMode={viewMode} onToggle={() => setViewMode((v) => (v === "first" ? "third" : "first"))} />
         {voiceVisible && <VoiceControls voice={voice} />}
         <GestureMatchGame activeGesture={activeGesture} onRequestGesture={requestGesture} />
-        <ChatPanel open={chatOpen} onToggle={() => setChatOpen((v) => !v)} messages={messages} selfId={selfId} onSend={sendChat} />
+        <ChatPanel
+          open={chatOpen}
+          onToggle={() => setChatOpen((v) => !v)}
+          messages={messages}
+          selfId={selfId}
+          onSend={sendChat}
+          connected={connected}
+        />
         <EditToolbar
           enabled={editingEnabled}
+          connected={connected}
           editMode={editMode}
           onToggleEditMode={() => {
             setEditMode((v) => !v);

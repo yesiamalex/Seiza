@@ -2,25 +2,29 @@
 // glTF-Transform — https://github.com/donmccurdy/glTF-Transform), run
 // entirely client-side before upload.
 //
-// Scope is deliberately narrow: texture recompression/downscaling only
-// (via @gltf-transform/functions' textureCompress), nothing that touches
-// the scene graph, nodes, meshes, or accessors. Reasoning: there's no
-// dedicated VRM extension package for glTF-Transform (checked — none
-// exists as of writing), so VRM-specific data (humanoid bone→node index
-// mapping, spring bones, blend shapes) is invisible to it, carried along
-// only as opaque unknown-extension JSON. Structural transforms like
-// prune/weld/draco reindex or discard nodes/accessors based on *core*
-// glTF reachability, which can't see references made only from within
-// that unknown VRM JSON — so they carry a real, unverified risk of
-// silently corrupting a VRM's humanoid rig or breaking morph-target-based
-// facial expressions (Draco compression in particular is documented to
-// have morph-target support gaps generally, not VRM-specific). Texture
-// recompression only replaces image byte payloads that a material's
-// texture slot points to by index — the index itself, and everything
-// referencing it (including unknown VRM extension JSON), is untouched.
-// This is "don't force it if it doesn't safely apply" taken literally:
-// if this throws or doesn't shrink the file, callers should just use the
-// original upload.
+// CONFIRMED BUG (found via a real upload, not theorized): glTF-Transform's
+// WebIO drops *any* extension it doesn't have a registered `Extension`
+// class for — logging "Some extensions were not registered for I/O, and
+// will not be written" — and there's no dedicated VRM extension package
+// for it (checked). That includes the VRM extension itself, so a naive
+// read→textureCompress→write round trip silently strips all VRM data
+// (humanoid rig, blend shapes, everything) from the output, even though
+// the transform itself only touches textures. Confirmed by reproducing
+// it: an uploaded avatar came back "loaded but contained no VRM data."
+//
+// The one community package claiming to preserve unknown extensions
+// (glTF-Transform-Generic-Ext) is a single-commit, ~2-star, unmaintained
+// repo — not something to trust for silently mutating someone's avatar
+// before upload. So instead of trusting glTF-Transform's round trip (or
+// disabling this outright and losing the safety net if the library
+// situation ever changes), this independently re-parses `extensionsUsed`
+// from the raw GLB bytes on both sides of the transform — without going
+// through glTF-Transform's own bookkeeping — and only accepts the
+// optimized result if nothing was actually dropped. Today, for any real
+// VRM file, that check will correctly reject the optimized output and
+// fall back to the original (matching "don't force it if it doesn't
+// safely apply"); if glTF-Transform ever adds VRM extension support, or
+// this project registers a verified one, the check just starts passing.
 //
 // Dynamically imported (see JoinScreen.tsx) so the ~1-2MB of optimizer
 // code + WASM/codec deps isn't part of the app's initial bundle — most
@@ -47,6 +51,8 @@ export async function optimizeVrmAvatar(file: File): Promise<OptimizeResult> {
     ]);
 
     const bytes = new Uint8Array(await file.arrayBuffer());
+    const inputExtensions = readExtensionsUsed(bytes);
+
     const io = new WebIO();
     const document = await io.readBinary(bytes);
 
@@ -59,6 +65,18 @@ export async function optimizeVrmAvatar(file: File): Promise<OptimizeResult> {
 
     const optimized = await io.writeBinary(document);
     const optimizedBytes = optimized.byteLength;
+    const outputExtensions = readExtensionsUsed(optimized);
+
+    const dropped = inputExtensions.filter((ext) => !outputExtensions.includes(ext));
+    if (dropped.length > 0) {
+      return {
+        blob: file,
+        originalBytes,
+        optimizedBytes: originalBytes,
+        applied: false,
+        reason: `Optimization would drop data this avatar needs (${dropped.join(", ")}) — using the original file.`,
+      };
+    }
 
     if (optimizedBytes >= originalBytes * MIN_USEFUL_SAVINGS_RATIO) {
       return {
@@ -85,5 +103,34 @@ export async function optimizeVrmAvatar(file: File): Promise<OptimizeResult> {
       applied: false,
       reason: "Optimization isn't available for this file — using the original file.",
     };
+  }
+}
+
+/**
+ * Reads `extensionsUsed` straight out of the raw glTF JSON — deliberately
+ * not via glTF-Transform's own Document/JSONDocument, so this check is
+ * independent of (and can catch bugs in) glTF-Transform's own claims
+ * about what it preserved.
+ */
+function readExtensionsUsed(bytes: Uint8Array): string[] {
+  try {
+    const isGlb = bytes.length >= 4 && bytes[0] === 0x67 && bytes[1] === 0x6c && bytes[2] === 0x54 && bytes[3] === 0x46; // ASCII "glTF"
+    let jsonText: string;
+    if (isGlb) {
+      const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      const chunkLength = view.getUint32(12, true);
+      jsonText = new TextDecoder("utf-8").decode(bytes.subarray(20, 20 + chunkLength));
+    } else {
+      jsonText = new TextDecoder("utf-8").decode(bytes);
+    }
+    const json = JSON.parse(jsonText) as { extensionsUsed?: unknown };
+    return Array.isArray(json.extensionsUsed) ? json.extensionsUsed.filter((e): e is string => typeof e === "string") : [];
+  } catch {
+    // If we can't even parse it to check, that's not a safety guarantee —
+    // treat it the same as "can't verify" by returning nothing, which
+    // just means the "was anything dropped" comparison finds no losses
+    // to report. The outer try/catch in optimizeVrmAvatar covers actual
+    // parse failures of the file itself.
+    return [];
   }
 }

@@ -62,7 +62,7 @@ interface UseVoiceChatArgs {
 
 /**
  * Peer-to-peer WebRTC voice mesh. Signaling is relayed through the
- * existing PartyKit room (see party/room.ts's "voiceSignal" case) — no
+ * existing room server (see worker/room.ts's "voiceSignal" case) — no
  * separate media server, everything stays on the deployer's own
  * Cloudflare account for signaling; actual audio flows directly between
  * browsers (plus an optional TURN relay if the deployer configures one

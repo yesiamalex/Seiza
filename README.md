@@ -53,47 +53,50 @@ Clicking this clones the repo into **your own** GitHub account and
 provisions everything into **your own** Cloudflare account — nothing
 touches infrastructure the maintainers run.
 
-The deploy is two pieces, and that's a deliberate, documented choice
-(see the comment in `wrangler.jsonc`), not an oversight:
+**This is a single deploy** — one Worker (`wrangler.jsonc` /
+`worker/index.ts`) serves the static frontend, the `/api/avatars`
+upload endpoint, and the realtime room server (`worker/room.ts`, a
+Durable Object bound directly into the same Worker):
 
-1. **This Worker** (`wrangler.jsonc` / `worker/index.ts`) — serves the
-   static frontend and the `/api/avatars` upload endpoint, backed by a
-   Workers KV namespace (chosen over R2 specifically because R2 requires
-   a payment method on file to activate at all, even for free-tier
-   usage — KV doesn't). The namespace is created automatically the first
-   time you build (`npm run build` runs `scripts/ensure-kv-namespace.mjs`,
-   which looks it up by title and reuses it if it already exists) —
-   including on Cloudflare's own Git-connected build pipeline (Workers
-   Builds), where there's no chance to run a manual setup command before
-   the first deploy. Locally:
-   ```bash
-   npm run worker:deploy   # builds, ensures the KV namespace exists, deploys
-   ```
-   If that still fails with a permissions error, create the namespace
-   once yourself (Cloudflare dashboard → Workers & Pages → KV → Create
-   namespace → `seiza-avatars`) and paste its id into wrangler.jsonc's
-   `AVATARS` binding, then retry.
-   >  **Tradeoff to know about:** KV is eventually consistent (global
-   >  propagation can lag), unlike R2's strong read-after-write. A
-   >  freshly-uploaded avatar could briefly 404 for someone at a
-   >  different edge location right after upload. Acceptable for this
-   >  project's classroom scale; worth knowing if you're evaluating it
-   >  for something more real-time-critical.
-2. **The realtime room server** (`party/room.ts`) — deploys separately
-   via PartyKit's own control plane on top of Durable Objects:
-   ```bash
-   npm run party:deploy
-   ```
-   Then set `VITE_SEIZA_PARTY_HOST` (in your Worker's env vars) to the
-   host PartyKit gives you, and rebuild/redeploy the Worker.
+```bash
+npm run worker:deploy   # builds, ensures the KV namespace exists, deploys everything
+```
+
+This used to be two separate deploys — a Worker plus a room server
+hosted on PartyKit. That's gone: PartyKit's last real release was over a
+year old and its dev CLI had an unfixed Windows path bug that broke
+local development entirely on some machines, so the room server was
+ported onto a plain Cloudflare Durable Object instead (see
+`worker/room.ts`'s header comment for the detail). One side effect of
+an unmaintained dependency turning into a real problem: the deploy
+story got simpler, not more complicated.
+
+Avatars are stored in a Workers KV namespace (chosen over R2
+specifically because R2 requires a payment method on file to activate
+at all, even for free-tier usage — KV doesn't). The namespace is
+created automatically the first time you build (`npm run build` runs
+`scripts/ensure-kv-namespace.mjs`, which looks it up by title and
+reuses it if it already exists) — including on Cloudflare's own
+Git-connected build pipeline (Workers Builds), where there's no chance
+to run a manual setup command before the first deploy. If it still
+fails with a permissions error, create the namespace once yourself
+(Cloudflare dashboard → Workers & Pages → KV → Create namespace →
+`seiza-avatars`) and paste its id into wrangler.jsonc's `AVATARS`
+binding, then retry.
+
+> **Tradeoff to know about:** KV is eventually consistent (global
+> propagation can lag), unlike R2's strong read-after-write. A
+> freshly-uploaded avatar could briefly 404 for someone at a different
+> edge location right after upload. Acceptable for this project's
+> classroom scale; worth knowing if you're evaluating it for something
+> more real-time-critical.
 
 ## Local development
 
 ```bash
 npm install
 cp .env.example .env.local     # then edit as needed
-npm run party:dev              # realtime room server, separate terminal
-npm run build && npm run worker:dev   # Worker (static + avatar upload API), separate terminal
+npm run build && npm run worker:dev   # Worker + room server, separate terminal
 npm run dev                    # frontend, with hot reload
 ```
 
@@ -102,12 +105,11 @@ land on the join screen, then a real procedurally-built room — see
 `public/worlds/default/README.md` for what is and isn't bundled, and
 `THIRD_PARTY_ASSETS.md` before adding any 3D asset to the repo.
 
-> **Known issue on Windows:** `npm run party:dev` (PartyKit's own CLI,
-> v0.0.111) has been observed crashing immediately with `TypeError:
-> Invalid URL` / `ERR_INVALID_URL` in its internal build step on Windows
-> — a bug in PartyKit's own path handling, not in this repo's code. If
-> you hit this, try running it under WSL, or check whether a newer
-> `partykit` release has fixed it before assuming it's something you did.
+`wrangler dev` simulates the Worker, KV, and the Durable Object room
+server locally (via Miniflare) with no Cloudflare login required — this
+was verified end-to-end (real WebSocket connect/join/broadcast/
+disconnect against a local `wrangler dev` instance) while building this,
+not just assumed to work.
 
 ## Customizing a deployment ("one world per deployment")
 
@@ -130,8 +132,8 @@ src/            frontend (React Three Fiber + WebXR + VRM)
   scene/        procedural base environment + deployer scene.glb overlay
   ui/           join screen, HUD
   interactions/ pedagogical interaction modules (gesture-match game, more TBD)
-party/          realtime room server (PartyKit / Durable Objects)
-worker/         Cloudflare Worker: static hosting + avatar upload API (KV)
+worker/         Cloudflare Worker: static hosting, avatar upload API (KV),
+                and the realtime room server (room.ts, a Durable Object)
 public/worlds/  per-deployment world configs — the customization surface
 scripts/        setup-time asset fetching for non-bundled, license-restricted assets
 ```

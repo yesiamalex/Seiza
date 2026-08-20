@@ -1,13 +1,22 @@
 import type { ReactNode } from "react";
 import { panelStyle } from "./styles";
+import { SignalIcon, SignalOffIcon } from "./icons";
+import type { ConnectionState } from "../multiplayer/useRoomSocket";
 
 interface HUDProps {
-  connected: boolean;
+  connectionState: ConnectionState;
   worldName: string;
   children?: ReactNode;
 }
 
-export function HUD({ connected, worldName, children }: HUDProps) {
+const STATUS_LABEL: Record<ConnectionState, string> = {
+  connected: "connected",
+  connecting: "connecting…",
+  reconnecting: "reconnecting…",
+};
+
+export function HUD({ connectionState, worldName, children }: HUDProps) {
+  const connected = connectionState === "connected";
   return (
     <div
       style={{
@@ -23,8 +32,12 @@ export function HUD({ connected, worldName, children }: HUDProps) {
         color: "white",
       }}
     >
-      <div style={{ ...panelStyle, alignSelf: "flex-start", padding: "6px 12px", fontSize: 13 }}>
-        <strong>{worldName}</strong> — {connected ? "connected" : "connecting…"}
+      <div style={{ ...panelStyle, alignSelf: "flex-start", padding: "6px 12px", fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
+        <strong>{worldName}</strong>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, opacity: 0.85 }}>
+          {connected ? <SignalIcon size={14} /> : <SignalOffIcon size={14} />}
+          {STATUS_LABEL[connectionState]}
+        </span>
       </div>
       <div
         style={{

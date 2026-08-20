@@ -23,6 +23,9 @@ const FOV_MAX = 90;
 const FOV_DEFAULT = 75;
 const ZOOM_WHEEL_SENSITIVITY = 0.0035;
 const MOVE_TARGET_ARRIVE_DISTANCE = 0.25;
+const JUMP_SPEED = 5; // initial upward velocity, m/s
+const GRAVITY = 14; // m/s^2
+const GROUNDED_EPSILON = 0.01;
 
 interface PlayerRigProps {
   spawnPoint: [number, number, number];
@@ -86,6 +89,8 @@ export function PlayerRig({
   const virtualCameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   if (!virtualCameraRef.current) virtualCameraRef.current = new THREE.PerspectiveCamera();
   const thirdPersonDistanceRef = useRef(THIRD_PERSON_DEFAULT_DISTANCE);
+  const verticalVelocityRef = useRef(0);
+  const groundEyeY = spawnPoint[1] + EYE_HEIGHT;
 
   useEffect(() => {
     virtualCameraRef.current!.position.set(spawnPoint[0], spawnPoint[1] + EYE_HEIGHT, spawnPoint[2]);
@@ -110,6 +115,13 @@ export function PlayerRig({
       keysRef.current[e.code] = true;
       if (["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.code)) {
         moveTargetRef.current = null; // manual input cancels an in-progress click-to-move
+      }
+      if (e.code === "Space") {
+        e.preventDefault(); // Space otherwise scrolls the page when nothing else has focus
+        const vcam = virtualCameraRef.current!;
+        if (vcam.position.y <= groundEyeY + GROUNDED_EPSILON) {
+          verticalVelocityRef.current = JUMP_SPEED;
+        }
       }
     };
     const onKeyUp = (e: KeyboardEvent) => (keysRef.current[e.code] = false);
@@ -186,6 +198,17 @@ export function PlayerRig({
       }
     }
     clampToBounds(vcam.position);
+
+    // Gravity/jump — applied every frame (not just while airborne) so
+    // landing back on a flat floor (the only terrain this scaffold has —
+    // see BOUNDS_RADIUS's own note about no real collision) is a clean
+    // clamp back to groundEyeY rather than needing separate ground-detection.
+    verticalVelocityRef.current -= GRAVITY * delta;
+    vcam.position.y += verticalVelocityRef.current * delta;
+    if (vcam.position.y <= groundEyeY) {
+      vcam.position.y = groundEyeY;
+      verticalVelocityRef.current = 0;
+    }
 
     const yaw = new THREE.Euler().setFromQuaternion(vcam.quaternion, "YXZ").y;
     positionRef.current = [vcam.position.x, vcam.position.y - EYE_HEIGHT, vcam.position.z];

@@ -1,8 +1,10 @@
-// Cloudflare Worker `main` script. Handles the avatar-upload API and
-// falls through to the static SPA build (via the `ASSETS` binding) for
-// everything else. This is separate from the realtime room server
-// (party/room.ts, deployed via PartyKit) — see wrangler.jsonc for why
-// the deploy is still two pieces rather than one.
+// Cloudflare Worker `main` script. Handles the avatar-upload API, routes
+// WebSocket upgrades to the room Durable Object (room.ts), and falls
+// through to the static SPA build (via the `ASSETS` binding) for
+// everything else. This is now a single deploy — see README's deploy
+// section for why that's a change from earlier (this project used to
+// run its realtime room server on PartyKit, deployed separately; that's
+// been replaced by room.ts, a plain Durable Object bound directly here).
 //
 // Avatars are stored in Workers KV, not R2. R2 requires a payment
 // method on file to activate at all (even to stay within its free
@@ -12,14 +14,19 @@
 // (KV is eventually consistent, unlike R2's strong read-after-write).
 //
 // Not covered by `npm run typecheck` (root tsconfig only includes
-// `src/`, same as party/) — see worker/tsconfig.json for editor support
-// via @cloudflare/workers-types, and sanity-check KV API shapes against
+// `src/`) — see worker/tsconfig.json for editor support via
+// @cloudflare/workers-types, and sanity-check API shapes against
 // current Cloudflare docs before relying on this in production.
+
+import { SeizaRoom } from "./room";
 
 export interface Env {
   ASSETS: Fetcher;
   AVATARS: KVNamespace;
+  ROOMS: DurableObjectNamespace<SeizaRoom>;
 }
+
+export { SeizaRoom };
 
 interface AvatarMetadata {
   contentType: string;
@@ -65,18 +72,33 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
+    if (url.pathname.startsWith("/rooms/")) {
+      return routeToRoom(request, url, env);
+    }
+
     if (url.pathname === "/api/avatars" && request.method === "POST") {
       return handleUpload(request, env);
     }
 
     const avatarMatch = url.pathname.match(/^\/api\/avatars\/([a-f0-9-]+\.vrm)$/);
     if (avatarMatch && request.method === "GET") {
-      return handleGetAvatar(avatarMatch[1], env);
+      return handleGetAvatar(request, avatarMatch[1], env);
     }
 
     return env.ASSETS.fetch(request);
   },
 };
+
+/** One Durable Object instance per room id (the world id — see
+ *  src/multiplayer/useRoomSocket.ts) — `idFromName` deterministically
+ *  maps the same room id to the same instance every time. */
+function routeToRoom(request: Request, url: URL, env: Env): Response | Promise<Response> {
+  const roomId = decodeURIComponent(url.pathname.slice("/rooms/".length));
+  if (!roomId) return new Response("Missing room id", { status: 400 });
+  const id = env.ROOMS.idFromName(roomId);
+  const stub = env.ROOMS.get(id);
+  return stub.fetch(request);
+}
 
 async function handleUpload(request: Request, env: Env): Promise<Response> {
   const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
@@ -113,19 +135,30 @@ async function handleUpload(request: Request, env: Env): Promise<Response> {
   });
 }
 
-async function handleGetAvatar(key: string, env: Env): Promise<Response> {
+async function handleGetAvatar(request: Request, key: string, env: Env): Promise<Response> {
+  // Every peer in a room fetches every other peer's avatar, and the same
+  // avatar gets re-fetched on every page reload — without edge caching
+  // that's a KV read per fetch per colo, which adds up fast against the
+  // free tier's 100k reads/day. Keys are random UUIDs that are never
+  // overwritten (only TTL-expired), so caching the response at
+  // Cloudflare's edge (not just the immutable Cache-Control header,
+  // which only helps the *browser's own* cache) is safe and cheap: a
+  // cache hit costs zero KV reads.
+  const cache = caches.default;
+  const cached = await cache.match(request);
+  if (cached) return cached;
+
   const { value, metadata } = await env.AVATARS.getWithMetadata<AvatarMetadata>(key, "arrayBuffer");
   if (!value) return new Response("Not found", { status: 404 });
-  return new Response(value, {
+
+  const response = new Response(value, {
     headers: {
       "content-type": metadata?.contentType ?? "model/gltf-binary",
-      // Keys are random UUIDs, one file per key, never overwritten —
-      // safe to cache aggressively. (They do expire after
-      // AVATAR_TTL_SECONDS, but that's a KV-side deletion, not a change
-      // to what's served for this key while it exists.)
       "cache-control": "public, max-age=31536000, immutable",
     },
   });
+  await cache.put(request, response.clone());
+  return response;
 }
 
 function jsonError(message: string, status: number): Response {

@@ -1,18 +1,16 @@
 {
-  // Cloudflare Workers config for the frontend + avatar-upload API.
-  // This is what a "Deploy to Cloudflare" button targets.
+  // Cloudflare Workers config for the whole app: static frontend,
+  // avatar-upload API, and the realtime room server — one deploy, one
+  // Worker. This is what a "Deploy to Cloudflare" button targets.
   //
-  // DEPLOY IS STILL TWO PIECES, deliberately: this Worker (static SPA +
-  // POST/GET /api/avatars, backed by the KV namespace below) deploys via
-  // this file, but the realtime room server (party/room.ts) deploys
-  // separately via `npx partykit deploy` (its own control plane on top
-  // of Durable Objects). Porting party/room.ts into a Durable Object
-  // bound directly here would get to a true single-button deploy, but
-  // hinges on the exact shape of the DO WebSocket Hibernation API, which
-  // this project hasn't verified against current Cloudflare docs — see
-  // party/room.ts's own header comment. Don't attempt that unification
-  // without checking current docs first; two verified pieces beats one
-  // unverified guess.
+  // This used to be two pieces (this Worker, plus a separately-deployed
+  // PartyKit room server) because porting the room server into a
+  // directly-bound Durable Object hinged on verifying the DO WebSocket
+  // Hibernation API against current Cloudflare docs before relying on
+  // it. That's since been done — see worker/room.ts — and PartyKit
+  // turned out to be a bigger problem than "unverified": its last real
+  // release was over a year old, and its dev CLI has an unfixed Windows
+  // path bug that broke local development entirely on some machines.
   "name": "seiza",
   "compatibility_date": "2026-01-01",
   "main": "worker/index.ts",
@@ -21,6 +19,24 @@
     "binding": "ASSETS",
     "not_found_handling": "single-page-application"
   },
+  "durable_objects": {
+    "bindings": [
+      // The realtime room server (worker/room.ts) — one DO instance per
+      // world/room id (see src/multiplayer/useRoomSocket.ts), routed to
+      // via idFromName so the same room id always reaches the same
+      // instance.
+      { "name": "ROOMS", "class_name": "SeizaRoom" }
+    ]
+  },
+  "migrations": [
+    // Required the first time a Durable Object class is introduced.
+    // new_sqlite_classes (vs. the older new_classes) is the
+    // Cloudflare-recommended default for new DOs — see
+    // https://developers.cloudflare.com/durable-objects/reference/data-location/
+    // before changing this; migrating an already-deployed class's
+    // storage backend after the fact is not a simple config edit.
+    { "tag": "v1", "new_sqlite_classes": ["SeizaRoom"] }
+  ],
   "kv_namespaces": [
     // Stores user-uploaded .vrm avatars (see worker/index.ts and
     // src/ui/JoinScreen.tsx). KV over R2 specifically because R2

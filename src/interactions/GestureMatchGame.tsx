@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { GESTURES } from "../avatar/gestures";
 import { panelStyle, pillButtonStyle } from "../ui/styles";
+import { WaveIcon } from "../ui/icons";
 
 interface GestureMatchGameProps {
   activeGesture: string | null;
@@ -32,7 +33,7 @@ export function GestureMatchGame({ activeGesture, onRequestGesture }: GestureMat
   return (
     <div style={{ display: "flex", flexDirection: "column-reverse", gap: 8, alignItems: "center" }}>
       <button style={pillButtonStyle} onClick={() => setOpen((v) => !v)}>
-        🙇 Gestures {score > 0 ? `(${score})` : ""}
+        <WaveIcon /> Gestures {score > 0 ? `(${score})` : ""}
       </button>
       {open && (
         <div style={{ ...panelStyle, display: "flex", flexDirection: "column", gap: 8 }}>
