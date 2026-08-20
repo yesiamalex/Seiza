@@ -74,7 +74,15 @@ export function useRoomSocket(
   onVoiceSignalRef.current = onVoiceSignal;
 
   const send = useCallback((msg: ClientMessage) => {
-    socketRef.current?.send(JSON.stringify(msg));
+    // socketRef.current is assigned the moment `new WebSocket()` runs,
+    // not once it's actually open — a plain truthy/null check isn't
+    // enough. Sending while still CONNECTING (e.g. a UI click that
+    // lands in the gap between construction and the "open" event) threw
+    // an uncaught InvalidStateError rather than just silently no-op-ing.
+    const socket = socketRef.current;
+    if (socket?.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify(msg));
+    }
   }, []);
 
   const addObject = useCallback(

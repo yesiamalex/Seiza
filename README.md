@@ -15,10 +15,14 @@ Japanese XR conference, April 2027).
 - **A real default room out of the box** — procedurally generated
   (floor, walls, pillars, seating), no bundled 3D assets required. A
   deployer can layer their own glTF scene on top via `world.json`.
-- **Movement** — desktop WASD + mouse-look (hold Shift to run), VR
-  thumbstick locomotion, click-to-move in third person. First/third-person
-  camera toggle with scroll-wheel zoom (FOV in first person, distance in
-  third).
+- **Movement** — desktop WASD + mouse-look, Shift to run, Space to jump
+  (real gravity, not a canned animation), VR thumbstick locomotion,
+  click-to-move in third person. First/third-person camera toggle with
+  scroll-wheel zoom (FOV in first person, follow-distance in third).
+  First person uses pointer lock (classic FPS mouse-look, click to
+  capture the cursor); third person deliberately does not — click-drag
+  orbits the view instead, cursor free otherwise, so you can inspect
+  your own avatar or click HUD/floor without the camera fighting you.
 - **Peer-to-peer voice chat** — WebRTC mesh, signaled through the same
   room server used for position sync, with a 3D speaking indicator and
   distance-based volume falloff. No separate media infrastructure; see
@@ -193,15 +197,26 @@ deliberate limitations (paper Section 7 has the fuller discussion):
 - **Multiplayer sync is untested at scale.** Works correctly in small
   local testing; no load testing has been done against `maxOccupants`-
   sized rooms.
-- **No physics/collision.** Movement bounds are a simple radius clamp,
-  not real collision with walls or placed objects.
+- **No world/object physics.** Movement bounds are a simple radius clamp
+  (no collision with walls or placed objects), and placed objects don't
+  fall, roll, or collide — there's no rigid-body simulation. VRM's own
+  spring-bone physics (hair/skirt secondary motion) is real and does run
+  via `vrm.update()`, so avatars aren't *entirely* without physics. A
+  real object physics layer (e.g.
+  [@react-three/rapier](https://github.com/pmndrs/react-three-rapier))
+  is a large enough addition — new dependency, collision authoring for
+  BaseEnvironment, network sync implications — that it's future work to
+  scope deliberately, not something to bolt on inline.
 - **The walk/run cycle is procedural, not a real animation clip.** No
   redistribution-clear "universal rig" mocap walk/run VRMA exists in this
   repo to bundle — same THIRD_PARTY_ASSETS.md diligence that applies to
   gestures. `useProceduralGait.ts`'s sine-wave limb swing is a stand-in;
-  its bone-swing sign/axis conventions haven't been visually verified
-  against a real uploaded VRM in a running browser, only reasoned about
-  from the VRM normalized-bone spec.
+  it blends continuously around each bone's own captured rest rotation
+  now (an earlier version snapped to/from literal T-pose while idle,
+  visible as arms unnaturally held out and spring-bone hair overreacting
+  to the discontinuity — fixed), but the swing's direction/axis still
+  hasn't been visually verified against a real uploaded VRM, only
+  reasoned about from the VRM normalized-bone spec.
 - **Chat has no history.** Room text chat is relay-only, not persisted —
   reconnecting or a new joiner starts with an empty chat panel.
 - **Avatar optimization is texture-only, by design.** It resizes/re-encodes

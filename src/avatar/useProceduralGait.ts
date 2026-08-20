@@ -15,20 +15,36 @@ import type { VRM, VRMHumanBoneName, VRMHumanoid } from "@pixiv/three-vrm";
 // regardless of the source rig's original bone axes (the same reason
 // GestureController.tsx plays VRMA clips against normalized bones).
 //
-// Caveat: the swing direction/axis below was chosen from the VRM
-// normalized-rig convention (rest pose = T-pose, arms out) but hasn't
-// been visually verified against a real uploaded VRM in a running
-// browser. If a limb appears to swing backward or through itself on a
-// real avatar, flip the sign on the relevant SWING_* constant — the
-// values are deliberately small so a wrong sign is a subtle glitch, not
-// a broken-looking pose.
+// IMPORTANT: rotation.x=0 on a normalized bone is NOT "arms relaxed at
+// your sides" — it's literal T-pose (see applyTPose.ts, which hit this
+// same fact from the other direction). An earlier version of this file
+// swung around, and idle-reset to, rotation.x=0 directly, which forced
+// the avatar into a T-pose-like stance whenever standing still, and
+// visibly snapped between that and the walk cycle's own zero-anchored
+// swing the instant movement started/stopped — a discontinuity that also
+// made spring-bone physics (hair, skirts) overreact. Fixed by capturing
+// each bone's own natural rest rotation once (from the file as loaded,
+// before this hook ever touches it) and blending continuously around
+// THAT baseline instead of zero, with amplitude fading smoothly rather
+// than switching between two hand-written states.
+//
+// Caveat that's still unresolved: the swing direction/axis was chosen
+// from the VRM normalized-rig convention but hasn't been visually
+// verified against a real uploaded VRM. If a limb swings backward or
+// through itself, flip the sign on the relevant SWING constant.
 
 const CYCLE_SPEED = 7; // radians of gait phase per second, at speed ~2 m/s
 const LEG_SWING = 0.5; // radians
 const ARM_SWING = 0.3; // radians
 const MAX_REFERENCE_SPEED = 5; // m/s — amplitude saturates at/above this
-const IDLE_SPEED_THRESHOLD = 0.05; // m/s below which we call it "not moving"
+const AMPLITUDE_RAMP_START = 0.15; // m/s — below this, amplitude is 0
 const SPEED_SMOOTHING = 4; // higher = snappier speed estimate, lower = smoother
+const GAIT_BONES: VRMHumanBoneName[] = ["leftUpperLeg", "rightUpperLeg", "leftUpperArm", "rightUpperArm"];
+
+function smoothstep(edge0: number, edge1: number, x: number): number {
+  const t = THREE.MathUtils.clamp((x - edge0) / (edge1 - edge0), 0, 1);
+  return t * t * (3 - 2 * t);
+}
 
 /**
  * Applies a procedural walk/run cycle to a VRM's leg/arm bones, scaled by
@@ -45,11 +61,22 @@ export function useProceduralGait(vrm: VRM | null, getPosition: () => [number, n
   const prevPosRef = useRef<[number, number, number] | null>(null);
   const speedRef = useRef(0);
   const phaseRef = useRef(0);
-  const settledRef = useRef(true);
+  const restRotationsRef = useRef<Map<VRMHumanBoneName, number> | null>(null);
+  const capturedForRef = useRef<VRM | null>(null);
 
   useFrame((_, delta) => {
     const humanoid = vrm?.humanoid;
     if (!humanoid || delta <= 0) return;
+
+    if (capturedForRef.current !== vrm) {
+      const rests = new Map<VRMHumanBoneName, number>();
+      for (const name of GAIT_BONES) {
+        rests.set(name, humanoid.getNormalizedBoneNode(name)?.rotation.x ?? 0);
+      }
+      restRotationsRef.current = rests;
+      capturedForRef.current = vrm;
+    }
+    const rests = restRotationsRef.current!;
 
     const pos = getPosition();
     if (prevPosRef.current) {
@@ -63,36 +90,22 @@ export function useProceduralGait(vrm: VRM | null, getPosition: () => [number, n
     if (suppressed) return;
 
     const speed = speedRef.current;
-    if (speed < IDLE_SPEED_THRESHOLD) {
-      if (!settledRef.current) {
-        resetBone(humanoid, "leftUpperLeg");
-        resetBone(humanoid, "rightUpperLeg");
-        resetBone(humanoid, "leftUpperArm");
-        resetBone(humanoid, "rightUpperArm");
-        phaseRef.current = 0;
-        settledRef.current = true;
-      }
-      return;
-    }
-    settledRef.current = false;
-
-    const amplitude = Math.min(1, speed / MAX_REFERENCE_SPEED);
+    // Continuous amplitude (0 well below walking speed, ramping smoothly
+    // up to 1) rather than a hard idle/walking branch — the swing term
+    // is `amplitude * sin(phase)`, so at amplitude 0 every bone just sits
+    // at its own rest rotation with no snap to get there.
+    const amplitude = smoothstep(AMPLITUDE_RAMP_START, MAX_REFERENCE_SPEED, speed);
     phaseRef.current += delta * CYCLE_SPEED * (0.6 + amplitude);
-    const swing = Math.sin(phaseRef.current);
+    const swing = Math.sin(phaseRef.current) * amplitude;
 
-    setBoneSwing(humanoid, "leftUpperLeg", swing * LEG_SWING * amplitude);
-    setBoneSwing(humanoid, "rightUpperLeg", -swing * LEG_SWING * amplitude);
-    setBoneSwing(humanoid, "leftUpperArm", -swing * ARM_SWING * amplitude);
-    setBoneSwing(humanoid, "rightUpperArm", swing * ARM_SWING * amplitude);
+    setBoneRotation(humanoid, "leftUpperLeg", (rests.get("leftUpperLeg") ?? 0) + swing * LEG_SWING);
+    setBoneRotation(humanoid, "rightUpperLeg", (rests.get("rightUpperLeg") ?? 0) - swing * LEG_SWING);
+    setBoneRotation(humanoid, "leftUpperArm", (rests.get("leftUpperArm") ?? 0) - swing * ARM_SWING);
+    setBoneRotation(humanoid, "rightUpperArm", (rests.get("rightUpperArm") ?? 0) + swing * ARM_SWING);
   });
 }
 
-function setBoneSwing(humanoid: VRMHumanoid, name: VRMHumanBoneName, angle: number) {
+function setBoneRotation(humanoid: VRMHumanoid, name: VRMHumanBoneName, angle: number) {
   const node = humanoid.getNormalizedBoneNode(name);
   if (node) node.rotation.x = angle;
-}
-
-function resetBone(humanoid: VRMHumanoid, name: VRMHumanBoneName) {
-  const node = humanoid.getNormalizedBoneNode(name);
-  if (node) node.rotation.x = 0;
 }

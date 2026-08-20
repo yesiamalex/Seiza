@@ -1,32 +1,20 @@
-import type { VRM, VRMHumanoid } from "@pixiv/three-vrm";
+import type { VRM } from "@pixiv/three-vrm";
 
-// three-vrm's humanoid.resetNormalizedPose() resets to the *file's own*
-// authored rest pose — VRM spec guidance recommends that be a literal
-// T-pose, but real-world exports don't reliably comply (relaxed A-pose,
-// tool-specific quirks). For a preview meant to compare avatars
-// consistently, that's not good enough. This instead absolute-sets the
-// arm rotations on the *normalized* rig, whose local axes (not
-// necessarily rest angles) ARE guaranteed consistent across avatars —
-// that's the actual portability guarantee VRM normalization provides,
-// and the same property GestureController.tsx relies on to play one
-// gesture clip across any uploaded VRM.
-//
-// Axis/sign not visually verified against a real avatar in a running
-// browser (same caveat as useProceduralGait.ts) — if arms end up
-// pointing down/up instead of straight out on a real file, flip
-// ARM_ANGLE's sign; it won't produce a broken pose either way since the
-// base (identity) rotation is still reset first.
-const ARM_ANGLE = Math.PI / 2;
-
+// three-vrm's humanoid.resetNormalizedPose() resets to the *normalized*
+// rig's rest pose, which the VRM spec defines as T-pose by construction
+// (see VRMHumanoid's own docs: "A VRMPose of its normalized human bones
+// that is its default state" / the normalized rig exists specifically so
+// rest == T-pose is guaranteed regardless of the source file's own
+// authored bind pose). That earlier assumption was wrong in this file's
+// first version: it *also* added an explicit ±90° arm rotation on top of
+// the reset, on the theory that reset alone wasn't reliably T-pose.
+// Real-world evidence (a live screenshot) showed the opposite problem —
+// arms rotated a further 90° past T-pose into pointing straight up —
+// which is consistent with reset alone already being correct T-pose, and
+// the added rotation double-applying on top of it. Removed here; if this
+// turns out wrong for some file, the fix is deleting this whole
+// workaround, not re-adding a guessed rotation on top of the reset.
 export function applyTPose(vrm: VRM) {
-  const humanoid = vrm.humanoid;
-  humanoid.resetNormalizedPose();
-  setArmZ(humanoid, "leftUpperArm", -ARM_ANGLE);
-  setArmZ(humanoid, "rightUpperArm", ARM_ANGLE);
-  humanoid.update();
-}
-
-function setArmZ(humanoid: VRMHumanoid, name: "leftUpperArm" | "rightUpperArm", angle: number) {
-  const node = humanoid.getNormalizedBoneNode(name);
-  if (node) node.rotation.z = angle;
+  vrm.humanoid.resetNormalizedPose();
+  vrm.humanoid.update();
 }

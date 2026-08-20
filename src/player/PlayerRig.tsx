@@ -26,6 +26,8 @@ const MOVE_TARGET_ARRIVE_DISTANCE = 0.25;
 const JUMP_SPEED = 5; // initial upward velocity, m/s
 const GRAVITY = 14; // m/s^2
 const GROUNDED_EPSILON = 0.01;
+const DRAG_LOOK_SENSITIVITY = 0.0025;
+const PITCH_LIMIT = Math.PI / 2 - 0.05;
 
 interface PlayerRigProps {
   spawnPoint: [number, number, number];
@@ -63,10 +65,11 @@ function clampToBounds(v: THREE.Vector3) {
  * active, so it moves along for free.
  *
  * First/third person is implemented by decoupling "the player's actual
- * transform" from "what the render camera shows": PointerLockControls
- * drives a detached, never-rendered virtualCamera (position + look
- * direction), and the real render camera is derived from it each frame —
- * identical to it in first person, offset behind it in third person.
+ * transform" from "what the render camera shows": a detached,
+ * never-rendered virtualCamera holds position + look direction, driven
+ * by PointerLockControls in first person or click-drag in third person,
+ * and the real render camera is derived from it each frame — identical
+ * to it in first person, offset behind it in third person.
  * positionRef/rotationRef always reflect the virtual camera (the real
  * player transform), never the visually-offset third-person view, so
  * other players always see you where you actually are regardless of
@@ -152,6 +155,49 @@ export function PlayerRig({
     return () => el.removeEventListener("wheel", onWheel);
   }, [viewMode, camera, gl]);
 
+  // Third person deliberately does NOT use pointer lock — capturing the
+  // cursor and driving the view from every raw mouse movement fights
+  // with the actual point of third person (look at/inspect your own
+  // avatar, click HUD buttons, click the floor to move) the same way it
+  // would in FrameVR. Instead: click-drag orbits the view (using
+  // PointerEvent.movementX/Y, which is populated on ordinary pointer
+  // moves too, not just under pointer lock), and the cursor stays free
+  // otherwise. First person keeps pointer lock — that one IS meant to
+  // behave like a classic FPS look.
+  useEffect(() => {
+    if (viewMode !== "third") return;
+    const el = gl.domElement;
+    let dragging = false;
+
+    const onPointerDown = (e: PointerEvent) => {
+      dragging = true;
+      el.setPointerCapture(e.pointerId);
+    };
+    const onPointerMove = (e: PointerEvent) => {
+      if (!dragging) return;
+      const vcam = virtualCameraRef.current!;
+      const euler = new THREE.Euler().setFromQuaternion(vcam.quaternion, "YXZ");
+      euler.y -= e.movementX * DRAG_LOOK_SENSITIVITY;
+      euler.x = THREE.MathUtils.clamp(euler.x - e.movementY * DRAG_LOOK_SENSITIVITY, -PITCH_LIMIT, PITCH_LIMIT);
+      vcam.quaternion.setFromEuler(euler);
+    };
+    const endDrag = (e: PointerEvent) => {
+      dragging = false;
+      if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
+    };
+
+    el.addEventListener("pointerdown", onPointerDown);
+    el.addEventListener("pointermove", onPointerMove);
+    el.addEventListener("pointerup", endDrag);
+    el.addEventListener("pointercancel", endDrag);
+    return () => {
+      el.removeEventListener("pointerdown", onPointerDown);
+      el.removeEventListener("pointermove", onPointerMove);
+      el.removeEventListener("pointerup", endDrag);
+      el.removeEventListener("pointercancel", endDrag);
+    };
+  }, [viewMode, gl]);
+
   useXRControllerLocomotion(xrOriginRef, { speed: MOVE_SPEED * 0.6 });
 
   useFrame((_, delta) => {
@@ -232,14 +278,16 @@ export function PlayerRig({
 
   return (
     <>
-      {/* Fully unmounted (not just `enabled={false}`) while editing: drei's
-          PointerLockControls attaches a global `click` -> `.lock()`
-          listener in an effect that doesn't depend on its `enabled` prop
-          at all, so toggling `enabled` alone still re-captured the
-          cursor on every click in edit mode — the opposite of what edit
-          mode needs (a free cursor to click/drag objects). Unmounting
-          removes that listener entirely instead of trying to out-race it. */}
-      {!isPresenting && pointerLockEnabled && <PointerLockControls camera={virtualCameraRef.current} />}
+      {/* First person only — see the drag-to-orbit effect above for why
+          third person doesn't use this. Fully unmounted (not just
+          `enabled={false}`) while editing: drei's PointerLockControls
+          attaches a global `click` -> `.lock()` listener in an effect
+          that doesn't depend on its `enabled` prop at all, so toggling
+          `enabled` alone still re-captured the cursor on every click in
+          edit mode — the opposite of what edit mode needs (a free
+          cursor to click/drag objects). Unmounting removes that
+          listener entirely instead of trying to out-race it. */}
+      {!isPresenting && viewMode === "first" && pointerLockEnabled && <PointerLockControls camera={virtualCameraRef.current} />}
       <XROrigin ref={xrOriginRef} position={spawnPoint} />
       {/* Own avatar body: hidden in VR and in first person (the camera
           sits at/inside the head in both cases — clipping and a jarring
