@@ -12,6 +12,7 @@
     "preview": "vite preview",
     "worker:dev": "wrangler dev",
     "worker:deploy": "npm run build && wrangler deploy",
+    "deploy": "npm run worker:deploy",
     "fetch-assets": "node scripts/fetch-assets.mjs"
   },
   "dependencies": {

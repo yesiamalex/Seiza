@@ -31,5 +31,16 @@ export async function loadWorldConfig(): Promise<WorldConfig> {
         `Check public/worlds/${WORLD_ID}/world.json exists.`
     );
   }
-  return (await res.json()) as WorldConfig;
+  const contentType = res.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) {
+    throw new Error(
+      `World config for "${WORLD_ID}" was not JSON (${contentType || "unknown content type"}). ` +
+        `Check public/worlds/${WORLD_ID}/world.json exists and is valid JSON.`
+    );
+  }
+  try {
+    return (await res.json()) as WorldConfig;
+  } catch {
+    throw new Error(`World config for "${WORLD_ID}" contains invalid JSON.`);
+  }
 }

@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatMessage, ClientMessage, PlayerState, ServerMessage, WorldObject } from "./types";
 
-const ROOM_HOST = import.meta.env.VITE_SEIZA_ROOM_HOST ?? "127.0.0.1:8787";
+// The production Worker serves both the app and the Durable Object route, so
+// same-origin is the reliable default. Set VITE_SEIZA_ROOM_HOST only when the
+// room server is intentionally deployed separately (or for a custom local
+// setup).
+const ROOM_HOST = import.meta.env.VITE_SEIZA_ROOM_HOST;
 // Chat isn't persisted server-side (see worker/room.ts) — capping how much
 // we keep client-side too, so a long-running session's message list
 // doesn't grow unbounded in memory.
@@ -114,7 +118,8 @@ export function useRoomSocket(
 
     function connect() {
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const socket = new WebSocket(`${protocol}//${ROOM_HOST}/rooms/${encodeURIComponent(roomId)}`);
+      const host = ROOM_HOST || window.location.host;
+      const socket = new WebSocket(`${protocol}//${host}/rooms/${encodeURIComponent(roomId)}`);
       socketRef.current = socket;
 
       socket.addEventListener("open", () => {
@@ -133,7 +138,13 @@ export function useRoomSocket(
       });
 
       socket.addEventListener("message", (event: MessageEvent) => {
-        const msg = JSON.parse(event.data) as ServerMessage;
+        let msg: ServerMessage;
+        try {
+          msg = JSON.parse(event.data) as ServerMessage;
+        } catch {
+          console.warn("Ignoring malformed room message from the server.");
+          return;
+        }
         switch (msg.type) {
           case "welcome": {
             setSelfId(msg.selfId);

@@ -51,7 +51,7 @@ Japanese XR conference, April 2027).
 
 ## Deploy your own instance
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=REPLACE_WITH_THIS_REPO_URL)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/yesiamalex/Seiza)
 
 Clicking this clones the repo into **your own** GitHub account and
 provisions everything into **your own** Cloudflare account — nothing
@@ -65,6 +65,12 @@ Durable Object bound directly into the same Worker):
 ```bash
 npm run worker:deploy   # builds, ensures the KV namespace exists, deploys everything
 ```
+
+The first deploy provisions the `seiza-avatars` KV namespace in the
+Cloudflare account you are logged into. The realtime Durable Object is
+declared and migrated by `wrangler.jsonc`; you do not create a Durable
+Object manually. The command may open Cloudflare's login page once. A
+fork never uses the original deployment's KV data or Worker hostname.
 
 This used to be two separate deploys — a Worker plus a room server
 hosted on PartyKit. That's gone: PartyKit's last real release was over a
@@ -85,8 +91,8 @@ Git-connected build pipeline (Workers Builds), where there's no chance
 to run a manual setup command before the first deploy. If it still
 fails with a permissions error, create the namespace once yourself
 (Cloudflare dashboard → Workers & Pages → KV → Create namespace →
-`seiza-avatars`) and paste its id into wrangler.jsonc's `AVATARS`
-binding, then retry.
+`seiza-avatars`), then retry `npm run deploy`. No Durable Object manual
+setup is required.
 
 > **Tradeoff to know about:** KV is eventually consistent (global
 > propagation can lag), unlike R2's strong read-after-write. A
@@ -108,6 +114,32 @@ Open the frontend dev server URL (not the Worker's). On first run you'll
 land on the join screen, then a real procedurally-built room — see
 `public/worlds/default/README.md` for what is and isn't bundled, and
 `THIRD_PARTY_ASSETS.md` before adding any 3D asset to the repo.
+
+The normal local flow is two terminals:
+
+```bash
+npm run worker:dev
+npm run dev
+```
+
+The frontend's `/api` and `/rooms` requests are proxied to the local Worker.
+Do not set `VITE_SEIZA_ROOM_HOST` unless you deliberately run the room server
+on another host.
+
+### Fork and customize
+
+1. Fork the repository and clone your fork.
+2. Run `npm install`, then `npm run deploy` after logging into Cloudflare.
+3. Open the URL printed by Wrangler.
+4. Customize `public/worlds/default/world.json`, or copy that folder to a new
+  world id and set `VITE_SEIZA_WORLD_ID` before building.
+
+The app uses relative `/worlds`, `/api`, and `/rooms` paths. The same build
+therefore works on a `workers.dev` URL, a Cloudflare custom domain, or a
+Worker route without editing an origin URL. Uploaded avatars and room data
+belong to the account that deployed the fork. Only add scenes, avatars,
+gesture clips, fonts, or other media when their licenses permit your use;
+review `THIRD_PARTY_ASSETS.md` and retain required attribution.
 
 `wrangler dev` simulates the Worker, KV, and the Durable Object room
 server locally (via Miniflare) with no Cloudflare login required — this
