@@ -32,6 +32,7 @@ export function HUD({ connectionState, worldName, children }: HUDProps) {
         color: "white",
       }}
     >
+      <style>{`@keyframes seiza-popover-in { from { opacity: 0; transform: translateX(-50%) translateY(8px) scale(0.96); } to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); } } .seiza-popover { animation: seiza-popover-in 160ms ease-out both; } @media (prefers-reduced-motion: reduce) { .seiza-popover { animation: none; } }`}</style>
       <div style={{ ...panelStyle, alignSelf: "flex-start", padding: "6px 12px", fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
         <strong>{worldName}</strong>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 4, opacity: 0.85 }}>

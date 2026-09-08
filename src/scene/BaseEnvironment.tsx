@@ -18,16 +18,14 @@ const WALL_COLOR = "#c9bfa8";
 const ACCENT_COLOR = "#8f7a5c";
 
 interface BaseEnvironmentProps {
-  /** Click-to-move (see PlayerRig's moveTargetRef) — only wired up by
-   *  App.tsx while in third person and not editing; undefined otherwise,
-   *  in which case the floor just isn't clickable. */
-  onFloorClick?: (point: THREE.Vector3) => void;
+  /** Double-click-to-move target, only wired up in third person. */
+  onFloorDoubleClick?: (point: THREE.Vector3) => void;
 }
 
-export function BaseEnvironment({ onFloorClick }: BaseEnvironmentProps) {
+export function BaseEnvironment({ onFloorDoubleClick }: BaseEnvironmentProps) {
   return (
     <group>
-      <Floor onFloorClick={onFloorClick} />
+      <Floor onFloorDoubleClick={onFloorDoubleClick} />
       <PerimeterWalls />
       <Pillars />
       <BenchSemicircle />
@@ -35,16 +33,16 @@ export function BaseEnvironment({ onFloorClick }: BaseEnvironmentProps) {
   );
 }
 
-function Floor({ onFloorClick }: { onFloorClick?: (point: THREE.Vector3) => void }) {
-  const handleClick = onFloorClick
+function Floor({ onFloorDoubleClick }: { onFloorDoubleClick?: (point: THREE.Vector3) => void }) {
+  const handleDoubleClick = onFloorDoubleClick
     ? (e: ThreeEvent<MouseEvent>) => {
         e.stopPropagation();
-        onFloorClick(e.point);
+        onFloorDoubleClick(e.point);
       }
     : undefined;
 
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow onClick={handleClick}>
+    <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow onDoubleClick={handleDoubleClick}>
       <circleGeometry args={[ROOM_HALF_SIZE - 0.5, 48]} />
       <meshStandardMaterial color={FLOOR_COLOR} roughness={0.9} />
     </mesh>

@@ -16,6 +16,15 @@ export const panelStyle: CSSProperties = {
   border: "1px solid rgba(255,255,255,0.08)",
 };
 
+export const popoverStyle: CSSProperties = {
+  position: "absolute",
+  bottom: "calc(100% + 8px)",
+  left: "50%",
+  transform: "translateX(-50%)",
+  transformOrigin: "bottom center",
+  zIndex: 20,
+};
+
 export const pillButtonStyle: CSSProperties = {
   background: "rgba(255,255,255,0.1)",
   border: "1px solid rgba(255,255,255,0.16)",

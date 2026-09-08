@@ -5,7 +5,7 @@ import { BaseEnvironment } from "./BaseEnvironment";
 
 interface SceneProps {
   sceneUrl?: string;
-  onFloorClick?: (point: THREE.Vector3) => void;
+  onFloorDoubleClick?: (point: THREE.Vector3) => void;
 }
 
 function SceneModel({ sceneUrl }: { sceneUrl: string }) {
@@ -34,13 +34,13 @@ class SceneLoadBoundary extends Component<{ children: ReactNode }, { failed: boo
   }
 }
 
-export function Scene({ sceneUrl, onFloorClick }: SceneProps) {
+export function Scene({ sceneUrl, onFloorDoubleClick }: SceneProps) {
   return (
     <>
       <ambientLight intensity={0.6} />
       <directionalLight position={[5, 10, 5]} intensity={1.2} castShadow />
       <Environment preset="sunset" />
-      <BaseEnvironment onFloorClick={onFloorClick} />
+      <BaseEnvironment onFloorDoubleClick={onFloorDoubleClick} />
       {sceneUrl && (
         <SceneLoadBoundary>
           <Suspense fallback={null}>

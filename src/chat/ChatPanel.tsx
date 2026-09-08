@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChatMessage } from "../multiplayer/types";
-import { panelStyle, pillButtonActiveStyle, pillButtonStyle } from "../ui/styles";
+import { panelStyle, pillButtonActiveStyle, pillButtonStyle, popoverStyle } from "../ui/styles";
 import { ChatIcon } from "../ui/icons";
 
 interface ChatPanelProps {
@@ -33,12 +33,12 @@ export function ChatPanel({ open, onToggle, messages, selfId, onSend, connected 
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column-reverse", gap: 8, alignItems: "center" }}>
+    <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
       <button style={open ? pillButtonActiveStyle : pillButtonStyle} onClick={onToggle}>
         <ChatIcon /> Chat{!open && messages.length > 0 ? ` (${messages.length})` : ""}
       </button>
       {open && (
-        <div style={{ ...panelStyle, display: "flex", flexDirection: "column", width: 280, maxHeight: 320, padding: 0, overflow: "hidden" }}>
+        <div className="seiza-popover" style={{ ...panelStyle, ...popoverStyle, display: "flex", flexDirection: "column", width: 280, maxHeight: 320, padding: 0, overflow: "hidden" }}>
           <div
             ref={listRef}
             style={{ overflowY: "auto", padding: 10, display: "flex", flexDirection: "column", gap: 4, fontSize: 13, flex: 1 }}

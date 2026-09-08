@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { GESTURES } from "../avatar/gestures";
-import { panelStyle, pillButtonStyle } from "../ui/styles";
+import { panelStyle, pillButtonStyle, popoverStyle } from "../ui/styles";
 import { WaveIcon } from "../ui/icons";
 
 interface GestureMatchGameProps {
@@ -31,12 +31,12 @@ export function GestureMatchGame({ activeGesture, onRequestGesture }: GestureMat
   }, [activeGesture]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column-reverse", gap: 8, alignItems: "center" }}>
+    <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
       <button style={pillButtonStyle} onClick={() => setOpen((v) => !v)}>
         <WaveIcon /> Gestures {score > 0 ? `(${score})` : ""}
       </button>
       {open && (
-        <div style={{ ...panelStyle, display: "flex", flexDirection: "column", gap: 8 }}>
+        <div className="seiza-popover" style={{ ...panelStyle, ...popoverStyle, display: "flex", flexDirection: "column", gap: 8, width: 260 }}>
           <p style={{ margin: 0 }}>
             Do the gesture: <strong>{GESTURES[target]?.label ?? target}</strong> — score {score}
           </p>

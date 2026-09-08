@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { WorldObject } from "../multiplayer/types";
-import { inputStyle, panelStyle, pillButtonActiveStyle, pillButtonStyle } from "../ui/styles";
+import { optimizeVrmAvatar } from "../avatar/optimizeVrm";
+import { inputStyle, panelStyle, pillButtonActiveStyle, pillButtonStyle, popoverStyle } from "../ui/styles";
 import { EditIcon } from "../ui/icons";
 
 interface EditToolbarProps {
@@ -16,6 +17,9 @@ interface EditToolbarProps {
   onToggleEditMode: () => void;
   onSpawn: (kind: WorldObject["kind"], modelUrl?: string) => void;
   selectedId: string | null;
+  transformMode: "translate" | "rotate";
+  onTransformModeChange: (mode: "translate" | "rotate") => void;
+  onSnapToFloor: () => void;
   onDeselect: () => void;
   onDeleteSelected: () => void;
   /** Whether this deployment has a shared editor password configured at
@@ -42,6 +46,9 @@ export function EditToolbar({
   onToggleEditMode,
   onSpawn,
   selectedId,
+  transformMode,
+  onTransformModeChange,
+  onSnapToFloor,
   onDeselect,
   onDeleteSelected,
   editorPasswordRequired,
@@ -52,12 +59,71 @@ export function EditToolbar({
 }: EditToolbarProps) {
   const [modelUrl, setModelUrl] = useState("");
   const [passwordDraft, setPasswordDraft] = useState("");
+  const [assets, setAssets] = useState<Array<{ id: string; url: string; name: string }>>([]);
+  const [assetUploading, setAssetUploading] = useState(false);
+  const [assetMessage, setAssetMessage] = useState<string | null>(null);
+  const [optimizeAsset, setOptimizeAsset] = useState(true);
   if (!enabled) return null;
 
   const needsAuth = editorPasswordRequired && !isEditor;
 
+  async function uploadAsset(file: File) {
+    setAssetMessage(null);
+    const extension = file.name.toLowerCase().split(".").pop();
+    if (extension !== "glb" && extension !== "gltf") {
+      setAssetMessage("Choose a .glb or .gltf model.");
+      return;
+    }
+    if (file.size > 60 * 1024 * 1024) {
+      setAssetMessage("That model is over 60MB. Choose a smaller export.");
+      return;
+    }
+    setAssetUploading(true);
+    try {
+      let body: Blob = file;
+      if (optimizeAsset && extension === "glb" && file.size > 8 * 1024 * 1024) {
+        const result = await optimizeVrmAvatar(file);
+        body = result.blob;
+        if (!result.applied) setAssetMessage(result.reason ?? "Optimization was skipped; uploading the original.");
+      }
+      if (body.size > 24 * 1024 * 1024) {
+        throw new Error("This model is over the 24MB deployment limit, even after optimization.");
+      }
+      const response = await fetch("/api/assets", {
+        method: "POST",
+        body,
+        headers: {
+          "x-seiza-asset-name": file.name,
+          ...(passwordDraft ? { "x-seiza-editor-password": passwordDraft } : {}),
+        },
+      });
+      const result = (await response.json().catch(() => ({}))) as { id?: string; url?: string; name?: string; error?: string };
+      if (!response.ok || !result.id || !result.url) throw new Error(result.error ?? `Upload failed (${response.status}).`);
+      const asset = { id: result.id, url: result.url, name: result.name ?? file.name };
+      setAssets((previous) => [...previous, asset]);
+      onSpawn("model", asset.url);
+      setAssetMessage(`${asset.name} uploaded and placed.`);
+    } catch (error) {
+      setAssetMessage(error instanceof Error ? error.message : "Model upload failed.");
+    } finally {
+      setAssetUploading(false);
+    }
+  }
+
+  async function deleteAsset(asset: { id: string }) {
+    const response = await fetch(`/api/assets/${asset.id}`, {
+      method: "DELETE",
+      headers: passwordDraft ? { "x-seiza-editor-password": passwordDraft } : undefined,
+    });
+    if (!response.ok) {
+      setAssetMessage("The asset could not be deleted.");
+      return;
+    }
+    setAssets((previous) => previous.filter((item) => item.id !== asset.id));
+  }
+
   return (
-    <div style={{ display: "flex", flexDirection: "column-reverse", gap: 8, alignItems: "center" }}>
+    <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
       <button style={editMode ? pillButtonActiveStyle : pillButtonStyle} onClick={onToggleEditMode}>
         <EditIcon /> {editMode ? "Exit edit mode" : "Edit world"}
       </button>
@@ -67,7 +133,8 @@ export function EditToolbar({
             e.preventDefault();
             if (passwordDraft) onAuthEditor(passwordDraft);
           }}
-          style={{ ...panelStyle, display: "flex", flexDirection: "column", gap: 8, width: 240 }}
+          className="seiza-popover"
+          style={{ ...panelStyle, ...popoverStyle, display: "flex", flexDirection: "column", gap: 8, width: 240 }}
         >
           <small style={{ opacity: 0.8 }}>This world requires an editor password.</small>
           <input
@@ -85,13 +152,20 @@ export function EditToolbar({
         </form>
       )}
       {editMode && !needsAuth && (
-        <div style={{ ...panelStyle, display: "flex", flexDirection: "column", gap: 8, width: 280 }}>
+        <div className="seiza-popover" style={{ ...panelStyle, ...popoverStyle, display: "flex", flexDirection: "column", gap: 8, width: 280 }}>
           {!connected && (
             <small style={{ color: "#ffb347" }}>
               Not connected to the room server — placing/moving objects won't do anything until you reconnect.
             </small>
           )}
-          <small style={{ opacity: 0.8 }}>Click an object to select it, drag the gizmo to move it.</small>
+          <small style={{ opacity: 0.8 }}>Click an object to select it, then use Move or Rotate.</small>
+          <small style={{ opacity: 0.7 }}>Only upload models you have permission to use. Seiza does not review or take responsibility for user-provided assets.</small>
+          {selectedId && (
+            <div style={{ display: "flex", gap: 6 }}>
+              <button style={transformMode === "translate" ? pillButtonActiveStyle : pillButtonStyle} onClick={() => onTransformModeChange("translate")}>Move</button>
+              <button style={transformMode === "rotate" ? pillButtonActiveStyle : pillButtonStyle} onClick={() => onTransformModeChange("rotate")}>Rotate</button>
+            </div>
+          )}
           <div style={{ display: "flex", gap: 6 }}>
             <button style={pillButtonStyle} disabled={!connected} onClick={() => onSpawn("box")}>
               + Box
@@ -103,6 +177,26 @@ export function EditToolbar({
               + Cylinder
             </button>
           </div>
+          <label style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+            Upload model (.glb or .gltf, max 24MB)
+            <input type="file" accept=".glb,.gltf,model/gltf-binary,model/gltf+json" disabled={!connected || assetUploading} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAsset(file); event.currentTarget.value = ""; }} />
+          </label>
+          <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, opacity: 0.8 }}>
+            <input type="checkbox" checked={optimizeAsset} onChange={(event) => setOptimizeAsset(event.target.checked)} />
+            Optimize large binary models before upload
+          </label>
+          {assetMessage && <small style={{ color: assetMessage.includes("uploaded") ? "#7CFF9E" : "#ffb347" }}>{assetMessage}</small>}
+          {assets.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 5, borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 8 }}>
+              <strong>Session assets</strong>
+              {assets.map((asset) => (
+                <div key={asset.id} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <button style={{ ...pillButtonStyle, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }} onClick={() => onSpawn("model", asset.url)}>{asset.name}</button>
+                  <button style={pillButtonStyle} onClick={() => void deleteAsset(asset)}>Delete</button>
+                </div>
+              ))}
+            </div>
+          )}
           <div style={{ display: "flex", gap: 6 }}>
             <input
               placeholder="https://…/model.glb"
@@ -124,6 +218,7 @@ export function EditToolbar({
           {selectedId && (
             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
               <span>1 object selected</span>
+              <button style={pillButtonStyle} onClick={onSnapToFloor}>Snap to floor</button>
               <button style={pillButtonStyle} disabled={!connected} onClick={onDeleteSelected}>
                 Delete
               </button>

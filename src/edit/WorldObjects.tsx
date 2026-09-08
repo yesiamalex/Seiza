@@ -8,13 +8,14 @@ interface WorldObjectsProps {
   objects: Record<string, WorldObject>;
   editMode: boolean;
   selectedId: string | null;
+  transformMode: "translate" | "rotate";
   onSelect: (id: string) => void;
   onMove: (id: string, position: [number, number, number], rotationY: number) => void;
 }
 
 /** Renders every synced world object; in edit mode, the selected one gets
  *  a drag/rotate gizmo (see src/edit/EditToolbar.tsx for spawn/delete UI). */
-export function WorldObjects({ objects, editMode, selectedId, onSelect, onMove }: WorldObjectsProps) {
+export function WorldObjects({ objects, editMode, selectedId, transformMode, onSelect, onMove }: WorldObjectsProps) {
   return (
     <>
       {Object.values(objects).map((obj) => (
@@ -25,6 +26,7 @@ export function WorldObjects({ objects, editMode, selectedId, onSelect, onMove }
           selected={obj.id === selectedId}
           onSelect={onSelect}
           onMove={onMove}
+          transformMode={transformMode}
         />
       ))}
     </>
@@ -35,11 +37,12 @@ interface PlacedObjectProps {
   object: WorldObject;
   editMode: boolean;
   selected: boolean;
+  transformMode: "translate" | "rotate";
   onSelect: (id: string) => void;
   onMove: (id: string, position: [number, number, number], rotationY: number) => void;
 }
 
-function PlacedObject({ object, editMode, selected, onSelect, onMove }: PlacedObjectProps) {
+function PlacedObject({ object, editMode, selected, onSelect, onMove, transformMode }: PlacedObjectProps) {
   const groupRef = useRef<Group>(null);
 
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
@@ -66,7 +69,7 @@ function PlacedObject({ object, editMode, selected, onSelect, onMove }: PlacedOb
         <ObjectGeometry object={object} />
       </group>
       {editMode && selected && groupRef.current && (
-        <TransformControls object={groupRef.current} mode="translate" onMouseUp={handleChangeEnd} />
+        <TransformControls object={groupRef.current} mode={transformMode} onMouseUp={handleChangeEnd} />
       )}
     </>
   );

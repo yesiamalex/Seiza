@@ -237,10 +237,6 @@ export function PlayerRig({
       } else {
         toTarget.normalize();
         vcam.position.addScaledVector(toTarget, MOVE_SPEED * delta);
-        const heading = Math.atan2(toTarget.x, toTarget.z);
-        const euler = new THREE.Euler().setFromQuaternion(vcam.quaternion, "YXZ");
-        euler.y = heading;
-        vcam.quaternion.setFromEuler(euler);
       }
     }
     clampToBounds(vcam.position);

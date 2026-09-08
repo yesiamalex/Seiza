@@ -44,6 +44,7 @@ export default function App() {
   const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("first");
   const [chatOpen, setChatOpen] = useState(false);
+  const [transformMode, setTransformMode] = useState<"translate" | "rotate">("translate");
   const moveTargetRef = useRef<THREE.Vector3 | null>(null);
 
   useEffect(() => {
@@ -142,7 +143,15 @@ export default function App() {
     setSelectedObjectId(null);
   }, [selectedObjectId, removeObject]);
 
-  // Click-to-move: only in third person (in first person the cursor is
+  const handleSnapToFloor = useCallback(() => {
+    if (!selectedObjectId) return;
+    const object = objects[selectedObjectId];
+    if (!object) return;
+    const halfHeight = object.kind === "model" ? 0 : 0.5 * object.scale;
+    moveObject(object.id, [object.position[0], halfHeight, object.position[2]], object.rotationY);
+  }, [objects, selectedObjectId, moveObject]);
+
+  // Double-click-to-move: only in third person (in first person the cursor is
   // pointer-locked and clicking means something else — look-lock, not a
   // world-space point) and not while editing (where a floor click should
   // do nothing rather than yank you away mid-edit).
@@ -165,7 +174,7 @@ export default function App() {
     <div style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden" }}>
       <Canvas camera={{ position: [0, 1.6, 4] }} shadows>
         <XR store={xrStore}>
-          <Scene sceneUrl={world.sceneUrl} onFloorClick={handleFloorClick} />
+          <Scene sceneUrl={world.sceneUrl} onFloorDoubleClick={handleFloorClick} />
           <PlayerRig
             spawnPoint={[world.spawnPoint.x, world.spawnPoint.y, world.spawnPoint.z]}
             positionRef={positionRef}
@@ -186,6 +195,7 @@ export default function App() {
             objects={objects}
             editMode={editMode && editingEnabled && isEditor}
             selectedId={selectedObjectId}
+            transformMode={transformMode}
             onSelect={setSelectedObjectId}
             onMove={moveObject}
           />
@@ -217,6 +227,9 @@ export default function App() {
           }}
           onSpawn={handleSpawn}
           selectedId={selectedObjectId}
+          transformMode={transformMode}
+          onTransformModeChange={setTransformMode}
+          onSnapToFloor={handleSnapToFloor}
           onDeselect={() => setSelectedObjectId(null)}
           onDeleteSelected={handleDeleteSelected}
           editorPasswordRequired={editorPasswordRequired}

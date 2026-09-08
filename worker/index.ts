@@ -36,6 +36,11 @@ interface AvatarMetadata {
   contentType: string;
 }
 
+interface StoredAssetMetadata {
+  contentType: string;
+  name: string;
+}
+
 // KV's per-value limit is 25 MiB, hard — this isn't a policy choice we
 // can relax, KV will reject the write above it regardless of what this
 // code does. Staying at 24MB for a small safety margin rather than
@@ -45,6 +50,7 @@ interface AvatarMetadata {
 // this for "this is a large file" reasons that aren't about hitting the
 // technical ceiling — that's a separate, softer threshold.
 const MAX_AVATAR_BYTES = 24 * 1024 * 1024;
+const MAX_MODEL_BYTES = 24 * 1024 * 1024;
 // .vrm files are glTF-binary (.glb) under the hood — this is the .glb
 // magic header, not a VRM-specific signature. Good enough to reject
 // obviously-wrong uploads without a full glTF/VRM validator.
@@ -87,6 +93,18 @@ export default {
 
     if (url.pathname === "/api/avatars" && request.method === "POST") {
       return handleUpload(request, env);
+    }
+
+    if (url.pathname === "/api/assets" && request.method === "POST") {
+      return handleAssetUpload(request, env);
+    }
+
+    const assetMatch = url.pathname.match(/^\/api\/assets\/([a-f0-9-]+\.(?:glb|gltf))$/);
+    if (assetMatch && request.method === "GET") {
+      return handleGetAsset(request, assetMatch[1], env);
+    }
+    if (assetMatch && request.method === "DELETE") {
+      return handleAssetDelete(request, assetMatch[1], env);
     }
 
     const avatarMatch = url.pathname.match(/^\/api\/avatars\/([a-f0-9-]+\.vrm)$/);
@@ -163,6 +181,72 @@ async function handleGetAvatar(request: Request, key: string, env: Env): Promise
   const response = new Response(value, {
     headers: {
       "content-type": metadata?.contentType ?? "model/gltf-binary",
+      "cache-control": "public, max-age=31536000, immutable",
+    },
+  });
+  await cache.put(request, response.clone());
+  return response;
+}
+
+async function handleAssetUpload(request: Request, env: Env): Promise<Response> {
+  if (env.SEIZA_EDITOR_PASSWORD && request.headers.get("x-seiza-editor-password") !== env.SEIZA_EDITOR_PASSWORD) {
+    return jsonError("Editor authorization is required to upload world assets.", 403);
+  }
+  const declaredLength = Number(request.headers.get("content-length") ?? "0");
+  if (declaredLength > MAX_MODEL_BYTES) return jsonError("Model is too large (max 24MB).", 413);
+  const name = (request.headers.get("x-seiza-asset-name") ?? "model.glb").slice(0, 120);
+  const extension = name.toLowerCase().endsWith(".gltf") ? "gltf" : name.toLowerCase().endsWith(".glb") ? "glb" : "";
+  if (!extension) return jsonError("Only .glb and .gltf files are accepted.", 400);
+  const buffer = await request.arrayBuffer();
+  if (buffer.byteLength === 0 || buffer.byteLength > MAX_MODEL_BYTES) return jsonError("Model is empty or too large (max 24MB).", 413);
+  if (extension === "glb") {
+    const header = new Uint8Array(buffer.slice(0, 4));
+    if (!GLTF_MAGIC.every((byte, i) => header[i] === byte)) return jsonError("This .glb file is missing the glTF binary header.", 400);
+  } else {
+    try {
+      const text = new TextDecoder().decode(buffer);
+      const json = JSON.parse(text) as {
+        asset?: { version?: unknown };
+        buffers?: Array<{ uri?: unknown }>;
+        images?: Array<{ uri?: unknown }>;
+      };
+      if (json.asset?.version !== "2.0") return jsonError("Only glTF 2.0 .gltf files are accepted.", 400);
+      const externalReferences = [...(json.buffers ?? []), ...(json.images ?? [])].some(
+        (entry) => typeof entry.uri === "string" && !entry.uri.startsWith("data:")
+      );
+      if (externalReferences) return jsonError("This .gltf references external files. Upload a self-contained .gltf or a bundled .glb.", 400);
+    } catch {
+      return jsonError("This .gltf file is not valid JSON.", 400);
+    }
+  }
+  const key = `${crypto.randomUUID()}.${extension}`;
+  await env.AVATARS.put(key, buffer, {
+    expirationTtl: AVATAR_TTL_SECONDS,
+    metadata: { contentType: extension === "glb" ? "model/gltf-binary" : "model/gltf+json", name } satisfies StoredAssetMetadata,
+  });
+  return new Response(JSON.stringify({ id: key, url: `/api/assets/${key}`, name }), {
+    status: 201,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+async function handleAssetDelete(request: Request, key: string, env: Env): Promise<Response> {
+  if (env.SEIZA_EDITOR_PASSWORD && request.headers.get("x-seiza-editor-password") !== env.SEIZA_EDITOR_PASSWORD) {
+    return jsonError("Editor authorization is required to delete world assets.", 403);
+  }
+  await env.AVATARS.delete(key);
+  return new Response(null, { status: 204 });
+}
+
+async function handleGetAsset(request: Request, key: string, env: Env): Promise<Response> {
+  const cache = caches.default;
+  const cached = await cache.match(request);
+  if (cached) return cached;
+  const { value, metadata } = await env.AVATARS.getWithMetadata<StoredAssetMetadata>(key, "arrayBuffer");
+  if (!value) return new Response("Not found", { status: 404 });
+  const response = new Response(value, {
+    headers: {
+      "content-type": metadata?.contentType ?? (key.endsWith(".glb") ? "model/gltf-binary" : "model/gltf+json"),
       "cache-control": "public, max-age=31536000, immutable",
     },
   });

@@ -141,6 +141,16 @@ belong to the account that deployed the fork. Only add scenes, avatars,
 gesture clips, fonts, or other media when their licenses permit your use;
 review `THIRD_PARTY_ASSETS.md` and retain required attribution.
 
+### Asset responsibility
+
+Seiza is a hosting tool, not an asset rights service. Users and deployers are
+responsible for obtaining permission for models, environments, avatars,
+animations, textures, and other uploaded files. The project does not verify
+licenses or accept responsibility for copyright or other rights disputes.
+Keep source and license records, honor takedown or DMCA requests where they
+apply to your deployment, and disable uploads when a closed asset policy is
+needed.
+
 `wrangler dev` simulates the Worker, KV, and the Durable Object room
 server locally (via Miniflare) with no Cloudflare login required — this
 was verified end-to-end (real WebSocket connect/join/broadcast/
@@ -267,3 +277,11 @@ deliberate limitations (paper Section 7 has the fuller discussion):
   navmesh file — awkward for geometry that's generated in code, not
   authored in Blender). Not implemented — noted as the concrete next step
   if this becomes worth doing.
+- **Navmesh upload is intentionally not enabled yet.** Current guidance from
+  Recast Navigation is to use a serialized Recast/Detour navmesh for direct
+  querying, or export a glTF navmesh and consume it with a pathfinding layer
+  such as `three-pathfinding`. Seiza's current movement controller has no
+  query/path integration, so accepting a file today would falsely imply that
+  it protects the environment. The planned implementation must validate the
+  uploaded mesh, show parse errors, preserve the procedural environment as a
+  fallback, and use the same editor permissions as world assets.
