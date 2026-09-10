@@ -25,7 +25,10 @@ import { pillButtonStyle } from "./ui/styles";
 import { VrHeadsetIcon } from "./ui/icons";
 import type { WorldObject } from "./multiplayer/types";
 
-const xrStore = createXRStore();
+// Keep baseline immersive VR compatible with headsets that do not implement
+// optional scene-understanding or DOM-overlay features. These are not needed
+// for Seiza's controller-based locomotion or in-world UI.
+const xrStore = createXRStore({ meshDetection: false, planeDetection: false, domOverlay: false });
 const OBJECT_COLORS = ["#c94f4f", "#4f8fc9", "#4fc97e", "#c9a94f", "#9a4fc9"];
 const NETWORK_TICK_MS = 200;
 
@@ -45,10 +48,17 @@ export default function App() {
   const [viewMode, setViewMode] = useState<ViewMode>("first");
   const [chatOpen, setChatOpen] = useState(false);
   const [transformMode, setTransformMode] = useState<"translate" | "rotate">("translate");
+  const [xrError, setXrError] = useState<string | null>(null);
+  const [webglLost, setWebglLost] = useState(false);
   const moveTargetRef = useRef<THREE.Vector3 | null>(null);
+  const gestureTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     loadWorldConfig().then(setWorld).catch(setWorldError);
+  }, []);
+
+  useEffect(() => () => {
+    if (gestureTimerRef.current !== null) window.clearTimeout(gestureTimerRef.current);
   }, []);
 
   // Escape any active pointer lock the moment edit mode turns on, so the
@@ -76,6 +86,7 @@ export default function App() {
     editorAuthPending,
     editorAuthFailed,
     authEditor,
+    roomFull,
   } = useRoomSocket(
     roomId,
     joined?.displayName ?? "",
@@ -109,12 +120,17 @@ export default function App() {
 
   const requestGesture = useCallback(
     (gesture: string) => {
+      if (!GESTURES[gesture]?.available) return;
+      if (gestureTimerRef.current !== null) window.clearTimeout(gestureTimerRef.current);
       setActiveGesture(gesture);
       send({ type: "gesture", gesture });
       // Auto-clears locally after a rough guess at clip duration. A real
       // implementation should read the clip's actual length instead of
       // guessing — TODO.
-      window.setTimeout(() => setActiveGesture(null), 2000);
+      gestureTimerRef.current = window.setTimeout(() => {
+        gestureTimerRef.current = null;
+        setActiveGesture(null);
+      }, 2000);
     },
     [send]
   );
@@ -165,14 +181,40 @@ export default function App() {
 
   if (worldError) return <CenteredMessage text={`Couldn't load world: ${worldError.message}`} />;
   if (!world) return <CenteredMessage text="Loading world…" />;
+  if (roomFull) return <CenteredMessage text={`This world is currently full (${roomFull} people). Please try again later.`} />;
   if (!joined) return <JoinScreen world={world} onJoin={(displayName, avatarUrl) => setJoined({ displayName, avatarUrl })} />;
 
   const editingEnabled = world.editingEnabled !== false;
   const voiceVisible = world.voiceEnabled;
 
+  async function enterVR() {
+    setXrError(null);
+    if (!("xr" in navigator)) {
+      setXrError("WebXR is not available in this browser or device.");
+      return;
+    }
+    try {
+      await xrStore.enterVR();
+    } catch (error) {
+      console.warn("Unable to start immersive VR:", error);
+      setXrError("This device cannot start immersive VR. Try a WebXR-compatible browser or continue in desktop mode.");
+    }
+  }
+
   return (
     <div style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden" }}>
-      <Canvas camera={{ position: [0, 1.6, 4] }} shadows>
+      <Canvas
+        camera={{ position: [0, 1.6, 4] }}
+        shadows
+        fallback={<CenteredMessage text="3D graphics are unavailable in this browser." />}
+        onCreated={({ gl }) => {
+          gl.domElement.addEventListener("webglcontextlost", (event) => {
+            event.preventDefault();
+            setWebglLost(true);
+          });
+          gl.domElement.addEventListener("webglcontextrestored", () => setWebglLost(false));
+        }}
+      >
         <XR store={xrStore}>
           <Scene sceneUrl={world.sceneUrl} onFloorDoubleClick={handleFloorClick} />
           <PlayerRig
@@ -203,12 +245,13 @@ export default function App() {
       </Canvas>
 
       <HUD connectionState={connectionState} worldName={world.displayName}>
-        <button style={pillButtonStyle} onClick={() => xrStore.enterVR()}>
+        <button style={pillButtonStyle} onClick={() => void enterVR()}>
           <VrHeadsetIcon /> Enter VR
         </button>
         <CameraViewToggle viewMode={viewMode} onToggle={() => setViewMode((v) => (v === "first" ? "third" : "first"))} />
         {voiceVisible && <VoiceControls voice={voice} />}
-        <GestureMatchGame activeGesture={activeGesture} onRequestGesture={requestGesture} />
+        <GestureMatchGame activeGesture={activeGesture} onRequestGesture={requestGesture} enabledGestures={world.enabledGestures} />
+          <GestureMatchGame activeGesture={activeGesture} onRequestGesture={requestGesture} enabledGestures={world.enabledGestures} />
         <ChatPanel
           open={chatOpen}
           onToggle={() => setChatOpen((v) => !v)}
@@ -239,6 +282,19 @@ export default function App() {
           onAuthEditor={authEditor}
         />
       </HUD>
+      {webglLost && (
+        <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", pointerEvents: "auto", background: "rgba(6,7,9,0.86)", color: "white", fontFamily: "system-ui, sans-serif", padding: 24, textAlign: "center" }}>
+          <div style={{ maxWidth: 420 }}>
+            <h2>3D graphics paused</h2>
+            <p>The browser lost its graphics context. We are waiting for it to recover. Reload this page if the scene does not return.</p>
+          </div>
+        </div>
+      )}
+      {xrError && (
+        <div role="alert" style={{ position: "absolute", left: "50%", bottom: 82, transform: "translateX(-50%)", maxWidth: "min(420px, 90vw)", padding: "10px 14px", borderRadius: 10, backgroundColor: "rgba(80,30,24,0.94)", color: "white", fontFamily: "system-ui, sans-serif", fontSize: 13, textAlign: "center", pointerEvents: "auto" }}>
+          {xrError}
+        </div>
+      )}
     </div>
   );
 }

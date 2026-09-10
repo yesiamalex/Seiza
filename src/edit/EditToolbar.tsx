@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { WorldObject } from "../multiplayer/types";
 import { optimizeVrmAvatar } from "../avatar/optimizeVrm";
 import { inputStyle, panelStyle, pillButtonActiveStyle, pillButtonStyle, popoverStyle } from "../ui/styles";
@@ -63,9 +63,26 @@ export function EditToolbar({
   const [assetUploading, setAssetUploading] = useState(false);
   const [assetMessage, setAssetMessage] = useState<string | null>(null);
   const [optimizeAsset, setOptimizeAsset] = useState(true);
-  if (!enabled) return null;
-
   const needsAuth = editorPasswordRequired && !isEditor;
+
+  useEffect(() => {
+    if (!enabled || !editMode || needsAuth || !connected) return;
+    let cancelled = false;
+    fetch("/api/assets", { headers: passwordDraft ? { "x-seiza-editor-password": passwordDraft } : undefined })
+      .then(async (response) => {
+        const result = (await response.json().catch(() => ({}))) as { assets?: Array<{ id: string; url: string; name: string }>; error?: string };
+        if (!response.ok) throw new Error(result.error ?? `Asset library failed to load (${response.status}).`);
+        if (!cancelled) setAssets(result.assets ?? []);
+      })
+      .catch((error) => {
+        if (!cancelled) setAssetMessage(error instanceof Error ? error.message : "Asset library failed to load.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [connected, editMode, enabled, needsAuth]);
+
+  if (!enabled) return null;
 
   async function uploadAsset(file: File) {
     setAssetMessage(null);
@@ -188,7 +205,7 @@ export function EditToolbar({
           {assetMessage && <small style={{ color: assetMessage.includes("uploaded") ? "#7CFF9E" : "#ffb347" }}>{assetMessage}</small>}
           {assets.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 5, borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 8 }}>
-              <strong>Session assets</strong>
+              <strong>Deployment asset library</strong>
               {assets.map((asset) => (
                 <div key={asset.id} style={{ display: "flex", gap: 6, alignItems: "center" }}>
                   <button style={{ ...pillButtonStyle, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }} onClick={() => onSpawn("model", asset.url)}>{asset.name}</button>

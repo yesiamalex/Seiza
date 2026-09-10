@@ -2,6 +2,7 @@ export interface GestureDefinition {
   name: string;
   label: string;
   vrmaUrl: string;
+  available: boolean;
   license: "verify-before-use" | "own-authored" | "cc-by" | "other";
   sourceNote: string;
 }
@@ -17,6 +18,7 @@ export const GESTURES: Record<string, GestureDefinition> = {
     name: "bow",
     label: "Bow (ojigi)",
     vrmaUrl: "/gestures/bow.vrma",
+    available: false,
     license: "verify-before-use",
     sourceNote:
       "Not in pixiv's official free VRMA pack. Options: BOOTH (check per-file license), " +
@@ -26,6 +28,7 @@ export const GESTURES: Record<string, GestureDefinition> = {
     name: "seiza",
     label: "Seiza (formal kneeling)",
     vrmaUrl: "/gestures/seiza.vrma",
+    available: false,
     license: "verify-before-use",
     sourceNote: "Same sourcing situation as bow — see paper Section 5.",
   },
@@ -33,6 +36,7 @@ export const GESTURES: Record<string, GestureDefinition> = {
     name: "wave",
     label: "Wave",
     vrmaUrl: "/gestures/wave.vrma",
+    available: false,
     license: "verify-before-use",
     sourceNote: "Check pixiv's official free VRMA sample pack first — greeting-type gestures are more likely covered there.",
   },

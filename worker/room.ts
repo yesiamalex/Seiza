@@ -100,6 +100,12 @@ export class SeizaRoom extends DurableObject<Env> {
 
     switch (message.type) {
       case "join": {
+        const maxOccupants = Math.max(1, Number.parseInt(this.env.SEIZA_MAX_OCCUPANTS ?? "16", 10) || 16);
+        if (this.listPlayers().length >= maxOccupants) {
+          ws.send(JSON.stringify({ type: "roomFull", maxOccupants } satisfies ServerMessage));
+          ws.close(1008, "Room is full");
+          return;
+        }
         const player: PlayerState = {
           id: attachment.connId,
           displayName: message.displayName,

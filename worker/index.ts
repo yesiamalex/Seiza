@@ -28,6 +28,8 @@ export interface Env {
    *  `wrangler secret put SEIZA_EDITOR_PASSWORD`, never committed to the
    *  repo. Undefined means editing stays open to everyone (the default). */
   SEIZA_EDITOR_PASSWORD?: string;
+  /** Maximum simultaneous joined players for the deployed world. */
+  SEIZA_MAX_OCCUPANTS?: string;
 }
 
 export { SeizaRoom };
@@ -97,6 +99,9 @@ export default {
 
     if (url.pathname === "/api/assets" && request.method === "POST") {
       return handleAssetUpload(request, env);
+    }
+    if (url.pathname === "/api/assets" && request.method === "GET") {
+      return handleAssetList(request, env);
     }
 
     const assetMatch = url.pathname.match(/^\/api\/assets\/([a-f0-9-]+\.(?:glb|gltf))$/);
@@ -224,10 +229,35 @@ async function handleAssetUpload(request: Request, env: Env): Promise<Response> 
     expirationTtl: AVATAR_TTL_SECONDS,
     metadata: { contentType: extension === "glb" ? "model/gltf-binary" : "model/gltf+json", name } satisfies StoredAssetMetadata,
   });
+  await caches.default.delete(new Request(new URL("/api/assets", request.url)));
   return new Response(JSON.stringify({ id: key, url: `/api/assets/${key}`, name }), {
     status: 201,
     headers: { "content-type": "application/json" },
   });
+}
+
+async function handleAssetList(request: Request, env: Env): Promise<Response> {
+  if (env.SEIZA_EDITOR_PASSWORD && request.headers.get("x-seiza-editor-password") !== env.SEIZA_EDITOR_PASSWORD) {
+    return jsonError("Editor authorization is required to list world assets.", 403);
+  }
+  const cached = await caches.default.match(request);
+  if (cached) return cached;
+  const listed = await env.AVATARS.list({ limit: 100 });
+  const assets = listed.keys
+    .filter((entry) => /\.(?:glb|gltf)$/i.test(entry.name))
+    .map((entry) => ({
+      id: entry.name,
+      url: `/api/assets/${entry.name}`,
+      name: (entry.metadata as StoredAssetMetadata | null)?.name ?? entry.name,
+    }));
+  const response = new Response(JSON.stringify({ assets, truncated: listed.list_complete === false }), {
+    headers: {
+      "content-type": "application/json",
+      "cache-control": "public, max-age=30, s-maxage=30",
+    },
+  });
+  await caches.default.put(request, response.clone());
+  return response;
 }
 
 async function handleAssetDelete(request: Request, key: string, env: Env): Promise<Response> {
@@ -235,6 +265,8 @@ async function handleAssetDelete(request: Request, key: string, env: Env): Promi
     return jsonError("Editor authorization is required to delete world assets.", 403);
   }
   await env.AVATARS.delete(key);
+  await caches.default.delete(new Request(new URL("/api/assets", request.url)));
+  await caches.default.delete(new Request(new URL(`/api/assets/${key}`, request.url)));
   return new Response(null, { status: 204 });
 }
 

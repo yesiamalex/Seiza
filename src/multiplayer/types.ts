@@ -54,6 +54,7 @@ export type ServerMessage =
        *  client should prompt for it before allowing Edit Mode. */
       editorPasswordRequired: boolean;
     }
+  | { type: "roomFull"; maxOccupants: number }
   | { type: "playerJoined"; player: PlayerState }
   | { type: "playerUpdated"; id: string; position: [number, number, number]; rotationY: number }
   | { type: "playerGesture"; id: string; gesture: string | null }

@@ -151,6 +151,18 @@ Keep source and license records, honor takedown or DMCA requests where they
 apply to your deployment, and disable uploads when a closed asset policy is
 needed.
 
+### World Labs / Atlas exports
+
+World Labs' public documentation currently describes Marble's web creation and
+export workflow; it does not provide a stable public Atlas generation endpoint
+that this project can safely hard-code. Seiza already accepts exported GLB or
+glTF environments through `sceneUrl` in `world.json`, so an exported world can
+be used without changing the multiplayer runtime. Keep any future World Labs
+API key in a Worker secret such as `WORLD_LABS_API_KEY`, never in `.env.local`
+committed to a fork or in browser JavaScript. A server-side integration should
+wait for the provider's documented API, terms, export format, polling, and
+privacy guarantees rather than proxying an invented endpoint.
+
 `wrangler dev` simulates the Worker, KV, and the Durable Object room
 server locally (via Miniflare) with no Cloudflare login required — this
 was verified end-to-end (real WebSocket connect/join/broadcast/

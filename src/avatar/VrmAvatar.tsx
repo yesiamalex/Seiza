@@ -31,15 +31,13 @@ export function VrmAvatar({ url, position = [0, 0, 0], rotationY = 0, onLoaded }
     }
   }, [vrm, onLoaded]);
 
+  useEffect(() => {
+    if (error) console.error("VRM load failed:", error);
+  }, [error]);
+
   useFrame((_, delta) => {
     vrm?.update(delta);
   });
-
-  if (error) {
-    // Deliberately visible in the console rather than failing silently —
-    // very likely on first run, see public/worlds/default/README.md.
-    console.error("VRM load failed:", error);
-  }
 
   if (!vrm) {
     // No avatar URL, or it failed to load — show a placeholder capsule

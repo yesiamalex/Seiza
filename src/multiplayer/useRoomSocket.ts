@@ -39,6 +39,7 @@ export interface MultiplayerState {
   editorAuthPending: boolean;
   editorAuthFailed: boolean;
   authEditor: (password: string) => void;
+  roomFull: number | null;
 }
 
 /**
@@ -74,6 +75,7 @@ export function useRoomSocket(
   const [isEditor, setIsEditor] = useState(false);
   const [editorAuthPending, setEditorAuthPending] = useState(false);
   const [editorAuthFailed, setEditorAuthFailed] = useState(false);
+    const [roomFull, setRoomFull] = useState<number | null>(null);
   const onVoiceSignalRef = useRef(onVoiceSignal);
   onVoiceSignalRef.current = onVoiceSignal;
 
@@ -147,6 +149,7 @@ export function useRoomSocket(
         }
         switch (msg.type) {
           case "welcome": {
+            setRoomFull(null);
             setSelfId(msg.selfId);
             const playerMap: Record<string, PlayerState> = {};
             for (const p of msg.players) playerMap[p.id] = p;
@@ -158,6 +161,10 @@ export function useRoomSocket(
             setIsEditor(!msg.editorPasswordRequired);
             break;
           }
+          case "roomFull":
+            setRoomFull(msg.maxOccupants);
+            socket.close();
+            break;
           case "playerJoined":
             setPlayers((prev) => ({ ...prev, [msg.player.id]: msg.player }));
             break;
@@ -241,5 +248,6 @@ export function useRoomSocket(
     editorAuthPending,
     editorAuthFailed,
     authEditor,
+    roomFull,
   };
 }

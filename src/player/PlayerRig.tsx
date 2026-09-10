@@ -165,7 +165,7 @@ export function PlayerRig({
   // otherwise. First person keeps pointer lock — that one IS meant to
   // behave like a classic FPS look.
   useEffect(() => {
-    if (viewMode !== "third") return;
+    if (viewMode !== "third" || !pointerLockEnabled) return;
     const el = gl.domElement;
     let dragging = false;
 
@@ -196,7 +196,7 @@ export function PlayerRig({
       el.removeEventListener("pointerup", endDrag);
       el.removeEventListener("pointercancel", endDrag);
     };
-  }, [viewMode, gl]);
+  }, [viewMode, pointerLockEnabled, gl]);
 
   useXRControllerLocomotion(xrOriginRef, { speed: MOVE_SPEED * 0.6 });
 
