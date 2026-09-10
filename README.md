@@ -27,13 +27,31 @@ Japanese XR conference, April 2027).
   room server used for position sync, with a 3D speaking indicator and
   distance-based volume falloff. No separate media infrastructure; see
   the Status section below for the scaling ceiling this implies.
+- **Mobile/touch support** — phones and tablets start in third person
+  (first person needs Pointer Lock and a keyboard, neither of which
+  exists there) and get on-screen controls: a four-way D-pad, a jump
+  button, and Minecraft-style double-tap-forward to sprint. Drag anywhere
+  to look; tap the floor to walk there.
 - **In-world editing** — anyone in a room can toggle Edit Mode and place
   primitives or paste in a custom glTF model URL, with drag-to-move and
   delete; placements persist per-room.
+- **Custom environments, swappable live** — upload a `.glb`/`.gltf` world
+  from Edit Mode and it becomes the room's environment for everyone
+  immediately, persisted in the room's Durable Object and restored for
+  later joiners. "Reset to default" returns to the deployment's own
+  `world.json` scene (or the procedural room). Same editor permissions
+  and same validation as any other uploaded asset.
 - **Text chat** — a lightweight room-wide chat panel alongside voice,
   relayed through the same room server (not persisted across reconnects).
 - **Name tags** above every player, highlighting when that player is
   speaking.
+- **Avatar presets** — `world.json`'s `defaultAvatars` populates a picker
+  on the join screen and in the in-world avatar menu (`C`), so visitors
+  can choose a look without supplying a file. It ships empty because this
+  repo doesn't bundle VRM binaries it hasn't license-verified — but
+  genuinely CC0 avatars exist (VRoid's own samples, Open Source Avatars),
+  and THIRD_PARTY_ASSETS.md lists sources plus the one config edit needed
+  to wire up a businessman/businesswoman/casual set.
 - **Bring-your-own-avatar** — the join screen shows a live, rotatable
   3D preview (drag to orbit, scroll to zoom, drag-and-drop a file) and
   lets each person upload their own open-source/self-authored `.vrm`,
@@ -279,21 +297,18 @@ deliberate limitations (paper Section 7 has the fuller discussion):
   for glTF-Transform to safely reason about humanoid bone references or
   blend shapes during structural transforms — see the reasoning in
   `src/avatar/optimizeVrm.ts`.
-- **Click-to-move walks in a straight line, not around obstacles.** No
-  navmesh — a player can path directly into a wall/pillar/placed object
-  and just stop there rather than routing around it. A real fix would be
+- **Click-to-move routes around obstacles, but nothing else collides.**
+  A navmesh is generated at runtime from whatever environment geometry is
+  actually in the scene — procedural `BaseEnvironment` or an uploaded
+  glTF world — via
   [recast-navigation](https://github.com/isaac-mason/recast-navigation-js)
-  (WASM Recast/Detour, can generate a navmesh directly from the existing
-  procedural `BaseEnvironment` geometry at runtime) rather than
-  `three-pathfinding` (donmccurdy, lighter, but expects a pre-authored
-  navmesh file — awkward for geometry that's generated in code, not
-  authored in Blender). Not implemented — noted as the concrete next step
-  if this becomes worth doing.
-- **Navmesh upload is intentionally not enabled yet.** Current guidance from
-  Recast Navigation is to use a serialized Recast/Detour navmesh for direct
-  querying, or export a glTF navmesh and consume it with a pathfinding layer
-  such as `three-pathfinding`. Seiza's current movement controller has no
-  query/path integration, so accepting a file today would falsely imply that
-  it protects the environment. The planned implementation must validate the
-  uploaded mesh, show parse errors, preserve the procedural environment as a
-  fallback, and use the same editor permissions as world assets.
+  (WASM Recast/Detour), so tap/click-to-move paths around walls and
+  pillars instead of walking into them. Generation is at runtime rather
+  than from a pre-baked navmesh file because the default room is
+  generated in code and an editor can swap the whole environment live —
+  there's no authoring step where a navmesh could have been baked. It is
+  strictly additive: if the WASM module fails to load, generation fails,
+  or no route exists, movement falls back to the previous straight-line
+  walk. **WASD/D-pad movement still has no collision** — only a radius
+  clamp — so direct input can still walk through a wall. Rigid-body
+  physics for placed objects is still absent.

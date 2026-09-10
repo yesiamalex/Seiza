@@ -28,6 +28,43 @@ terms.
 4. Either way, a PR adding an asset without a completed row here should
    not be merged (see `CONTRIBUTING.md`).
 
+## Adding default avatars (businessman / businesswoman / casual, etc.)
+
+`world.json`'s `defaultAvatars` array powers the avatar picker on the join
+screen and in the in-world avatar menu. It ships **empty**, because this
+repo doesn't bundle VRM binaries whose redistribution terms it hasn't
+verified — not because suitable avatars don't exist.
+
+They do, and they're genuinely CC0 (public domain, no attribution
+required), so a deployer can fill this in without a licensing question:
+
+| Source | Notes |
+|---|---|
+| [VRoid Studio sample models](https://vroid.com/en/studio) | Released CC0 by Pixiv; editable and redistributable. Good base for making your own businessman/casual variants in VRoid Studio itself. |
+| [Open Source Avatars](https://www.opensourceavatars.com/) ([registry](https://github.com/ToxSam/open-source-avatars)) | 300+ CC0 VRM avatars. Per-avatar licenses are listed in the registry's `projects.json` — check the individual entry, not just the collection blurb. |
+| [MJMoonbow/VRMavatars](https://github.com/MJMoonbow/VRMavatars) | Collection published as CC0. |
+
+To wire them up:
+
+1. Put the `.vrm` files in `public/avatars/` (or add them to
+   `scripts/fetch-assets.mjs` so `npm run fetch-assets` pulls them at
+   setup time instead of committing binaries — the preferred route, and
+   why that script exists).
+2. List them in your world config:
+   ```jsonc
+   "defaultAvatars": [
+     { "label": "Businessman", "url": "/avatars/businessman.vrm" },
+     { "label": "Businesswoman", "url": "/avatars/businesswoman.vrm" },
+     { "label": "Casual", "url": "/avatars/casual.vrm" }
+   ]
+   ```
+3. Add a row to the table at the top of this file recording the exact
+   source and license for each file you added.
+
+Confirm the license on the specific model you download. "The collection
+is CC0" and "this particular avatar in it is CC0" are not automatically
+the same claim.
+
 ## User-uploaded avatars (not covered by the table above)
 
 The join screen (`src/ui/JoinScreen.tsx`) lets anyone joining a

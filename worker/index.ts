@@ -18,7 +18,7 @@
 // @cloudflare/workers-types, and sanity-check API shapes against
 // current Cloudflare docs before relying on this in production.
 
-import { SeizaRoom } from "./room";
+import { SeizaRoom, timingSafeEqual } from "./room";
 
 export interface Env {
   ASSETS: Fetcher;
@@ -194,8 +194,22 @@ async function handleGetAvatar(request: Request, key: string, env: Env): Promise
 }
 
 async function handleAssetUpload(request: Request, env: Env): Promise<Response> {
-  if (env.SEIZA_EDITOR_PASSWORD && request.headers.get("x-seiza-editor-password") !== env.SEIZA_EDITOR_PASSWORD) {
+  if (!isEditorAuthorized(request, env)) {
     return jsonError("Editor authorization is required to upload world assets.", 403);
+  }
+  // A deployment with no SEIZA_EDITOR_PASSWORD leaves this endpoint open
+  // by design (editing is open by default — see worker/room.ts). "Open"
+  // shouldn't also mean "unlimited 24MB writes into the deployer's KV
+  // from anyone on the internet", so the same per-IP limit that guards
+  // avatar uploads applies here too. A deployer who configured a password
+  // and supplied it is explicitly trusted, and building out a world can
+  // legitimately mean more than ten uploads in an hour — so that case
+  // skips the limit rather than fighting it.
+  if (!env.SEIZA_EDITOR_PASSWORD) {
+    const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
+    if (isRateLimited(ip)) {
+      return jsonError("Too many uploads from this address recently — try again later.", 429);
+    }
   }
   const declaredLength = Number(request.headers.get("content-length") ?? "0");
   if (declaredLength > MAX_MODEL_BYTES) return jsonError("Model is too large (max 24MB).", 413);
@@ -225,8 +239,14 @@ async function handleAssetUpload(request: Request, env: Env): Promise<Response> 
     }
   }
   const key = `${crypto.randomUUID()}.${extension}`;
+  // Deliberately NO expirationTtl, unlike avatars. A placed object lives
+  // in the room's Durable Object storage indefinitely and references this
+  // key by URL — expiring the model out from under it after 30 days would
+  // silently rot a deployed world into broken objects. World assets are
+  // deployer-curated content with an explicit Delete button; avatars are
+  // ephemeral per-visitor uploads. Different lifecycles, so: different
+  // retention.
   await env.AVATARS.put(key, buffer, {
-    expirationTtl: AVATAR_TTL_SECONDS,
     metadata: { contentType: extension === "glb" ? "model/gltf-binary" : "model/gltf+json", name } satisfies StoredAssetMetadata,
   });
   await caches.default.delete(new Request(new URL("/api/assets", request.url)));
@@ -237,11 +257,19 @@ async function handleAssetUpload(request: Request, env: Env): Promise<Response> 
 }
 
 async function handleAssetList(request: Request, env: Env): Promise<Response> {
-  if (env.SEIZA_EDITOR_PASSWORD && request.headers.get("x-seiza-editor-password") !== env.SEIZA_EDITOR_PASSWORD) {
+  if (!isEditorAuthorized(request, env)) {
     return jsonError("Editor authorization is required to list world assets.", 403);
   }
-  const cached = await caches.default.match(request);
-  if (cached) return cached;
+  // Only edge-cache the listing on deployments where it isn't behind a
+  // password. Cloudflare's Cache API keys on URL, not headers, so a
+  // `public` cached copy of an authorized listing is the wrong thing to
+  // leave lying around for shared proxies/browsers on a password-gated
+  // deployment — the KV list operations saved aren't worth that.
+  const cacheable = !env.SEIZA_EDITOR_PASSWORD;
+  if (cacheable) {
+    const cached = await caches.default.match(request);
+    if (cached) return cached;
+  }
   const listed = await env.AVATARS.list({ limit: 100 });
   const assets = listed.keys
     .filter((entry) => /\.(?:glb|gltf)$/i.test(entry.name))
@@ -253,15 +281,15 @@ async function handleAssetList(request: Request, env: Env): Promise<Response> {
   const response = new Response(JSON.stringify({ assets, truncated: listed.list_complete === false }), {
     headers: {
       "content-type": "application/json",
-      "cache-control": "public, max-age=30, s-maxage=30",
+      "cache-control": cacheable ? "public, max-age=30, s-maxage=30" : "private, no-store",
     },
   });
-  await caches.default.put(request, response.clone());
+  if (cacheable) await caches.default.put(request, response.clone());
   return response;
 }
 
 async function handleAssetDelete(request: Request, key: string, env: Env): Promise<Response> {
-  if (env.SEIZA_EDITOR_PASSWORD && request.headers.get("x-seiza-editor-password") !== env.SEIZA_EDITOR_PASSWORD) {
+  if (!isEditorAuthorized(request, env)) {
     return jsonError("Editor authorization is required to delete world assets.", 403);
   }
   await env.AVATARS.delete(key);
@@ -284,6 +312,18 @@ async function handleGetAsset(request: Request, key: string, env: Env): Promise<
   });
   await cache.put(request, response.clone());
   return response;
+}
+
+/**
+ * A deployment with no SEIZA_EDITOR_PASSWORD configured leaves the asset
+ * endpoints open — that's the documented default (editing is open unless
+ * a deployer opts into the shared password; see worker/room.ts). When one
+ * IS set, every asset endpoint requires it, compared in constant time by
+ * the same helper the WebSocket path uses so the two can't drift apart.
+ */
+function isEditorAuthorized(request: Request, env: Env): boolean {
+  if (!env.SEIZA_EDITOR_PASSWORD) return true;
+  return timingSafeEqual(request.headers.get("x-seiza-editor-password"), env.SEIZA_EDITOR_PASSWORD);
 }
 
 function jsonError(message: string, status: number): Response {

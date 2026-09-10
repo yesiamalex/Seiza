@@ -3,6 +3,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { PointerLockControls } from "@react-three/drei";
 import { useXR, useXRControllerLocomotion, XROrigin } from "@react-three/xr";
 import * as THREE from "three";
+import type { TouchMoveInput } from "./touchInput";
 
 export type ViewMode = "first" | "third";
 
@@ -43,6 +44,14 @@ interface PlayerRigProps {
    *  as WASD is pressed, whichever comes first. Third-person only — see
    *  the click handler wiring in App.tsx for why. */
   moveTargetRef: MutableRefObject<THREE.Vector3 | null>;
+  /** Remaining navmesh waypoints after `moveTargetRef`, consumed in
+   *  order as each is reached (see src/nav/useNavMesh.ts). Empty/absent
+   *  means "walk straight at the target", the pre-navmesh behavior. */
+  movePathRef?: MutableRefObject<THREE.Vector3[] | null>;
+  /** On-screen D-pad / jump state for touch devices — see
+   *  TouchControls.tsx. Read every frame alongside the keyboard so both
+   *  input paths drive exactly the same movement code. */
+  touchInputRef?: MutableRefObject<TouchMoveInput>;
   children?: ReactNode;
 }
 
@@ -82,6 +91,8 @@ export function PlayerRig({
   pointerLockEnabled = true,
   viewMode,
   moveTargetRef,
+  movePathRef,
+  touchInputRef,
   children,
 }: PlayerRigProps) {
   const { camera, gl } = useThree();
@@ -117,7 +128,11 @@ export function PlayerRig({
       if (isTypingTarget(e.target)) return;
       keysRef.current[e.code] = true;
       if (["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.code)) {
-        moveTargetRef.current = null; // manual input cancels an in-progress click-to-move
+        // Manual input cancels an in-progress click-to-move, including
+        // any remaining navmesh waypoints — otherwise releasing WASD
+        // would resume walking the old route.
+        moveTargetRef.current = null;
+        if (movePathRef) movePathRef.current = null;
       }
       if (e.code === "Space") {
         e.preventDefault(); // Space otherwise scrolls the page when nothing else has focus
@@ -134,7 +149,7 @@ export function PlayerRig({
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, [moveTargetRef]);
+  }, [moveTargetRef, movePathRef]);
 
   useEffect(() => {
     const onWheel = (e: WheelEvent) => {
@@ -159,26 +174,42 @@ export function PlayerRig({
   // cursor and driving the view from every raw mouse movement fights
   // with the actual point of third person (look at/inspect your own
   // avatar, click HUD buttons, click the floor to move) the same way it
-  // would in FrameVR. Instead: click-drag orbits the view (using
-  // PointerEvent.movementX/Y, which is populated on ordinary pointer
-  // moves too, not just under pointer lock), and the cursor stays free
-  // otherwise. First person keeps pointer lock — that one IS meant to
-  // behave like a classic FPS look.
+  // would in FrameVR. Instead: click-drag orbits the view and the cursor
+  // stays free otherwise. First person keeps pointer lock — that one IS
+  // meant to behave like a classic FPS look, and is desktop-only in
+  // practice (Pointer Lock isn't available on mobile browsers, which is
+  // why App.tsx starts touch devices in third person).
   useEffect(() => {
     if (viewMode !== "third" || !pointerLockEnabled) return;
     const el = gl.domElement;
     let dragging = false;
+    let lastX = 0;
+    let lastY = 0;
+    // Without this the browser claims touch drags for scrolling/zooming
+    // and the look-drag never gets pointermove events on mobile.
+    const previousTouchAction = el.style.touchAction;
+    el.style.touchAction = "none";
 
     const onPointerDown = (e: PointerEvent) => {
       dragging = true;
+      lastX = e.clientX;
+      lastY = e.clientY;
       el.setPointerCapture(e.pointerId);
     };
     const onPointerMove = (e: PointerEvent) => {
       if (!dragging) return;
+      // Deltas are measured from clientX/clientY rather than
+      // movementX/movementY: the latter is only dependable for mouse
+      // input — touch pointers report 0 on some browsers (notably iOS
+      // Safari), which silently made drag-to-look do nothing on phones.
+      const dx = e.clientX - lastX;
+      const dy = e.clientY - lastY;
+      lastX = e.clientX;
+      lastY = e.clientY;
       const vcam = virtualCameraRef.current!;
       const euler = new THREE.Euler().setFromQuaternion(vcam.quaternion, "YXZ");
-      euler.y -= e.movementX * DRAG_LOOK_SENSITIVITY;
-      euler.x = THREE.MathUtils.clamp(euler.x - e.movementY * DRAG_LOOK_SENSITIVITY, -PITCH_LIMIT, PITCH_LIMIT);
+      euler.y -= dx * DRAG_LOOK_SENSITIVITY;
+      euler.x = THREE.MathUtils.clamp(euler.x - dy * DRAG_LOOK_SENSITIVITY, -PITCH_LIMIT, PITCH_LIMIT);
       vcam.quaternion.setFromEuler(euler);
     };
     const endDrag = (e: PointerEvent) => {
@@ -191,6 +222,7 @@ export function PlayerRig({
     el.addEventListener("pointerup", endDrag);
     el.addEventListener("pointercancel", endDrag);
     return () => {
+      el.style.touchAction = previousTouchAction;
       el.removeEventListener("pointerdown", onPointerDown);
       el.removeEventListener("pointermove", onPointerMove);
       el.removeEventListener("pointerup", endDrag);
@@ -218,12 +250,29 @@ export function PlayerRig({
     forward.normalize();
     const right = new THREE.Vector3().crossVectors(forward, vcam.up).normalize();
 
+    const touch = touchInputRef?.current;
     const move = new THREE.Vector3();
     if (keys.KeyW || keys.ArrowUp) move.add(forward);
     if (keys.KeyS || keys.ArrowDown) move.sub(forward);
     if (keys.KeyD || keys.ArrowRight) move.add(right);
     if (keys.KeyA || keys.ArrowLeft) move.sub(right);
-    const running = !!(keys.ShiftLeft || keys.ShiftRight);
+    if (touch) {
+      if (touch.y !== 0) move.addScaledVector(forward, touch.y);
+      if (touch.x !== 0) move.addScaledVector(right, touch.x);
+      if (touch.jumpRequested) {
+        touch.jumpRequested = false; // consume — one press, one jump
+        if (vcam.position.y <= groundEyeY + GROUNDED_EPSILON) {
+          verticalVelocityRef.current = JUMP_SPEED;
+        }
+      }
+      // Any on-screen movement cancels an in-progress tap-to-walk, same
+      // as WASD does — otherwise the two fight over the player.
+      if (touch.x !== 0 || touch.y !== 0) {
+        moveTargetRef.current = null;
+        if (movePathRef) movePathRef.current = null;
+      }
+    }
+    const running = !!(keys.ShiftLeft || keys.ShiftRight) || !!touch?.running;
 
     if (move.lengthSq() > 0) {
       move.normalize().multiplyScalar(MOVE_SPEED * (running ? RUN_MULTIPLIER : 1) * delta);
@@ -233,7 +282,11 @@ export function PlayerRig({
       const toTarget = new THREE.Vector3(target.x - vcam.position.x, 0, target.z - vcam.position.z);
       const dist = toTarget.length();
       if (dist < MOVE_TARGET_ARRIVE_DISTANCE) {
-        moveTargetRef.current = null;
+        // Reached this waypoint — advance along the navmesh path, or
+        // stop if that was the last one (or there was no path at all and
+        // this was a plain straight-line target).
+        const nextWaypoint = movePathRef?.current?.shift() ?? null;
+        moveTargetRef.current = nextWaypoint;
       } else {
         toTarget.normalize();
         vcam.position.addScaledVector(toTarget, MOVE_SPEED * delta);

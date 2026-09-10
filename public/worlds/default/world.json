@@ -7,5 +7,6 @@
   "maxOccupants": 16,
   "voiceEnabled": true,
   "editingEnabled": true,
-  "allowAvatarUpload": true
+  "allowAvatarUpload": true,
+  "defaultAvatars": []
 }

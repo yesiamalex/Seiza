@@ -34,6 +34,11 @@ export type ClientMessage =
   | { type: "objectMove"; id: string; position: [number, number, number]; rotationY: number }
   | { type: "objectRemove"; id: string }
   | { type: "chat"; text: string }
+  // Swaps the room's environment model for everyone, live. `null` falls
+  // back to the deployment's own world.json sceneUrl (or the procedural
+  // BaseEnvironment when that isn't set either). Editor-gated exactly
+  // like object edits — see worker/room.ts.
+  | { type: "setEnvironment"; url: string | null }
   // Unlocks editing for this connection if the deployer has configured
   // SEIZA_EDITOR_PASSWORD (see worker/room.ts) — a shared password, not
   // per-user accounts. If the deployer hasn't set one, editing stays
@@ -53,7 +58,11 @@ export type ServerMessage =
       /** True if this deployment has SEIZA_EDITOR_PASSWORD set — the
        *  client should prompt for it before allowing Edit Mode. */
       editorPasswordRequired: boolean;
+      /** Room-level environment override set via the editor, or null to
+       *  use the deployment's own world.json sceneUrl. */
+      environmentUrl: string | null;
     }
+  | { type: "environmentChanged"; url: string | null }
   | { type: "roomFull"; maxOccupants: number }
   | { type: "playerJoined"; player: PlayerState }
   | { type: "playerUpdated"; id: string; position: [number, number, number]; rotationY: number }

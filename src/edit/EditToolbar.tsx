@@ -30,6 +30,10 @@ interface EditToolbarProps {
   editorAuthPending: boolean;
   editorAuthFailed: boolean;
   onAuthEditor: (password: string) => void;
+  /** Room-level environment override, or null when the deployment's own
+   *  world.json sceneUrl (or the procedural base room) is in use. */
+  environmentUrl: string | null;
+  onSetEnvironment: (url: string | null) => void;
 }
 
 /**
@@ -56,6 +60,8 @@ export function EditToolbar({
   editorAuthPending,
   editorAuthFailed,
   onAuthEditor,
+  environmentUrl,
+  onSetEnvironment,
 }: EditToolbarProps) {
   const [modelUrl, setModelUrl] = useState("");
   const [passwordDraft, setPasswordDraft] = useState("");
@@ -84,44 +90,63 @@ export function EditToolbar({
 
   if (!enabled) return null;
 
-  async function uploadAsset(file: File) {
-    setAssetMessage(null);
+  /** Shared by "place a model" and "replace the environment" — both are
+   *  the same upload, they just differ in what happens to the URL after. */
+  async function postAsset(file: File): Promise<{ id: string; url: string; name: string }> {
     const extension = file.name.toLowerCase().split(".").pop();
     if (extension !== "glb" && extension !== "gltf") {
-      setAssetMessage("Choose a .glb or .gltf model.");
-      return;
+      throw new Error("Choose a .glb or .gltf model.");
     }
     if (file.size > 60 * 1024 * 1024) {
-      setAssetMessage("That model is over 60MB. Choose a smaller export.");
-      return;
+      throw new Error("That model is over 60MB. Choose a smaller export.");
     }
+    let body: Blob = file;
+    if (optimizeAsset && extension === "glb" && file.size > 8 * 1024 * 1024) {
+      const result = await optimizeVrmAvatar(file);
+      body = result.blob;
+      if (!result.applied) setAssetMessage(result.reason ?? "Optimization was skipped; uploading the original.");
+    }
+    if (body.size > 24 * 1024 * 1024) {
+      throw new Error("This model is over the 24MB deployment limit, even after optimization.");
+    }
+    const response = await fetch("/api/assets", {
+      method: "POST",
+      body,
+      headers: {
+        "x-seiza-asset-name": file.name,
+        ...(passwordDraft ? { "x-seiza-editor-password": passwordDraft } : {}),
+      },
+    });
+    const result = (await response.json().catch(() => ({}))) as { id?: string; url?: string; name?: string; error?: string };
+    if (!response.ok || !result.id || !result.url) throw new Error(result.error ?? `Upload failed (${response.status}).`);
+    return { id: result.id, url: result.url, name: result.name ?? file.name };
+  }
+
+  async function uploadAsset(file: File) {
+    setAssetMessage(null);
     setAssetUploading(true);
     try {
-      let body: Blob = file;
-      if (optimizeAsset && extension === "glb" && file.size > 8 * 1024 * 1024) {
-        const result = await optimizeVrmAvatar(file);
-        body = result.blob;
-        if (!result.applied) setAssetMessage(result.reason ?? "Optimization was skipped; uploading the original.");
-      }
-      if (body.size > 24 * 1024 * 1024) {
-        throw new Error("This model is over the 24MB deployment limit, even after optimization.");
-      }
-      const response = await fetch("/api/assets", {
-        method: "POST",
-        body,
-        headers: {
-          "x-seiza-asset-name": file.name,
-          ...(passwordDraft ? { "x-seiza-editor-password": passwordDraft } : {}),
-        },
-      });
-      const result = (await response.json().catch(() => ({}))) as { id?: string; url?: string; name?: string; error?: string };
-      if (!response.ok || !result.id || !result.url) throw new Error(result.error ?? `Upload failed (${response.status}).`);
-      const asset = { id: result.id, url: result.url, name: result.name ?? file.name };
+      const asset = await postAsset(file);
       setAssets((previous) => [...previous, asset]);
       onSpawn("model", asset.url);
       setAssetMessage(`${asset.name} uploaded and placed.`);
     } catch (error) {
       setAssetMessage(error instanceof Error ? error.message : "Model upload failed.");
+    } finally {
+      setAssetUploading(false);
+    }
+  }
+
+  async function uploadEnvironment(file: File) {
+    setAssetMessage(null);
+    setAssetUploading(true);
+    try {
+      const asset = await postAsset(file);
+      setAssets((previous) => [...previous, asset]);
+      onSetEnvironment(asset.url);
+      setAssetMessage(`${asset.name} is now this room's environment for everyone.`);
+    } catch (error) {
+      setAssetMessage(error instanceof Error ? error.message : "Environment upload failed.");
     } finally {
       setAssetUploading(false);
     }
@@ -169,7 +194,7 @@ export function EditToolbar({
         </form>
       )}
       {editMode && !needsAuth && (
-        <div className="seiza-popover" style={{ ...panelStyle, ...popoverStyle, display: "flex", flexDirection: "column", gap: 8, width: 280 }}>
+        <div className="seiza-popover" style={{ ...panelStyle, ...popoverStyle, display: "flex", flexDirection: "column", gap: 8, width: "min(360px, calc(100vw - 32px))", maxHeight: "min(620px, calc(100svh - 120px))", overflowY: "auto", boxSizing: "border-box" }}>
           {!connected && (
             <small style={{ color: "#ffb347" }}>
               Not connected to the room server — placing/moving objects won't do anything until you reconnect.
@@ -193,6 +218,45 @@ export function EditToolbar({
             <button style={pillButtonStyle} disabled={!connected} onClick={() => onSpawn("cylinder")}>
               + Cylinder
             </button>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 5, borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 8 }}>
+            <strong>Environment</strong>
+            <small style={{ opacity: 0.7 }}>
+              {environmentUrl
+                ? "A custom environment is active for everyone in this room."
+                : "Using this deployment's default environment."}
+            </small>
+            <label style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+              Replace with a .glb / .gltf world
+              <input
+                type="file"
+                accept=".glb,.gltf,model/gltf-binary,model/gltf+json"
+                disabled={!connected || assetUploading}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void uploadEnvironment(file);
+                  event.currentTarget.value = "";
+                }}
+              />
+            </label>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {assets.map((asset) => (
+                <button
+                  key={`env-${asset.id}`}
+                  style={{ ...pillButtonStyle, maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis" }}
+                  disabled={!connected}
+                  onClick={() => onSetEnvironment(asset.url)}
+                  title={`Use ${asset.name} as the environment`}
+                >
+                  Use {asset.name}
+                </button>
+              ))}
+              {environmentUrl && (
+                <button style={pillButtonStyle} disabled={!connected} onClick={() => onSetEnvironment(null)}>
+                  Reset to default
+                </button>
+              )}
+            </div>
           </div>
           <label style={{ display: "flex", flexDirection: "column", gap: 5 }}>
             Upload model (.glb or .gltf, max 24MB)

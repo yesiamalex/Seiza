@@ -13,6 +13,25 @@ export interface WorldConfig {
   editingEnabled?: boolean;
   /** Let new joiners upload their own .vrm on the join screen. Default true. */
   allowAvatarUpload?: boolean;
+  /**
+   * Ready-to-pick avatars offered on the join screen and in the in-world
+   * avatar menu (e.g. a businessman / businesswoman / casual set), so a
+   * visitor doesn't have to supply their own file to look like anything.
+   *
+   * Empty by default: this repo can't ship VRM binaries it hasn't
+   * license-verified (THIRD_PARTY_ASSETS.md). Genuinely CC0 avatars do
+   * exist though — VRoid Studio's own sample models and the Open Source
+   * Avatars collection are both CC0 — so a deployer can populate this in
+   * one config edit. See THIRD_PARTY_ASSETS.md for sources and
+   * scripts/fetch-assets.mjs for wiring them into a setup step.
+   */
+  defaultAvatars?: AvatarPreset[];
+}
+
+export interface AvatarPreset {
+  label: string;
+  /** Same-origin path (e.g. /avatars/businessman.vrm) or absolute URL. */
+  url: string;
 }
 
 const WORLD_ID = import.meta.env.VITE_SEIZA_WORLD_ID ?? "default";

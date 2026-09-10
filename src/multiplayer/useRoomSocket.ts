@@ -40,6 +40,10 @@ export interface MultiplayerState {
   editorAuthFailed: boolean;
   authEditor: (password: string) => void;
   roomFull: number | null;
+  /** Room-level environment override (see worker/room.ts), or null when
+   *  the deployment's own world.json sceneUrl should be used. */
+  environmentUrl: string | null;
+  setEnvironment: (url: string | null) => void;
 }
 
 /**
@@ -76,6 +80,7 @@ export function useRoomSocket(
   const [editorAuthPending, setEditorAuthPending] = useState(false);
   const [editorAuthFailed, setEditorAuthFailed] = useState(false);
     const [roomFull, setRoomFull] = useState<number | null>(null);
+  const [environmentUrl, setEnvironmentUrl] = useState<string | null>(null);
   const onVoiceSignalRef = useRef(onVoiceSignal);
   onVoiceSignalRef.current = onVoiceSignal;
 
@@ -102,6 +107,7 @@ export function useRoomSocket(
   );
   const removeObject = useCallback((id: string) => send({ type: "objectRemove", id }), [send]);
   const sendChat = useCallback((text: string) => send({ type: "chat", text }), [send]);
+  const setEnvironment = useCallback((url: string | null) => send({ type: "setEnvironment", url }), [send]);
   const authEditor = useCallback(
     (password: string) => {
       setEditorAuthPending(true);
@@ -159,8 +165,12 @@ export function useRoomSocket(
             setObjects(objectMap);
             setEditorPasswordRequired(msg.editorPasswordRequired);
             setIsEditor(!msg.editorPasswordRequired);
+            setEnvironmentUrl(msg.environmentUrl);
             break;
           }
+          case "environmentChanged":
+            setEnvironmentUrl(msg.url);
+            break;
           case "roomFull":
             setRoomFull(msg.maxOccupants);
             socket.close();
@@ -225,11 +235,7 @@ export function useRoomSocket(
       socketRef.current?.close();
       socketRef.current = null;
     };
-    // Intentionally only re-runs on roomId change — displayName/avatarUrl
-    // are captured at join time. Re-joining on every rename is a
-    // reasonable future improvement, not a bug in this scaffold.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomId]);
+  }, [roomId, displayName, avatarUrl]);
 
   return {
     selfId,
@@ -249,5 +255,7 @@ export function useRoomSocket(
     editorAuthFailed,
     authEditor,
     roomFull,
+    environmentUrl,
+    setEnvironment,
   };
 }

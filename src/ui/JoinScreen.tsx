@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { WorldConfig } from "../config/worldConfig";
 import { optimizeVrmAvatar } from "../avatar/optimizeVrm";
 import { AvatarPreview } from "./AvatarPreview";
+import { AvatarPicker } from "./AvatarPicker";
 import { ACCENT_COLOR, inputStyle, primaryButtonStyle } from "./styles";
 
 interface JoinScreenProps {
@@ -61,6 +62,9 @@ export function JoinScreen({ world, onJoin }: JoinScreenProps) {
   const [displayName, setDisplayName] = useState(() => `guest-${Math.random().toString(36).slice(2, 7)}`);
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  // Which configured preset (or "" for the built-in placeholder) the
+  // visitor picked. A file upload takes precedence over this.
+  const [presetUrl, setPresetUrl] = useState(world.defaultAvatarUrl);
   const [optimize, setOptimize] = useState(true);
   const [rightsConfirmed, setRightsConfirmed] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -93,7 +97,7 @@ export function JoinScreen({ world, onJoin }: JoinScreenProps) {
     setError(null);
 
     if (!file) {
-      onJoin(displayName.trim(), world.defaultAvatarUrl);
+      onJoin(displayName.trim(), presetUrl);
       return;
     }
 
@@ -223,7 +227,21 @@ export function JoinScreen({ world, onJoin }: JoinScreenProps) {
             </h1>
             <div style={{ width: 40, height: 2, marginTop: 10, background: `linear-gradient(90deg, ${ACCENT_COLOR}, transparent)` }} />
           </div>
-          <AvatarPreview url={previewUrl ?? world.defaultAvatarUrl} />
+          <AvatarPreview url={previewUrl ?? presetUrl} />
+          <AvatarPicker
+            presets={world.defaultAvatars ?? []}
+            selectedUrl={presetUrl}
+            onSelect={(url) => {
+              // Picking a preset replaces a staged upload, otherwise the
+              // preview would show one thing and the join would send the
+              // other.
+              setPresetUrl(url);
+              setFile(null);
+              if (fileInputRef.current) fileInputRef.current.value = "";
+              setWarning(null);
+            }}
+            disabled={uploading}
+          />
         </div>
 
         <div style={{ flex: "1 1 280px", minWidth: 0, display: "flex", flexDirection: "column", gap: 14, alignSelf: "center" }}>

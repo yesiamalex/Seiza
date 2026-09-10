@@ -3,6 +3,7 @@ import type { ClientMessage, PlayerState, ServerMessage, WorldObject } from "../
 import type { Env } from "./index";
 
 const OBJECTS_STORAGE_KEY = "objects";
+const ENVIRONMENT_STORAGE_KEY = "environmentUrl";
 // No permission system yet (see class doc below) — these are the actual
 // abuse guards for an open room: a cap on total placed objects (storage
 // growth + everyone's render load) and a per-connection minimum gap
@@ -24,6 +25,12 @@ const BOUNDS_LIMIT = 100; // generous outer bound — BaseEnvironment's own radi
 // appropriate for the classroom-scale threat model this targets, not a
 // claim of real security hardening.
 const MAX_AUTH_ATTEMPTS = 5;
+// `join` is client-controlled like everything else on this socket, and
+// both of these get broadcast to every other player and stored in this
+// connection's attachment (which has a hard 16KB serialization limit —
+// an unbounded displayName would throw there and break the connection).
+const MAX_DISPLAY_NAME_LENGTH = 32; // matches JoinScreen.tsx's input maxLength
+const MAX_URL_LENGTH = 2000;
 
 interface ConnectionAttachment {
   connId: string;
@@ -56,6 +63,7 @@ interface ConnectionAttachment {
  */
 export class SeizaRoom extends DurableObject<Env> {
   objects = new Map<string, WorldObject>();
+  environmentUrl: string | null = null;
   private ready: Promise<void>;
 
   constructor(ctx: DurableObjectState, env: Env) {
@@ -68,6 +76,7 @@ export class SeizaRoom extends DurableObject<Env> {
     this.ready = ctx.blockConcurrencyWhile(async () => {
       const stored = await ctx.storage.get<WorldObject[]>(OBJECTS_STORAGE_KEY);
       if (stored) for (const obj of stored) this.objects.set(obj.id, obj);
+      this.environmentUrl = (await ctx.storage.get<string | null>(ENVIRONMENT_STORAGE_KEY)) ?? null;
     });
   }
 
@@ -106,10 +115,18 @@ export class SeizaRoom extends DurableObject<Env> {
           ws.close(1008, "Room is full");
           return;
         }
+        // Same reasoning as validateNewObject below: the ClientMessage
+        // type is a compile-time assertion about a JSON.parse result, not
+        // a guarantee. An unvalidated avatarUrl here would be the exact
+        // "make every other client's browser fetch an arbitrary URL"
+        // hole that objectAdd already guards against.
+        const displayName = sanitizeDisplayName(message.displayName);
+        const avatarUrl = sanitizeAssetUrl(message.avatarUrl, { allowEmpty: true });
+        if (avatarUrl === null) return;
         const player: PlayerState = {
           id: attachment.connId,
-          displayName: message.displayName,
-          avatarUrl: message.avatarUrl,
+          displayName,
+          avatarUrl,
           position: [0, 0, 0],
           rotationY: 0,
           activeGesture: null,
@@ -122,6 +139,7 @@ export class SeizaRoom extends DurableObject<Env> {
           players: this.listPlayers(),
           objects: Array.from(this.objects.values()),
           editorPasswordRequired: !!this.env.SEIZA_EDITOR_PASSWORD,
+          environmentUrl: this.environmentUrl,
         };
         ws.send(JSON.stringify(welcome));
         this.broadcast({ type: "playerJoined", player }, attachment.connId);
@@ -129,6 +147,14 @@ export class SeizaRoom extends DurableObject<Env> {
       }
       case "state": {
         if (!attachment.player) return;
+        // Unvalidated position used to be relayed straight through. A
+        // NaN/Infinity here propagates into every other client's
+        // Three.js transforms (and the speed estimate feeding
+        // useProceduralGait), so one bad or malicious client could
+        // visually break the room for everyone.
+        if (!Array.isArray(message.position) || message.position.length !== 3) return;
+        if (!message.position.every(isFiniteInBounds)) return;
+        if (typeof message.rotationY !== "number" || !Number.isFinite(message.rotationY)) return;
         attachment.player.position = message.position;
         attachment.player.rotationY = message.rotationY;
         ws.serializeAttachment(attachment);
@@ -159,7 +185,7 @@ export class SeizaRoom extends DurableObject<Env> {
           ws.send(JSON.stringify({ type: "editorAuthResult", granted: false } satisfies ServerMessage));
           break;
         }
-        const granted = message.password === required;
+        const granted = timingSafeEqual(message.password, required);
         attachment.isEditor = granted || attachment.isEditor;
         attachment.authAttempts = granted ? attempts : attempts + 1;
         ws.serializeAttachment(attachment);
@@ -204,6 +230,21 @@ export class SeizaRoom extends DurableObject<Env> {
         if (!this.objects.delete(message.id)) return;
         this.persistObjects();
         this.broadcast({ type: "objectRemoved", id: message.id });
+        break;
+      }
+      case "setEnvironment": {
+        if (this.env.SEIZA_EDITOR_PASSWORD && !attachment.isEditor) return;
+        // null clears the override; anything else goes through the same
+        // URL sanitizer as placed models, since this makes every client
+        // in the room fetch it.
+        let next: string | null = null;
+        if (message.url !== null) {
+          next = sanitizeAssetUrl(message.url, { allowEmpty: false });
+          if (!next) return;
+        }
+        this.environmentUrl = next;
+        void this.ctx.storage.put(ENVIRONMENT_STORAGE_KEY, next);
+        this.broadcast({ type: "environmentChanged", url: next });
         break;
       }
       case "chat": {
@@ -266,7 +307,13 @@ export class SeizaRoom extends DurableObject<Env> {
       const attachment = ws.deserializeAttachment() as ConnectionAttachment | null;
       if (!attachment?.player) continue; // hasn't joined yet
       if (excludeConnId && attachment.connId === excludeConnId) continue;
-      ws.send(json);
+      try {
+        ws.send(json);
+      } catch {
+        // A socket that's already closing throws on send. Without this,
+        // one dead peer aborts the whole loop and everyone after it in
+        // the iteration order silently misses the message.
+      }
     }
   }
 
@@ -308,12 +355,75 @@ function validateNewObject(input: unknown): Omit<WorldObject, "id" | "ownerId"> 
 
   let modelUrl: string | undefined;
   if (kind === "model") {
-    if (typeof obj.modelUrl !== "string" || obj.modelUrl.length === 0 || obj.modelUrl.length > 2000) return null;
-    if (!/^https:\/\//i.test(obj.modelUrl) && !/^http:\/\//i.test(obj.modelUrl)) return null;
-    modelUrl = obj.modelUrl;
+    const sanitized = sanitizeAssetUrl(obj.modelUrl, { allowEmpty: false });
+    if (!sanitized) return null;
+    modelUrl = sanitized;
   }
 
   return { kind, modelUrl, color: obj.color, position, rotationY: obj.rotationY, scale };
+}
+
+/**
+ * Shared by placed-object modelUrls and join avatarUrls. Accepts either a
+ * same-origin absolute path (what this deployment's own upload endpoints
+ * hand back — `/api/assets/<id>.glb`, `/api/avatars/<id>.vrm`) or an
+ * explicit http(s) URL (the paste-a-URL feature).
+ *
+ * The same-origin case is why this exists: uploading a model returned a
+ * relative URL from worker/index.ts, which the old http(s)-only check
+ * rejected — so every asset-library upload was silently dropped by the
+ * server while the UI reported success.
+ *
+ * Returns null for anything else. The schemes being excluded are the
+ * point: `javascript:`, `data:`, `file:`, and protocol-relative `//host`
+ * (which looks same-origin but isn't). Any connected client can make
+ * every other client's browser fetch whatever this returns.
+ */
+function sanitizeAssetUrl(input: unknown, { allowEmpty }: { allowEmpty: boolean }): string | null {
+  if (typeof input !== "string") return null;
+  const url = input.trim();
+  if (url.length === 0) return allowEmpty ? "" : null;
+  if (url.length > MAX_URL_LENGTH) return null;
+  if (url.startsWith("//")) return null; // protocol-relative → cross-origin
+  if (url.startsWith("/")) return url; // same-origin path
+  if (/^https?:\/\//i.test(url)) return url;
+  return null;
+}
+
+function sanitizeDisplayName(input: unknown): string {
+  if (typeof input !== "string") return "guest";
+  // Strip control characters (including newlines) so a name can't break
+  // up the chat/nameplate rendering or smuggle terminal escapes into a
+  // deployer's logs.
+  let cleaned = "";
+  for (const ch of input) {
+    const code = ch.codePointAt(0) ?? 0;
+    // Drop C0 controls and DEL; everything printable (incl. non-Latin) stays.
+    if (code >= 0x20 && code !== 0x7f) cleaned += ch;
+  }
+  cleaned = cleaned.trim().slice(0, MAX_DISPLAY_NAME_LENGTH);
+  return cleaned.length > 0 ? cleaned : "guest";
+}
+
+/**
+ * Constant-time string comparison for the shared editor password. The
+ * realistic threat model here is small (network jitter swamps the timing
+ * signal of a JS string compare, and MAX_AUTH_ATTEMPTS caps guesses per
+ * connection), but this costs nothing and removes the question.
+ */
+export function timingSafeEqual(a: unknown, b: string): boolean {
+  if (typeof a !== "string") return false;
+  const encoder = new TextEncoder();
+  const left = encoder.encode(a);
+  const right = encoder.encode(b);
+  // Compare over a fixed length so the loop count doesn't leak the
+  // candidate's length; the length check is folded into the result.
+  const length = Math.max(left.length, right.length);
+  let mismatch = left.length === right.length ? 0 : 1;
+  for (let i = 0; i < length; i++) {
+    mismatch |= (left[i] ?? 0) ^ (right[i] ?? 0);
+  }
+  return mismatch === 0;
 }
 
 function isFiniteInBounds(n: unknown): n is number {
