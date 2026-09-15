@@ -113,7 +113,7 @@ export default {
     }
 
     const avatarMatch = url.pathname.match(/^\/api\/avatars\/([a-f0-9-]+\.vrm)$/);
-    if (avatarMatch && request.method === "GET") {
+    if (avatarMatch && (request.method === "GET" || request.method === "HEAD")) {
       return handleGetAvatar(request, avatarMatch[1], env);
     }
 
@@ -176,12 +176,22 @@ async function handleGetAvatar(request: Request, key: string, env: Env): Promise
   // Cloudflare's edge (not just the immutable Cache-Control header,
   // which only helps the *browser's own* cache) is safe and cheap: a
   // cache hit costs zero KV reads.
+  //
+  // HEAD is answered from the same GET cache entry. A returning visitor's
+  // browser uses it to check that their remembered upload still exists
+  // before rejoining with it (src/profile/profileStore.ts), and the Cache
+  // API only stores GET, so the key is always a GET request.
   const cache = caches.default;
-  const cached = await cache.match(request);
-  if (cached) return cached;
+  const cacheKey = new Request(request.url, { method: "GET" });
+  const headOnly = request.method === "HEAD";
+  const withoutBody = (response: Response) =>
+    headOnly ? new Response(null, { status: response.status, headers: response.headers }) : response;
+
+  const cached = await cache.match(cacheKey);
+  if (cached) return withoutBody(cached);
 
   const { value, metadata } = await env.AVATARS.getWithMetadata<AvatarMetadata>(key, "arrayBuffer");
-  if (!value) return new Response("Not found", { status: 404 });
+  if (!value) return new Response(headOnly ? null : "Not found", { status: 404 });
 
   const response = new Response(value, {
     headers: {
@@ -189,8 +199,8 @@ async function handleGetAvatar(request: Request, key: string, env: Env): Promise
       "cache-control": "public, max-age=31536000, immutable",
     },
   });
-  await cache.put(request, response.clone());
-  return response;
+  await cache.put(cacheKey, response.clone());
+  return withoutBody(response);
 }
 
 async function handleAssetUpload(request: Request, env: Env): Promise<Response> {

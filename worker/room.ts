@@ -31,11 +31,26 @@ const MAX_AUTH_ATTEMPTS = 5;
 // an unbounded displayName would throw there and break the connection).
 const MAX_DISPLAY_NAME_LENGTH = 32; // matches JoinScreen.tsx's input maxLength
 const MAX_URL_LENGTH = 2000;
+// Same rule as isValidGestureName in src/avatar/gestures.ts. The server
+// doesn't know which clips a deployment has — clients resolve names
+// against world.json — so it only checks the shape, which keeps anything
+// odd out of every other client's state.
+const GESTURE_NAME = /^[a-z0-9][a-z0-9_-]{0,31}$/;
+const GESTURE_MIN_INTERVAL_MS = 250;
+// Every avatar change makes everyone in the room download and build a
+// model, so rapid switching is throttled per connection.
+const AVATAR_CHANGE_MIN_INTERVAL_MS = 1500;
+// Designer avatars are data, not files: `seiza-avatar:v1:` + base64url JSON
+// (see src/avatar/designer/avatarSpec.ts). Real specs are a few hundred
+// characters; the cap only bounds abuse. Receivers re-validate every field.
+const DESIGNER_AVATAR_URL = /^seiza-avatar:v1:[A-Za-z0-9_-]{1,1200}$/;
 
 interface ConnectionAttachment {
   connId: string;
   player: PlayerState | null; // null until this connection sends "join"
   lastChatAt?: number;
+  lastGestureAt?: number;
+  lastAvatarChangeAt?: number;
   isEditor?: boolean;
   authAttempts?: number;
 }
@@ -130,6 +145,7 @@ export class SeizaRoom extends DurableObject<Env> {
           position: [0, 0, 0],
           rotationY: 0,
           activeGesture: null,
+          gestureSeq: 0,
         };
         ws.serializeAttachment({ connId: attachment.connId, player } satisfies ConnectionAttachment);
 
@@ -149,8 +165,8 @@ export class SeizaRoom extends DurableObject<Env> {
         if (!attachment.player) return;
         // Unvalidated position used to be relayed straight through. A
         // NaN/Infinity here propagates into every other client's
-        // Three.js transforms (and the speed estimate feeding
-        // useProceduralGait), so one bad or malicious client could
+        // Three.js transforms (and the ground-speed estimate feeding
+        // AvatarAnimator), so one bad or malicious client could
         // visually break the room for everyone.
         if (!Array.isArray(message.position) || message.position.length !== 3) return;
         if (!message.position.every(isFiniteInBounds)) return;
@@ -166,9 +182,35 @@ export class SeizaRoom extends DurableObject<Env> {
       }
       case "gesture": {
         if (!attachment.player) return;
-        attachment.player.activeGesture = message.gesture;
+        const gesture = message.gesture;
+        if (gesture !== null && (typeof gesture !== "string" || !GESTURE_NAME.test(gesture))) return;
+        const player = attachment.player;
+        if (gesture !== null) {
+          const now = Date.now();
+          if (attachment.lastGestureAt && now - attachment.lastGestureAt < GESTURE_MIN_INTERVAL_MS) return;
+          attachment.lastGestureAt = now;
+          // Only starting a gesture bumps the sequence; clearing one
+          // (gesture: null, sent when a clip ends) just updates state.
+          player.gestureSeq = (player.gestureSeq ?? 0) + 1;
+        }
+        player.activeGesture = gesture;
         ws.serializeAttachment(attachment);
-        this.broadcast({ type: "playerGesture", id: attachment.connId, gesture: message.gesture }, attachment.connId);
+        this.broadcast(
+          { type: "playerGesture", id: attachment.connId, gesture, seq: player.gestureSeq ?? 0 },
+          attachment.connId
+        );
+        break;
+      }
+      case "setAvatar": {
+        if (!attachment.player) return;
+        const avatarUrl = sanitizeAssetUrl(message.avatarUrl, { allowEmpty: true });
+        if (avatarUrl === null || avatarUrl === attachment.player.avatarUrl) return;
+        const now = Date.now();
+        if (attachment.lastAvatarChangeAt && now - attachment.lastAvatarChangeAt < AVATAR_CHANGE_MIN_INTERVAL_MS) return;
+        attachment.lastAvatarChangeAt = now;
+        attachment.player.avatarUrl = avatarUrl;
+        ws.serializeAttachment(attachment);
+        this.broadcast({ type: "playerAvatarChanged", id: attachment.connId, avatarUrl }, attachment.connId);
         break;
       }
       case "authEditor": {
@@ -214,6 +256,11 @@ export class SeizaRoom extends DurableObject<Env> {
         if (this.env.SEIZA_EDITOR_PASSWORD && !attachment.isEditor) return;
         const object = this.objects.get(message.id);
         if (!object) return;
+        // Same NaN/Infinity concern as "state" above — and this one is
+        // persisted, so a bad value would survive restarts too.
+        if (!Array.isArray(message.position) || message.position.length !== 3) return;
+        if (!message.position.every(isFiniteInBounds)) return;
+        if (typeof message.rotationY !== "number" || !Number.isFinite(message.rotationY)) return;
         object.position = message.position;
         object.rotationY = message.rotationY;
         this.persistObjects();
@@ -251,6 +298,7 @@ export class SeizaRoom extends DurableObject<Env> {
         if (!attachment.player) return;
         const now = Date.now();
         if (attachment.lastChatAt && now - attachment.lastChatAt < CHAT_MIN_INTERVAL_MS) return;
+        if (typeof message.text !== "string") return;
         const text = message.text.trim().slice(0, 500);
         if (!text) return;
         attachment.lastChatAt = now;
@@ -374,6 +422,10 @@ function validateNewObject(input: unknown): Omit<WorldObject, "id" | "ownerId"> 
  * rejected — so every asset-library upload was silently dropped by the
  * server while the UI reported success.
  *
+ * Designer avatars (`seiza-avatar:v1:…`) are also accepted. They aren't
+ * fetched at all — clients build the model from the encoded spec — so the
+ * only check needed is that the payload is plain base64url of bounded size.
+ *
  * Returns null for anything else. The schemes being excluded are the
  * point: `javascript:`, `data:`, `file:`, and protocol-relative `//host`
  * (which looks same-origin but isn't). Any connected client can make
@@ -384,6 +436,7 @@ function sanitizeAssetUrl(input: unknown, { allowEmpty }: { allowEmpty: boolean 
   const url = input.trim();
   if (url.length === 0) return allowEmpty ? "" : null;
   if (url.length > MAX_URL_LENGTH) return null;
+  if (url.startsWith("seiza-avatar:")) return DESIGNER_AVATAR_URL.test(url) ? url : null;
   if (url.startsWith("//")) return null; // protocol-relative → cross-origin
   if (url.startsWith("/")) return url; // same-origin path
   if (/^https?:\/\//i.test(url)) return url;

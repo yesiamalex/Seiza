@@ -15,6 +15,8 @@ const MAX_CHAT_MESSAGES = 200;
 // the console/network with a rapid-fire retry loop.
 const RECONNECT_BASE_DELAY_MS = 500;
 const RECONNECT_MAX_DELAY_MS = 10_000;
+// A little over the room server's AVATAR_CHANGE_MIN_INTERVAL_MS (1500).
+const AVATAR_CHANGE_MIN_INTERVAL_MS = 1600;
 
 export type ConnectionState = "connecting" | "connected" | "reconnecting";
 
@@ -83,6 +85,15 @@ export function useRoomSocket(
   const [environmentUrl, setEnvironmentUrl] = useState<string | null>(null);
   const onVoiceSignalRef = useRef(onVoiceSignal);
   onVoiceSignalRef.current = onVoiceSignal;
+  // Read at connect time rather than being effect dependencies: changing
+  // your avatar used to tear down and reopen the socket, which dropped
+  // voice connections and showed you leaving and rejoining to everyone.
+  // Now a change is sent in place (setAvatar, below) and a later
+  // reconnect simply joins with the latest values.
+  const displayNameRef = useRef(displayName);
+  displayNameRef.current = displayName;
+  const avatarUrlRef = useRef(avatarUrl);
+  const selfIdRef = useRef<string | null>(null);
 
   const send = useCallback((msg: ClientMessage) => {
     // socketRef.current is assigned the moment `new WebSocket()` runs,
@@ -133,7 +144,9 @@ export function useRoomSocket(
       socket.addEventListener("open", () => {
         reconnectAttempt = 0;
         setConnectionState("connected");
-        socket.send(JSON.stringify({ type: "join", displayName, avatarUrl } satisfies ClientMessage));
+        socket.send(
+          JSON.stringify({ type: "join", displayName: displayNameRef.current, avatarUrl: avatarUrlRef.current } satisfies ClientMessage)
+        );
       });
 
       socket.addEventListener("close", () => {
@@ -156,6 +169,7 @@ export function useRoomSocket(
         switch (msg.type) {
           case "welcome": {
             setRoomFull(null);
+            selfIdRef.current = msg.selfId;
             setSelfId(msg.selfId);
             const playerMap: Record<string, PlayerState> = {};
             for (const p of msg.players) playerMap[p.id] = p;
@@ -187,7 +201,14 @@ export function useRoomSocket(
             break;
           case "playerGesture":
             setPlayers((prev) =>
-              prev[msg.id] ? { ...prev, [msg.id]: { ...prev[msg.id], activeGesture: msg.gesture } } : prev
+              prev[msg.id]
+                ? { ...prev, [msg.id]: { ...prev[msg.id], activeGesture: msg.gesture, gestureSeq: msg.seq } }
+                : prev
+            );
+            break;
+          case "playerAvatarChanged":
+            setPlayers((prev) =>
+              prev[msg.id] ? { ...prev, [msg.id]: { ...prev[msg.id], avatarUrl: msg.avatarUrl } } : prev
             );
             break;
           case "playerLeft":
@@ -235,7 +256,35 @@ export function useRoomSocket(
       socketRef.current?.close();
       socketRef.current = null;
     };
-  }, [roomId, displayName, avatarUrl]);
+  }, [roomId]);
+
+  // Avatar changes go out in place. If the socket isn't open right now,
+  // the next join carries the new URL instead.
+  //
+  // The server ignores changes less than 1.5s apart (worker/room.ts), so
+  // clicking through presets quickly would otherwise leave everyone else
+  // seeing a stale avatar. Changes inside that window are held and only
+  // the latest one is sent once it has passed.
+  const lastAvatarSendRef = useRef(0);
+  const avatarSendTimerRef = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (avatarUrlRef.current === avatarUrl) return;
+    avatarUrlRef.current = avatarUrl;
+    const self = selfIdRef.current;
+    if (self) {
+      setPlayers((prev) => (prev[self] ? { ...prev, [self]: { ...prev[self], avatarUrl } } : prev));
+    }
+    const flush = () => {
+      avatarSendTimerRef.current = undefined;
+      lastAvatarSendRef.current = Date.now();
+      send({ type: "setAvatar", avatarUrl: avatarUrlRef.current });
+    };
+    window.clearTimeout(avatarSendTimerRef.current);
+    const wait = lastAvatarSendRef.current + AVATAR_CHANGE_MIN_INTERVAL_MS - Date.now();
+    if (wait <= 0) flush();
+    else avatarSendTimerRef.current = window.setTimeout(flush, wait);
+  }, [avatarUrl, send]);
+  useEffect(() => () => window.clearTimeout(avatarSendTimerRef.current), []);
 
   return {
     selfId,

@@ -83,31 +83,31 @@ export function TouchControls({ inputRef }: TouchControlsProps) {
       onPointerLeave={() => pressed[key] && onUp()}
       onContextMenu={(e) => e.preventDefault()}
     >
-      {label}
+      <Chevron direction={key as ChevronDirection} />
     </button>
   );
 
   return (
     <div style={wrapperStyle}>
       <div style={padGridStyle}>
-        {padButton("up", "▲", handleForwardDown, handleForwardUp, "up")}
+        {padButton("up", "Move forward (double-tap to run)", handleForwardDown, handleForwardUp, "up")}
         {padButton(
           "left",
-          "◀",
+          "Move left",
           () => press("left", () => (inputRef.current.x = -1)),
           () => release("left", () => (inputRef.current.x = 0)),
           "left"
         )}
         {padButton(
           "right",
-          "▶",
+          "Move right",
           () => press("right", () => (inputRef.current.x = 1)),
           () => release("right", () => (inputRef.current.x = 0)),
           "right"
         )}
         {padButton(
           "down",
-          "▼",
+          "Move back",
           () => press("down", () => (inputRef.current.y = -1)),
           () => release("down", () => (inputRef.current.y = 0)),
           "down"
@@ -131,6 +131,18 @@ export function TouchControls({ inputRef }: TouchControlsProps) {
         JUMP
       </button>
     </div>
+  );
+}
+
+type ChevronDirection = "up" | "down" | "left" | "right";
+const CHEVRON_ROTATION: Record<ChevronDirection, number> = { up: 0, right: 90, down: 180, left: 270 };
+
+/** SVG, not ▲/◀ characters: Android renders some of those as color emoji. */
+function Chevron({ direction }: { direction: ChevronDirection }) {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden style={{ transform: `rotate(${CHEVRON_ROTATION[direction]}deg)` }}>
+      <path d="M6 15l6-6 6 6" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 

@@ -5,6 +5,11 @@ export interface PlayerState {
   position: [number, number, number];
   rotationY: number;
   activeGesture: string | null;
+  /** Incremented by the server every time this player starts a gesture.
+   *  Lets clients replay the same gesture twice in a row, and lets a
+   *  newly joined client tell "already playing before I arrived" apart
+   *  from "just started" (see RemotePlayers.tsx). */
+  gestureSeq: number;
 }
 
 export interface WorldObject {
@@ -30,6 +35,10 @@ export type ClientMessage =
   | { type: "join"; displayName: string; avatarUrl: string }
   | { type: "state"; position: [number, number, number]; rotationY: number }
   | { type: "gesture"; gesture: string | null }
+  // Changes this player's avatar in place, without reconnecting. Same URL
+  // rules as `join` (see sanitizeAssetUrl in worker/room.ts), including
+  // designer avatars (`seiza-avatar:v1:…`).
+  | { type: "setAvatar"; avatarUrl: string }
   | { type: "objectAdd"; object: Omit<WorldObject, "id" | "ownerId"> }
   | { type: "objectMove"; id: string; position: [number, number, number]; rotationY: number }
   | { type: "objectRemove"; id: string }
@@ -66,7 +75,8 @@ export type ServerMessage =
   | { type: "roomFull"; maxOccupants: number }
   | { type: "playerJoined"; player: PlayerState }
   | { type: "playerUpdated"; id: string; position: [number, number, number]; rotationY: number }
-  | { type: "playerGesture"; id: string; gesture: string | null }
+  | { type: "playerGesture"; id: string; gesture: string | null; seq: number }
+  | { type: "playerAvatarChanged"; id: string; avatarUrl: string }
   | { type: "playerLeft"; id: string }
   | { type: "objectAdded"; object: WorldObject }
   | { type: "objectMoved"; id: string; position: [number, number, number]; rotationY: number }

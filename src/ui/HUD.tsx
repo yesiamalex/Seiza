@@ -33,6 +33,7 @@ export function HUD({ connectionState, worldName, topRight, touchControlsVisible
         inset: 0,
         pointerEvents: "none",
         padding: 16,
+        paddingTop: "calc(12px + env(safe-area-inset-top, 0px))",
         paddingBottom: `calc(16px + env(safe-area-inset-bottom, 0px) + ${bottomInset}px)`,
         display: "flex",
         flexDirection: "column",
@@ -47,19 +48,22 @@ export function HUD({ connectionState, worldName, topRight, touchControlsVisible
     >
       <style>{`
         @keyframes seiza-popover-in { from { opacity: 0; transform: translateX(-50%) translateY(8px) scale(0.96); } to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); } }
-        @keyframes seiza-popover-right-in { from { opacity: 0; transform: translateY(8px) scale(0.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        @keyframes seiza-popover-dock-in { from { opacity: 0; transform: translateY(8px) scale(0.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        @keyframes seiza-popover-down-in { from { opacity: 0; transform: translateY(-8px) scale(0.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
         .seiza-popover { animation: seiza-popover-in 160ms ease-out both; }
-        .seiza-popover-right { animation: seiza-popover-right-in 160ms ease-out both; }
-        @media (prefers-reduced-motion: reduce) { .seiza-popover, .seiza-popover-right { animation: none; } }
-        /* Popovers are absolutely positioned and centered on their own
-           trigger button. On a narrow screen a button near the edge puts
-           its panel partly off-screen, and a tall panel can run past the
-           top. Docking them to the viewport instead is the only thing
-           that reliably prevents both. !important because the base
-           positioning comes from inline styles (popoverStyle), which a
-           plain class rule can't override. */
+        /* Panels whose trigger sits at the top of the screen (the avatar
+           menu) open downward. Opening upward from there is what made the
+           avatar panel run off the top of the viewport. */
+        .seiza-popover-down { animation: seiza-popover-down-in 160ms ease-out both; transform-origin: top right; }
+        @media (prefers-reduced-motion: reduce) { .seiza-popover, .seiza-popover-down { animation: none !important; } }
+        /* Popovers are absolutely positioned relative to their own
+           trigger. On a narrow screen a trigger near the edge puts its
+           panel partly off-screen, so they dock to the viewport instead:
+           bottom-bar panels above the bar (and the D-pad), top panels
+           below the top bar. !important because the base positioning
+           comes from inline styles, which a class rule can't override. */
         @media (max-width: 640px) {
-          .seiza-popover, .seiza-popover-right {
+          .seiza-popover {
             position: fixed !important;
             left: 12px !important;
             right: 12px !important;
@@ -68,9 +72,20 @@ export function HUD({ connectionState, worldName, topRight, touchControlsVisible
             width: auto !important;
             max-width: none !important;
             transform: none !important;
-            max-height: 58svh !important;
+            max-height: calc(100svh - var(--seiza-popover-bottom, 96px) - 72px) !important;
             overflow-y: auto !important;
-            animation: seiza-popover-right-in 160ms ease-out both;
+            animation: seiza-popover-dock-in 160ms ease-out both;
+          }
+          .seiza-popover-down {
+            position: fixed !important;
+            left: 12px !important;
+            right: 12px !important;
+            top: calc(60px + env(safe-area-inset-top, 0px)) !important;
+            bottom: auto !important;
+            width: auto !important;
+            max-width: none !important;
+            max-height: calc(100svh - 60px - env(safe-area-inset-top, 0px) - 16px) !important;
+            overflow-y: auto !important;
           }
           /* One scrollable row instead of several wrapped rows — wrapping
              six pills on a phone claims most of the screen and pushes the
@@ -89,9 +104,9 @@ export function HUD({ connectionState, worldName, topRight, touchControlsVisible
         }
       `}</style>
       <div style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-        <div style={{ ...panelStyle, padding: "6px 12px", fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
-          <strong>{worldName}</strong>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, opacity: 0.85 }}>
+        <div style={{ ...panelStyle, padding: "6px 12px", fontSize: 13, display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+          <strong style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{worldName}</strong>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, opacity: 0.85, flexShrink: 0 }}>
             {connected ? <SignalIcon size={14} /> : <SignalOffIcon size={14} />}
             {STATUS_LABEL[connectionState]}
           </span>

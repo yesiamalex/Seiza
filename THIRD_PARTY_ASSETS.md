@@ -15,7 +15,21 @@ terms.
 
 | Asset | Source | License | Commercial use OK? | Redistributable in this repo? | Notes |
 |---|---|---|---|---|---|
-| _(none bundled yet — see `public/worlds/default/README.md`)_ | | | | | |
+| _No third-party assets are bundled._ | | | | | See `public/worlds/default/README.md`. |
+
+### First-party generated content (not third-party)
+
+These ship with the repository but contain no external data, so they are
+covered by the repository's own license like the code that produces them.
+
+| Content | Produced by | Notes |
+|---|---|---|
+| `public/animations/{idle,walk,run}.vrma` | `scripts/generate-motions.mjs` | Keyframes authored in the script. Regenerate with `npm run generate:motions`. |
+| `public/gestures/builtin/*.vrma` | `scripts/generate-motions.mjs` | Same as above. Deployers can replace any of them; see `public/gestures/README.md`. |
+| Designer avatars | `src/avatar/designer/buildDesignerVrm.ts` | Geometry is generated at runtime from settings. No model files exist. |
+
+If you replace a generated clip with a clip from elsewhere, that clip is a
+third-party asset and needs a row in the table above.
 
 ## Adding a new asset
 
@@ -30,7 +44,11 @@ terms.
 
 ## Adding default avatars (businessman / businesswoman / casual, etc.)
 
-`world.json`'s `defaultAvatars` array powers the avatar picker on the join
+The built-in avatar designer already offers businessman, businesswoman,
+casual, student, and creative presets with no files at all. This section is
+for deployers who also want real `.vrm` models.
+
+`world.json`'s `defaultAvatars` array powers the "Presets" tab on the join
 screen and in the in-world avatar menu. It ships **empty**, because this
 repo doesn't bundle VRM binaries whose redistribution terms it hasn't
 verified — not because suitable avatars don't exist.
@@ -67,8 +85,9 @@ the same claim.
 
 ## User-uploaded avatars (not covered by the table above)
 
-The join screen (`src/ui/JoinScreen.tsx`) lets anyone joining a
-deployment upload their own `.vrm` avatar, stored via `worker/index.ts`
+The avatar chooser (`src/ui/AvatarChooser.tsx`, on the join screen and in
+the in-world avatar menu) lets anyone joining a deployment upload their own
+`.vrm` avatar, stored via `worker/index.ts`
 into that deployment's own Cloudflare KV namespace, auto-expiring after
 30 days. This is fundamentally different from the assets tracked above:
 

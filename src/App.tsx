@@ -1,33 +1,33 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { XR, createXRStore } from "@react-three/xr";
 import * as THREE from "three";
-import type { VRM } from "@pixiv/three-vrm";
-import { optimizeVrmAvatar } from "./avatar/optimizeVrm";
 import { loadWorldConfig, type WorldConfig } from "./config/worldConfig";
 import { Scene } from "./scene/Scene";
 import { VrmAvatar } from "./avatar/VrmAvatar";
-import { GestureController } from "./avatar/GestureController";
-import { useProceduralGait } from "./avatar/useProceduralGait";
-import { GESTURES } from "./avatar/gestures";
+import { AvatarAnimator } from "./avatar/AvatarAnimator";
+import { buildGestureRegistry, type GestureDefinition } from "./avatar/gestures";
+import type { VRM } from "@pixiv/three-vrm";
 import { useRoomSocket } from "./multiplayer/useRoomSocket";
 import { RemotePlayers } from "./multiplayer/RemotePlayers";
 import { PlayerRig, type ViewMode } from "./player/PlayerRig";
 import { TouchControls } from "./player/TouchControls";
-import { createTouchMoveInput, isCoarsePointer, type TouchMoveInput } from "./player/touchInput";
+import { createTouchMoveInput, type TouchMoveInput } from "./player/touchInput";
 import { useNavMesh } from "./nav/useNavMesh";
 import { useVoiceChat } from "./voice/useVoiceChat";
 import { VoiceControls } from "./voice/VoiceControls";
 import { WorldObjects } from "./edit/WorldObjects";
 import { EditToolbar } from "./edit/EditToolbar";
-import { GestureMatchGame } from "./interactions/GestureMatchGame";
+import { GesturePanel } from "./interactions/GesturePanel";
 import { ChatPanel } from "./chat/ChatPanel";
 import { HUD } from "./ui/HUD";
-import { JoinScreen } from "./ui/JoinScreen";
+import { JoinScreen, type JoinedIdentity } from "./ui/JoinScreen";
 import { CameraViewToggle } from "./ui/CameraViewToggle";
-import { AvatarPicker } from "./ui/AvatarPicker";
-import { panelStyle, pillButtonStyle, popoverStyle } from "./ui/styles";
-import { VrHeadsetIcon } from "./ui/icons";
+import { AvatarChooser } from "./ui/AvatarChooser";
+import { useMediaQuery, useWantsTouchControls } from "./ui/useMediaQuery";
+import { saveProfile } from "./profile/profileStore";
+import { panelStyle, pillButtonStyle } from "./ui/styles";
+import { CloseIcon, VrHeadsetIcon } from "./ui/icons";
 import type { WorldObject } from "./multiplayer/types";
 
 // Keep baseline immersive VR compatible with headsets that do not implement
@@ -36,24 +36,27 @@ import type { WorldObject } from "./multiplayer/types";
 const xrStore = createXRStore({ meshDetection: false, planeDetection: false, domOverlay: false });
 const OBJECT_COLORS = ["#c94f4f", "#4f8fc9", "#4fc97e", "#c9a94f", "#9a4fc9"];
 const NETWORK_TICK_MS = 200;
+// Custom clips don't declare a duration up front. AvatarAnimator reports
+// the real end; this only bounds how long a stuck gesture can stay "active".
+const GESTURE_FALLBACK_SECONDS = 10;
 
-interface JoinedIdentity {
-  displayName: string;
-  avatarUrl: string;
-}
+const isTypingTarget = (target: EventTarget | null) =>
+  target instanceof HTMLInputElement ||
+  target instanceof HTMLTextAreaElement ||
+  target instanceof HTMLSelectElement ||
+  (target instanceof HTMLElement && target.isContentEditable);
 
 export default function App() {
   const [world, setWorld] = useState<WorldConfig | null>(null);
   const [worldError, setWorldError] = useState<Error | null>(null);
   const [joined, setJoined] = useState<JoinedIdentity | null>(null);
   const [localVrm, setLocalVrm] = useState<VRM | null>(null);
-  const [activeGesture, setActiveGesture] = useState<string | null>(null);
+  const [localGesture, setLocalGesture] = useState<{ gesture: GestureDefinition; seq: number } | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
-  // First person needs Pointer Lock (unsupported on mobile browsers) and
-  // WASD (no keyboard on a phone), so a touch visitor defaulted into it
-  // can neither look nor move. Third person is the mode that actually
-  // works there: drag to look, tap the floor to walk.
+  // Touch devices start in third person: seeing your own avatar makes the
+  // D-pad's directions obvious. Desktop starts in first person. Both look
+  // around by dragging; neither uses pointer lock.
   const [viewMode, setViewMode] = useState<ViewMode>(() =>
     typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches ? "third" : "first"
   );
@@ -62,8 +65,6 @@ export default function App() {
   const [xrError, setXrError] = useState<string | null>(null);
   const [webglLost, setWebglLost] = useState(false);
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
-  const [avatarUploading, setAvatarUploading] = useState(false);
-  const [avatarRightsConfirmed, setAvatarRightsConfirmed] = useState(false);
   const [avatarMessage, setAvatarMessage] = useState<string | null>(null);
   const moveTargetRef = useRef<THREE.Vector3 | null>(null);
   const movePathRef = useRef<THREE.Vector3[] | null>(null);
@@ -73,38 +74,30 @@ export default function App() {
   const navSourceRef = useRef<THREE.Group | null>(null);
   const navMesh = useNavMesh(navSourceRef);
   const touchInputRef = useRef<TouchMoveInput>(createTouchMoveInput());
-  const [showTouchControls] = useState(isCoarsePointer);
+  const showTouchControls = useWantsTouchControls();
+  const hasHoverPointer = useMediaQuery("(hover: hover)");
+  const gestureSeqRef = useRef(0);
   const gestureTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     loadWorldConfig().then(setWorld).catch(setWorldError);
   }, []);
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.code !== "KeyC") return;
-      // Without the modifier check this swallows Ctrl+C / Cmd+C — i.e.
-      // copying anything on the page would toggle the avatar menu.
-      if (event.ctrlKey || event.metaKey || event.altKey) return;
-      const target = event.target;
-      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
-      if (target instanceof HTMLElement && target.isContentEditable) return;
-      setAvatarMenuOpen((open) => !open);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  const gestures = useMemo(
+    () => (world ? buildGestureRegistry({ enabledGestures: world.enabledGestures, customGestures: world.customGestures }) : []),
+    [world]
+  );
 
   useEffect(() => () => {
     if (gestureTimerRef.current !== null) window.clearTimeout(gestureTimerRef.current);
   }, []);
 
-  // Escape any active pointer lock the moment edit mode turns on, so the
-  // cursor is immediately free to drag transform gizmos.
+  // A blob: URL for your own uploaded avatar lives as long as it's in use.
+  const localAvatarUrl = joined?.localUrl ?? null;
   useEffect(() => {
-    if (editMode && document.pointerLockElement) document.exitPointerLock();
-  }, [editMode]);
-
+    if (!localAvatarUrl) return;
+    return () => URL.revokeObjectURL(localAvatarUrl);
+  }, [localAvatarUrl]);
 
   const voiceSignalHandlerRef = useRef<(from: string, data: unknown) => void>(() => {});
   const roomId = world && joined ? world.id : "";
@@ -131,7 +124,7 @@ export default function App() {
   } = useRoomSocket(
     roomId,
     joined?.displayName ?? "",
-    joined?.avatarUrl ?? "",
+    joined?.url ?? "",
     useCallback((from: string, data: unknown) => voiceSignalHandlerRef.current(from, data), [])
   );
 
@@ -149,12 +142,12 @@ export default function App() {
 
   const positionRef = useRef<[number, number, number]>([0, 0, 0]);
   const rotationRef = useRef(0);
+  const lookYawRef = useRef(0);
 
   // voice.updateSpatial is recreated whenever `players` changes (i.e.
   // often) — read it through a ref inside the interval below rather than
   // as an effect dependency, so the interval doesn't need to be torn
-  // down and rebuilt on every remote-player update, and so it never
-  // calls a stale closure bound to an old `players` snapshot.
+  // down and rebuilt on every remote-player update.
   const updateSpatialRef = useRef(voice.updateSpatial);
   updateSpatialRef.current = voice.updateSpatial;
 
@@ -167,27 +160,50 @@ export default function App() {
     return () => window.clearInterval(interval);
   }, [connected, send]);
 
+  const endGesture = useCallback(() => {
+    if (gestureTimerRef.current !== null) window.clearTimeout(gestureTimerRef.current);
+    gestureTimerRef.current = null;
+    send({ type: "gesture", gesture: null });
+  }, [send]);
+
   const requestGesture = useCallback(
-    (gesture: string) => {
-      if (!GESTURES[gesture]?.available) return;
+    (name: string) => {
+      const gesture = gestures.find((g) => g.name === name);
+      if (!gesture) return;
+      gestureSeqRef.current += 1;
+      // The definition stays set after the clip ends; AvatarAnimator plays
+      // only when `seq` changes, so there's nothing to reset.
+      setLocalGesture({ gesture, seq: gestureSeqRef.current });
+      send({ type: "gesture", gesture: name });
       if (gestureTimerRef.current !== null) window.clearTimeout(gestureTimerRef.current);
-      setActiveGesture(gesture);
-      send({ type: "gesture", gesture });
-      // Auto-clears locally after a rough guess at clip duration. A real
-      // implementation should read the clip's actual length instead of
-      // guessing — TODO.
-      gestureTimerRef.current = window.setTimeout(() => {
-        gestureTimerRef.current = null;
-        setActiveGesture(null);
-      }, 2000);
+      gestureTimerRef.current = window.setTimeout(endGesture, ((gesture.duration ?? GESTURE_FALLBACK_SECONDS) + 1) * 1000);
     },
-    [send]
+    [gestures, send, endGesture]
   );
+
+  // Keyboard: C toggles the avatar menu, 1–9 play gestures, Escape closes
+  // the avatar menu.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      // Modifier check: otherwise Ctrl+C (copy) would toggle the menu.
+      if (event.ctrlKey || event.metaKey || event.altKey || isTypingTarget(event.target)) return;
+      if (event.code === "KeyC") setAvatarMenuOpen((open) => !open);
+      else if (event.code === "Escape") setAvatarMenuOpen(false);
+      else if (/^Digit[1-9]$/.test(event.code) && joined) {
+        const gesture = gestures[Number(event.code.slice(5)) - 1];
+        if (gesture) requestGesture(gesture.name);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [gestures, requestGesture, joined]);
 
   const handleSpawn = useCallback(
     (kind: WorldObject["kind"], modelUrl?: string) => {
       const [px, py, pz] = positionRef.current;
-      const yaw = rotationRef.current;
+      // In front of the camera, not the avatar: in third person those differ,
+      // and you want the object where you're looking.
+      const yaw = lookYawRef.current;
       const distance = 2;
       const spawnPosition: [number, number, number] = [px - Math.sin(yaw) * distance, py + 1, pz - Math.cos(yaw) * distance];
       addObject({
@@ -216,17 +232,15 @@ export default function App() {
     moveObject(object.id, [object.position[0], halfHeight, object.position[2]], object.rotationY);
   }, [objects, selectedObjectId, moveObject]);
 
-  // Double-click-to-move: only in third person (in first person the cursor is
-  // pointer-locked and clicking means something else — look-lock, not a
-  // world-space point) and not while editing (where a floor click should
-  // do nothing rather than yank you away mid-edit).
+  // Double-click (or double-tap) the floor to walk there, in either view.
+  // Disabled while editing, where a floor click shouldn't yank you away.
   const handleFloorClick = useCallback(
     (point: THREE.Vector3) => {
-      if (editMode || viewMode !== "third") return;
+      if (editMode) return;
       const destination = point.clone();
       const from = new THREE.Vector3(positionRef.current[0], positionRef.current[1], positionRef.current[2]);
       // Route around walls/pillars when a navmesh is available; fall back
-      // to the old straight-line walk when it isn't (see useNavMesh).
+      // to a straight-line walk when it isn't (see useNavMesh).
       const path = navMesh.findPath(from, destination);
       if (path && path.length > 1) {
         const waypoints = path.slice(1); // path[0] is where we already are
@@ -237,16 +251,17 @@ export default function App() {
         movePathRef.current = null;
       }
     },
-    [editMode, viewMode, navMesh]
+    [editMode, navMesh]
   );
 
   if (worldError) return <CenteredMessage text={`Couldn't load world: ${worldError.message}`} />;
   if (!world) return <CenteredMessage text="Loading world…" />;
   if (roomFull) return <CenteredMessage text={`This world is currently full (${roomFull} people). Please try again later.`} />;
-  if (!joined) return <JoinScreen world={world} onJoin={(displayName, avatarUrl) => setJoined({ displayName, avatarUrl })} />;
+  if (!joined) return <JoinScreen world={world} onJoin={setJoined} />;
 
   const editingEnabled = world.editingEnabled !== false;
   const voiceVisible = world.voiceEnabled;
+  const currentWorld = world;
 
   async function enterVR() {
     setXrError(null);
@@ -259,36 +274,6 @@ export default function App() {
     } catch (error) {
       console.warn("Unable to start immersive VR:", error);
       setXrError("This device cannot start immersive VR. Try a WebXR-compatible browser or continue in desktop mode.");
-    }
-  }
-
-  async function uploadAvatar(file: File) {
-    setAvatarMessage(null);
-    if (!avatarRightsConfirmed) {
-      setAvatarMessage("Confirm that you have permission to use this avatar first.");
-      return;
-    }
-    if (!file.name.toLowerCase().endsWith(".vrm")) {
-      setAvatarMessage("Choose a .vrm avatar file.");
-      return;
-    }
-    if (file.size > 60 * 1024 * 1024) {
-      setAvatarMessage("That avatar is over 60MB. Choose a smaller export.");
-      return;
-    }
-    setAvatarUploading(true);
-    try {
-      const result = await optimizeVrmAvatar(file);
-      const response = await fetch("/api/avatars", { method: "POST", body: result.blob });
-      const payload = (await response.json().catch(() => ({}))) as { url?: string; error?: string };
-      if (!response.ok || !payload.url) throw new Error(payload.error ?? `Avatar upload failed (${response.status}).`);
-      setJoined((identity) => identity ? { ...identity, avatarUrl: payload.url! } : identity);
-      setAvatarMessage("Avatar updated. Reconnecting the room…");
-      setAvatarRightsConfirmed(false);
-    } catch (error) {
-      setAvatarMessage(error instanceof Error ? error.message : "Avatar upload failed.");
-    } finally {
-      setAvatarUploading(false);
     }
   }
 
@@ -317,20 +302,23 @@ export default function App() {
             spawnPoint={[world.spawnPoint.x, world.spawnPoint.y, world.spawnPoint.z]}
             positionRef={positionRef}
             rotationRef={rotationRef}
-            pointerLockEnabled={!editMode}
+            lookYawRef={lookYawRef}
+            editMode={editMode}
             viewMode={viewMode}
             moveTargetRef={moveTargetRef}
             movePathRef={movePathRef}
             touchInputRef={touchInputRef}
           >
-            <VrmAvatar url={joined.avatarUrl} onLoaded={setLocalVrm} />
-            <GestureController
+            <VrmAvatar url={joined.localUrl ?? joined.url} onLoaded={setLocalVrm} />
+            <AvatarAnimator
               vrm={localVrm}
-              activeGestureUrl={activeGesture ? GESTURES[activeGesture]?.vrmaUrl ?? null : null}
+              getPosition={() => positionRef.current}
+              gesture={localGesture?.gesture ?? null}
+              gestureSeq={localGesture?.seq ?? 0}
+              onGestureEnd={endGesture}
             />
-            {viewMode === "third" && <LocalGaitController vrm={localVrm} positionRef={positionRef} suppressed={!!activeGesture} />}
           </PlayerRig>
-          <RemotePlayers players={players} selfId={selfId} speakingLevels={voice.speakingLevels} />
+          <RemotePlayers players={players} selfId={selfId} speakingLevels={voice.speakingLevels} gestures={gestures} />
           <WorldObjects
             objects={objects}
             editMode={editMode && editingEnabled && isEditor}
@@ -347,46 +335,69 @@ export default function App() {
         worldName={world.displayName}
         touchControlsVisible={showTouchControls}
         topRight={(
-          <div style={{ position: "relative", pointerEvents: "auto" }}>
-            <button style={avatarMenuOpen ? { ...pillButtonStyle, background: "rgba(232,195,122,0.24)", borderColor: "rgba(232,195,122,0.7)" } : pillButtonStyle} onClick={() => setAvatarMenuOpen((open) => !open)} title="Avatar (C)">
-              Avatar <kbd style={{ opacity: 0.7, fontSize: 10 }}>C</kbd>
+          <div style={{ position: "relative", pointerEvents: "auto", flexShrink: 0 }}>
+            <button
+              type="button"
+              aria-expanded={avatarMenuOpen}
+              style={avatarMenuOpen ? { ...pillButtonStyle, background: "rgba(232,195,122,0.24)", borderColor: "rgba(232,195,122,0.7)" } : pillButtonStyle}
+              onClick={() => setAvatarMenuOpen((open) => !open)}
+              title="Avatar (C)"
+            >
+              Avatar {hasHoverPointer && <kbd style={{ opacity: 0.7, fontSize: 10 }}>C</kbd>}
             </button>
             {avatarMenuOpen && (
-              <div className="seiza-popover-right" style={{ ...panelStyle, ...popoverStyle, left: "auto", right: 0, transform: "none", transformOrigin: "top right", width: "min(320px, calc(100vw - 32px))", display: "flex", flexDirection: "column", gap: 8 }}>
-                <strong>Avatar</strong>
-                <small style={{ opacity: 0.75 }}>VRM files use the VRM humanoid mapping, so licensed gesture clips can retarget automatically.</small>
-                <AvatarPicker
-                  presets={world.defaultAvatars ?? []}
-                  selectedUrl={joined.avatarUrl}
-                  onSelect={(url) => {
-                    setJoined((identity) => (identity ? { ...identity, avatarUrl: url } : identity));
-                    setAvatarMessage(url ? "Avatar updated. Reconnecting the room…" : "Using the built-in placeholder avatar.");
+              <div
+                className="seiza-popover-down"
+                role="dialog"
+                aria-label="Avatar"
+                style={{
+                  ...panelStyle,
+                  position: "absolute",
+                  top: "calc(100% + 8px)",
+                  right: 0,
+                  zIndex: 30,
+                  width: "min(360px, calc(100vw - 32px))",
+                  maxHeight: "calc(100svh - 96px)",
+                  overflowY: "auto",
+                  boxSizing: "border-box",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 10,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <strong>Avatar</strong>
+                  <button type="button" aria-label="Close" onClick={() => setAvatarMenuOpen(false)} style={{ ...pillButtonStyle, padding: 6 }}>
+                    <CloseIcon size={14} />
+                  </button>
+                </div>
+                <AvatarChooser
+                  world={currentWorld}
+                  value={joined.choice}
+                  rememberLocally={joined.remember}
+                  onChange={(selection) => {
+                    setJoined((identity) => (identity ? { ...identity, ...selection } : identity));
+                    if (joined.remember) void saveProfile(currentWorld.id, { displayName: joined.displayName, avatar: selection.choice });
+                    setAvatarMessage("Avatar updated for everyone in the room.");
                   }}
-                  disabled={avatarUploading}
                 />
-                <button style={pillButtonStyle} onClick={() => { setJoined((identity) => identity ? { ...identity, avatarUrl: "" } : identity); setAvatarMessage("Using the built-in placeholder avatar."); }}>Use default avatar</button>
-                {world.allowAvatarUpload !== false && (
-                  <>
-                    <label style={{ display: "flex", gap: 6, alignItems: "flex-start", fontSize: 12 }}>
-                      <input type="checkbox" checked={avatarRightsConfirmed} onChange={(event) => setAvatarRightsConfirmed(event.target.checked)} />
-                      <span>I have permission to use and share this avatar in this room.</span>
-                    </label>
-                    <input type="file" accept=".vrm" disabled={avatarUploading} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAvatar(file); event.currentTarget.value = ""; }} />
-                  </>
-                )}
-                {avatarUploading && <small>Uploading and checking the file…</small>}
-                {avatarMessage && <small style={{ color: avatarMessage.includes("updated") || avatarMessage.includes("default") ? "#7CFF9E" : "#ffb347" }}>{avatarMessage}</small>}
+                {avatarMessage && <small style={{ color: "#7CFF9E" }}>{avatarMessage}</small>}
               </div>
             )}
           </div>
         )}
       >
-        <button style={pillButtonStyle} onClick={() => void enterVR()}>
+        <button type="button" style={pillButtonStyle} onClick={() => void enterVR()}>
           <VrHeadsetIcon /> Enter VR
         </button>
         <CameraViewToggle viewMode={viewMode} onToggle={() => setViewMode((v) => (v === "first" ? "third" : "first"))} />
         {voiceVisible && <VoiceControls voice={voice} />}
-        <GestureMatchGame activeGesture={activeGesture} onRequestGesture={requestGesture} enabledGestures={world.enabledGestures} />
+        <GesturePanel
+          gestures={gestures}
+          lastGesture={localGesture ? { name: localGesture.gesture.name, seq: localGesture.seq } : null}
+          onRequestGesture={requestGesture}
+          showShortcuts={hasHoverPointer}
+        />
         <ChatPanel
           open={chatOpen}
           onToggle={() => setChatOpen((v) => !v)}
@@ -435,22 +446,6 @@ export default function App() {
       )}
     </div>
   );
-}
-
-/** Thin bridge so useProceduralGait (needs useFrame) can run inside the
- *  Canvas tree while reading the local player's per-frame position from
- *  the same ref App.tsx already uses for network sync. */
-function LocalGaitController({
-  vrm,
-  positionRef,
-  suppressed,
-}: {
-  vrm: VRM | null;
-  positionRef: React.MutableRefObject<[number, number, number]>;
-  suppressed: boolean;
-}) {
-  useProceduralGait(vrm, () => positionRef.current, suppressed);
-  return null;
 }
 
 function CenteredMessage({ text }: { text: string }) {

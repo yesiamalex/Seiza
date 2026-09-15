@@ -3,10 +3,10 @@
   "displayName": "Seiza — Default World",
   "spawnPoint": { "x": 0, "y": 0, "z": 10 },
   "defaultAvatarUrl": "",
-  "enabledGestures": ["bow", "seiza", "wave"],
   "maxOccupants": 16,
   "voiceEnabled": true,
   "editingEnabled": true,
   "allowAvatarUpload": true,
-  "defaultAvatars": []
+  "defaultAvatars": [],
+  "customGestures": []
 }

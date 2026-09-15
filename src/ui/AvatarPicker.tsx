@@ -3,49 +3,37 @@ import { pillButtonActiveStyle, pillButtonStyle } from "./styles";
 
 interface AvatarPickerProps {
   presets: AvatarPreset[];
-  /** Currently selected avatar URL — "" means the built-in placeholder. */
-  selectedUrl: string;
+  /** Currently selected avatar URL, or null when none of these is selected. */
+  selectedUrl: string | null;
   onSelect: (url: string) => void;
   disabled?: boolean;
 }
 
 /**
- * Preset avatar chooser, shared by the join screen and the in-world
- * avatar menu so both offer exactly the same set (see
- * WorldConfig.defaultAvatars).
+ * Chooser for a deployment's own .vrm presets (WorldConfig.defaultAvatars),
+ * shown in the "Presets" tab of AvatarChooser.
  *
- * Renders nothing when a deployment hasn't configured any presets —
- * which is the out-of-the-box state, since this repo doesn't ship VRM
- * binaries it hasn't license-verified. Upload and the built-in
- * placeholder still work in that case.
+ * Empty out of the box: this repo doesn't ship VRM binaries it hasn't
+ * license-verified (THIRD_PARTY_ASSETS.md). The built-in designer presets
+ * (businessman, businesswoman, casual…) cover that case without any files.
  */
 export function AvatarPicker({ presets, selectedUrl, onSelect, disabled }: AvatarPickerProps) {
   if (presets.length === 0) return null;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <small style={{ opacity: 0.8 }}>Pick an avatar</small>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+      {presets.map((preset) => (
         <button
+          key={preset.url}
           type="button"
           disabled={disabled}
-          style={selectedUrl === "" ? pillButtonActiveStyle : pillButtonStyle}
-          onClick={() => onSelect("")}
+          aria-pressed={selectedUrl === preset.url}
+          style={selectedUrl === preset.url ? pillButtonActiveStyle : pillButtonStyle}
+          onClick={() => onSelect(preset.url)}
         >
-          Default
+          {preset.label}
         </button>
-        {presets.map((preset) => (
-          <button
-            key={preset.url}
-            type="button"
-            disabled={disabled}
-            style={selectedUrl === preset.url ? pillButtonActiveStyle : pillButtonStyle}
-            onClick={() => onSelect(preset.url)}
-          >
-            {preset.label}
-          </button>
-        ))}
-      </div>
+      ))}
     </div>
   );
 }

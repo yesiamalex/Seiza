@@ -7,6 +7,9 @@
  * frame inside useFrame, and routing per-frame D-pad input through
  * setState would re-render the whole app tree ~60 times a second while
  * someone holds a direction.
+ *
+ * Whether the overlay is shown at all is decided by useWantsTouchControls
+ * (src/ui/useMediaQuery.ts), which re-evaluates live.
  */
 export interface TouchMoveInput {
   /** -1 = strafe left, +1 = strafe right. */
@@ -21,11 +24,4 @@ export interface TouchMoveInput {
 
 export function createTouchMoveInput(): TouchMoveInput {
   return { x: 0, y: 0, running: false, jumpRequested: false };
-}
-
-/** True for phones/tablets — where there's no keyboard for WASD and no
- *  Pointer Lock for mouse-look, so the on-screen controls are the only
- *  way to move at all. */
-export function isCoarsePointer(): boolean {
-  return typeof window !== "undefined" && !!window.matchMedia?.("(pointer: coarse)").matches;
 }

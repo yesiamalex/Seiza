@@ -1,3 +1,5 @@
+import type { CustomGestureConfig } from "../avatar/gestures";
+
 export interface WorldConfig {
   id: string;
   displayName: string;
@@ -5,8 +7,19 @@ export interface WorldConfig {
    *  (see src/scene/Scene.tsx). Omit to use just the procedural base. */
   sceneUrl?: string;
   spawnPoint: { x: number; y: number; z: number };
+  /** Avatar a first-time visitor starts with: a .vrm URL, or "" to start
+   *  from the built-in avatar designer's default look. */
   defaultAvatarUrl: string;
-  enabledGestures: string[];
+  /** Optional allowlist of built-in gesture names (see
+   *  src/avatar/builtinMotions.generated.ts). Omit or leave empty to offer
+   *  every built-in. Custom gestures are always offered. */
+  enabledGestures?: string[];
+  /**
+   * A deployment's own `.vrma` gesture clips. A custom gesture with the
+   * same `name` as a built-in replaces it; any other name is added
+   * alongside. See src/avatar/gestures.ts and public/gestures/README.md.
+   */
+  customGestures?: CustomGestureConfig[];
   maxOccupants: number;
   voiceEnabled: boolean;
   /** Let anyone in the room place/move/remove objects. Default true. */

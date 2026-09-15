@@ -15,23 +15,23 @@ Japanese XR conference, April 2027).
 - **A real default room out of the box** — procedurally generated
   (floor, walls, pillars, seating), no bundled 3D assets required. A
   deployer can layer their own glTF scene on top via `world.json`.
-- **Movement** — desktop WASD + mouse-look, Shift to run, Space to jump
-  (real gravity, not a canned animation), VR thumbstick locomotion,
-  click-to-move in third person. First/third-person camera toggle with
-  scroll-wheel zoom (FOV in first person, follow-distance in third).
-  First person uses pointer lock (classic FPS mouse-look, click to
-  capture the cursor); third person deliberately does not — click-drag
-  orbits the view instead, cursor free otherwise, so you can inspect
-  your own avatar or click HUD/floor without the camera fighting you.
+- **Movement** — WASD or arrow keys, Shift to run, Space to jump (real
+  gravity), VR thumbstick locomotion, and double-click the floor to walk
+  there along a navmesh route. Look around by dragging, the way FrameVR
+  works. There is no pointer lock anywhere, so the cursor always stays free
+  for the HUD and the editor. First/third-person toggle with scroll zoom
+  (field of view in first person, follow distance in third). In third
+  person your avatar turns smoothly to face where it walks.
 - **Peer-to-peer voice chat** — WebRTC mesh, signaled through the same
   room server used for position sync, with a 3D speaking indicator and
   distance-based volume falloff. No separate media infrastructure; see
   the Status section below for the scaling ceiling this implies.
-- **Mobile/touch support** — phones and tablets start in third person
-  (first person needs Pointer Lock and a keyboard, neither of which
-  exists there) and get on-screen controls: a four-way D-pad, a jump
-  button, and Minecraft-style double-tap-forward to sprint. Drag anywhere
-  to look; tap the floor to walk there.
+- **Mobile/touch support** — phones and tablets get a four-way D-pad, a
+  jump button, and Minecraft-style double-tap-forward to sprint. Drag to
+  look, pinch to zoom, double-tap the floor to walk there. The controls
+  appear on touch-first devices and update live if that changes, such as a
+  tablet docked to a keyboard. Panels dock to the screen edges on narrow
+  screens so nothing runs off-screen.
 - **In-world editing** — anyone in a room can toggle Edit Mode and place
   primitives or paste in a custom glTF model URL, with drag-to-move and
   delete; placements persist per-room.
@@ -45,27 +45,32 @@ Japanese XR conference, April 2027).
   relayed through the same room server (not persisted across reconnects).
 - **Name tags** above every player, highlighting when that player is
   speaking.
-- **Avatar presets** — `world.json`'s `defaultAvatars` populates a picker
-  on the join screen and in the in-world avatar menu (`C`), so visitors
-  can choose a look without supplying a file. It ships empty because this
-  repo doesn't bundle VRM binaries it hasn't license-verified — but
-  genuinely CC0 avatars exist (VRoid's own samples, Open Source Avatars),
-  and THIRD_PARTY_ASSETS.md lists sources plus the one config edit needed
-  to wire up a businessman/businesswoman/casual set.
-- **Bring-your-own-avatar** — the join screen shows a live, rotatable
-  3D preview (drag to orbit, scroll to zoom, drag-and-drop a file) and
-  lets each person upload their own open-source/self-authored `.vrm`,
-  stored in the deployer's own Cloudflare KV namespace (auto-expiring
-  after 30 days), instead of being stuck with one fixed default avatar.
-  An optional client-side optimization pass (via
-  [glTF-Transform](https://github.com/donmccurdy/glTF-Transform),
-  texture-only — see `src/avatar/optimizeVrm.ts` for why) can shrink
-  oversized avatar files before upload, and silently no-ops rather than
-  forcing a change if it wouldn't help.
-- **Gesture playback** — VRMA clips (bow/seiza/wave scaffolded; see
-  licensing note below) portable across any uploaded VRM, plus a
-  procedural (not mocap — see `src/avatar/useProceduralGait.ts`)
-  walk/run cycle driven by actual movement speed.
+- **Avatars, three ways** — on the join screen and in the in-world avatar
+  menu (`C`), each with a live, rotatable 3D preview:
+  - *Design*: a built-in avatar designer (skin, hair, eyes, clothing,
+    accessories, height, build) with ready presets such as businessman,
+    businesswoman, and casual. Designed avatars are generated in code and
+    shared as a few hundred bytes of settings, so nothing is uploaded and
+    there is no asset license to check.
+  - *Presets*: a deployment's own `.vrm` files from `world.json`.
+  - *Upload VRM*: your own VRM 0.x or 1.0 file, stored in the deployer's
+    KV namespace for 30 days. An optional texture-only optimization pass
+    via [glTF-Transform](https://github.com/donmccurdy/glTF-Transform)
+    shrinks oversized files and skips itself when it wouldn't help (see
+    `src/avatar/optimizeVrm.ts`).
+
+  Changing your avatar in-world updates everyone without reconnecting.
+- **Remembered on your device** — your name and avatar are kept in this
+  browser's IndexedDB, including an uploaded file. Your own avatar then
+  loads instantly on return, and is re-uploaded automatically if the
+  deployment's copy has expired. The join screen has a switch to turn this
+  off on shared computers.
+- **Animation and gestures** — idle, walk, and run clips blend by actual
+  ground speed, and eight built-in gestures (wave, bow, seiza, nod, clap,
+  cheer, shrug, point) play on any avatar. They are VRM Animation clips
+  generated by a script in this repo, so there's no licensing question.
+  Deployers can add their own `.vrma` clips, or replace built-ins, in
+  `world.json`. Press `1`–`9` on desktop.
 
 ## Deploy your own instance
 
@@ -215,22 +220,133 @@ thing that could plausibly work for a self-hosted classroom room; see
 worker/room.ts's comment on `MAX_AUTH_ATTEMPTS` for the (limited) abuse
 protection this does and doesn't provide.
 
+## Avatars, animation, and gestures: notes for forkers and reviewers
+
+### Controls
+
+| Action | Desktop | Touch |
+|---|---|---|
+| Move | WASD or arrow keys | D-pad |
+| Run | Hold Shift | Double-tap forward and hold |
+| Jump | Space | Jump button |
+| Look | Drag with any mouse button | Drag with one finger |
+| Look in Edit Mode | Drag with right or middle button | Drag with two fingers |
+| Zoom | Scroll | Pinch |
+| Walk to a spot | Double-click the floor | Double-tap the floor |
+| Avatar menu | `C` or the Avatar button | Avatar button |
+| Gestures | `1`–`9` or the Gestures menu | Gestures menu |
+
+### What an avatar is on the wire
+
+The protocol's `avatarUrl` field holds one of two things:
+
+- a same-origin path or `https://` URL to a `.vrm` file, or
+- `seiza-avatar:v1:<base64url JSON>`, a designer avatar's settings.
+
+The room server (`sanitizeAssetUrl` in `worker/room.ts`) accepts only those
+shapes, capped in size. Every receiver re-validates each designer field with
+`sanitizeAvatarSpec`, so a malformed payload renders as the default look.
+`src/avatar/designer/buildDesignerVrm.ts` turns the settings into a genuine
+three-vrm `VRM` object with a humanoid rig, so designer avatars go through
+exactly the same animation path as uploaded files.
+
+### Orientation
+
+VRM 0.x models face -Z and VRM 1.0 models face +Z. `VrmAvatar.tsx` gives
+VRM 1.0 models, including designer avatars, an extra half turn, so every
+avatar faces -Z at rotation 0, the same way the camera looks by default.
+Without that, VRM 1.0 uploads walked backwards.
+
+### Animation pipeline
+
+`src/avatar/AvatarAnimator.tsx` runs one Three.js animation mixer per avatar.
+
+- Idle, walk, and run are each split into upper- and lower-body halves.
+  Their weights follow ground speed, and walk and run share one phase so
+  feet don't slide when they crossfade.
+- An upper-body gesture takes over the upper half only, so you can wave
+  while walking. A full-body gesture takes over both.
+- Weights for every bone always add up to one. The VRM rest pose is a
+  T-pose by specification, so any gap in the blend would show as arms
+  snapping out. That was the cause of the old in-world T-pose.
+- It runs before `vrm.update()` each frame. Spring bones (hair, skirts) get
+  a capped time step and are reset after teleports, which is what stops
+  hair from flying away.
+
+Remote players are eased toward their latest network position
+(`src/multiplayer/RemotePlayers.tsx`) rather than jumping five times a
+second. That gives their animator a believable speed and keeps their hair
+calm.
+
+### Regenerating the built-in clips
+
+```bash
+npm run generate:motions
+```
+
+`scripts/generate-motions.mjs` writes `public/animations/*.vrma`,
+`public/gestures/builtin/*.vrma`, and the manifest
+`src/avatar/builtinMotions.generated.ts`. Keyframes are authored as Euler
+angles in the VRM 1.0 normalized humanoid space: the avatar faces +Z with
+its left side toward +X, and rotation order is XZY. `@pixiv/three-vrm-animation`
+converts the clips for VRM 0.x models at load time. Use the T-pose button in
+any avatar preview to check a model's rig before blaming a clip.
+
+### Custom gestures
+
+Add clips under `public/gestures/custom/` and list them in `world.json`:
+
+```json
+"customGestures": [
+  { "name": "salute", "label": "Salute", "url": "/gestures/custom/salute.vrma" },
+  { "name": "bow", "label": "Deep bow", "url": "/gestures/custom/deep-bow.vrma" }
+]
+```
+
+A custom gesture with a built-in's name replaces that built-in. Any other
+name is added alongside. The gesture menu lists built-in and custom
+gestures separately. Details and authoring tips are in
+`public/gestures/README.md`.
+
+### Gesture sync
+
+A client sends only a gesture name. The server checks the name's shape,
+throttles each connection to one gesture per 250 ms, and increments that
+player's `gestureSeq`. Clients start a clip only when the sequence number
+changes. Repeating a gesture therefore replays it, and a player who joins
+mid-gesture doesn't see a stale one start. A name that a client's
+`world.json` doesn't define is ignored.
+
+### Local profile storage
+
+`src/profile/profileStore.ts` stores the display name, avatar choice, and
+any uploaded `.vrm` file in IndexedDB, keyed by world id. Cookies were
+ruled out because they hold about 4 KB and are sent with every request.
+Every call fails soft, so blocked storage or private browsing just means
+nothing is remembered. Unticking "Remember" on the join screen deletes the
+stored profile.
+
 ## Project layout
 
 ```
 src/            frontend (React Three Fiber + WebXR + VRM)
-  avatar/       VRM loading, VRMA gesture playback
-  player/       local movement (desktop WASD/mouse-look, VR locomotion)
+  avatar/       VRM loading, orientation, animation mixer, gesture registry
+    designer/   built-in avatar designer: settings model, VRM builder, UI
+  player/       local movement, camera, touch controls, VR locomotion
   multiplayer/  realtime client, remote-player rendering, protocol types
+  profile/      remembered name/avatar in IndexedDB
   voice/        WebRTC voice mesh, signaled through the room server
   edit/         in-world object placement/move/delete UI
+  nav/          runtime navmesh for click-to-move
   scene/        procedural base environment + deployer scene.glb overlay
-  ui/           join screen, HUD
-  interactions/ pedagogical interaction modules (gesture-match game, more TBD)
+  ui/           join screen, avatar chooser and preview, HUD
+  interactions/ gesture menu and practice mode (pedagogical modules)
 worker/         Cloudflare Worker: static hosting, avatar upload API (KV),
                 and the realtime room server (room.ts, a Durable Object)
 public/worlds/  per-deployment world configs — the customization surface
-scripts/        setup-time asset fetching for non-bundled, license-restricted assets
+public/animations/, public/gestures/
+                built-in motion clips (generated) and custom gesture clips
+scripts/        motion clip generator, KV setup, optional asset fetching
 ```
 
 ## Licensing
@@ -259,8 +375,9 @@ deliberate limitations (paper Section 7 has the fuller discussion):
   set, editing requires that one password — still not per-user accounts,
   roles, or moderation, and anyone can join a room at all regardless.
   Room-wide guardrails that ARE enforced server-side regardless of
-  permissions: a cap on total placed objects, per-connection chat rate
-  limiting, and pasted model URLs are restricted to http(s) (see
+  permissions: a cap on total placed objects, per-connection throttles on
+  chat, gestures, and avatar changes, and asset URLs restricted to
+  same-origin paths, http(s), or well-formed designer settings (see
   `worker/room.ts`).
 - **Avatar-upload rate limiting is best-effort.** `worker/index.ts` uses
   a per-isolate in-memory counter, not Cloudflare's real Rate Limiting
@@ -279,16 +396,14 @@ deliberate limitations (paper Section 7 has the fuller discussion):
   is a large enough addition — new dependency, collision authoring for
   BaseEnvironment, network sync implications — that it's future work to
   scope deliberately, not something to bolt on inline.
-- **The walk/run cycle is procedural, not a real animation clip.** No
-  redistribution-clear "universal rig" mocap walk/run VRMA exists in this
-  repo to bundle — same THIRD_PARTY_ASSETS.md diligence that applies to
-  gestures. `useProceduralGait.ts`'s sine-wave limb swing is a stand-in;
-  it blends continuously around each bone's own captured rest rotation
-  now (an earlier version snapped to/from literal T-pose while idle,
-  visible as arms unnaturally held out and spring-bone hair overreacting
-  to the discontinuity — fixed), but the swing's direction/axis still
-  hasn't been visually verified against a real uploaded VRM, only
-  reasoned about from the VRM normalized-bone spec.
+- **Built-in motions are hand-keyed, not motion capture.** They are kept
+  simple so they can live as readable code under the repository license.
+  Any gesture can be replaced with a richer `.vrma` clip through
+  `world.json`. Idle, walk, and run can't be swapped through config yet;
+  a fork can replace the files in `public/animations/`.
+- **Designer avatars are stylized.** They are built from simple shapes and
+  have no facial expressions, blinking, lip sync, or hair physics. Upload a
+  VRM for those.
 - **Chat has no history.** Room text chat is relay-only, not persisted —
   reconnecting or a new joiner starts with an empty chat panel.
 - **Avatar optimization is texture-only, by design.** It resizes/re-encodes
