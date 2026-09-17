@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { RealtimeMediaState } from "./useRealtimeMedia";
 import { VOICE_ENABLED } from "./useRealtimeMedia";
-import { panelStyle, pillButtonActiveStyle, pillButtonStyle, popoverStyle } from "../ui/styles";
+import { BAR_LABEL_CLASS, barButtonActiveStyle, barButtonStyle, panelStyle, pillButtonActiveStyle, pillButtonStyle, popoverStyle } from "../ui/styles";
 import { CameraIcon, MicIcon, MicOffIcon, ScreenShareIcon } from "../ui/icons";
 
 interface MediaControlsProps {
@@ -31,20 +31,40 @@ export function MediaControls({ media, voiceEnabled, onShareScreen, onStopScreen
   return (
     <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 4 }}>
       {voiceAvailable && !media.micEnabled && (
-        <button type="button" style={pillButtonStyle} onClick={() => void media.enableMic()} disabled={media.connecting}>
-          <MicIcon /> {media.connecting ? "Connecting mic…" : "Enable voice chat"}
+        <button
+          type="button"
+          className="seiza-bar-btn"
+          style={barButtonStyle}
+          onClick={() => void media.enableMic()}
+          disabled={media.connecting}
+          aria-label={media.connecting ? "Connecting microphone" : "Enable voice chat"}
+          title={media.connecting ? "Connecting microphone…" : "Enable voice chat"}
+        >
+          <MicIcon />
+          <span className={BAR_LABEL_CLASS}>{media.connecting ? "Connecting…" : "Voice"}</span>
         </button>
       )}
       {voiceAvailable && media.micEnabled && (
-        <button type="button" style={media.muted ? pillButtonStyle : pillButtonActiveStyle} onClick={media.toggleMute}>
-          {media.muted ? <MicOffIcon /> : <MicIcon />} {media.muted ? "Unmute" : "Mute"}
+        <button
+          type="button"
+          className="seiza-bar-btn"
+          style={media.muted ? barButtonStyle : barButtonActiveStyle}
+          onClick={media.toggleMute}
+          aria-pressed={!media.muted}
+          aria-label={media.muted ? "Unmute microphone" : "Mute microphone"}
+          title={media.muted ? "Unmute" : "Mute"}
+        >
+          {media.muted ? <MicOffIcon /> : <MicIcon />}
+          <span className={BAR_LABEL_CLASS}>{media.muted ? "Unmute" : "Mute"}</span>
         </button>
       )}
       <button
         type="button"
         aria-label="Camera, screen sharing and audio settings"
         aria-expanded={open}
-        style={{ ...(media.cameraOn || media.screenOn ? pillButtonActiveStyle : pillButtonStyle), padding: "9px 11px" }}
+        className="seiza-bar-btn"
+        title="Camera and screen sharing"
+        style={media.cameraOn || media.screenOn ? barButtonActiveStyle : barButtonStyle}
         onClick={() => setOpen((value) => !value)}
       >
         <CameraIcon />

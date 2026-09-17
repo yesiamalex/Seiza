@@ -16,6 +16,16 @@ export interface BuiltinGesture {
   /** Hidden gestures aren't offered in the menu or on the number keys —
    *  something else in the app triggers them (sitting on a chair). */
   hidden: boolean;
+  /**
+   * How the app should settle this pose onto the world at runtime.
+   *
+   * A clip can only carry one hip height, but every avatar has different
+   * leg proportions, so a baked height that grounds one body leaves another
+   * hovering or sunk. "floor" drops the avatar until whatever is lowest
+   * (shins, feet) rests on the ground; "seat" lifts the hips to the height
+   * of the seat they're sitting on. See AvatarAnimator.
+   */
+  ground: "none" | "floor" | "seat";
 }
 
 // The ?v= is a content hash: regenerating a clip changes its URL, so a
@@ -35,7 +45,8 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
     "duration": 2.88,
     "fullBody": false,
     "hold": false,
-    "hidden": false
+    "hidden": false,
+    "ground": "none"
   },
   {
     "name": "bow",
@@ -44,16 +55,18 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
     "duration": 3.12,
     "fullBody": false,
     "hold": false,
-    "hidden": false
+    "hidden": false,
+    "ground": "none"
   },
   {
     "name": "seiza",
     "label": "Seiza (hold)",
-    "url": "/gestures/builtin/seiza.vrma?v=691f2d1c",
+    "url": "/gestures/builtin/seiza.vrma?v=6ea1b1ab",
     "duration": 1.8,
     "fullBody": true,
     "hold": true,
-    "hidden": false
+    "hidden": false,
+    "ground": "floor"
   },
   {
     "name": "nod",
@@ -62,7 +75,8 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
     "duration": 1.92,
     "fullBody": false,
     "hold": false,
-    "hidden": false
+    "hidden": false,
+    "ground": "none"
   },
   {
     "name": "clap",
@@ -71,7 +85,8 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
     "duration": 2.64,
     "fullBody": false,
     "hold": false,
-    "hidden": false
+    "hidden": false,
+    "ground": "none"
   },
   {
     "name": "cheer",
@@ -80,7 +95,8 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
     "duration": 2.64,
     "fullBody": false,
     "hold": false,
-    "hidden": false
+    "hidden": false,
+    "ground": "none"
   },
   {
     "name": "shrug",
@@ -89,7 +105,8 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
     "duration": 2.28,
     "fullBody": false,
     "hold": false,
-    "hidden": false
+    "hidden": false,
+    "ground": "none"
   },
   {
     "name": "point",
@@ -98,7 +115,8 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
     "duration": 2.4,
     "fullBody": false,
     "hold": false,
-    "hidden": false
+    "hidden": false,
+    "ground": "none"
   },
   {
     "name": "gassho",
@@ -107,7 +125,8 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
     "duration": 4.32,
     "fullBody": false,
     "hold": false,
-    "hidden": false
+    "hidden": false,
+    "ground": "none"
   },
   {
     "name": "raisehand",
@@ -116,15 +135,17 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
     "duration": 1.08,
     "fullBody": false,
     "hold": true,
-    "hidden": false
+    "hidden": false,
+    "ground": "none"
   },
   {
     "name": "sit",
     "label": "Sit",
-    "url": "/gestures/builtin/sit.vrma?v=9e98976c",
+    "url": "/gestures/builtin/sit.vrma?v=837a45b7",
     "duration": 1.14,
     "fullBody": true,
     "hold": true,
-    "hidden": true
+    "hidden": true,
+    "ground": "seat"
   }
 ];

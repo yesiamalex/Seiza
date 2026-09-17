@@ -87,21 +87,41 @@ export function HUD({ connectionState, worldName, topRight, touchControlsVisible
             max-height: calc(100svh - 60px - env(safe-area-inset-top, 0px) - 16px) !important;
             overflow-y: auto !important;
           }
-          /* One scrollable row instead of several wrapped rows — wrapping
-             six pills on a phone claims most of the screen and pushes the
-             bar into the D-pad. */
+          /* Last resort on a very narrow phone: scroll the dock sideways
+             rather than let it wrap or push controls off-screen. Popovers
+             are position:fixed at this width (above), so they still escape
+             the scroll container. */
           .seiza-control-bar {
-            flex-wrap: nowrap !important;
             justify-content: flex-start !important;
             overflow-x: auto;
             overflow-y: visible;
             max-width: 100% !important;
             width: 100%;
-            padding-bottom: 2px;
             scrollbar-width: none;
           }
           .seiza-control-bar::-webkit-scrollbar { display: none; }
         }
+        /* Buttons in the dock have no chrome of their own until you touch
+           them — see barButtonStyle in styles.ts. */
+        .seiza-bar-btn {
+          transition: background-color 160ms var(--seiza-ease, ease-out), border-color 160ms var(--seiza-ease, ease-out);
+        }
+        .seiza-bar-btn:hover:not(:disabled) { background: rgba(255,255,255,0.11); }
+        .seiza-bar-btn:focus-visible { outline: 2px solid rgba(232,195,122,0.8); outline-offset: 1px; }
+        .seiza-bar-btn:disabled { opacity: 0.45; cursor: default; }
+        .seiza-bar-divider {
+          width: 1px;
+          align-self: stretch;
+          margin: 4px 2px;
+          background: rgba(255,255,255,0.12);
+          flex-shrink: 0;
+        }
+        /* Collapse to icons before the row ever has to wrap. The button
+           keeps its accessible name from aria-label/title. */
+        @media (max-width: 960px) {
+          .seiza-bar-label { display: none; }
+        }
+        @media (prefers-reduced-motion: reduce) { .seiza-bar-btn { transition: none; } }
       `}</style>
       <div style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
         <div style={{ ...panelStyle, padding: "6px 12px", fontSize: 13, display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
@@ -118,11 +138,22 @@ export function HUD({ connectionState, worldName, topRight, touchControlsVisible
         style={{
           pointerEvents: "auto",
           display: "flex",
-          flexWrap: "wrap",
-          gap: 10,
-          alignItems: "flex-end",
+          // Never wraps. A second row was both ugly and a moving target:
+          // the bar's height changed with how many controls were showing,
+          // so everything anchored above it jumped.
+          flexWrap: "nowrap",
+          gap: 2,
+          alignItems: "center",
           justifyContent: "center",
-          maxWidth: "min(900px, 96vw)",
+          maxWidth: "calc(100vw - 24px)",
+          background: "rgba(16,17,22,0.74)",
+          backdropFilter: "blur(10px)",
+          WebkitBackdropFilter: "blur(10px)",
+          border: "1px solid rgba(255,255,255,0.09)",
+          borderRadius: 16,
+          padding: 5,
+          boxShadow: "0 10px 30px rgba(0,0,0,0.38)",
+          boxSizing: "border-box",
         }}
       >
         {children}

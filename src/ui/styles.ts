@@ -40,6 +40,46 @@ export const pillButtonStyle: CSSProperties = {
   whiteSpace: "nowrap",
 };
 
+/**
+ * A button inside the bottom control bar.
+ *
+ * The bar is a single dock, so its buttons don't each carry their own pill
+ * chrome — eight stacked pills read as eight unrelated widgets, and at full
+ * width they were what pushed the bar onto a second line. They get a
+ * background on hover and while active instead. Pair with the CSS in
+ * HUD.tsx (`.seiza-bar-btn`), which supplies hover and disabled states.
+ */
+export const barButtonStyle: CSSProperties = {
+  background: "transparent",
+  border: "1px solid transparent",
+  color: "white",
+  borderRadius: 11,
+  padding: "8px 11px",
+  fontSize: 13,
+  lineHeight: 1,
+  fontFamily: "system-ui, sans-serif",
+  cursor: "pointer",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 7,
+  whiteSpace: "nowrap",
+  flexShrink: 0,
+};
+
+export const barButtonActiveStyle: CSSProperties = {
+  ...barButtonStyle,
+  background: "rgba(124,255,158,0.2)",
+  border: "1px solid rgba(124,255,158,0.45)",
+};
+
+/**
+ * Wrap a control-bar button's text in this class. Below a narrow viewport
+ * the labels drop out and the bar becomes icons, which is what keeps it on
+ * one line instead of wrapping or scrolling out of reach — the icon keeps
+ * its accessible name from the button's aria-label/title.
+ */
+export const BAR_LABEL_CLASS = "seiza-bar-label";
+
 export const pillButtonActiveStyle: CSSProperties = {
   ...pillButtonStyle,
   background: "rgba(124,255,158,0.22)",

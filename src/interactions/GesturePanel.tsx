@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { GestureDefinition } from "../avatar/gestures";
-import { panelStyle, pillButtonActiveStyle, pillButtonStyle, popoverStyle } from "../ui/styles";
+import { BAR_LABEL_CLASS, barButtonActiveStyle, barButtonStyle, panelStyle, pillButtonActiveStyle, pillButtonStyle, popoverStyle } from "../ui/styles";
 import { WaveIcon } from "../ui/icons";
 
 interface GesturePanelProps {
@@ -99,8 +99,18 @@ export function GesturePanel({
 
   return (
     <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-      <button type="button" style={open ? pillButtonActiveStyle : pillButtonStyle} onClick={() => setOpen((v) => !v)} aria-expanded={open}>
-        <WaveIcon /> Gestures {practice && score > 0 ? `(${score})` : ""}
+      <button
+        type="button"
+        className="seiza-bar-btn"
+        style={open ? barButtonActiveStyle : barButtonStyle}
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-label="Gestures"
+        title="Gestures"
+      >
+        <WaveIcon />
+        <span className={BAR_LABEL_CLASS}>Gestures</span>
+        {practice && score > 0 && <span style={{ fontSize: 11, opacity: 0.75 }}>{score}</span>}
       </button>
       {open && (
         <div

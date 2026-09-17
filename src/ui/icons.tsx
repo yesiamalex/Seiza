@@ -71,6 +71,19 @@ export function TextBoardIcon(props: IconProps) {
   );
 }
 
+/** A chair seen from the side: backrest, seat, two legs. */
+export function ChairIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M7 4v9" />
+      <path d="M7 13h10" />
+      <path d="M8 13v7" />
+      <path d="M16 13v7" />
+      <path d="M7 9h3" />
+    </Svg>
+  );
+}
+
 export function MicOffIcon(props: IconProps) {
   return (
     <Svg {...props}>

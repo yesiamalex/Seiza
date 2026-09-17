@@ -28,17 +28,34 @@ export interface PlayerState {
   gestureSeq: number;
 }
 
-export const WORLD_OBJECT_KINDS = ["box", "sphere", "cylinder", "model", "text", "screen"] as const;
+export const WORLD_OBJECT_KINDS = ["box", "sphere", "cylinder", "model", "text", "screen", "image", "video", "chair"] as const;
 export type WorldObjectKind = (typeof WORLD_OBJECT_KINDS)[number];
 
 /** Longest text a board or note will hold. Long enough for a notice, short
  *  enough that it stays readable on a panel and cheap to sync. */
 export const MAX_OBJECT_TEXT_LENGTH = 600;
 
+/** Longest asset URL accepted for an image or a video, matching the room
+ *  server's own cap (MAX_URL_LENGTH in worker/room.ts). */
+export const MAX_OBJECT_SRC_LENGTH = 2048;
+
 export interface WorldObject {
   id: string;
   kind: WorldObjectKind;
   modelUrl?: string;
+  /**
+   * Where an "image" or "video" object gets its picture.
+   *
+   * Kept separate from `modelUrl` rather than overloading it: they're
+   * fetched by different loaders and validated against different rules, and
+   * a world stored before images existed still deserializes unchanged.
+   *
+   * Images are uploaded to this deployment and come back as
+   * `/api/assets/<id>.webp`. Videos are referenced by URL and never
+   * uploaded — see the note on the Video button in src/edit/EditToolbar.tsx
+   * for why Workers KV is the wrong place to keep video.
+   */
+  src?: string;
   color: string;
   position: [number, number, number];
   rotationY: number;

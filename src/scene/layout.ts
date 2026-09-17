@@ -184,6 +184,37 @@ const seatAt = (x: number, z: number, rotationY: number): [number, number, numbe
 };
 
 /**
+ * The seat belonging to a chair a player placed themselves in Edit Mode.
+ *
+ * Built exactly the way the room's own seats are — forward of the chair's
+ * centre by SEAT_FORWARD_OFFSET, for the same backrest-clearance reason —
+ * with one addition. The sitting pose is grounded to SEAT_HEIGHT above
+ * whatever floor the seat reports (see the grounding pass in
+ * AvatarAnimator.tsx), so a chair that has been scaled up has to report a
+ * proportionally higher floor, or its occupant sits in mid-air below the
+ * cushion. The id is the object's, so occupancy highlighting works without
+ * a second registry.
+ */
+export function placedChairSeat(
+  id: string,
+  position: [number, number, number],
+  rotationY: number,
+  scale = 1
+): Seat {
+  const [fx, fz] = facingVector(rotationY);
+  return {
+    id,
+    position: [
+      position[0] + fx * SEAT_FORWARD_OFFSET * scale,
+      position[1] + SEAT_HEIGHT * (scale - 1),
+      position[2] + fz * SEAT_FORWARD_OFFSET * scale,
+    ],
+    rotationY,
+    label: "Chair",
+  };
+}
+
+/**
  * Every seat a player can sit on. Avatars face -Z at yaw 0 (see
  * VrmAvatar.tsx), so a seat facing the -Z end of the classroom has yaw 0.
  */

@@ -321,6 +321,10 @@ const GESTURES = [
     label: "Seiza (hold)",
     fullBody: true,
     hold: true,
+    // Settled onto the floor at runtime: the hip drop below is only a
+    // starting point, and the app lowers or lifts each avatar until its
+    // shins actually rest on the ground.
+    ground: "floor",
     keys: [
       { t: 0, pose: {} },
       {
@@ -347,15 +351,22 @@ const GESTURES = [
           rightLowerLeg: { x: 152 },
           leftFoot: { x: 60 },
           rightFoot: { x: 60 },
-          // Hands resting on the thighs, solved across three rigs against
-          // each one's own thigh line — and scored on staying ON that line
-          // rather than outboard of it, which is what had the arms hanging
-          // out beside the legs. The elbow is pinned to a relaxed bend so
-          // the solver can't flatten it straight to shave a centimetre.
-          leftUpperArm: { z: -79, x: -26 },
-          rightUpperArm: { z: 79, x: -26 },
-          leftLowerArm: { y: -32, x: 98 },
-          rightLowerArm: { y: 32, x: -98 },
+          // Hands resting ON the thighs, solved across four real rigs
+          // (including a VRM 0.x VRoid Hub model) against each one's own
+          // thigh line, and measured at the PALM rather than the wrist —
+          // the wrist joint sits a whole hand's length short of where the
+          // hand actually touches, which is why the previous solve read as
+          // hands sunk into the inner thigh. The wrist angles are part of
+          // the solve because forearm roll alone can't lay the palm flat
+          // without dragging the hand off the leg; with them, the palm
+          // normal points 83% of the way straight down on every rig,
+          // against 46% before. Elbow bend is held at a relaxed 28 degrees.
+          leftUpperArm: { z: -78, x: -26 },
+          rightUpperArm: { z: 78, x: -26 },
+          leftLowerArm: { y: -28, x: 103 },
+          rightLowerArm: { y: 28, x: -103 },
+          leftHand: { z: 30, x: 2 },
+          rightHand: { z: -30, x: 2 },
           _hips: [0, -0.61, 0],
         },
       },
@@ -540,6 +551,9 @@ const GESTURES = [
     fullBody: true,
     hold: true,
     hidden: true,
+    // Settled onto the seat at runtime rather than trusting the baked hip
+    // height, which can only ever be right for one set of proportions.
+    ground: "seat",
     keys: [
       { t: 0, pose: {} },
       {
@@ -570,18 +584,21 @@ const GESTURES = [
           rightLowerLeg: { x: 76 },
           leftFoot: { x: 8 },
           rightFoot: { x: 8 },
-          // Hands on the thighs, solved the same way as seiza's.
-          leftUpperArm: { z: -76, x: -27 },
-          rightUpperArm: { z: 76, x: -27 },
-          leftLowerArm: { y: -32, x: 85 },
-          rightLowerArm: { y: 32, x: -85 },
-          // Measured, not guessed: at a 0.40 drop the hips ended up only
-          // 3-4cm above the cushion on real avatars, so the backside sank
-          // into the chair. 0.33 leaves a 9-10cm gap — enough for the body
-          // to sit ON the seat — at the cost of the feet hovering 4-5cm off
-          // the floor, because a 0.45m chair is proportionally tall for a
-          // ~1.5m avatar. Of the two, floating feet read far better than a
-          // body buried in the seat.
+          // Hands on the thighs, solved the same way as seiza's: palm
+          // contact, four rigs, wrists included. A deeper elbow bend than
+          // seiza because a seated thigh is closer to horizontal, so the
+          // hand has further to travel forward to land on it.
+          leftUpperArm: { z: -69, x: -26 },
+          rightUpperArm: { z: 69, x: -26 },
+          leftLowerArm: { y: -40, x: 91 },
+          rightLowerArm: { y: 40, x: -91 },
+          leftHand: { z: 30, x: 14 },
+          rightHand: { z: -30, x: 14 },
+          // Only a starting point. The app measures each avatar's hips
+          // against the real seat height every frame and slides the body
+          // to meet it (ground: "seat" above), so no baked number here has
+          // to be right for every set of proportions — which is just as
+          // well, because none can be.
           _hips: [0, -0.33, 0],
         },
       },
@@ -736,6 +753,7 @@ for (const gesture of GESTURES) {
     fullBody: gesture.fullBody,
     hold: gesture.hold === true,
     hidden: gesture.hidden === true,
+    ground: gesture.ground ?? "none",
   });
 }
 
@@ -757,6 +775,16 @@ export interface BuiltinGesture {
   /** Hidden gestures aren't offered in the menu or on the number keys —
    *  something else in the app triggers them (sitting on a chair). */
   hidden: boolean;
+  /**
+   * How the app should settle this pose onto the world at runtime.
+   *
+   * A clip can only carry one hip height, but every avatar has different
+   * leg proportions, so a baked height that grounds one body leaves another
+   * hovering or sunk. "floor" drops the avatar until whatever is lowest
+   * (shins, feet) rests on the ground; "seat" lifts the hips to the height
+   * of the seat they're sitting on. See AvatarAnimator.
+   */
+  ground: "none" | "floor" | "seat";
 }
 
 // The ?v= is a content hash: regenerating a clip changes its URL, so a

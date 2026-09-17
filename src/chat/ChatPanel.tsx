@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChatMessage } from "../multiplayer/types";
-import { panelStyle, pillButtonActiveStyle, pillButtonStyle, popoverStyle } from "../ui/styles";
+import { BAR_LABEL_CLASS, barButtonActiveStyle, barButtonStyle, panelStyle, pillButtonStyle, popoverStyle } from "../ui/styles";
 import { ChatIcon } from "../ui/icons";
 
 interface ChatPanelProps {
@@ -34,8 +34,20 @@ export function ChatPanel({ open, onToggle, messages, selfId, onSend, connected 
 
   return (
     <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-      <button style={open ? pillButtonActiveStyle : pillButtonStyle} onClick={onToggle}>
-        <ChatIcon /> Chat{!open && messages.length > 0 ? ` (${messages.length})` : ""}
+      <button
+        type="button"
+        className="seiza-bar-btn"
+        style={open ? barButtonActiveStyle : barButtonStyle}
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-label={`Chat${messages.length > 0 ? ` (${messages.length} messages)` : ""}`}
+        title="Chat"
+      >
+        <ChatIcon />
+        <span className={BAR_LABEL_CLASS}>Chat</span>
+        {!open && messages.length > 0 && (
+          <span style={{ fontSize: 11, opacity: 0.75 }}>{messages.length}</span>
+        )}
       </button>
       {open && (
         <div className="seiza-popover" style={{ ...panelStyle, ...popoverStyle, display: "flex", flexDirection: "column", width: 280, maxHeight: 320, padding: 0, overflow: "hidden" }}>

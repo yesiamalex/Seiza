@@ -53,6 +53,44 @@ interface StoredAssetMetadata {
 // technical ceiling — that's a separate, softer threshold.
 const MAX_AVATAR_BYTES = 24 * 1024 * 1024;
 const MAX_MODEL_BYTES = 24 * 1024 * 1024;
+/**
+ * Images get a far smaller ceiling than models, on purpose.
+ *
+ * The constraint isn't KV's 25MiB per value, it's the free tier's 1GB of
+ * total storage and the fact that a room's worth of pictures is meant to be
+ * cheap to keep forever. The editor re-encodes every upload client-side
+ * (src/edit/compressImage.ts) to at most 2048px and roughly 500KB, so this
+ * is a backstop against something that skipped that path, not the normal
+ * limit — a wall of photos at 500KB each is ~2000 images per free GB.
+ *
+ * Video is deliberately NOT uploadable. A single clip would eat a
+ * meaningful share of that budget, KV serves whole values with no range
+ * requests (so seeking re-downloads the file), and every viewer in every
+ * colo costs a fresh read. Videos are referenced by URL instead and served
+ * by whoever already hosts them.
+ */
+const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
+
+/** Accepted image encodings, with the magic bytes that prove each one. */
+const IMAGE_TYPES: Array<{ extension: string; contentType: string; matches: (bytes: Uint8Array) => boolean }> = [
+  {
+    extension: "webp",
+    contentType: "image/webp",
+    matches: (b) =>
+      b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 &&
+      b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50,
+  },
+  { extension: "png", contentType: "image/png", matches: (b) => b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47 },
+  { extension: "jpg", contentType: "image/jpeg", matches: (b) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff },
+  { extension: "gif", contentType: "image/gif", matches: (b) => b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46 },
+];
+
+/** Sniffs the encoding from the bytes rather than trusting the filename —
+ *  the stored content-type is what browsers will act on. */
+function detectImageType(buffer: ArrayBuffer) {
+  const bytes = new Uint8Array(buffer.slice(0, 16));
+  return IMAGE_TYPES.find((type) => type.matches(bytes)) ?? null;
+}
 // .vrm files are glTF-binary (.glb) under the hood — this is the .glb
 // magic header, not a VRM-specific signature. Good enough to reject
 // obviously-wrong uploads without a full glTF/VRM validator.
@@ -104,7 +142,7 @@ export default {
       return handleAssetList(request, env);
     }
 
-    const assetMatch = url.pathname.match(/^\/api\/assets\/([a-f0-9-]+\.(?:glb|gltf))$/);
+    const assetMatch = url.pathname.match(/^\/api\/assets\/([a-f0-9-]+\.(?:glb|gltf|webp|png|jpg|gif))$/);
     if (assetMatch && request.method === "GET") {
       return handleGetAsset(request, assetMatch[1], env);
     }
@@ -221,9 +259,23 @@ async function handleAssetUpload(request: Request, env: Env): Promise<Response> 
       return jsonError("Too many uploads from this address recently — try again later.", 429);
     }
   }
-  const declaredLength = Number(request.headers.get("content-length") ?? "0");
-  if (declaredLength > MAX_MODEL_BYTES) return jsonError("Model is too large (max 24MB).", 413);
   const name = (request.headers.get("x-seiza-asset-name") ?? "model.glb").slice(0, 120);
+  const wantsImage = (request.headers.get("x-seiza-asset-kind") ?? "").toLowerCase() === "image";
+  const limit = wantsImage ? MAX_IMAGE_BYTES : MAX_MODEL_BYTES;
+  const limitLabel = wantsImage ? "3MB" : "24MB";
+  const declaredLength = Number(request.headers.get("content-length") ?? "0");
+  if (declaredLength > limit) return jsonError(`File is too large (max ${limitLabel}).`, 413);
+
+  if (wantsImage) {
+    const buffer = await request.arrayBuffer();
+    if (buffer.byteLength === 0 || buffer.byteLength > limit) {
+      return jsonError(`Image is empty or too large (max ${limitLabel}).`, 413);
+    }
+    const type = detectImageType(buffer);
+    if (!type) return jsonError("Only PNG, JPEG, WebP and GIF images are accepted.", 400);
+    return storeAsset(request, env, buffer, type.extension, type.contentType, name);
+  }
+
   const extension = name.toLowerCase().endsWith(".gltf") ? "gltf" : name.toLowerCase().endsWith(".glb") ? "glb" : "";
   if (!extension) return jsonError("Only .glb and .gltf files are accepted.", 400);
   const buffer = await request.arrayBuffer();
@@ -248,22 +300,52 @@ async function handleAssetUpload(request: Request, env: Env): Promise<Response> 
       return jsonError("This .gltf file is not valid JSON.", 400);
     }
   }
+  return storeAsset(
+    request,
+    env,
+    buffer,
+    extension,
+    extension === "glb" ? "model/gltf-binary" : "model/gltf+json",
+    name
+  );
+}
+
+/**
+ * Writes a validated world asset to KV and returns the URL to place it by.
+ *
+ * Deliberately NO expirationTtl, unlike avatars. A placed object lives in
+ * the room's Durable Object storage indefinitely and references this key by
+ * URL — expiring the file out from under it after 30 days would silently rot
+ * a deployed world into broken objects. World assets are deployer-curated
+ * content with an explicit Delete button; avatars are ephemeral per-visitor
+ * uploads. Different lifecycles, so: different retention.
+ */
+async function storeAsset(
+  request: Request,
+  env: Env,
+  buffer: ArrayBuffer,
+  extension: string,
+  contentType: string,
+  name: string
+): Promise<Response> {
   const key = `${crypto.randomUUID()}.${extension}`;
-  // Deliberately NO expirationTtl, unlike avatars. A placed object lives
-  // in the room's Durable Object storage indefinitely and references this
-  // key by URL — expiring the model out from under it after 30 days would
-  // silently rot a deployed world into broken objects. World assets are
-  // deployer-curated content with an explicit Delete button; avatars are
-  // ephemeral per-visitor uploads. Different lifecycles, so: different
-  // retention.
   await env.AVATARS.put(key, buffer, {
-    metadata: { contentType: extension === "glb" ? "model/gltf-binary" : "model/gltf+json", name } satisfies StoredAssetMetadata,
+    metadata: { contentType, name } satisfies StoredAssetMetadata,
   });
   await caches.default.delete(new Request(new URL("/api/assets", request.url)));
-  return new Response(JSON.stringify({ id: key, url: `/api/assets/${key}`, name }), {
+  return new Response(JSON.stringify({ id: key, url: `/api/assets/${key}`, name, kind: assetKind(key) }), {
     status: 201,
     headers: { "content-type": "application/json" },
   });
+}
+
+/** What a stored key is, from its extension — the editor groups the asset
+ *  library by this so models and pictures don't sit in one undifferentiated
+ *  list. */
+function assetKind(key: string): "model" | "image" | null {
+  if (/\.(?:glb|gltf)$/i.test(key)) return "model";
+  if (/\.(?:webp|png|jpg|gif)$/i.test(key)) return "image";
+  return null;
 }
 
 async function handleAssetList(request: Request, env: Env): Promise<Response> {
@@ -282,11 +364,12 @@ async function handleAssetList(request: Request, env: Env): Promise<Response> {
   }
   const listed = await env.AVATARS.list({ limit: 100 });
   const assets = listed.keys
-    .filter((entry) => /\.(?:glb|gltf)$/i.test(entry.name))
+    .filter((entry) => assetKind(entry.name) !== null)
     .map((entry) => ({
       id: entry.name,
       url: `/api/assets/${entry.name}`,
       name: (entry.metadata as StoredAssetMetadata | null)?.name ?? entry.name,
+      kind: assetKind(entry.name),
     }));
   const response = new Response(JSON.stringify({ assets, truncated: listed.list_complete === false }), {
     headers: {
@@ -317,6 +400,9 @@ async function handleGetAsset(request: Request, key: string, env: Env): Promise<
   const response = new Response(value, {
     headers: {
       "content-type": metadata?.contentType ?? (key.endsWith(".glb") ? "model/gltf-binary" : "model/gltf+json"),
+      // Stored bytes are sniffed on upload, but a stale metadata record
+      // shouldn't let a stored file be interpreted as something else.
+      "x-content-type-options": "nosniff",
       "cache-control": "public, max-age=31536000, immutable",
     },
   });

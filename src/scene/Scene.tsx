@@ -3,6 +3,7 @@ import { useGLTF, Sky } from "@react-three/drei";
 import { useThree } from "@react-three/fiber";
 import type * as THREE from "three";
 import { BaseEnvironment } from "./BaseEnvironment";
+import { Outdoors } from "./Outdoors";
 import type { Seat } from "./layout";
 
 interface SceneProps {
@@ -82,8 +83,11 @@ class SceneLoadBoundary extends Component<{ children: ReactNode }, { failed: boo
 // The lower it sits, the more the atmosphere shader reddens — at the old
 // 14° elevation the sky came out pale blue rather than a sunset.
 const SUN: [number, number, number] = [-34, 4.6, 14];
-/** Radius of the outdoor ground, comfortably inside the camera's far plane. */
-const GROUND_RADIUS = 150;
+/** Haze, so the treeline fades into the sky instead of ending at a hard
+ *  edge. It starts well past the building, so nothing indoors is touched. */
+const FOG_COLOR = "#e5b489";
+const FOG_NEAR = 55;
+const FOG_FAR = 210;
 
 /**
  * Lighting is lights and a procedural sky shader, not an image-based
@@ -120,20 +124,8 @@ export const Scene = memo(function Scene({
           far clip and never renders at all — which is what made the newly
           opened windows look out at nothing, rather than the sunset. */}
       <Sky sunPosition={SUN} distance={200} turbidity={10} rayleigh={3.4} mieCoefficient={0.02} mieDirectionalG={0.94} />
-      {/* Ground outside the building. Without it the newly opened windows
-          look out over a void below the horizon, because the rooms' own
-          floors stop at their walls. Flagged navIgnore so the navmesh
-          doesn't treat the whole outdoors as somewhere to walk to. */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]} userData={{ navIgnore: true }}>
-        <circleGeometry args={[GROUND_RADIUS, 48]} />
-        <meshBasicMaterial color="#b08c63" toneMapped={false} />
-      </mesh>
-      {/* A band of treetops along the horizon, so the ground has an edge to
-          meet the sky at instead of running flat to infinity. */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.4, 0]} userData={{ navIgnore: true }}>
-        <ringGeometry args={[GROUND_RADIUS * 0.55, GROUND_RADIUS, 48]} />
-        <meshBasicMaterial color="#6f7f52" toneMapped={false} />
-      </mesh>
+      <fog attach="fog" args={[FOG_COLOR, FOG_NEAR, FOG_FAR]} />
+      <Outdoors />
       {/* Warm sky above, warmer bounce off the wooden floor below. A big
           share of the light comes from here rather than the sun, which is
           what keeps the shadows soft. */}

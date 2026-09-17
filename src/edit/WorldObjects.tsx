@@ -1,8 +1,11 @@
-import { Component, Suspense, useEffect, useMemo, useRef, type ReactNode } from "react";
+import { Component, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { TransformControls, useGLTF } from "@react-three/drei";
-import type { ThreeEvent } from "@react-three/fiber";
+import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 import type { WorldObject } from "../multiplayer/types";
+import { placedChairSeat, type Seat } from "../scene/layout";
+import { Chair } from "../scene/Chair";
+import { SeatPad } from "../scene/SeatPad";
 import { VideoPanel } from "../media/VideoPanel";
 import { createScreenPlaceholder, createTextTexture } from "./textTexture";
 
@@ -19,6 +22,11 @@ interface WorldObjectsProps {
   onPresentToggle?: (object: WorldObject) => void;
   /** The live picture for a screen, when somebody is presenting on it. */
   resolveScreenStream?: (object: WorldObject) => MediaStream | null;
+  /** Sit on a placed chair. Omitted in edit mode, where a click selects the
+   *  chair to move instead — the same rule the built-in seats follow. */
+  onSit?: (seat: Seat) => void;
+  /** Id of the seat this player currently occupies, built-in or placed. */
+  occupiedSeatId?: string | null;
 }
 
 /** Renders every synced world object; in edit mode, the selected one gets
@@ -33,6 +41,8 @@ export function WorldObjects({
   onEditText,
   onPresentToggle,
   resolveScreenStream,
+  onSit,
+  occupiedSeatId,
 }: WorldObjectsProps) {
   return (
     <>
@@ -48,6 +58,8 @@ export function WorldObjects({
           onEditText={onEditText}
           onPresentToggle={onPresentToggle}
           screenStream={obj.kind === "screen" ? (resolveScreenStream?.(obj) ?? null) : null}
+          onSit={onSit}
+          occupiedSeatId={occupiedSeatId}
         />
       ))}
     </>
@@ -64,6 +76,8 @@ interface PlacedObjectProps {
   onEditText?: (object: WorldObject) => void;
   onPresentToggle?: (object: WorldObject) => void;
   screenStream: MediaStream | null;
+  onSit?: (seat: Seat) => void;
+  occupiedSeatId?: string | null;
 }
 
 function PlacedObject({
@@ -76,6 +90,8 @@ function PlacedObject({
   onEditText,
   onPresentToggle,
   screenStream,
+  onSit,
+  occupiedSeatId,
 }: PlacedObjectProps) {
   const groupRef = useRef<THREE.Group>(null);
   const hovering = useRef(false);
@@ -148,6 +164,17 @@ function PlacedObject({
       >
         <ObjectGeometry object={object} screenStream={screenStream} />
       </group>
+      {/* The chair's click pad is a sibling of the chair, not a child: the
+          seat is already in world coordinates, so putting it inside a group
+          that carries the object's own rotation and scale would apply both
+          of them twice. */}
+      {object.kind === "chair" && onSit && (
+        <SeatPad
+          seat={placedChairSeat(object.id, object.position, object.rotationY, object.scale)}
+          onSit={onSit}
+          occupied={occupiedSeatId === object.id}
+        />
+      )}
       {editMode && selected && groupRef.current && (
         <TransformControls object={groupRef.current} mode={transformMode} onMouseUp={handleChangeEnd} />
       )}
@@ -159,6 +186,12 @@ function ObjectGeometry({ object, screenStream }: { object: WorldObject; screenS
   if (object.kind === "model" && object.modelUrl) {
     return <ModelGeometry url={object.modelUrl} />;
   }
+  // Chairs use the room's own furniture materials rather than the object's
+  // colour: a chair is furniture, and one that matches the classroom's
+  // chairs is what makes a placed one look placed rather than pasted in.
+  if (object.kind === "chair") return <Chair />;
+  if (object.kind === "image" && object.src) return <ImageObject object={object} />;
+  if (object.kind === "video" && object.src) return <VideoObject object={object} />;
   switch (object.kind) {
     case "text":
       return <TextSurfaceObject object={object} />;
@@ -232,6 +265,180 @@ function TextSurfaceObject({ object }: { object: WorldObject }) {
     </group>
   );
 }
+
+/** A picture or a clip is one unit tall at scale 1, and as wide as its own
+ *  aspect ratio makes it — so placing one never distorts it. */
+const PICTURE_HEIGHT = 1;
+/** Stop decoding a world video past this far from the camera. */
+const VIDEO_DISTANCE = 26;
+
+/**
+ * A picture hung in the world.
+ *
+ * The texture is loaded directly rather than through drei's useTexture
+ * because a failed load must not take the room down with it: these URLs
+ * come from whoever placed the object, and a 404 or a deleted asset is an
+ * ordinary thing that should leave a blank frame on the wall, not a
+ * suspended tree that never resolves.
+ */
+function ImageObject({ object }: { object: WorldObject }) {
+  const [state, setState] = useState<{ texture: THREE.Texture; aspect: number } | null>(null);
+  const [failed, setFailed] = useState(false);
+  const src = object.src ?? "";
+
+  useEffect(() => {
+    if (!src) return;
+    let cancelled = false;
+    setState(null);
+    setFailed(false);
+    const loader = new THREE.TextureLoader();
+    loader.setCrossOrigin("anonymous");
+    loader.load(
+      src,
+      (texture) => {
+        if (cancelled) {
+          texture.dispose();
+          return;
+        }
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.anisotropy = 4;
+        const { width, height } = texture.image as { width: number; height: number };
+        setState({ texture, aspect: height > 0 ? width / height : 1 });
+      },
+      undefined,
+      () => {
+        if (!cancelled) setFailed(true);
+      }
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [src]);
+
+  useEffect(() => () => state?.texture.dispose(), [state]);
+
+  const aspect = state?.aspect ?? 1.5;
+  const width = PICTURE_HEIGHT * aspect;
+
+  return (
+    <group>
+      {/* Frame. Also what you see while the picture is still loading, and
+          all you see if it never arrives. */}
+      <mesh position={[0, 0, -0.03]} castShadow receiveShadow>
+        <boxGeometry args={[width + 0.08, PICTURE_HEIGHT + 0.08, 0.05]} />
+        <meshStandardMaterial color={failed ? "#5a4038" : object.color} roughness={0.6} />
+      </mesh>
+      {state && (
+        <mesh position={[0, 0, 0.004]}>
+          <planeGeometry args={[width, PICTURE_HEIGHT]} />
+          <meshBasicMaterial map={state.texture} toneMapped={false} />
+        </mesh>
+      )}
+    </group>
+  );
+}
+
+/**
+ * A video playing on a panel in the world, from a URL.
+ *
+ * Muted and looping: it's set dressing, not a presentation — a shared screen
+ * (ScreenObject) is the thing with sound and a presenter. Muted is also what
+ * lets it start without a user gesture, which matters because nobody clicks
+ * on wall decoration.
+ *
+ * Decoding is gated on distance for the same reason VideoPanel gates remote
+ * cameras: a room with several of these would otherwise decode all of them
+ * every frame whether or not anyone can see them.
+ */
+function VideoObject({ object }: { object: WorldObject }) {
+  const meshRef = useRef<THREE.Mesh>(null);
+  const [aspect, setAspect] = useState(16 / 9);
+  const [failed, setFailed] = useState(false);
+  const elapsed = useRef(0);
+  const playing = useRef(false);
+  const src = object.src ?? "";
+
+  const video = useMemo(() => {
+    if (!src || typeof document === "undefined") return null;
+    const element = document.createElement("video");
+    element.src = src;
+    element.crossOrigin = "anonymous";
+    element.muted = true;
+    element.loop = true;
+    element.playsInline = true;
+    element.preload = "metadata";
+    element.autoplay = false;
+    return element;
+  }, [src]);
+
+  const texture = useMemo(() => {
+    if (!video) return null;
+    const created = new THREE.VideoTexture(video);
+    created.colorSpace = THREE.SRGBColorSpace;
+    created.minFilter = THREE.LinearFilter;
+    created.magFilter = THREE.LinearFilter;
+    created.generateMipmaps = false;
+    return created;
+  }, [video]);
+
+  useEffect(() => {
+    if (!video) return;
+    const onMetadata = () => {
+      if (video.videoWidth > 0) setAspect(video.videoWidth / video.videoHeight);
+    };
+    const onError = () => setFailed(true);
+    video.addEventListener("loadedmetadata", onMetadata);
+    video.addEventListener("error", onError);
+    return () => {
+      video.removeEventListener("loadedmetadata", onMetadata);
+      video.removeEventListener("error", onError);
+      video.pause();
+      video.removeAttribute("src");
+      video.load();
+    };
+  }, [video]);
+
+  useEffect(() => () => texture?.dispose(), [texture]);
+
+  useFrame((state, delta) => {
+    const mesh = meshRef.current;
+    if (!mesh || !video) return;
+    elapsed.current += delta;
+    if (elapsed.current < 0.25) return;
+    elapsed.current = 0;
+    const near = state.camera.position.distanceTo(mesh.getWorldPosition(scratchPosition)) <= VIDEO_DISTANCE;
+    mesh.visible = near && !failed;
+    if (near && !playing.current) {
+      playing.current = true;
+      void video.play().catch(() => {
+        playing.current = false;
+      });
+    } else if (!near && playing.current) {
+      playing.current = false;
+      video.pause();
+    }
+  });
+
+  const width = PICTURE_HEIGHT * aspect;
+
+  return (
+    <group>
+      <mesh position={[0, 0, -0.04]} castShadow receiveShadow>
+        <boxGeometry args={[width + 0.1, PICTURE_HEIGHT + 0.1, 0.06]} />
+        <meshStandardMaterial color={failed ? "#5a3838" : "#1d212b"} roughness={0.6} />
+      </mesh>
+      {texture && (
+        <mesh ref={meshRef} position={[0, 0, 0.005]} visible={false}>
+          <planeGeometry args={[width, PICTURE_HEIGHT]} />
+          <meshBasicMaterial map={texture} toneMapped={false} />
+        </mesh>
+      )}
+    </group>
+  );
+}
+
+/** Reused rather than allocated per frame, per video. */
+const scratchPosition = new THREE.Vector3();
 
 const SCREEN_WIDTH = 3.2;
 const SCREEN_HEIGHT = 1.8;

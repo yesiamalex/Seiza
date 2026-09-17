@@ -10,7 +10,8 @@ import {
 } from "@pixiv/three-vrm-animation";
 import { VRMHumanBoneList, type VRM, type VRMHumanBoneName } from "@pixiv/three-vrm";
 import { LOCOMOTION_CLIPS } from "./builtinMotions.generated";
-import type { GestureDefinition } from "./gestures";
+import type { GestureDefinition, GroundContact } from "./gestures";
+import { SEAT_HEIGHT } from "../scene/layout";
 
 /**
  * Drives every avatar's body animation from VRM Animation clips, in three
@@ -34,6 +35,10 @@ import type { GestureDefinition } from "./gestures";
  *
  * Walk and run are phase-locked and advanced by ground speed, so feet don't
  * skate when speed changes or when the two clips crossfade.
+ *
+ * Finally, poses that rest on something (see GroundContact) are settled onto
+ * it per avatar, because no baked clip can be right for every body — that's
+ * the second useFrame pass at the bottom of this file.
  */
 
 const animationCache = new Map<string, Promise<VRMAnimation>>();
@@ -77,6 +82,22 @@ const GESTURE_FADE_OUT = 0.3;
 const POSTURE_FADE_RATE = 7; // sitting down and standing up ease in/out
 const MAX_DELTA = 1 / 20;
 
+/** Bones that can be the lowest point of a pose resting on the floor. */
+const FLOOR_CONTACT_BONES: VRMHumanBoneName[] = [
+  "leftToes", "rightToes",
+  "leftFoot", "rightFoot",
+  "leftLowerLeg", "rightLowerLeg",
+];
+/** Hips height of the skeleton the built-in clips were authored against. */
+const REFERENCE_HIPS_HEIGHT = 0.95;
+/** Distance from a shin or ankle joint to the skin, at reference scale. */
+const LIMB_RADIUS = 0.045;
+/** Distance from the hip joint down to the part that meets the cushion. */
+const HIP_TO_SEAT = 0.095;
+/** How fast the grounding offset chases its target. Fast enough to keep up
+ *  with sitting down, slow enough that a noisy frame doesn't pop the body. */
+const GROUND_SETTLE_RATE = 14;
+
 /**
  * Retargeting a clip onto one avatar is the expensive part of playing a
  * gesture, so it happens once per avatar per clip and is kept.
@@ -106,6 +127,7 @@ interface LocomotionState extends SplitActions {
 interface PostureState extends SplitActions {
   url: string;
   weight: number;
+  ground: GroundContact;
   /** False once released: weight eases to 0, then the actions stop. */
   active: boolean;
 }
@@ -116,6 +138,7 @@ interface GestureLayer {
   duration: number;
   fullBody: boolean;
   hold: boolean;
+  ground: GroundContact;
   weight: number;
   /** Set when a newer gesture replaces this one, or a hold is released. */
   fadingOut: boolean;
@@ -134,6 +157,14 @@ interface AnimatorState {
   phase: number;
   speed: number;
   lastPosition: THREE.Vector3 | null;
+  /** What the pose currently showing is resting on, and how much of it is
+   *  blended in. Written by the animation pass, read by the grounding pass. */
+  groundMode: GroundContact;
+  groundWeight: number;
+  /** Metres the avatar is currently sunk (negative) or lifted to meet it. */
+  groundOffset: number;
+  /** Rest hips height, so contact clearances scale with the body. */
+  scale: number;
 }
 
 /**
@@ -147,6 +178,33 @@ function ensureLookAtProxy(vrm: VRM) {
   const proxy = new VRMLookAtQuaternionProxy(vrm.lookAt);
   proxy.name = "VRMLookAtQuaternionProxy";
   vrm.scene.add(proxy);
+}
+
+/**
+ * How big this avatar is relative to the skeleton the built-in clips were
+ * authored against, measured from the hips of the rest pose. Contact
+ * clearances (how thick a shin is, how far the hip joint sits above the
+ * cushion) are body-sized, not absolute, so everything the grounding pass
+ * measures is expressed as a multiple of this.
+ */
+function measureRestScale(vrm: VRM): number {
+  const hips = vrm.humanoid.getRawBoneNode("hips") ?? vrm.humanoid.getNormalizedBoneNode("hips");
+  if (!hips) return 1;
+  hips.updateWorldMatrix(true, false);
+  const height = new THREE.Vector3().setFromMatrixPosition(hips.matrixWorld).y - rootY(vrm);
+  // A metre-tall child avatar and a two-metre one are both plausible; a
+  // zero is not, and would divide the clearances away to nothing.
+  return height > 0.2 ? height / REFERENCE_HIPS_HEIGHT : 1;
+}
+
+/** World Y of the group the avatar is parented to — i.e. where its feet are
+ *  meant to be. Everything the grounding pass measures is relative to it, so
+ *  it works the same for a player standing on a floor at any height. */
+function rootY(vrm: VRM): number {
+  const parent = vrm.scene.parent;
+  if (!parent) return 0;
+  parent.updateWorldMatrix(true, false);
+  return parent.matrixWorld.elements[13];
 }
 
 function getClipBundle(state: AnimatorState, url: string, animation: VRMAnimation): ClipBundle {
@@ -229,6 +287,10 @@ export function AvatarAnimator({
       phase: 0,
       speed: 0,
       lastPosition: null,
+      groundMode: "none",
+      groundWeight: 0,
+      groundOffset: 0,
+      scale: measureRestScale(vrm),
     };
     stateRef.current = state;
 
@@ -279,6 +341,7 @@ export function AvatarAnimator({
       mixer.uncacheRoot(vrm.scene);
       state.clips.clear();
       vrm.humanoid.resetNormalizedPose();
+      vrm.scene.position.y = 0;
       vrm.scene.visible = true;
       if (stateRef.current === state) stateRef.current = null;
     };
@@ -291,6 +354,7 @@ export function AvatarAnimator({
   const gestureUrl = gesture?.url ?? null;
   const gestureFullBody = gesture?.fullBody ?? false;
   const gestureHold = gesture?.hold ?? false;
+  const gestureGround: GroundContact = gesture?.ground ?? "none";
   const playedSeqRef = useRef(gestureSeq);
   useEffect(() => {
     if (playedSeqRef.current === gestureSeq) return;
@@ -314,6 +378,7 @@ export function AvatarAnimator({
             duration: bundle.full.duration,
             fullBody: gestureFullBody,
             hold: gestureHold,
+            ground: gestureGround,
             weight: 0,
             fadingOut: false,
           };
@@ -321,6 +386,7 @@ export function AvatarAnimator({
         }
         layer.fullBody = gestureFullBody;
         layer.hold = gestureHold;
+        layer.ground = gestureGround;
         layer.fadingOut = false;
         layer.action.setLoop(THREE.LoopOnce, 1);
         layer.action.clampWhenFinished = true;
@@ -340,7 +406,7 @@ export function AvatarAnimator({
     return () => {
       cancelled = true;
     };
-  }, [vrm, gestureUrl, gestureFullBody, gestureHold, gestureSeq]);
+  }, [vrm, gestureUrl, gestureFullBody, gestureHold, gestureGround, gestureSeq]);
 
   // Releasing a hold gesture: the key came up, or the player stood up.
   useEffect(() => {
@@ -354,6 +420,8 @@ export function AvatarAnimator({
 
   // Posture: sit down, and stand back up when it clears.
   const postureUrl = posture?.url ?? null;
+  const postureGroundRef = useRef<GroundContact>("none");
+  postureGroundRef.current = posture?.ground ?? "none";
   useEffect(() => {
     const state = stateRef.current;
     if (!vrm || !state) return;
@@ -363,6 +431,7 @@ export function AvatarAnimator({
     }
     if (state.posture?.url === postureUrl) {
       state.posture.active = true;
+      state.posture.ground = postureGroundRef.current;
       return;
     }
     let cancelled = false;
@@ -384,7 +453,14 @@ export function AvatarAnimator({
           action.play();
           return action;
         };
-        current.posture = { upper: make(bundle.upper), lower: make(bundle.lower), url: postureUrl, weight: 0, active: true };
+        current.posture = {
+          upper: make(bundle.upper),
+          lower: make(bundle.lower),
+          url: postureUrl,
+          weight: 0,
+          ground: postureGroundRef.current,
+          active: true,
+        };
       })
       .catch((error) => console.warn(`Posture clip failed to load (${postureUrl}):`, error));
     return () => {
@@ -401,6 +477,7 @@ export function AvatarAnimator({
 
     if (holdTPose) {
       state.vrm.humanoid.resetNormalizedPose();
+      state.groundWeight = 0;
       return;
     }
 
@@ -507,8 +584,93 @@ export function AvatarAnimator({
     }
     for (const layer of state.gestures) layer.action.setEffectiveWeight(layer.weight);
 
+    // ---- what the pose is resting on ----------------------------------------------
+    // Whichever contact is most strongly blended in wins, so crossing from a
+    // chair into seiza hands the grounding over rather than fighting over it.
+    state.groundMode = "none";
+    state.groundWeight = 0;
+    const considerGround = (mode: GroundContact, weight: number) => {
+      if (mode === "none" || weight <= state.groundWeight) return;
+      state.groundMode = mode;
+      state.groundWeight = weight;
+    };
+    for (const layer of state.gestures) {
+      // Only a full-body clip moves the legs, so only it can change where
+      // the body meets the world; a wave while seated must not.
+      if (layer.fullBody) considerGround(layer.ground, layer.weight);
+    }
+    if (state.posture) considerGround(state.posture.ground, postureWeight * (1 - gestureLowerTakeover));
+
     state.mixer.update(delta);
   }, -1);
+
+  /**
+   * Settles a resting pose onto the world, once per frame, per avatar.
+   *
+   * Why this exists: a .vrma clip can only bake one hip height. VRM playback
+   * scales that translation by the avatar's own hips height, but leg length
+   * varies independently — two avatars with identical hips heights can have
+   * very different shins — so a kneeling pose that sits perfectly on the
+   * skeleton it was authored for hovers above the tatami on one upload and
+   * sinks through it on the next. No amount of re-authoring fixes that for
+   * every body; it has to be measured on the body that's actually there.
+   *
+   * So: measure where the posed skeleton's contact points ended up, and slide
+   * the whole model down (or up) until they're where they belong. The
+   * measurement already includes the offset applied last frame, which makes
+   * this a simple feedback loop — correct by the error, smooth it, repeat —
+   * that converges in a few frames and then holds still.
+   *
+   * Priority 1 puts it after VrmAvatar's vrm.update() at priority 0, so the
+   * bones being measured are the ones about to be drawn.
+   */
+  useFrame((_, rawDelta) => {
+    const state = stateRef.current;
+    if (!state) return;
+    const { vrm } = state;
+    const delta = Math.min(rawDelta, MAX_DELTA);
+
+    let target = 0;
+    if (!holdTPose && state.groundWeight > 0.001) {
+      const base = rootY(vrm);
+      const scale = state.scale;
+      let error: number | null = null;
+
+      if (state.groundMode === "floor") {
+        // Whatever is lowest is what's touching: shins in seiza, feet when
+        // sitting cross-legged, toes on the way in and out of both.
+        let lowest = Infinity;
+        for (const name of FLOOR_CONTACT_BONES) {
+          const node = vrm.humanoid.getRawBoneNode(name);
+          if (!node) continue;
+          node.updateWorldMatrix(true, false);
+          lowest = Math.min(lowest, node.matrixWorld.elements[13] - base);
+        }
+        if (Number.isFinite(lowest)) error = LIMB_RADIUS * scale - lowest;
+      } else if (state.groundMode === "seat") {
+        const hips = vrm.humanoid.getRawBoneNode("hips");
+        if (hips) {
+          hips.updateWorldMatrix(true, false);
+          error = SEAT_HEIGHT + HIP_TO_SEAT * scale - (hips.matrixWorld.elements[13] - base);
+        }
+      }
+
+      if (error !== null) {
+        // Scaled by how much of the pose is blended in, so the correction
+        // arrives with the pose and is gone again by the time you stand.
+        target = (state.groundOffset + error) * state.groundWeight;
+        // A bad rig (mislabelled bones, a metre-off hips) can't drag the
+        // avatar somewhere absurd.
+        target = THREE.MathUtils.clamp(target, -0.9 * scale, 0.9 * scale);
+      }
+    }
+
+    state.groundOffset = approach(state.groundOffset, target, GROUND_SETTLE_RATE, delta);
+    if (Math.abs(state.groundOffset) < 1e-4) state.groundOffset = 0;
+    // The renderer refreshes world matrices from here on its own; writing the
+    // local position is enough.
+    vrm.scene.position.y = state.groundOffset;
+  }, 1);
 
   return null;
 }

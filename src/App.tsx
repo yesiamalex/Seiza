@@ -29,7 +29,7 @@ import { CameraViewToggle } from "./ui/CameraViewToggle";
 import { AvatarChooser } from "./ui/AvatarChooser";
 import { useMediaQuery, useWantsTouchControls } from "./ui/useMediaQuery";
 import { saveProfile } from "./profile/profileStore";
-import { panelStyle, pillButtonActiveStyle, pillButtonStyle } from "./ui/styles";
+import { BAR_LABEL_CLASS, barButtonActiveStyle, barButtonStyle, panelStyle, pillButtonStyle } from "./ui/styles";
 import { CloseIcon, PersonIcon, VrHeadsetIcon } from "./ui/icons";
 import type { WorldObject, WorldObjectKind } from "./multiplayer/types";
 
@@ -330,16 +330,25 @@ export default function App() {
   }, [menuGestures, requestGesture, releaseGesture, joined]);
 
   const handleSpawn = useCallback(
-    (kind: WorldObjectKind, modelUrl?: string, pitch = 0) => {
+    /**
+     * `url` is the asset this object is made of, if it needs one: the model
+     * for a "model", the picture or clip for an "image"/"video". They're
+     * carried in different fields on the wire (see WorldObject.src) but
+     * there's only ever one of them per object, so callers pass one URL.
+     */
+    (kind: WorldObjectKind, url?: string, pitch = 0) => {
       const [px, py, pz] = positionRef.current;
       // In front of the camera, not the avatar: in third person those differ,
       // and you want the object where you're looking.
       const yaw = lookYawRef.current;
       const flat = Math.abs(pitch) > 0.6;
+      const picture = kind === "image" || kind === "video";
       // Put each kind where it's actually used: a note on a desk, a board at
-      // eye level, a screen a little above that.
-      const distance = flat ? 1.1 : 2;
-      const height = flat ? 0.78 : kind === "screen" ? 1.9 : kind === "text" ? 1.6 : 1;
+      // eye level, a screen or a picture a little above that, a chair on the
+      // floor (its own geometry is measured up from its base).
+      const distance = flat ? 1.1 : kind === "chair" ? 1.4 : 2;
+      const height =
+        kind === "chair" ? 0 : flat ? 0.78 : kind === "screen" ? 1.9 : picture ? 1.75 : kind === "text" ? 1.6 : 1;
       const spawnPosition: [number, number, number] = [
         px - Math.sin(yaw) * distance,
         py + height,
@@ -347,14 +356,17 @@ export default function App() {
       ];
       addObject({
         kind,
-        modelUrl,
+        modelUrl: kind === "model" ? url : undefined,
+        src: picture ? url : undefined,
         color:
-          kind === "text" || kind === "screen"
+          kind === "text" || kind === "screen" || picture
             ? ACCENT_OBJECT_COLOR
             : OBJECT_COLORS[Math.floor(Math.random() * OBJECT_COLORS.length)],
         position: spawnPosition,
-        // Boards and screens face whoever placed them.
-        rotationY: yaw + Math.PI,
+        // Boards and screens face whoever placed them. A chair is the
+        // exception: you place one to sit in it, so it faces the way you're
+        // already looking rather than turning you back around.
+        rotationY: kind === "chair" ? yaw : yaw + Math.PI,
         pitch,
         scale: 1,
         text: kind === "text" ? "" : undefined,
@@ -619,6 +631,8 @@ export default function App() {
             onEditText={handleEditText}
             onPresentToggle={(object) => void presentOn(object)}
             resolveScreenStream={resolveScreenStream}
+            onSit={editMode ? undefined : sitDown}
+            occupiedSeatId={seat?.id ?? null}
           />
         </XR>
       </Canvas>
@@ -681,14 +695,31 @@ export default function App() {
         )}
       >
         {(seat || posture) && (
-          <button type="button" style={pillButtonActiveStyle} onClick={standUp} title="Or just move">
-            <PersonIcon /> Stand up
+          <button
+            type="button"
+            className="seiza-bar-btn"
+            style={barButtonActiveStyle}
+            onClick={standUp}
+            aria-label="Stand up"
+            title="Stand up (or just move)"
+          >
+            <PersonIcon />
+            <span className={BAR_LABEL_CLASS}>Stand up</span>
           </button>
         )}
-        <button type="button" style={pillButtonStyle} onClick={() => void enterVR()}>
-          <VrHeadsetIcon /> Enter VR
+        <button
+          type="button"
+          className="seiza-bar-btn"
+          style={barButtonStyle}
+          onClick={() => void enterVR()}
+          aria-label="Enter VR"
+          title="Enter VR"
+        >
+          <VrHeadsetIcon />
+          <span className={BAR_LABEL_CLASS}>VR</span>
         </button>
         <CameraViewToggle viewMode={viewMode} onToggle={() => setViewMode((v) => (v === "first" ? "third" : "first"))} />
+        <div className="seiza-bar-divider" aria-hidden />
         <MediaControls
           media={media}
           voiceEnabled={voiceVisible}
@@ -703,6 +734,7 @@ export default function App() {
           activePosture={posture?.name ?? null}
           showShortcuts={hasHoverPointer}
         />
+        <div className="seiza-bar-divider" aria-hidden />
         <ChatPanel
           open={chatOpen}
           onToggle={() => setChatOpen((v) => !v)}
@@ -711,6 +743,7 @@ export default function App() {
           onSend={sendChat}
           connected={connected}
         />
+        <div className="seiza-bar-divider" aria-hidden />
         <EditToolbar
           enabled={editingEnabled}
           connected={connected}

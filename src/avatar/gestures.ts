@@ -30,7 +30,27 @@ export interface CustomGestureConfig {
    *  released, instead of playing once. Use it for a raised hand or any
    *  other posture a player holds. */
   hold?: boolean;
+  /** How the avatar should meet the ground while this clip holds.
+   *  See GestureDefinition.ground — the same values apply. */
+  ground?: GroundContact;
 }
+
+/**
+ * Where a held pose touches the world.
+ *
+ * A .vrma clip can only bake one hip height, and that height is only correct
+ * for the proportions it was authored against: VRM playback scales the hips
+ * translation by each avatar's hips height, but leg length varies
+ * independently of it, so a kneeling pose baked for one skeleton floats on a
+ * long-legged avatar and sinks into the floor on a short-legged one. Rather
+ * than guess, clips declare what they are resting on and the app settles the
+ * avatar onto it at runtime (see AvatarAnimator).
+ *
+ *   "none"  — ordinary clip, the avatar stands on its own feet.
+ *   "floor" — the legs rest on the ground (kneeling, seiza, sitting down).
+ *   "seat"  — the hips rest on a chair or bench at SEAT_HEIGHT.
+ */
+export type GroundContact = "none" | "floor" | "seat";
 
 export interface GestureDefinition {
   name: string;
@@ -42,6 +62,8 @@ export interface GestureDefinition {
   /** Not offered in the menu or on the number keys — something else in the
    *  app triggers it. `sit` is the built-in example: chairs trigger it. */
   hidden: boolean;
+  /** What this pose rests on, settled per avatar at runtime. */
+  ground: GroundContact;
   /** Known up front for built-ins; custom clips report theirs on load. */
   duration: number | null;
   source: "builtin" | "custom";
@@ -65,6 +87,7 @@ export function buildGestureRegistry(options: {
     fullBody: g.fullBody,
     hold: g.hold,
     hidden: g.hidden,
+    ground: g.ground,
     duration: g.duration,
     source: "builtin",
     overridesBuiltin: false,
@@ -89,6 +112,10 @@ export function buildGestureRegistry(options: {
       // a deployment can supply its own sitting pose without it showing up
       // in the menu as a gesture.
       hidden: BUILTIN_GESTURES.some((g) => g.name === custom.name && g.hidden),
+      // A replacement clip inherits the built-in's contact by default, so a
+      // deployment swapping in its own sitting pose still lands on the chair.
+      ground:
+        custom.ground ?? BUILTIN_GESTURES.find((g) => g.name === custom.name)?.ground ?? "none",
       duration: null,
       source: "custom",
       overridesBuiltin: false,

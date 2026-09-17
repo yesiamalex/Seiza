@@ -43,6 +43,17 @@ Japanese XR conference, April 2027).
 - **In-world editing** — anyone in a room can toggle Edit Mode and place
   primitives or paste in a custom glTF model URL, with drag-to-move and
   delete; placements persist per-room.
+- **Placeable chairs** — a chair is one of the default objects in Edit Mode,
+  and it's the same chair the classroom uses, so anyone can sit on one the
+  moment it's placed. Leave Edit Mode and click it, exactly like a built-in
+  seat.
+- **Pictures and video on the walls** — upload an image and it's hung in
+  front of you as a framed panel, sized to its own aspect ratio; add a video
+  by link and it plays muted and looping on a panel, decoding only while
+  someone is near enough to see it. Images are downscaled and re-encoded to
+  WebP in your browser before upload, so a phone photo costs the deployment
+  a few hundred kilobytes instead of several megabytes. Video is
+  deliberately by link only — see "Where uploads go" below.
 - **Custom environments, swappable live** — upload a `.glb`/`.gltf` world
   from Edit Mode and it becomes the room's environment for everyone
   immediately, persisted in the room's Durable Object and restored for
@@ -219,6 +230,40 @@ in-world editing (`editingEnabled: false`) or avatar uploads
 (`allowAvatarUpload: false`) for a given deployment without touching
 code.
 
+### Where uploads go, and why video isn't one of them
+
+Avatars, models and images all live in one Workers KV namespace. KV was
+chosen over R2 because R2 requires a payment method even on its free tier
+and this is meant to be deployable by anyone forking the repo with no
+billing setup — see the tradeoff note at the top of `worker/index.ts`.
+
+That choice sets the budget: 25MiB per value, hard, and 1GB of storage in
+total on the free tier. So each kind of upload gets a ceiling that matches
+what it's for.
+
+| What | Limit | Retention |
+| --- | --- | --- |
+| Avatar (`.vrm`) | 24MB | 30-day TTL — ephemeral, uploader-owned |
+| Model (`.glb`/`.gltf`) | 24MB | Kept until deleted |
+| Image (PNG/JPEG/WebP/GIF) | 3MB server-side; the editor targets ~500KB | Kept until deleted |
+| Video | Not uploadable | n/a |
+
+Images are re-encoded client-side first (`src/edit/compressImage.ts`):
+downscaled to at most 2048px on the long edge, then encoded as WebP with the
+quality stepped down until it fits the target. The server's 3MB limit is a
+backstop for anything that skipped that path, not the normal size. At ~500KB
+a picture, a deployment gets roughly two thousand of them per free gigabyte.
+
+Video is referenced by URL and never stored here. One clip would take a
+meaningful share of the whole storage budget; KV serves whole values with no
+range requests, so seeking would re-download the file; and every viewer in
+every Cloudflare colo costs a fresh read. Point a video object at any https
+URL that serves an MP4 or WebM with CORS allowed and let whoever already
+hosts it serve it. Image and video URLs go through the same scheme
+validation as models and avatars (`sanitizeAssetUrl` in `worker/room.ts`) —
+placing one makes every other browser in the room fetch it, so `javascript:`,
+`data:` and protocol-relative URLs are rejected.
+
 ### Restricting who can edit
 
 By default, if `editingEnabled` is true, *anyone* in the room can place,
@@ -253,12 +298,22 @@ protection this does and doesn't provide.
 | Zoom toward yourself | Scroll | Pinch |
 | Walk to a spot | Double-click the floor | Double-tap the floor |
 | Sit down | Click a chair or bench | Tap a chair or bench |
+| Place a chair | Edit Mode → Chair | Edit Mode → Chair |
 | Kneel (seiza) | `3`, and `3` again to stand | The Seiza button |
 | Stand up | Move, jump, or the Stand up button | D-pad, or the Stand up button |
 | Switch view | `V` or the camera button | Camera button |
 | Avatar menu | `C` or the Avatar button | Avatar button |
 | Gestures | `1`–`9`, `0`, or the Gestures menu | Gestures menu |
 | Hold a pose | Hold its number key | Press and hold its button |
+
+The controls sit in one dock at the bottom of the screen, and it never
+wraps. That isn't only cosmetic: a second row made the bar's height depend
+on how many controls happened to be showing, so everything anchored above it
+— popovers, the notice toast — moved whenever you sat down or started
+sharing. Below 960px the dock drops its text labels and becomes icons, each
+keeping its accessible name from `aria-label`; below 640px it scrolls
+sideways as a last resort, and its popovers switch to `position: fixed` so
+they dock to the viewport instead of being clipped by that scroll container.
 
 ### The built-in world
 
@@ -288,6 +343,18 @@ can get stuck in a chair. `standUpSpot` picks where they end up: behind the
 seat if that's clear, otherwise to a side or a diagonal, because stepping
 back off a classroom chair would otherwise walk them into the desk behind.
 
+Chairs a player places in Edit Mode use the same `Chair` component and the
+same materials as the room's own, and get a seat built by `placedChairSeat`
+in `layout.ts`. That function exists because the seat has to be derived from
+the chair rather than stored beside it: it offsets forward of the chair's
+centre by the same `SEAT_FORWARD_OFFSET` the built-in seats use, and it
+raises the floor it reports by the chair's scale — the sitting pose is
+grounded to `SEAT_HEIGHT` above whatever floor the seat gives it, so a chair
+scaled up would otherwise seat its occupant in mid-air below the cushion.
+Checked numerically at several scales, heights and rotations. Placed chairs
+aren't obstacles, the same as every other placed object; seat occupancy is
+local-only, as it is for the built-in seats, so two people can share a chair.
+
 Furniture collision is a list of boxes in the same file, resolved by pushing
 a walker out along whichever axis they're least far inside. A desk and its
 chair are deliberately one box rather than two: as separate boxes the gap
@@ -300,6 +367,19 @@ Avatars get a soft blob shadow rather than a real cast shadow. A skinned mesh
 has to be re-rendered into the shadow map every frame it moves, which is the
 per-frame cost the rest of the world deliberately avoids; a textured disc
 costs one draw call and still says where someone's feet are.
+
+The first-person camera bobs while you walk. It's driven by distance
+travelled rather than by a clock, so the rhythm stays locked to the
+footsteps at any speed instead of drifting when you speed up or get pushed
+along a wall: one stride is a full cycle, the head dips twice in it (once
+per foot) and sways once, with a little roll. It moves the *render* camera
+only — the virtual camera that the networked position, the avatar's
+placement and every raycast come from never sees it, so bobbing can't nudge
+you through a wall or make a seat harder to click. It fades out when you
+stop, when you're airborne and while you're seated, and
+`prefers-reduced-motion` turns it off entirely. There's no bob in VR, where
+moving the view out from under someone's head is a good way to make them
+ill.
 
 The third-person camera orbits a point at the avatar's chest rather than
 sitting behind the eye and looking wherever the eye looks. That keeps the
@@ -314,6 +394,21 @@ a length-wise gap per window, reusing the same mechanism doorways use. The
 frame is four bars around an open pane — it used to be a single solid box
 spanning the whole opening, which is why cutting a hole in the wall behind it
 changed nothing you could see.
+
+What you see through them is `src/scene/Outdoors.tsx`: a ground disc painted
+procedurally onto a canvas, an instanced treeline, instanced hills on the
+horizon, and distance fog that starts well past the building so nothing
+indoors is tinted. Four draw calls, no downloads, and deterministic from a
+seeded PRNG so everyone in the room sees the same landscape. It replaced a
+flat brown disc and a flat green ring, which read as cardboard.
+
+Indoor lighting is one point light per visible fixture rather than a single
+bright one covering a room. The classroom previously had one lamp at twice
+the intensity between its two fixtures, plus a "sunlight through the window
+wall" light sitting 1.2m off that wall — with inverse-square falloff the
+plaster beside it took the full brightness and blew out to white. The glow
+light now sits further into the room and dimmer, so the windows still wash
+the floor warm without clipping anything near them.
 
 ### What an avatar is on the wire
 
@@ -356,6 +451,31 @@ avatar, in three layers.
 - It runs before `vrm.update()` each frame. Spring bones (hair, skirts) get
   a capped time step and are reset after teleports, which is what stops
   hair from flying away.
+
+**Resting poses are settled onto the world at runtime, not baked.** A
+`.vrma` clip can only carry one hip height. VRM playback scales that
+translation by each avatar's own hips height, but leg length varies
+independently of it — two avatars with the same hips height can have very
+different shins — so a kneeling pose that sits perfectly on the skeleton it
+was authored against hovers above the tatami on one upload and sinks through
+it on the next. No amount of re-authoring fixes that for every body.
+
+So a clip declares what it rests on (`ground: "floor" | "seat"` in the
+generator and the manifest), and a second frame pass in `AvatarAnimator`,
+running after `vrm.update()`, measures where the posed skeleton's contact
+points actually ended up and slides the model until they're where they
+belong: the lowest of shins/feet/toes onto the floor for seiza, the hips up
+to the seat height for sitting. The measurement already includes the offset
+applied last frame, which makes it a plain feedback loop — correct by the
+error, smooth it, repeat — that settles in a few frames and then holds
+still. Clearances (a shin's thickness, the drop from hip joint to cushion)
+scale with the body, so they mean the same thing on a 1.4m avatar and a
+1.8m one.
+
+Verified on four real `.vrm` files including a VRoid Hub download and a VRM
+1.0 sample: every one lands its contact point within a centimetre of where
+it should be, with a per-avatar correction between 4cm and 10cm — which is
+exactly the floating the baked heights had been producing.
 
 Remote players are eased toward their latest network position
 (`src/multiplayer/RemotePlayers.tsx`) rather than jumping five times a
@@ -406,11 +526,20 @@ the hard way:
   quietly produce mirrored nonsense — in one run, arms above the head in a
   pose that should have had the hands resting on the thighs.
 
+- **The contact point is the palm, not the wrist.** Scoring the wrist joint
+  against the thigh looked right numerically and wrong on screen: the wrist
+  sits a whole hand's length short of where the hand actually touches, so
+  "wrist 4cm above the thigh axis" meant the palm was *inside* the leg.
+  Measuring at the middle-finger knuckle instead, and adding the wrist
+  angles to the solve — forearm roll alone can't lay a palm flat without
+  dragging the hand off the leg — took the palm from 46% of the way to
+  facing down to 83%, on every rig.
+
 The same harness re-checks every clip afterwards, on each rig, through the
 real playback path: hands meeting at the sternum for gasshō, a clap that
-actually closes, palms up and elbows in for a shrug, hands resting on the
-thigh line (and not outboard of it) for seiza and sitting, and a seated
-backside that clears the chair cushion.
+actually closes, palms up and elbows in for a shrug, palms resting flat on
+the thigh line (and not inboard or outboard of it) for seiza and sitting,
+and a seated backside that clears the chair cushion.
 
 Clip URLs in the generated manifest carry a `?v=` content hash. Regenerating
 a motion rewrites the file but not its path, so without that a browser keeps
@@ -466,10 +595,11 @@ src/            frontend (React Three Fiber + WebXR + VRM)
   multiplayer/  realtime client, remote-player rendering, protocol types
   profile/      remembered name/avatar in IndexedDB
   voice/        WebRTC voice mesh, signaled through the room server
-  edit/         in-world object placement/move/delete UI
+  edit/         in-world object placement/move/delete UI, image compression
   nav/          runtime navmesh for click-to-move
   scene/        built-in world: floor plan (layout.ts), canvas-drawn
-                materials, lighting + deployer scene.glb overlay
+                materials, lighting, the procedural exterior (Outdoors.tsx),
+                shared furniture (Chair/SeatPad) + deployer scene.glb overlay
   ui/           join screen, avatar chooser and preview, HUD, shared motion
   interactions/ gesture menu and practice mode (pedagogical modules)
 worker/         Cloudflare Worker: static hosting, avatar upload API (KV),

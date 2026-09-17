@@ -45,6 +45,33 @@ const GROUNDED_EPSILON = 0.01;
 const MOUSE_LOOK_SENSITIVITY = 0.0025; // radians per pixel
 const TOUCH_LOOK_SENSITIVITY = 0.0042; // fingers cover fewer pixels than a mouse sweep
 const PITCH_LIMIT = Math.PI / 2 - 0.05;
+/**
+ * First-person head bob.
+ *
+ * Driven by distance travelled rather than by a clock, so the rhythm stays
+ * locked to the footsteps at any speed and doesn't drift when you speed up,
+ * slow down or get pushed along a wall. One stride is a full cycle: the
+ * head dips twice in it (once per foot) and sways once, which is what a
+ * walk actually does.
+ *
+ * It moves the render camera only. `virtualCameraRef` — which is what the
+ * networked position, the avatar's placement and every raycast are taken
+ * from — never sees it, so bobbing can't nudge you through a wall or make
+ * clicking a seat harder to land.
+ */
+const BOB_STRIDE = 3.2; // metres per full cycle, matching the walk clip
+const BOB_VERTICAL = 0.035; // metres of dip at walking pace
+const BOB_LATERAL = 0.022; // metres of sway at walking pace
+const BOB_ROLL = 0.0075; // radians of roll at walking pace
+/** How fast the bob fades in when you start moving and out when you stop. */
+const BOB_EASE_RATE = 7;
+/** Running bobs harder, but not proportionally — 1.9x the speed at 1.9x the
+ *  amplitude is nauseating rather than energetic. */
+const BOB_MAX_AMOUNT = 1.4;
+/** A frame that moves further than this isn't a step, it's a teleport
+ *  (spawning, standing up off a seat) — don't advance the stride for it. */
+const BOB_TELEPORT_DISTANCE = 0.6;
+
 // How quickly the avatar turns to face where it's walking (1/s). Turning
 // smoothly instead of snapping to the camera is also what keeps spring-bone
 // hair from whipping around every time the view is dragged.
@@ -142,6 +169,26 @@ export function PlayerRig({
   // Eye height over whatever the player is standing on, updated each frame
   // so stepping onto the tatami platform raises them instead of sinking them.
   const groundEyeYRef = useRef(spawnPoint[1] + EYE_HEIGHT);
+  // Head bob: how far through the current stride, how much of the bob is
+  // faded in, and where the player was last frame (the bob is driven by
+  // distance covered, not by a clock — see BOB_STRIDE).
+  const bobPhaseRef = useRef(0);
+  const bobAmountRef = useRef(0);
+  const bobLastPositionRef = useRef<THREE.Vector2 | null>(null);
+  // Motion sensitivity is a real accessibility need and a bobbing camera is
+  // one of the worst offenders, so the OS setting turns it off outright.
+  const reducedMotionRef = useRef(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => {
+      reducedMotionRef.current = query.matches;
+    };
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
 
   useEffect(() => {
     virtualCameraRef.current!.position.set(spawnPoint[0], spawnPoint[1] + EYE_HEIGHT, spawnPoint[2]);
@@ -371,9 +418,41 @@ export function PlayerRig({
     }
     const running = !!(keys.ShiftLeft || keys.ShiftRight) || !!touch?.running;
 
+    /**
+     * Advances the head bob and returns the offsets to apply to the render
+     * camera this frame. Runs whatever the view mode, so switching between
+     * first and third person doesn't snap the bob back to neutral or leave
+     * it stale, and always returns zeroes when the player is seated,
+     * airborne, standing still or has asked for reduced motion.
+     */
+    const updateHeadBob = (grounded: boolean) => {
+      const previous = bobLastPositionRef.current;
+      const travelled = previous ? Math.hypot(vcam.position.x - previous.x, vcam.position.z - previous.y) : 0;
+      bobLastPositionRef.current = (previous ?? new THREE.Vector2()).set(vcam.position.x, vcam.position.z);
+      const teleported = travelled > BOB_TELEPORT_DISTANCE;
+
+      const speed = delta > 0 && !teleported ? travelled / delta : 0;
+      const target = grounded && !reducedMotionRef.current ? Math.min(BOB_MAX_AMOUNT, speed / MOVE_SPEED) : 0;
+      bobAmountRef.current += (target - bobAmountRef.current) * (1 - Math.exp(-BOB_EASE_RATE * delta));
+      if (!teleported) bobPhaseRef.current = (bobPhaseRef.current + travelled / BOB_STRIDE) % 1;
+
+      const amount = bobAmountRef.current;
+      // Below this the offsets are sub-millimetre; skip the trigonometry
+      // and, more importantly, stop the phase from mattering while stopped.
+      if (amount < 0.002) return null;
+      const angle = bobPhaseRef.current * Math.PI * 2;
+      return {
+        // Twice per stride: the head drops on each footfall, not each pair.
+        vertical: Math.sin(angle * 2) * BOB_VERTICAL * amount,
+        lateral: Math.sin(angle) * BOB_LATERAL * amount,
+        roll: -Math.sin(angle) * BOB_ROLL * amount,
+      };
+    };
+
     // Writes out everything downstream reads: the networked transform, the
     // render camera, and the group the local avatar is rendered in.
-    const applyTransforms = (feetY: number) => {
+    const applyTransforms = (feetY: number, grounded = true) => {
+      const bob = updateHeadBob(grounded);
       const lookYaw = new THREE.Euler().setFromQuaternion(vcam.quaternion, "YXZ").y;
       positionRef.current = [vcam.position.x, feetY, vcam.position.z];
       rotationRef.current = avatarYawRef.current;
@@ -402,6 +481,13 @@ export function PlayerRig({
       } else {
         camera.position.copy(vcam.position);
         camera.quaternion.copy(vcam.quaternion);
+        if (bob) {
+          camera.position.y += bob.vertical;
+          camera.position.addScaledVector(right, bob.lateral);
+          // Local-space roll, so it tilts about the view axis rather than
+          // about world Z — which would look like the horizon sliding.
+          camera.rotateZ(bob.roll);
+        }
       }
 
       if (rigRef.current) {
@@ -440,7 +526,7 @@ export function PlayerRig({
         } else {
           avatarYawRef.current = lerpAngle(avatarYawRef.current, sit.rotationY, 1 - Math.exp(-SIT_TURN_RATE * delta));
         }
-        applyTransforms(sit.position[1]);
+        applyTransforms(sit.position[1], false);
         return;
       }
     } else if (postureHeldRef.current && (move.lengthSq() > 0 || jumpPressed)) {
@@ -487,7 +573,7 @@ export function PlayerRig({
       avatarYawRef.current = lerpAngle(avatarYawRef.current, targetYaw, 1 - Math.exp(-AVATAR_TURN_RATE * delta));
     }
 
-    applyTransforms(vcam.position.y - EYE_HEIGHT);
+    applyTransforms(vcam.position.y - EYE_HEIGHT, vcam.position.y <= groundEyeY + GROUNDED_EPSILON);
   });
 
   return (

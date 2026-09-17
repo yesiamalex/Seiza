@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import type { WorldObject } from "../multiplayer/types";
 import { optimizeVrmAvatar } from "../avatar/optimizeVrm";
-import { inputStyle, panelStyle, pillButtonActiveStyle, pillButtonStyle, popoverStyle } from "../ui/styles";
-import { EditIcon, ScreenShareIcon, TextBoardIcon } from "../ui/icons";
+import { compressImage } from "./compressImage";
+import { BAR_LABEL_CLASS, barButtonActiveStyle, barButtonStyle, inputStyle, panelStyle, pillButtonActiveStyle, pillButtonStyle, popoverStyle } from "../ui/styles";
+import { ChairIcon, EditIcon, ScreenShareIcon, TextBoardIcon } from "../ui/icons";
 
 interface EditToolbarProps {
   enabled: boolean;
@@ -65,8 +66,9 @@ export function EditToolbar({
   onSetEnvironment,
 }: EditToolbarProps) {
   const [modelUrl, setModelUrl] = useState("");
+  const [videoUrl, setVideoUrl] = useState("");
   const [passwordDraft, setPasswordDraft] = useState("");
-  const [assets, setAssets] = useState<Array<{ id: string; url: string; name: string }>>([]);
+  const [assets, setAssets] = useState<Array<{ id: string; url: string; name: string; kind?: "model" | "image" | null }>>([]);
   const [assetUploading, setAssetUploading] = useState(false);
   const [assetMessage, setAssetMessage] = useState<string | null>(null);
   const [optimizeAsset, setOptimizeAsset] = useState(true);
@@ -77,7 +79,10 @@ export function EditToolbar({
     let cancelled = false;
     fetch("/api/assets", { headers: passwordDraft ? { "x-seiza-editor-password": passwordDraft } : undefined })
       .then(async (response) => {
-        const result = (await response.json().catch(() => ({}))) as { assets?: Array<{ id: string; url: string; name: string }>; error?: string };
+        const result = (await response.json().catch(() => ({}))) as {
+          assets?: Array<{ id: string; url: string; name: string; kind?: "model" | "image" | null }>;
+          error?: string;
+        };
         if (!response.ok) throw new Error(result.error ?? `Asset library failed to load (${response.status}).`);
         if (!cancelled) setAssets(result.assets ?? []);
       })
@@ -138,6 +143,43 @@ export function EditToolbar({
     }
   }
 
+  /**
+   * Pictures go through the browser's encoder first — see compressImage.ts
+   * for why a deployment's KV budget makes that worth doing.
+   */
+  async function uploadImage(file: File) {
+    setAssetMessage(null);
+    setAssetUploading(true);
+    try {
+      const compressed = await compressImage(file);
+      const response = await fetch("/api/assets", {
+        method: "POST",
+        body: compressed.blob,
+        headers: {
+          "x-seiza-asset-name": compressed.name,
+          "x-seiza-asset-kind": "image",
+          ...(passwordDraft ? { "x-seiza-editor-password": passwordDraft } : {}),
+        },
+      });
+      const result = (await response.json().catch(() => ({}))) as {
+        id?: string;
+        url?: string;
+        name?: string;
+        error?: string;
+      };
+      if (!response.ok || !result.id || !result.url) throw new Error(result.error ?? `Upload failed (${response.status}).`);
+      const asset = { id: result.id, url: result.url, name: result.name ?? compressed.name, kind: "image" as const };
+      setAssets((previous) => [...previous, asset]);
+      onSpawn("image", asset.url);
+      const kb = Math.max(1, Math.round(compressed.blob.size / 1024));
+      setAssetMessage(`${asset.name} uploaded and placed (${kb}KB after compression).`);
+    } catch (error) {
+      setAssetMessage(error instanceof Error ? error.message : "Image upload failed.");
+    } finally {
+      setAssetUploading(false);
+    }
+  }
+
   async function uploadEnvironment(file: File) {
     setAssetMessage(null);
     setAssetUploading(true);
@@ -167,8 +209,17 @@ export function EditToolbar({
 
   return (
     <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-      <button style={editMode ? pillButtonActiveStyle : pillButtonStyle} onClick={onToggleEditMode}>
-        <EditIcon /> {editMode ? "Exit edit mode" : "Edit world"}
+      <button
+        type="button"
+        className="seiza-bar-btn"
+        style={editMode ? barButtonActiveStyle : barButtonStyle}
+        onClick={onToggleEditMode}
+        aria-pressed={editMode}
+        aria-label={editMode ? "Exit edit mode" : "Edit world"}
+        title={editMode ? "Exit edit mode" : "Edit world"}
+      >
+        <EditIcon />
+        <span className={BAR_LABEL_CLASS}>{editMode ? "Done" : "Edit"}</span>
       </button>
       {editMode && needsAuth && (
         <form
@@ -237,10 +288,65 @@ export function EditToolbar({
             <button style={pillButtonStyle} disabled={!connected} onClick={() => onSpawn("screen")} title="A display to present on">
               <ScreenShareIcon /> Screen
             </button>
+            <button
+              style={pillButtonStyle}
+              disabled={!connected}
+              onClick={() => onSpawn("chair")}
+              title="A chair anyone can sit on"
+            >
+              <ChairIcon /> Chair
+            </button>
           </div>
           <small style={{ opacity: 0.7 }}>
-            Leave edit mode to use them: click a board or note to write on it, a screen to present on it.
+            Leave edit mode to use them: click a board or note to write on it, a screen to present on it, a chair to
+            sit on it.
           </small>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 5, borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 8 }}>
+            <strong>Pictures and video</strong>
+            <label style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+              Hang a picture (PNG, JPEG, WebP or GIF)
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                disabled={!connected || assetUploading}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void uploadImage(file);
+                  event.currentTarget.value = "";
+                }}
+              />
+            </label>
+            <small style={{ opacity: 0.7 }}>
+              Resized and re-encoded in your browser before upload, so a photo costs this deployment a few hundred
+              kilobytes rather than several megabytes.
+            </small>
+
+            <div style={{ display: "flex", gap: 6 }}>
+              <input
+                placeholder="https://…/clip.mp4"
+                value={videoUrl}
+                onChange={(event) => setVideoUrl(event.target.value)}
+                style={{ ...inputStyle, flex: 1, minWidth: 0, padding: "6px 8px", fontSize: 13 }}
+              />
+              <button
+                style={pillButtonStyle}
+                disabled={!connected || !/^https?:\/\//i.test(videoUrl.trim())}
+                onClick={() => {
+                  onSpawn("video", videoUrl.trim());
+                  setVideoUrl("");
+                }}
+                title="Place a looping video panel"
+              >
+                + Video
+              </button>
+            </div>
+            <small style={{ opacity: 0.7 }}>
+              Video is placed by link, not uploaded: a clip would take a large share of this deployment's storage, and
+              Workers KV serves whole files with no seeking. Use any https URL that serves an MP4 or WebM with CORS
+              allowed. Plays muted and looping, and only while someone is nearby.
+            </small>
+          </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 5, borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 8 }}>
             <strong>Environment</strong>
             <small style={{ opacity: 0.7 }}>
@@ -262,7 +368,7 @@ export function EditToolbar({
               />
             </label>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {assets.map((asset) => (
+              {assets.filter((asset) => asset.kind !== "image").map((asset) => (
                 <button
                   key={`env-${asset.id}`}
                   style={{ ...pillButtonStyle, maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis" }}
@@ -292,12 +398,25 @@ export function EditToolbar({
           {assets.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 5, borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 8 }}>
               <strong>Deployment asset library</strong>
-              {assets.map((asset) => (
-                <div key={asset.id} style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                  <button style={{ ...pillButtonStyle, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }} onClick={() => onSpawn("model", asset.url)}>{asset.name}</button>
-                  <button style={pillButtonStyle} onClick={() => void deleteAsset(asset)}>Delete</button>
-                </div>
-              ))}
+              {assets.map((asset) => {
+                // Older deployments stored models before there was a kind to
+                // record, so an absent kind means model.
+                const isImage = asset.kind === "image";
+                return (
+                  <div key={asset.id} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <button
+                      style={{ ...pillButtonStyle, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}
+                      disabled={!connected}
+                      onClick={() => onSpawn(isImage ? "image" : "model", asset.url)}
+                      title={isImage ? `Hang ${asset.name}` : `Place ${asset.name}`}
+                    >
+                      {isImage ? "🖼 " : ""}
+                      {asset.name}
+                    </button>
+                    <button style={pillButtonStyle} onClick={() => void deleteAsset(asset)}>Delete</button>
+                  </div>
+                );
+              })}
             </div>
           )}
           <div style={{ display: "flex", gap: 6 }}>

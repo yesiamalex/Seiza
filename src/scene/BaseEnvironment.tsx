@@ -1,7 +1,9 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { memo } from "react";
 import type * as THREE from "three";
 import type { ThreeEvent } from "@react-three/fiber";
 import { getWorldMaterials, type WorldMaterials } from "./materials";
+import { Chair } from "./Chair";
+import { SeatPad } from "./SeatPad";
 import {
   BENCHES,
   BENCH_LENGTH,
@@ -565,17 +567,24 @@ function ClassroomShell({ m }: { m: WorldMaterials }) {
         />
       ))}
 
-      {/* Ceiling lamps: two fixtures, one light between them. */}
+      {/* Ceiling lamps. One light per fixture rather than a single bright
+          one between them: a lone lamp at twice the intensity put a hot
+          spot in the middle of the room and left the corners dim, which is
+          exactly what "too bright" looked like from inside. */}
       {[-20, -14.5].map((z) => (
         <group key={z} position={[0, CLASSROOM_WALL_HEIGHT - 0.25, z]}>
           <mesh material={m.lantern}>
             <cylinderGeometry args={[0.7, 0.7, 0.12, 20]} />
           </mesh>
+          <pointLight position={[0, -0.2, 0]} intensity={5.5} distance={17} decay={2} color="#ffeccd" />
         </group>
       ))}
-      <pointLight position={[0, CLASSROOM_WALL_HEIGHT - 0.4, -17.2]} intensity={15} distance={22} decay={2} color="#ffeccd" />
-      {/* The glow of a low sun coming through the window wall. */}
-      <pointLight position={[CLASSROOM.minX + 1.2, 2, -17]} intensity={12} distance={16} decay={2} color="#ffb877" />
+      {/* The glow of a low sun coming through the window wall. It used to
+          sit 1.2m off that wall, so with inverse-square falloff the plaster
+          beside it took the full brightness and blew out to white. Moved
+          into the room and dimmed: the windows still wash the floor warm,
+          but nothing near them clips. */}
+      <pointLight position={[CLASSROOM.minX + 4.2, 2.1, -17]} intensity={5} distance={19} decay={2} color="#ffbe86" />
     </group>
   );
 }
@@ -677,86 +686,5 @@ function ClassroomFurniture({ m }: { m: WorldMaterials }) {
         </mesh>
       </group>
     </group>
-  );
-}
-
-function Chair({ position, rotationY, m }: { position: [number, number, number]; rotationY: number; m: WorldMaterials }) {
-  return (
-    <group position={position} rotation={[0, rotationY, 0]}>
-      <mesh position={[0, SEAT_HEIGHT, 0]} material={m.furnitureLight} castShadow receiveShadow>
-        <boxGeometry args={[0.46, 0.07, 0.46]} />
-      </mesh>
-      {/* Behind the sitter, who faces -Z in local space and sits forward of
-          this chair's own centre (see SEAT_FORWARD_OFFSET in layout.ts) —
-          pushed back a little further and shortened so a coat or skirt,
-          which doesn't fold the way real cloth would, has room to sit
-          between the two without visibly poking through the backrest. */}
-      <mesh position={[0, SEAT_HEIGHT + 0.28, 0.24]} rotation={[0.08, 0, 0]} material={m.furnitureLight} castShadow>
-        <boxGeometry args={[0.44, 0.38, 0.06]} />
-      </mesh>
-      {[
-        [-0.19, -0.19],
-        [0.19, -0.19],
-        [-0.19, 0.19],
-        [0.19, 0.19],
-      ].map(([x, z]) => (
-        <mesh key={`${x}-${z}`} position={[x, SEAT_HEIGHT / 2, z]} material={m.metal}>
-          <boxGeometry args={[0.05, SEAT_HEIGHT, 0.05]} />
-        </mesh>
-      ))}
-    </group>
-  );
-}
-
-/**
- * Click target floating just above a seat. Invisible until hovered, so the
- * room isn't covered in markers, and flagged `navIgnore` so the navmesh
- * doesn't treat these discs as little platforms (see useNavMesh.ts).
- */
-function SeatPad({ seat, onSit, occupied }: { seat: Seat; onSit: (seat: Seat) => void; occupied: boolean }) {
-  const [hovered, setHovered] = useState(false);
-  // Looking around is a drag with the same button, so a press that travels
-  // is a look, not a request to sit.
-  const pressRef = useRef<{ x: number; y: number } | null>(null);
-
-  useEffect(() => {
-    if (!hovered) return;
-    document.body.style.cursor = "pointer";
-    return () => {
-      document.body.style.cursor = "";
-    };
-  }, [hovered]);
-
-  return (
-    <mesh
-      position={[seat.position[0], SEAT_HEIGHT + 0.06, seat.position[2]]}
-      rotation={[-Math.PI / 2, 0, 0]}
-      userData={{ navIgnore: true }}
-      onPointerOver={(event) => {
-        event.stopPropagation();
-        setHovered(true);
-      }}
-      onPointerOut={() => setHovered(false)}
-      onPointerDown={(event) => {
-        pressRef.current = { x: event.nativeEvent.clientX, y: event.nativeEvent.clientY };
-      }}
-      onPointerUp={(event) => {
-        const press = pressRef.current;
-        pressRef.current = null;
-        if (!press) return;
-        const travelled = Math.hypot(event.nativeEvent.clientX - press.x, event.nativeEvent.clientY - press.y);
-        if (travelled > 8) return;
-        event.stopPropagation();
-        onSit(seat);
-      }}
-    >
-      <circleGeometry args={[0.28, 24]} />
-      <meshBasicMaterial
-        color={occupied ? "#7CFF9E" : "#ffd9a0"}
-        transparent
-        opacity={hovered ? 0.55 : occupied ? 0.3 : 0}
-        depthWrite={false}
-      />
-    </mesh>
   );
 }

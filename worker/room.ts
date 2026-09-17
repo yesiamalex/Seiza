@@ -506,6 +506,17 @@ function validateNewObject(input: unknown): Omit<WorldObject, "id" | "ownerId"> 
     modelUrl = sanitized;
   }
 
+  // Images and videos carry a URL every other client's browser will load,
+  // so it goes through exactly the same scheme check as models and avatars
+  // — an image object is just as good a way to point a room full of
+  // browsers at an arbitrary URL as a model object is.
+  let src: string | undefined;
+  if (kind === "image" || kind === "video") {
+    const sanitized = sanitizeAssetUrl(obj.src, { allowEmpty: false });
+    if (!sanitized || sanitized.startsWith("seiza-avatar:")) return null;
+    src = sanitized;
+  }
+
   // Tilt, so a note can lie flat on a desk. Clamped rather than rejected:
   // it's cosmetic, and a nonsense value shouldn't lose the whole object.
   const pitch =
@@ -516,7 +527,7 @@ function validateNewObject(input: unknown): Omit<WorldObject, "id" | "ownerId"> 
   // through objectPresent, which checks it's actually free.
   const presenterId = kind === "screen" ? null : undefined;
 
-  return { kind, modelUrl, color: obj.color, position, rotationY: obj.rotationY, pitch, scale, text, presenterId };
+  return { kind, modelUrl, src, color: obj.color, position, rotationY: obj.rotationY, pitch, scale, text, presenterId };
 }
 
 /**
