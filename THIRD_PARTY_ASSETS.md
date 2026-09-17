@@ -27,6 +27,9 @@ covered by the repository's own license like the code that produces them.
 | `public/animations/{idle,walk,run}.vrma` | `scripts/generate-motions.mjs` | Keyframes authored in the script. Regenerate with `npm run generate:motions`. |
 | `public/gestures/builtin/*.vrma` | `scripts/generate-motions.mjs` | Same as above. Deployers can replace any of them; see `public/gestures/README.md`. |
 | Designer avatars | `src/avatar/designer/buildDesignerVrm.ts` | Geometry is generated at runtime from settings. No model files exist. |
+| The built-in hall and classroom | `src/scene/BaseEnvironment.tsx`, `layout.ts` | Geometry generated at runtime. |
+| Wood, tatami and plaster textures | `src/scene/materials.ts` | Drawn onto a 2D canvas at startup, not image files. |
+| Sky and lighting | `src/scene/Scene.tsx` | A procedural sky shader plus lights. Deliberately not an image-based environment map: drei's `<Environment preset>` downloads an HDR from a third-party CDN. |
 
 If you replace a generated clip with a clip from elsewhere, that clip is a
 third-party asset and needs a row in the table above.

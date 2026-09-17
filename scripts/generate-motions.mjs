@@ -88,7 +88,14 @@ const BASE = {
 // Pose helpers
 // ---------------------------------------------------------------------------
 const deg = THREE.MathUtils.degToRad;
-const smooth = (u) => u * u * (3 - 2 * u);
+// Smootherstep rather than smoothstep: its second derivative is zero at both
+// ends, so a keyframe's arrival and departure have no visible kink. On short
+// gestures the difference is the whole reason a wave reads as a wave instead
+// of a twitch.
+const smooth = (u) => u * u * u * (u * (6 * u - 15) + 10);
+// Gestures are authored at a comfortable reading pace and then stretched a
+// little, because played at the authored speed they came off as hurried.
+const GESTURE_TIME_SCALE = 1.2;
 
 function withBase(pose) {
   const out = {};
@@ -131,9 +138,10 @@ const pos = (v) => Math.max(0, v);
 const LOCOMOTION = [
   {
     name: "idle",
-    duration: 4,
+    // A slow breath. Faster than this and a standing avatar looks restless.
+    duration: 5.5,
     sample: (t) => {
-      const p = (2 * Math.PI * t) / 4;
+      const p = (2 * Math.PI * t) / 5.5;
       const breathe = Math.sin(p);
       return withBase({
         chest: { x: 1.2 * breathe },
@@ -208,7 +216,13 @@ const LOCOMOTION = [
 ];
 
 // ---------------------------------------------------------------------------
-// Gestures (one-shot, start and end on the relaxed base pose)
+// Gestures
+//
+// One-shot gestures start and end on the relaxed base pose, so they can fade
+// out into whatever the body was doing. A gesture marked `hold: true` instead
+// ENDS on the pose it should keep: the player holds the key (or sits on a
+// chair) and the avatar stays there until released, rather than the clip
+// looping or snapping back. AvatarAnimator clamps the final frame for those.
 // ---------------------------------------------------------------------------
 const WAVE_UP = { rightUpperArm: { z: -40, x: -10 }, head: { z: -4, y: -4 } };
 const GESTURES = [
@@ -422,6 +436,112 @@ const GESTURES = [
       ];
     })(),
   },
+  {
+    // 合掌 — palms together at the chest with a small bow. Everyday
+    // thanks, and what you'd do before and after a meal (itadakimasu /
+    // gochisousama) or in a dojo.
+    name: "gassho",
+    label: "Gasshō (thanks)",
+    fullBody: false,
+    keys: (() => {
+      const palms = (bow) => ({
+        spine: { x: bow },
+        chest: { x: bow * 0.55 },
+        neck: { x: 6 + bow * 0.2 },
+        head: { x: 8 + bow * 0.25 },
+        leftUpperArm: { y: -66, x: 32, z: -8 },
+        rightUpperArm: { y: 66, x: 32, z: 8 },
+        leftLowerArm: { y: -80 },
+        rightLowerArm: { y: 80 },
+        leftHand: { z: 12 },
+        rightHand: { z: -12 },
+      });
+      return [
+        { t: 0, pose: {} },
+        { t: 0.8, pose: palms(2) },
+        { t: 1.5, pose: palms(16) },
+        { t: 2.4, pose: palms(16) },
+        { t: 3.0, pose: palms(2) },
+        { t: 3.6, pose: {} },
+      ];
+    })(),
+  },
+  {
+    // はい! — the classroom "I have a question" hand. Held, not looped:
+    // you keep it up until you're called on.
+    name: "raisehand",
+    label: "Raise hand (hold)",
+    fullBody: false,
+    hold: true,
+    keys: [
+      { t: 0, pose: {} },
+      {
+        t: 0.45,
+        pose: {
+          rightUpperArm: { z: -94, x: -8 },
+          rightLowerArm: { y: 6 },
+          spine: { z: -3 },
+          head: { x: -6, z: 5 },
+        },
+      },
+      {
+        t: 0.9,
+        pose: {
+          rightUpperArm: { z: -87, x: -6 },
+          rightLowerArm: { y: 10 },
+          rightHand: { z: -6 },
+          spine: { z: -2 },
+          head: { x: -4, z: 4 },
+        },
+      },
+    ],
+  },
+  {
+    // Sitting on a chair or bench. Triggered by clicking a seat rather
+    // than from the gesture menu (hence `hidden`), and held until the
+    // player stands up. The 0.45m hips drop matches SEAT_HEIGHT in
+    // src/scene/layout.ts, so feet land on the floor and hips on the seat.
+    name: "sit",
+    label: "Sit",
+    fullBody: true,
+    hold: true,
+    hidden: true,
+    keys: [
+      { t: 0, pose: {} },
+      {
+        t: 0.45,
+        pose: {
+          spine: { x: 8 },
+          leftUpperLeg: { x: -45, z: 3 },
+          rightUpperLeg: { x: -45, z: -3 },
+          leftLowerLeg: { x: 45 },
+          rightLowerLeg: { x: 45 },
+          leftUpperArm: { z: -70, x: -14 },
+          rightUpperArm: { z: 70, x: -14 },
+          _hips: [0, -0.22, 0],
+        },
+      },
+      {
+        t: 0.95,
+        pose: {
+          spine: { x: 4 },
+          chest: { x: -2 },
+          head: { x: 2 },
+          leftUpperLeg: { x: -86, z: 5 },
+          rightUpperLeg: { x: -86, z: -5 },
+          leftLowerLeg: { x: 84 },
+          rightLowerLeg: { x: 84 },
+          leftFoot: { x: 6 },
+          rightFoot: { x: 6 },
+          leftUpperArm: { z: -66, x: -30 },
+          rightUpperArm: { z: 66, x: -30 },
+          leftLowerArm: { y: -34 },
+          rightLowerArm: { y: 34 },
+          _hips: [0, -0.45, 0],
+        },
+      },
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -543,13 +663,22 @@ for (const clip of LOCOMOTION) {
 
 const manifest = [];
 for (const gesture of GESTURES) {
-  const duration = gesture.keys[gesture.keys.length - 1].t;
+  const keys = gesture.keys.map((key) => ({ ...key, t: Number((key.t * GESTURE_TIME_SCALE).toFixed(3)) }));
+  const duration = keys[keys.length - 1].t;
   const bones = gesture.fullBody ? allBones : allBones.filter((b) => UPPER_BODY.has(b));
   emit(
     `public/gestures/builtin/${gesture.name}.vrma`,
-    writeVrma({ name: gesture.name, duration, sample: keyed(gesture.keys), loop: false, bones })
+    writeVrma({ name: gesture.name, duration, sample: keyed(keys), loop: false, bones })
   );
-  manifest.push({ name: gesture.name, label: gesture.label, url: `/gestures/builtin/${gesture.name}.vrma`, duration, fullBody: gesture.fullBody });
+  manifest.push({
+    name: gesture.name,
+    label: gesture.label,
+    url: `/gestures/builtin/${gesture.name}.vrma`,
+    duration,
+    fullBody: gesture.fullBody,
+    hold: gesture.hold === true,
+    hidden: gesture.hidden === true,
+  });
 }
 
 const ts = `// AUTO-GENERATED by scripts/generate-motions.mjs — do not edit by hand.
@@ -564,6 +693,12 @@ export interface BuiltinGesture {
   /** Full-body gestures also drive the legs (e.g. kneeling), so they
    *  override walking; upper-body gestures layer over it. */
   fullBody: boolean;
+  /** Hold gestures stay on their final pose until released, instead of
+   *  playing once and returning to the body's previous motion. */
+  hold: boolean;
+  /** Hidden gestures aren't offered in the menu or on the number keys —
+   *  something else in the app triggers them (sitting on a chair). */
+  hidden: boolean;
 }
 
 export const LOCOMOTION_CLIPS = {

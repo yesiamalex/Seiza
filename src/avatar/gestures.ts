@@ -26,6 +26,10 @@ export interface CustomGestureConfig {
   /** True if the clip drives the legs too (sitting, kneeling, dancing).
    *  Upper-body clips layer over walking; full-body clips replace it. */
   fullBody?: boolean;
+  /** True if the clip should stop on its final pose and stay there until
+   *  released, instead of playing once. Use it for a raised hand or any
+   *  other posture a player holds. */
+  hold?: boolean;
 }
 
 export interface GestureDefinition {
@@ -33,6 +37,11 @@ export interface GestureDefinition {
   label: string;
   url: string;
   fullBody: boolean;
+  /** Holds its final pose until released (see CustomGestureConfig.hold). */
+  hold: boolean;
+  /** Not offered in the menu or on the number keys — something else in the
+   *  app triggers it. `sit` is the built-in example: chairs trigger it. */
+  hidden: boolean;
   /** Known up front for built-ins; custom clips report theirs on load. */
   duration: number | null;
   source: "builtin" | "custom";
@@ -54,6 +63,8 @@ export function buildGestureRegistry(options: {
     label: g.label,
     url: g.url,
     fullBody: g.fullBody,
+    hold: g.hold,
+    hidden: g.hidden,
     duration: g.duration,
     source: "builtin",
     overridesBuiltin: false,
@@ -73,6 +84,11 @@ export function buildGestureRegistry(options: {
       label: typeof custom.label === "string" && custom.label.trim() ? custom.label.trim().slice(0, 40) : custom.name,
       url: custom.url,
       fullBody: custom.fullBody === true,
+      hold: custom.hold === true,
+      // A custom clip replacing a hidden built-in (`sit`) stays hidden, so
+      // a deployment can supply its own sitting pose without it showing up
+      // in the menu as a gesture.
+      hidden: BUILTIN_GESTURES.some((g) => g.name === custom.name && g.hidden),
       duration: null,
       source: "custom",
       overridesBuiltin: false,
@@ -91,3 +107,13 @@ export function buildGestureRegistry(options: {
 export function isValidGestureName(name: unknown): name is string {
   return typeof name === "string" && NAME.test(name);
 }
+
+/** The clip a seated avatar holds. Named `sit` so a deployment can replace
+ *  it through `customGestures` like any other gesture. */
+export const SIT_GESTURE_NAME = "sit";
+
+export function findGesture(gestures: GestureDefinition[], name: string | null): GestureDefinition | null {
+  if (!name) return null;
+  return gestures.find((g) => g.name === name) ?? null;
+}
+

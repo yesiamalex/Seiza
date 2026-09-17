@@ -27,19 +27,33 @@ npm run generate:motions
 That also rewrites `src/avatar/builtinMotions.generated.ts`, the manifest the
 app reads names, labels, durations, and the full-body flag from.
 
-| Name | Label | Body |
-|---|---|---|
-| `wave` | Wave | upper |
-| `bow` | Bow (ojigi) | upper |
-| `seiza` | Seiza (formal kneel) | full |
-| `nod` | Nod | upper |
-| `clap` | Clap | upper |
-| `cheer` | Cheer | upper |
-| `shrug` | Shrug | upper |
-| `point` | Point | upper |
+| Key | Name | Label | Body | Kind |
+|---|---|---|---|---|
+| 1 | `wave` | Wave | upper | one-shot |
+| 2 | `bow` | Bow (ojigi) | upper | one-shot |
+| 3 | `seiza` | Seiza (formal kneel) | full | one-shot |
+| 4 | `nod` | Nod | upper | one-shot |
+| 5 | `clap` | Clap | upper | one-shot |
+| 6 | `cheer` | Cheer | upper | one-shot |
+| 7 | `shrug` | Shrug | upper | one-shot |
+| 8 | `point` | Point | upper | one-shot |
+| 9 | `gassho` | Gasshō (thanks) | upper | one-shot |
+| 0 | `raisehand` | Raise hand (hold) | upper | hold |
+| — | `sit` | Sit | full | hold, hidden |
 
 Upper-body gestures layer over walking, so you can wave while moving. Full-body
 gestures also drive the legs and take over from walking while they play.
+
+A **hold** clip ends on the pose it should keep and stays there until the key
+or button is released, instead of playing through or looping. A **hidden**
+clip is triggered by the app rather than the menu: `sit` is played when a
+player clicks a chair, and sitting is tracked as a posture, so a seated
+player who waves stays seated.
+
+Replacing `sit` with your own clip changes how everyone sits in your world.
+Keep the hips drop in the final pose equal to `SEAT_HEIGHT` in
+`src/scene/layout.ts` (0.45m), or avatars will float above the chairs or sink
+into them.
 
 ## Adding your own
 
@@ -51,7 +65,8 @@ gestures also drive the legs and take over from walking while they play.
    "customGestures": [
      { "name": "salute", "label": "Salute", "url": "/gestures/custom/salute.vrma" },
      { "name": "bow", "label": "Deep bow", "url": "/gestures/custom/deep-bow.vrma" },
-     { "name": "dance", "label": "Dance", "url": "/gestures/custom/dance.vrma", "fullBody": true }
+     { "name": "dance", "label": "Dance", "url": "/gestures/custom/dance.vrma", "fullBody": true },
+     { "name": "salute_hold", "label": "Salute (hold)", "url": "/gestures/custom/salute-hold.vrma", "hold": true }
    ]
    ```
 
@@ -68,6 +83,8 @@ Rules, enforced in `src/avatar/gestures.ts`:
 - `url` must be a same-origin path or an `https://` URL.
 - `fullBody: true` for clips that move the legs (sitting, kneeling, dancing).
   Leave it out for arm, head, and torso gestures.
+- `hold: true` for a pose that should stay until released. Author the clip so
+  its last frame *is* that pose, since that's the frame it holds.
 - To hide some built-ins, list the ones to keep in `enabledGestures`. Custom
   gestures are always shown.
 
@@ -82,9 +99,10 @@ to the same clip for every client.
   Blender.
 - **Code:** copy the approach in `scripts/generate-motions.mjs`.
 
-Keep clips short, one-shot (not looping), and starting and ending near a
-relaxed standing pose. The app blends in and out over a fraction of a second,
-so a clip that ends mid-motion will visibly snap back. Clips that animate
+Keep clips short and not looping. A one-shot should start and end near a
+relaxed standing pose, because the app blends in and out over a fraction of a
+second and a clip that ends mid-motion will visibly snap back; a `hold` clip
+should instead end exactly on the pose it keeps. Clips that animate
 `expressions` or `lookAt` are fine; only humanoid bone tracks are required.
 
 Test a new clip on both a VRM 0.x and a VRM 1.0 avatar. The two formats use

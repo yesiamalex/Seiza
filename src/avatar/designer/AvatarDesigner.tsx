@@ -257,8 +257,10 @@ const DESIGNER_CSS = `
   .seiza-swatch-custom input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
   .seiza-slider { display: grid; grid-template-columns: 64px 1fr; align-items: center; gap: 10px; font-size: 12px; }
   .seiza-slider input { width: 100%; accent-color: ${ACCENT_COLOR}; }
-  .seiza-designer-backdrop { position: fixed; inset: 0; z-index: 60; background: rgba(4,5,8,0.62); display: grid; place-items: center; padding: 16px; pointer-events: auto; }
-  .seiza-designer-dialog { width: min(980px, 100%); height: min(680px, calc(100svh - 32px)); display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 380px); gap: 16px; padding: 16px !important; box-sizing: border-box; }
+  .seiza-designer-backdrop { position: fixed; inset: 0; z-index: 60; background: rgba(4,5,8,0.62); display: grid; place-items: center; padding: 16px; pointer-events: auto; animation: seiza-designer-backdrop-in 260ms ease both; }
+  .seiza-designer-dialog { width: min(980px, 100%); height: min(680px, calc(100svh - 32px)); display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 380px); gap: 16px; padding: 16px !important; box-sizing: border-box; animation: seiza-designer-dialog-in 380ms var(--seiza-ease, cubic-bezier(0.22,1,0.36,1)) both; }
+  @keyframes seiza-designer-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes seiza-designer-dialog-in { from { opacity: 0; transform: translateY(14px) scale(0.985); } to { opacity: 1; transform: none; } }
   .seiza-designer-preview { min-height: 0; }
   .seiza-designer-side { display: flex; flex-direction: column; min-height: 0; gap: 12px; }
   .seiza-designer-header { display: flex; flex-direction: column; gap: 2px; }

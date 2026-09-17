@@ -1,3 +1,6 @@
+export const POSTURES = ["stand", "sit"] as const;
+export type Posture = (typeof POSTURES)[number];
+
 export interface PlayerState {
   id: string;
   displayName: string;
@@ -5,6 +8,10 @@ export interface PlayerState {
   position: [number, number, number];
   rotationY: number;
   activeGesture: string | null;
+  /** Held body posture, independent of gestures: sitting persists while
+   *  the player waves or claps, and a transient gesture ending doesn't
+   *  stand them up. Set by sitting on a chair — see src/scene/layout.ts. */
+  posture: Posture;
   /** Incremented by the server every time this player starts a gesture.
    *  Lets clients replay the same gesture twice in a row, and lets a
    *  newly joined client tell "already playing before I arrived" apart
@@ -39,6 +46,9 @@ export type ClientMessage =
   // rules as `join` (see sanitizeAssetUrl in worker/room.ts), including
   // designer avatars (`seiza-avatar:v1:…`).
   | { type: "setAvatar"; avatarUrl: string }
+  // Sits down or stands up. Separate from `gesture` because it's a state,
+  // not a one-shot: it has to outlast any gesture played while seated.
+  | { type: "setPosture"; posture: Posture }
   | { type: "objectAdd"; object: Omit<WorldObject, "id" | "ownerId"> }
   | { type: "objectMove"; id: string; position: [number, number, number]; rotationY: number }
   | { type: "objectRemove"; id: string }
@@ -77,6 +87,7 @@ export type ServerMessage =
   | { type: "playerUpdated"; id: string; position: [number, number, number]; rotationY: number }
   | { type: "playerGesture"; id: string; gesture: string | null; seq: number }
   | { type: "playerAvatarChanged"; id: string; avatarUrl: string }
+  | { type: "playerPosture"; id: string; posture: Posture }
   | { type: "playerLeft"; id: string }
   | { type: "objectAdded"; object: WorldObject }
   | { type: "objectMoved"; id: string; position: [number, number, number]; rotationY: number }

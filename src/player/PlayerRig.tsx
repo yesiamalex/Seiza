@@ -3,15 +3,16 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useXR, useXRControllerLocomotion, XROrigin } from "@react-three/xr";
 import * as THREE from "three";
 import type { TouchMoveInput } from "./touchInput";
+import { clampToRooms, SEATED_EYE_HEIGHT } from "../scene/layout";
 
 export type ViewMode = "first" | "third";
 
 const EYE_HEIGHT = 1.6;
 const MOVE_SPEED = 3.2; // meters/second — matches the walk clip (AvatarAnimator.tsx)
 const RUN_MULTIPLIER = 1.9; // hold Shift, or double-tap forward on the D-pad
-// Keeps players inside BaseEnvironment's walls. A radius clamp, not real
-// collision — click-to-move routes around obstacles via the navmesh.
-const BOUNDS_RADIUS = 18;
+// How fast a player slides onto a seat, and turns to face the way it faces.
+const SIT_EASE_RATE = 9;
+const SIT_TURN_RATE = 6;
 
 const THIRD_PERSON_MIN_DISTANCE = 1.5;
 const THIRD_PERSON_MAX_DISTANCE = 8;
@@ -60,16 +61,11 @@ interface PlayerRigProps {
    *  TouchControls.tsx. Read every frame alongside the keyboard so both
    *  input paths drive exactly the same movement code. */
   touchInputRef?: MutableRefObject<TouchMoveInput>;
+  /** Seat the player is sitting on, or null when standing. While seated,
+   *  movement input stands them up instead of walking. */
+  sitAnchor?: { position: [number, number, number]; rotationY: number } | null;
+  onStandUp?: () => void;
   children?: ReactNode;
-}
-
-function clampToBounds(v: THREE.Vector3) {
-  const dist = Math.hypot(v.x, v.z);
-  if (dist > BOUNDS_RADIUS) {
-    const scale = BOUNDS_RADIUS / dist;
-    v.x *= scale;
-    v.z *= scale;
-  }
 }
 
 function lerpAngle(from: number, to: number, t: number) {
@@ -103,6 +99,8 @@ export function PlayerRig({
   moveTargetRef,
   movePathRef,
   touchInputRef,
+  sitAnchor = null,
+  onStandUp,
   children,
 }: PlayerRigProps) {
   const { camera, gl } = useThree();
@@ -117,6 +115,10 @@ export function PlayerRig({
   const avatarYawRef = useRef(0);
   const viewModeRef = useRef(viewMode);
   viewModeRef.current = viewMode;
+  const sitAnchorRef = useRef(sitAnchor);
+  sitAnchorRef.current = sitAnchor;
+  const onStandUpRef = useRef(onStandUp);
+  onStandUpRef.current = onStandUp;
   const groundEyeY = spawnPoint[1] + EYE_HEIGHT;
 
   useEffect(() => {
@@ -150,6 +152,10 @@ export function PlayerRig({
       }
       if (e.code === "Space") {
         e.preventDefault(); // Space otherwise scrolls the page or re-clicks a focused button
+        if (sitAnchorRef.current) {
+          onStandUpRef.current?.();
+          return;
+        }
         const vcam = virtualCameraRef.current!;
         if (vcam.position.y <= groundEyeY + GROUNDED_EPSILON) {
           verticalVelocityRef.current = JUMP_SPEED;
@@ -303,7 +309,7 @@ export function PlayerRig({
     if (isPresenting) {
       const origin = xrOriginRef.current;
       if (!origin) return;
-      clampToBounds(origin.position);
+      clampToRooms(origin.position);
       positionRef.current = [origin.position.x, origin.position.y, origin.position.z];
       rotationRef.current = origin.rotation.y;
       return;
@@ -319,6 +325,7 @@ export function PlayerRig({
 
     const touch = touchInputRef?.current;
     const move = new THREE.Vector3();
+    let jumpPressed = false;
     if (keys.KeyW || keys.ArrowUp) move.add(forward);
     if (keys.KeyS || keys.ArrowDown) move.sub(forward);
     if (keys.KeyD || keys.ArrowRight) move.add(right);
@@ -328,7 +335,8 @@ export function PlayerRig({
       if (touch.x !== 0) move.addScaledVector(right, touch.x);
       if (touch.jumpRequested) {
         touch.jumpRequested = false; // consume — one press, one jump
-        if (vcam.position.y <= groundEyeY + GROUNDED_EPSILON) {
+        jumpPressed = true;
+        if (!sitAnchorRef.current && vcam.position.y <= groundEyeY + GROUNDED_EPSILON) {
           verticalVelocityRef.current = JUMP_SPEED;
         }
       }
@@ -340,6 +348,54 @@ export function PlayerRig({
       }
     }
     const running = !!(keys.ShiftLeft || keys.ShiftRight) || !!touch?.running;
+
+    // Writes out everything downstream reads: the networked transform, the
+    // render camera, and the group the local avatar is rendered in.
+    const applyTransforms = (feetY: number) => {
+      const lookYaw = new THREE.Euler().setFromQuaternion(vcam.quaternion, "YXZ").y;
+      positionRef.current = [vcam.position.x, feetY, vcam.position.z];
+      rotationRef.current = avatarYawRef.current;
+      if (lookYawRef) lookYawRef.current = lookYaw;
+
+      if (viewMode === "third") {
+        const behind = new THREE.Vector3(0, 0, thirdPersonDistanceRef.current).applyQuaternion(vcam.quaternion);
+        camera.position.copy(vcam.position).add(behind);
+        camera.position.y += THIRD_PERSON_HEIGHT_OFFSET;
+        camera.quaternion.copy(vcam.quaternion);
+      } else {
+        camera.position.copy(vcam.position);
+        camera.quaternion.copy(vcam.quaternion);
+      }
+
+      if (rigRef.current) {
+        rigRef.current.position.set(positionRef.current[0], positionRef.current[1], positionRef.current[2]);
+        rigRef.current.rotation.set(0, avatarYawRef.current, 0);
+      }
+      return lookYaw;
+    };
+
+    // Seated: hold the player on the chair until they ask to get up. Any
+    // movement input is that request, which is also why sitting can't trap
+    // anyone — there's no "stand up" button to find first.
+    const sit = sitAnchorRef.current;
+    if (sit) {
+      if (move.lengthSq() > 0 || jumpPressed) {
+        onStandUpRef.current?.();
+      } else {
+        const seatEye = new THREE.Vector3(sit.position[0], sit.position[1] + SEATED_EYE_HEIGHT, sit.position[2]);
+        vcam.position.lerp(seatEye, 1 - Math.exp(-SIT_EASE_RATE * delta));
+        verticalVelocityRef.current = 0;
+        moveTargetRef.current = null;
+        if (movePathRef) movePathRef.current = null;
+        if (viewMode === "first") {
+          avatarYawRef.current = new THREE.Euler().setFromQuaternion(vcam.quaternion, "YXZ").y;
+        } else {
+          avatarYawRef.current = lerpAngle(avatarYawRef.current, sit.rotationY, 1 - Math.exp(-SIT_TURN_RATE * delta));
+        }
+        applyTransforms(sit.position[1]);
+        return;
+      }
+    }
 
     const heading = new THREE.Vector3();
     if (move.lengthSq() > 0) {
@@ -357,7 +413,7 @@ export function PlayerRig({
         vcam.position.addScaledVector(heading, MOVE_SPEED * delta);
       }
     }
-    clampToBounds(vcam.position);
+    clampToRooms(vcam.position);
 
     // Gravity/jump — applied every frame so landing on the flat floor is a
     // clean clamp back to eye height rather than separate ground detection.
@@ -368,33 +424,15 @@ export function PlayerRig({
       verticalVelocityRef.current = 0;
     }
 
-    const lookYaw = new THREE.Euler().setFromQuaternion(vcam.quaternion, "YXZ").y;
     if (viewMode === "first") {
-      avatarYawRef.current = lookYaw;
+      avatarYawRef.current = new THREE.Euler().setFromQuaternion(vcam.quaternion, "YXZ").y;
     } else if (heading.lengthSq() > 0) {
       // Avatars face -Z at yaw 0, so facing direction (x, z) is yaw atan2(-x, -z).
       const targetYaw = Math.atan2(-heading.x, -heading.z);
       avatarYawRef.current = lerpAngle(avatarYawRef.current, targetYaw, 1 - Math.exp(-AVATAR_TURN_RATE * delta));
     }
 
-    positionRef.current = [vcam.position.x, vcam.position.y - EYE_HEIGHT, vcam.position.z];
-    rotationRef.current = avatarYawRef.current;
-    if (lookYawRef) lookYawRef.current = lookYaw;
-
-    if (viewMode === "third") {
-      const behind = new THREE.Vector3(0, 0, thirdPersonDistanceRef.current).applyQuaternion(vcam.quaternion);
-      camera.position.copy(vcam.position).add(behind);
-      camera.position.y += THIRD_PERSON_HEIGHT_OFFSET;
-      camera.quaternion.copy(vcam.quaternion);
-    } else {
-      camera.position.copy(vcam.position);
-      camera.quaternion.copy(vcam.quaternion);
-    }
-
-    if (rigRef.current) {
-      rigRef.current.position.set(positionRef.current[0], positionRef.current[1], positionRef.current[2]);
-      rigRef.current.rotation.set(0, avatarYawRef.current, 0);
-    }
+    applyTransforms(vcam.position.y - EYE_HEIGHT);
   });
 
   return (

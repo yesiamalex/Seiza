@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PlayerState } from "../multiplayer/types";
 
-export const VOICE_ENABLED = import.meta.env.VITE_SEIZA_VOICE_ENABLED === "true";
+// On unless a deployer explicitly turns it off. This used to require
+// VITE_SEIZA_VOICE_ENABLED=true, which meant the default deployment — and
+// Cloudflare's own build pipeline, where no .env file exists — shipped with
+// the voice UI silently missing even though world.json asked for it.
+// `voiceEnabled` in world.json is the per-world switch (see App.tsx); this
+// env var is the build-level override.
+export const VOICE_ENABLED = import.meta.env.VITE_SEIZA_VOICE_ENABLED !== "false";
 
 // WebRTC mesh: every participant connects directly to every other
 // participant (O(n^2) connections/bandwidth). That's the right tradeoff

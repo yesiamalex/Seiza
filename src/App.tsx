@@ -6,7 +6,8 @@ import { loadWorldConfig, type WorldConfig } from "./config/worldConfig";
 import { Scene } from "./scene/Scene";
 import { VrmAvatar } from "./avatar/VrmAvatar";
 import { AvatarAnimator } from "./avatar/AvatarAnimator";
-import { buildGestureRegistry, type GestureDefinition } from "./avatar/gestures";
+import { buildGestureRegistry, findGesture, SIT_GESTURE_NAME, type GestureDefinition } from "./avatar/gestures";
+import type { Seat } from "./scene/layout";
 import type { VRM } from "@pixiv/three-vrm";
 import { useRoomSocket } from "./multiplayer/useRoomSocket";
 import { RemotePlayers } from "./multiplayer/RemotePlayers";
@@ -26,8 +27,8 @@ import { CameraViewToggle } from "./ui/CameraViewToggle";
 import { AvatarChooser } from "./ui/AvatarChooser";
 import { useMediaQuery, useWantsTouchControls } from "./ui/useMediaQuery";
 import { saveProfile } from "./profile/profileStore";
-import { panelStyle, pillButtonStyle } from "./ui/styles";
-import { CloseIcon, VrHeadsetIcon } from "./ui/icons";
+import { panelStyle, pillButtonActiveStyle, pillButtonStyle } from "./ui/styles";
+import { CloseIcon, PersonIcon, VrHeadsetIcon } from "./ui/icons";
 import type { WorldObject } from "./multiplayer/types";
 
 // Keep baseline immersive VR compatible with headsets that do not implement
@@ -39,6 +40,13 @@ const NETWORK_TICK_MS = 200;
 // Custom clips don't declare a duration up front. AvatarAnimator reports
 // the real end; this only bounds how long a stuck gesture can stay "active".
 const GESTURE_FALLBACK_SECONDS = 10;
+
+/** Number-key slots for the gesture menu: 1–9, then 0 for the tenth. */
+function gestureKeyIndex(code: string): number | null {
+  if (!/^Digit[0-9]$/.test(code)) return null;
+  const digit = Number(code.slice(5));
+  return digit === 0 ? 9 : digit - 1;
+}
 
 const isTypingTarget = (target: EventTarget | null) =>
   target instanceof HTMLInputElement ||
@@ -52,6 +60,12 @@ export default function App() {
   const [joined, setJoined] = useState<JoinedIdentity | null>(null);
   const [localVrm, setLocalVrm] = useState<VRM | null>(null);
   const [localGesture, setLocalGesture] = useState<{ gesture: GestureDefinition; seq: number } | null>(null);
+  const localGestureRef = useRef<{ gesture: GestureDefinition; seq: number } | null>(null);
+  localGestureRef.current = localGesture;
+  const [seat, setSeat] = useState<Seat | null>(null);
+  // Mirrors `seat` for the frame loop and callbacks, which must not send a
+  // stand-up message on every frame a movement key is held.
+  const seatRef = useRef<Seat | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
   // Touch devices start in third person: seeing your own avatar makes the
@@ -87,6 +101,10 @@ export default function App() {
     () => (world ? buildGestureRegistry({ enabledGestures: world.enabledGestures, customGestures: world.customGestures }) : []),
     [world]
   );
+  // The menu and number keys only offer gestures a player triggers
+  // directly; `sit` is hidden because chairs trigger it.
+  const menuGestures = useMemo(() => gestures.filter((g) => !g.hidden), [gestures]);
+  const sitGesture = useMemo(() => findGesture(gestures, SIT_GESTURE_NAME), [gestures]);
 
   useEffect(() => () => {
     if (gestureTimerRef.current !== null) window.clearTimeout(gestureTimerRef.current);
@@ -111,6 +129,7 @@ export default function App() {
     moveObject,
     removeObject,
     sendChat,
+    setPosture,
     connected,
     connectionState,
     editorPasswordRequired,
@@ -168,35 +187,103 @@ export default function App() {
 
   const requestGesture = useCallback(
     (name: string) => {
-      const gesture = gestures.find((g) => g.name === name);
+      const gesture = findGesture(gestures, name);
       if (!gesture) return;
+      // Re-triggering a gesture that's already being held would restart the
+      // clip on every key repeat, which is exactly the spam a held pose is
+      // meant to avoid.
+      if (gesture.hold && localGestureRef.current?.gesture.name === name) return;
       gestureSeqRef.current += 1;
-      // The definition stays set after the clip ends; AvatarAnimator plays
-      // only when `seq` changes, so there's nothing to reset.
+      // The definition stays set after a one-shot clip ends; AvatarAnimator
+      // plays only when `seq` changes, so there's nothing to reset.
       setLocalGesture({ gesture, seq: gestureSeqRef.current });
       send({ type: "gesture", gesture: name });
       if (gestureTimerRef.current !== null) window.clearTimeout(gestureTimerRef.current);
-      gestureTimerRef.current = window.setTimeout(endGesture, ((gesture.duration ?? GESTURE_FALLBACK_SECONDS) + 1) * 1000);
+      gestureTimerRef.current = null;
+      // A held pose ends when the player lets go, so it gets no timer.
+      if (!gesture.hold) {
+        gestureTimerRef.current = window.setTimeout(endGesture, ((gesture.duration ?? GESTURE_FALLBACK_SECONDS) + 1) * 1000);
+      }
     },
     [gestures, send, endGesture]
   );
 
-  // Keyboard: C toggles the avatar menu, 1–9 play gestures, Escape closes
-  // the avatar menu.
+  /** Lets go of a held pose. With no name, releases whatever is held. */
+  const releaseGesture = useCallback(
+    (name?: string) => {
+      const current = localGestureRef.current;
+      if (!current?.gesture.hold) return;
+      if (name && current.gesture.name !== name) return;
+      setLocalGesture(null);
+      send({ type: "gesture", gesture: null });
+    },
+    [send]
+  );
+
+  const sitDown = useCallback(
+    (target: Seat) => {
+      seatRef.current = target;
+      setSeat(target);
+      setPosture("sit");
+      moveTargetRef.current = null;
+      movePathRef.current = null;
+    },
+    [setPosture]
+  );
+
+  const standUp = useCallback(() => {
+    if (!seatRef.current) return;
+    seatRef.current = null;
+    setSeat(null);
+    setPosture("stand");
+  }, [setPosture]);
+
+  // Keyboard: C toggles the avatar menu, Escape closes it, and 1–9 plus 0
+  // play gestures. A hold gesture (raise hand) lasts as long as the key is
+  // down, so these listen for keyup too.
   useEffect(() => {
+    const heldKeys = new Set<string>();
+    const gestureFor = (code: string) => {
+      const index = gestureKeyIndex(code);
+      return index === null ? null : (menuGestures[index] ?? null);
+    };
     const onKeyDown = (event: KeyboardEvent) => {
       // Modifier check: otherwise Ctrl+C (copy) would toggle the menu.
       if (event.ctrlKey || event.metaKey || event.altKey || isTypingTarget(event.target)) return;
-      if (event.code === "KeyC") setAvatarMenuOpen((open) => !open);
-      else if (event.code === "Escape") setAvatarMenuOpen(false);
-      else if (/^Digit[1-9]$/.test(event.code) && joined) {
-        const gesture = gestures[Number(event.code.slice(5)) - 1];
-        if (gesture) requestGesture(gesture.name);
+      if (event.code === "KeyC") {
+        setAvatarMenuOpen((open) => !open);
+        return;
       }
+      if (event.code === "Escape") {
+        setAvatarMenuOpen(false);
+        return;
+      }
+      if (!joined) return;
+      const gesture = gestureFor(event.code);
+      if (!gesture || event.repeat || heldKeys.has(event.code)) return;
+      heldKeys.add(event.code);
+      requestGesture(gesture.name);
+    };
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (!heldKeys.delete(event.code)) return;
+      const gesture = gestureFor(event.code);
+      if (gesture?.hold) releaseGesture(gesture.name);
+    };
+    // Switching tabs mid-press never delivers the keyup, which would
+    // otherwise leave a hand raised forever.
+    const onBlur = () => {
+      heldKeys.clear();
+      releaseGesture();
     };
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [gestures, requestGesture, joined]);
+    window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("blur", onBlur);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("blur", onBlur);
+    };
+  }, [menuGestures, requestGesture, releaseGesture, joined]);
 
   const handleSpawn = useCallback(
     (kind: WorldObject["kind"], modelUrl?: string) => {
@@ -237,6 +324,8 @@ export default function App() {
   const handleFloorClick = useCallback(
     (point: THREE.Vector3) => {
       if (editMode) return;
+      // Walking somewhere is also a way of getting up.
+      standUp();
       const destination = point.clone();
       const from = new THREE.Vector3(positionRef.current[0], positionRef.current[1], positionRef.current[2]);
       // Route around walls/pillars when a navmesh is available; fall back
@@ -251,7 +340,7 @@ export default function App() {
         movePathRef.current = null;
       }
     },
-    [editMode, navMesh]
+    [editMode, navMesh, standUp]
   );
 
   if (worldError) return <CenteredMessage text={`Couldn't load world: ${worldError.message}`} />;
@@ -296,7 +385,14 @@ export default function App() {
               over the deployment's static world.json sceneUrl. The group
               wrapper is what the navmesh is generated from. */}
           <group ref={navSourceRef}>
-            <Scene sceneUrl={environmentUrl ?? world.sceneUrl} onFloorDoubleClick={handleFloorClick} />
+            <Scene
+              sceneUrl={environmentUrl ?? world.sceneUrl}
+              onFloorDoubleClick={handleFloorClick}
+              // In Edit Mode a click belongs to the object gizmos, so the
+              // seats stop accepting clicks entirely.
+              onSit={editMode ? undefined : sitDown}
+              occupiedSeatId={seat?.id ?? null}
+            />
           </group>
           <PlayerRig
             spawnPoint={[world.spawnPoint.x, world.spawnPoint.y, world.spawnPoint.z]}
@@ -308,6 +404,8 @@ export default function App() {
             moveTargetRef={moveTargetRef}
             movePathRef={movePathRef}
             touchInputRef={touchInputRef}
+            sitAnchor={seat ? { position: seat.position, rotationY: seat.rotationY } : null}
+            onStandUp={standUp}
           >
             <VrmAvatar url={joined.localUrl ?? joined.url} onLoaded={setLocalVrm} />
             <AvatarAnimator
@@ -316,6 +414,7 @@ export default function App() {
               gesture={localGesture?.gesture ?? null}
               gestureSeq={localGesture?.seq ?? 0}
               onGestureEnd={endGesture}
+              posture={seat ? sitGesture : null}
             />
           </PlayerRig>
           <RemotePlayers players={players} selfId={selfId} speakingLevels={voice.speakingLevels} gestures={gestures} />
@@ -387,15 +486,21 @@ export default function App() {
           </div>
         )}
       >
+        {seat && (
+          <button type="button" style={pillButtonActiveStyle} onClick={standUp} title="Or just walk away">
+            <PersonIcon /> Stand up
+          </button>
+        )}
         <button type="button" style={pillButtonStyle} onClick={() => void enterVR()}>
           <VrHeadsetIcon /> Enter VR
         </button>
         <CameraViewToggle viewMode={viewMode} onToggle={() => setViewMode((v) => (v === "first" ? "third" : "first"))} />
         {voiceVisible && <VoiceControls voice={voice} />}
         <GesturePanel
-          gestures={gestures}
+          gestures={menuGestures}
           lastGesture={localGesture ? { name: localGesture.gesture.name, seq: localGesture.seq } : null}
           onRequestGesture={requestGesture}
+          onReleaseGesture={releaseGesture}
           showShortcuts={hasHoverPointer}
         />
         <ChatPanel

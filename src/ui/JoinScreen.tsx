@@ -151,7 +151,7 @@ export function JoinScreen({ world, onJoin }: JoinScreenProps) {
       <div aria-hidden style={{ position: "absolute", inset: 0, backgroundImage: STAR_DOTS_FAR, opacity: 0.9, pointerEvents: "none" }} />
       <div aria-hidden style={{ position: "absolute", inset: 0, backgroundImage: STAR_DOTS_NEAR, pointerEvents: "none" }} />
 
-      <form onSubmit={handleSubmit} className="seiza-join-form">
+      <form onSubmit={handleSubmit} className="seiza-join-form seiza-rise-in">
         <div className="seiza-join-col">
           <div>
             <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: ACCENT_COLOR, opacity: 0.85 }}>Seiza · 星座</div>

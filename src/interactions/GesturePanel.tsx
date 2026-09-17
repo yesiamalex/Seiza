@@ -8,7 +8,9 @@ interface GesturePanelProps {
   /** The local player's most recent gesture; `seq` changes on every trigger. */
   lastGesture: { name: string; seq: number } | null;
   onRequestGesture: (name: string) => void;
-  /** Show 1–9 keyboard hints (desktop). */
+  /** Lets go of a held pose (see GestureDefinition.hold). */
+  onReleaseGesture: (name: string) => void;
+  /** Show number-key hints (desktop). */
   showShortcuts: boolean;
 }
 
@@ -21,7 +23,7 @@ interface GesturePanelProps {
  * so it's clear which is which; a custom clip that replaced a built-in is
  * listed under Custom with a note. See src/avatar/gestures.ts.
  */
-export function GesturePanel({ gestures, lastGesture, onRequestGesture, showShortcuts }: GesturePanelProps) {
+export function GesturePanel({ gestures, lastGesture, onRequestGesture, onReleaseGesture, showShortcuts }: GesturePanelProps) {
   const [open, setOpen] = useState(false);
   const [practice, setPractice] = useState(false);
   const [target, setTarget] = useState<string | null>(null);
@@ -49,17 +51,35 @@ export function GesturePanel({ gestures, lastGesture, onRequestGesture, showShor
   const renderButton = (g: GestureDefinition) => {
     const index = gestures.indexOf(g);
     const isActive = practice && target === g.name;
+    // 1–9 then 0, matching the keyboard shortcuts in App.tsx.
+    const shortcut = index < 10 ? (index === 9 ? "0" : String(index + 1)) : null;
+    // A held pose follows the button the way it follows the key: press and
+    // keep holding, let go to drop it.
+    const holdHandlers = g.hold
+      ? {
+          onPointerDown: () => onRequestGesture(g.name),
+          onPointerUp: () => onReleaseGesture(g.name),
+          onPointerLeave: () => onReleaseGesture(g.name),
+          onPointerCancel: () => onReleaseGesture(g.name),
+        }
+      : { onClick: () => onRequestGesture(g.name) };
     return (
       <button
         key={g.name}
         type="button"
-        style={{ ...(isActive ? pillButtonActiveStyle : pillButtonStyle), padding: "7px 12px", fontSize: 12 }}
-        onClick={() => onRequestGesture(g.name)}
-        title={g.overridesBuiltin ? "Custom clip replacing the built-in gesture of the same name" : undefined}
+        style={{ ...(isActive ? pillButtonActiveStyle : pillButtonStyle), padding: "7px 12px", fontSize: 12, touchAction: "none" }}
+        title={
+          g.overridesBuiltin
+            ? "Custom clip replacing the built-in gesture of the same name"
+            : g.hold
+              ? "Press and hold to keep the pose"
+              : undefined
+        }
+        {...holdHandlers}
       >
         {g.label}
         {g.overridesBuiltin && <span style={{ fontSize: 10, opacity: 0.7 }}>custom</span>}
-        {showShortcuts && index < 9 && <kbd style={{ fontSize: 10, opacity: 0.55 }}>{index + 1}</kbd>}
+        {showShortcuts && shortcut && <kbd style={{ fontSize: 10, opacity: 0.55 }}>{shortcut}</kbd>}
       </button>
     );
   };
@@ -98,6 +118,10 @@ export function GesturePanel({ gestures, lastGesture, onRequestGesture, showShor
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{custom.map(renderButton)}</div>
                 </Section>
               )}
+              {gestures.some((g) => g.hold) && (
+                <small style={{ opacity: 0.6 }}>Poses marked "hold" stay up while you hold the key or the button.</small>
+              )}
+              <small style={{ opacity: 0.6 }}>Click a chair or bench in the world to sit down.</small>
               <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
                 <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}>
                   <input

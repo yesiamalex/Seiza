@@ -50,11 +50,11 @@ export function HUD({ connectionState, worldName, topRight, touchControlsVisible
         @keyframes seiza-popover-in { from { opacity: 0; transform: translateX(-50%) translateY(8px) scale(0.96); } to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); } }
         @keyframes seiza-popover-dock-in { from { opacity: 0; transform: translateY(8px) scale(0.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
         @keyframes seiza-popover-down-in { from { opacity: 0; transform: translateY(-8px) scale(0.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
-        .seiza-popover { animation: seiza-popover-in 160ms ease-out both; }
+        .seiza-popover { animation: seiza-popover-in var(--seiza-slow, 360ms) var(--seiza-ease, ease-out) both; }
         /* Panels whose trigger sits at the top of the screen (the avatar
            menu) open downward. Opening upward from there is what made the
            avatar panel run off the top of the viewport. */
-        .seiza-popover-down { animation: seiza-popover-down-in 160ms ease-out both; transform-origin: top right; }
+        .seiza-popover-down { animation: seiza-popover-down-in var(--seiza-slow, 360ms) var(--seiza-ease, ease-out) both; transform-origin: top right; }
         @media (prefers-reduced-motion: reduce) { .seiza-popover, .seiza-popover-down { animation: none !important; } }
         /* Popovers are absolutely positioned relative to their own
            trigger. On a narrow screen a trigger near the edge puts its
@@ -74,7 +74,7 @@ export function HUD({ connectionState, worldName, topRight, touchControlsVisible
             transform: none !important;
             max-height: calc(100svh - var(--seiza-popover-bottom, 96px) - 72px) !important;
             overflow-y: auto !important;
-            animation: seiza-popover-dock-in 160ms ease-out both;
+            animation: seiza-popover-dock-in var(--seiza-slow, 360ms) var(--seiza-ease, ease-out) both;
           }
           .seiza-popover-down {
             position: fixed !important;

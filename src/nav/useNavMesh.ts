@@ -66,7 +66,15 @@ export function useNavMesh(sourceRef: React.MutableRefObject<THREE.Object3D | nu
       root.traverse((child) => {
         // Skinned meshes are avatars — they move, and baking them in
         // would carve player-shaped holes into the walkable area.
-        if (child instanceof THREE.Mesh && !(child instanceof THREE.SkinnedMesh) && child.visible) {
+        // `navIgnore` opts out interaction helpers, like the click-to-sit
+        // pads floating above each chair, which would otherwise show up as
+        // little walkable platforms in mid-air.
+        if (
+          child instanceof THREE.Mesh &&
+          !(child instanceof THREE.SkinnedMesh) &&
+          child.visible &&
+          child.userData.navIgnore !== true
+        ) {
           meshes.push(child);
         }
       });

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ChatMessage, ClientMessage, PlayerState, ServerMessage, WorldObject } from "./types";
+import type { ChatMessage, ClientMessage, PlayerState, Posture, ServerMessage, WorldObject } from "./types";
 
 // The production Worker serves both the app and the Durable Object route, so
 // same-origin is the reliable default. Set VITE_SEIZA_ROOM_HOST only when the
@@ -30,6 +30,8 @@ export interface MultiplayerState {
   moveObject: (id: string, position: [number, number, number], rotationY: number) => void;
   removeObject: (id: string) => void;
   sendChat: (text: string) => void;
+  /** Sit down or stand up, so other clients can hold the pose. */
+  setPosture: (posture: Posture) => void;
   connected: boolean;
   connectionState: ConnectionState;
   /** Whether this deployment has SEIZA_EDITOR_PASSWORD set at all — if
@@ -118,6 +120,7 @@ export function useRoomSocket(
   );
   const removeObject = useCallback((id: string) => send({ type: "objectRemove", id }), [send]);
   const sendChat = useCallback((text: string) => send({ type: "chat", text }), [send]);
+  const setPosture = useCallback((posture: Posture) => send({ type: "setPosture", posture }), [send]);
   const setEnvironment = useCallback((url: string | null) => send({ type: "setEnvironment", url }), [send]);
   const authEditor = useCallback(
     (password: string) => {
@@ -205,6 +208,9 @@ export function useRoomSocket(
                 ? { ...prev, [msg.id]: { ...prev[msg.id], activeGesture: msg.gesture, gestureSeq: msg.seq } }
                 : prev
             );
+            break;
+          case "playerPosture":
+            setPlayers((prev) => (prev[msg.id] ? { ...prev, [msg.id]: { ...prev[msg.id], posture: msg.posture } } : prev));
             break;
           case "playerAvatarChanged":
             setPlayers((prev) =>
@@ -296,6 +302,7 @@ export function useRoomSocket(
     moveObject,
     removeObject,
     sendChat,
+    setPosture,
     connected: connectionState === "connected",
     connectionState,
     editorPasswordRequired,

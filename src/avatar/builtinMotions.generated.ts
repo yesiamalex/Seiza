@@ -10,6 +10,12 @@ export interface BuiltinGesture {
   /** Full-body gestures also drive the legs (e.g. kneeling), so they
    *  override walking; upper-body gestures layer over it. */
   fullBody: boolean;
+  /** Hold gestures stay on their final pose until released, instead of
+   *  playing once and returning to the body's previous motion. */
+  hold: boolean;
+  /** Hidden gestures aren't offered in the menu or on the number keys —
+   *  something else in the app triggers them (sitting on a chair). */
+  hidden: boolean;
 }
 
 export const LOCOMOTION_CLIPS = {
@@ -23,56 +29,99 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
     "name": "wave",
     "label": "Wave",
     "url": "/gestures/builtin/wave.vrma",
-    "duration": 2.4,
-    "fullBody": false
+    "duration": 2.88,
+    "fullBody": false,
+    "hold": false,
+    "hidden": false
   },
   {
     "name": "bow",
     "label": "Bow (ojigi)",
     "url": "/gestures/builtin/bow.vrma",
-    "duration": 2.6,
-    "fullBody": false
+    "duration": 3.12,
+    "fullBody": false,
+    "hold": false,
+    "hidden": false
   },
   {
     "name": "seiza",
     "label": "Seiza (formal kneel)",
     "url": "/gestures/builtin/seiza.vrma",
-    "duration": 4.5,
-    "fullBody": true
+    "duration": 5.4,
+    "fullBody": true,
+    "hold": false,
+    "hidden": false
   },
   {
     "name": "nod",
     "label": "Nod",
     "url": "/gestures/builtin/nod.vrma",
-    "duration": 1.6,
-    "fullBody": false
+    "duration": 1.92,
+    "fullBody": false,
+    "hold": false,
+    "hidden": false
   },
   {
     "name": "clap",
     "label": "Clap",
     "url": "/gestures/builtin/clap.vrma",
-    "duration": 2.2,
-    "fullBody": false
+    "duration": 2.64,
+    "fullBody": false,
+    "hold": false,
+    "hidden": false
   },
   {
     "name": "cheer",
     "label": "Cheer",
     "url": "/gestures/builtin/cheer.vrma",
-    "duration": 2.2,
-    "fullBody": false
+    "duration": 2.64,
+    "fullBody": false,
+    "hold": false,
+    "hidden": false
   },
   {
     "name": "shrug",
     "label": "Shrug",
     "url": "/gestures/builtin/shrug.vrma",
-    "duration": 1.9,
-    "fullBody": false
+    "duration": 2.28,
+    "fullBody": false,
+    "hold": false,
+    "hidden": false
   },
   {
     "name": "point",
     "label": "Point",
     "url": "/gestures/builtin/point.vrma",
-    "duration": 2,
-    "fullBody": false
+    "duration": 2.4,
+    "fullBody": false,
+    "hold": false,
+    "hidden": false
+  },
+  {
+    "name": "gassho",
+    "label": "Gasshō (thanks)",
+    "url": "/gestures/builtin/gassho.vrma",
+    "duration": 4.32,
+    "fullBody": false,
+    "hold": false,
+    "hidden": false
+  },
+  {
+    "name": "raisehand",
+    "label": "Raise hand (hold)",
+    "url": "/gestures/builtin/raisehand.vrma",
+    "duration": 1.08,
+    "fullBody": false,
+    "hold": true,
+    "hidden": false
+  },
+  {
+    "name": "sit",
+    "label": "Sit",
+    "url": "/gestures/builtin/sit.vrma",
+    "duration": 1.14,
+    "fullBody": true,
+    "hold": true,
+    "hidden": true
   }
 ];

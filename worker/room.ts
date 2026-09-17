@@ -1,5 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
-import type { ClientMessage, PlayerState, ServerMessage, WorldObject } from "../src/multiplayer/types";
+import { POSTURES, type ClientMessage, type PlayerState, type Posture, type ServerMessage, type WorldObject } from "../src/multiplayer/types";
 import type { Env } from "./index";
 
 const OBJECTS_STORAGE_KEY = "objects";
@@ -146,6 +146,7 @@ export class SeizaRoom extends DurableObject<Env> {
           rotationY: 0,
           activeGesture: null,
           gestureSeq: 0,
+          posture: "stand",
         };
         ws.serializeAttachment({ connId: attachment.connId, player } satisfies ConnectionAttachment);
 
@@ -199,6 +200,16 @@ export class SeizaRoom extends DurableObject<Env> {
           { type: "playerGesture", id: attachment.connId, gesture, seq: player.gestureSeq ?? 0 },
           attachment.connId
         );
+        break;
+      }
+      case "setPosture": {
+        if (!attachment.player) return;
+        if (!(POSTURES as readonly string[]).includes(message.posture as string)) return;
+        const posture = message.posture as Posture;
+        if (attachment.player.posture === posture) return;
+        attachment.player.posture = posture;
+        ws.serializeAttachment(attachment);
+        this.broadcast({ type: "playerPosture", id: attachment.connId, posture }, attachment.connId);
         break;
       }
       case "setAvatar": {

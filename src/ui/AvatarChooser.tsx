@@ -118,7 +118,9 @@ export function AvatarChooser({ world, value, onChange, rememberLocally, onStage
       )}
 
       {tab === "design" && (
-        <div role="tabpanel" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        // `key` on each panel restarts the cross-fade every time the tab
+        // changes; React would otherwise reuse the element and skip it.
+        <div key="design" className="seiza-tabpanel" role="tabpanel" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
             {AVATAR_DESIGN_PRESETS.map((preset) => {
               const active = value.kind === "designer" && JSON.stringify(value.spec) === JSON.stringify(preset.spec);
@@ -153,7 +155,7 @@ export function AvatarChooser({ world, value, onChange, rememberLocally, onStage
       )}
 
       {tab === "presets" && (
-        <div role="tabpanel" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div key="presets" className="seiza-tabpanel" role="tabpanel" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <AvatarPicker
             presets={presets}
             selectedUrl={value.kind === "preset" ? value.url : null}
@@ -275,7 +277,7 @@ function UploadPanel({
   }
 
   return (
-    <div role="tabpanel" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+    <div key="upload" className="seiza-tabpanel" role="tabpanel" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       {current && !file && (
         <small style={{ opacity: 0.75 }}>
           Current: <strong>{current.fileName}</strong>

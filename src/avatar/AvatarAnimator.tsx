@@ -8,24 +8,27 @@ import { LOCOMOTION_CLIPS } from "./builtinMotions.generated";
 import type { GestureDefinition } from "./gestures";
 
 /**
- * Drives every avatar's body animation from VRM Animation clips: an
- * idle / walk / run locomotion blend underneath, and gestures layered on top.
+ * Drives every avatar's body animation from VRM Animation clips, in three
+ * layers that never fight each other:
  *
- * This replaces two earlier pieces that fought each other — a procedural
- * sine-wave gait and a separate gesture player. Both wrote the same bones
- * independently, gestures froze on their final frame, and nothing ever
- * posed an idle avatar, so everyone stood in the VRM rest pose, which is a
- * T-pose by spec. One AnimationMixer with managed weights fixes all three.
+ * 1. Locomotion — idle / walk / run, blended by actual ground speed.
+ * 2. Posture — a held full-body pose, currently sitting. It stays until
+ *    released, so a seated player who waves doesn't stand up.
+ * 3. Gestures — layered on top. An upper-body gesture (wave, clap…) leaves
+ *    the legs to whatever is underneath, so you can wave while walking or
+ *    while sitting. A full-body gesture (seiza) takes over both halves.
  *
- * Layering:
- * - Each locomotion clip is split into upper- and lower-body halves.
- * - An upper-body gesture (wave, clap…) takes over the upper half only,
- *   so legs keep walking underneath it.
- * - A full-body gesture (seiza) takes over both halves.
- * Weights always sum to 1 per bone, so nothing ever blends toward T-pose.
+ * Each clip is split into upper- and lower-body halves so a layer can win
+ * one half and yield the other. Weights per bone always add up to 1: the
+ * VRM rest pose is a T-pose by specification, so any gap in the blend
+ * shows up as the arms snapping outward.
  *
- * Walk and run are phase-locked and advanced by actual ground speed, so
- * feet don't skate when speed changes or when the two clips crossfade.
+ * A gesture marked `hold` clamps on its final frame instead of finishing —
+ * holding the key keeps the pose, and the key can't be spammed into a
+ * restart loop. Releasing it (the `gesture` prop going null) fades it out.
+ *
+ * Walk and run are phase-locked and advanced by ground speed, so feet don't
+ * skate when speed changes or when the two clips crossfade.
  */
 
 const animationCache = new Map<string, Promise<VRMAnimation>>();
@@ -66,13 +69,25 @@ const WALK_STRIDE = 3.2; // meters travelled per walk cycle
 const RUN_STRIDE = 3.9;
 const GESTURE_FADE_IN = 0.2;
 const GESTURE_FADE_OUT = 0.3;
+const POSTURE_FADE_RATE = 7; // sitting down and standing up ease in/out
 const MAX_DELTA = 1 / 20;
 
-interface LocomotionState {
+interface SplitActions {
   upper: THREE.AnimationAction;
   lower: THREE.AnimationAction;
+}
+
+interface LocomotionState extends SplitActions {
   duration: number;
   weight: number;
+}
+
+interface PostureState extends SplitActions {
+  clips: THREE.AnimationClip[];
+  url: string;
+  weight: number;
+  /** False once released: weight eases to 0, then it's disposed. */
+  active: boolean;
 }
 
 interface GestureLayer {
@@ -80,8 +95,9 @@ interface GestureLayer {
   clip: THREE.AnimationClip;
   duration: number;
   fullBody: boolean;
+  hold: boolean;
   weight: number;
-  /** Set when a newer gesture replaces this one mid-play. */
+  /** Set when a newer gesture replaces this one, or a hold is released. */
   fadingOut: boolean;
 }
 
@@ -91,6 +107,7 @@ interface AnimatorState {
   idle: LocomotionState | null;
   walk: LocomotionState | null;
   run: LocomotionState | null;
+  posture: PostureState | null;
   gestures: GestureLayer[];
   phase: number;
   speed: number;
@@ -107,6 +124,8 @@ export interface AvatarAnimatorProps {
    *  gesture replays it instead of being ignored as "no change". */
   gestureSeq?: number;
   onGestureEnd?: () => void;
+  /** Held full-body pose (sitting), or null when standing. */
+  posture?: GestureDefinition | null;
   /** Inspection mode for the avatar preview: hold the T-pose. */
   holdTPose?: boolean;
 }
@@ -132,7 +151,15 @@ function splitClip(clip: THREE.AnimationClip, vrm: VRM) {
 const approach = (current: number, target: number, rate: number, delta: number) =>
   current + (target - current) * (1 - Math.exp(-rate * delta));
 
-export function AvatarAnimator({ vrm, getPosition, gesture = null, gestureSeq = 0, onGestureEnd, holdTPose = false }: AvatarAnimatorProps) {
+export function AvatarAnimator({
+  vrm,
+  getPosition,
+  gesture = null,
+  gestureSeq = 0,
+  onGestureEnd,
+  posture = null,
+  holdTPose = false,
+}: AvatarAnimatorProps) {
   const stateRef = useRef<AnimatorState | null>(null);
   const getPositionRef = useRef(getPosition);
   getPositionRef.current = getPosition;
@@ -149,6 +176,7 @@ export function AvatarAnimator({ vrm, getPosition, gesture = null, gestureSeq = 
       idle: null,
       walk: null,
       run: null,
+      posture: null,
       gestures: [],
       phase: 0,
       speed: 0,
@@ -213,6 +241,7 @@ export function AvatarAnimator({ vrm, getPosition, gesture = null, gestureSeq = 
   // swapped) after a gesture started, doesn't replay a stale one.
   const gestureUrl = gesture?.url ?? null;
   const gestureFullBody = gesture?.fullBody ?? false;
+  const gestureHold = gesture?.hold ?? false;
   const playedSeqRef = useRef(gestureSeq);
   useEffect(() => {
     if (playedSeqRef.current === gestureSeq) return;
@@ -233,7 +262,15 @@ export function AvatarAnimator({ vrm, getPosition, gesture = null, gestureSeq = 
         action.setEffectiveWeight(0);
         action.play();
         for (const layer of state.gestures) layer.fadingOut = true;
-        state.gestures.push({ action, clip, duration: clip.duration, fullBody: gestureFullBody, weight: 0, fadingOut: false });
+        state.gestures.push({
+          action,
+          clip,
+          duration: clip.duration,
+          fullBody: gestureFullBody,
+          hold: gestureHold,
+          weight: 0,
+          fadingOut: false,
+        });
       })
       .catch((error) => {
         console.warn(`Gesture clip failed to load (${gestureUrl}):`, error);
@@ -244,7 +281,56 @@ export function AvatarAnimator({ vrm, getPosition, gesture = null, gestureSeq = 
     return () => {
       cancelled = true;
     };
-  }, [vrm, gestureUrl, gestureFullBody, gestureSeq]);
+  }, [vrm, gestureUrl, gestureFullBody, gestureHold, gestureSeq]);
+
+  // Releasing a hold gesture: the key came up, or the player stood up.
+  useEffect(() => {
+    if (gestureUrl) return;
+    const state = stateRef.current;
+    if (!state) return;
+    for (const layer of state.gestures) {
+      if (layer.hold) layer.fadingOut = true;
+    }
+  }, [gestureUrl]);
+
+  // Posture: sit down, and stand back up when it clears.
+  const postureUrl = posture?.url ?? null;
+  useEffect(() => {
+    const state = stateRef.current;
+    if (!vrm || !state) return;
+    if (!postureUrl) {
+      if (state.posture) state.posture.active = false;
+      return;
+    }
+    if (state.posture?.url === postureUrl) {
+      state.posture.active = true;
+      return;
+    }
+    let cancelled = false;
+    loadVrmAnimation(postureUrl)
+      .then((animation) => {
+        const current = stateRef.current;
+        if (cancelled || !current || current.vrm !== vrm) return;
+        if (current.posture) current.posture.active = false;
+        const clip = createVRMAnimationClip(animation, vrm);
+        clip.name = `posture:${postureUrl}`;
+        const { upper, lower } = splitClip(clip, vrm);
+        const make = (part: THREE.AnimationClip) => {
+          const action = current.mixer.clipAction(part);
+          action.setLoop(THREE.LoopOnce, 1);
+          action.clampWhenFinished = true;
+          action.setEffectiveWeight(0);
+          action.reset();
+          action.play();
+          return action;
+        };
+        current.posture = { upper: make(upper), lower: make(lower), clips: [upper, lower], url: postureUrl, weight: 0, active: true };
+      })
+      .catch((error) => console.warn(`Posture clip failed to load (${postureUrl}):`, error));
+    return () => {
+      cancelled = true;
+    };
+  }, [vrm, postureUrl]);
 
   // Negative priority: runs before VrmAvatar's vrm.update(), so the pose
   // written here reaches the rendered skeleton in the same frame.
@@ -301,25 +387,45 @@ export function AvatarAnimator({ vrm, getPosition, gesture = null, gestureSeq = 
       loco.lower.time = state.phase * loco.duration;
     }
 
+    // ---- posture ------------------------------------------------------------------
+    const postureLayer = state.posture;
+    let postureWeight = 0;
+    if (postureLayer) {
+      postureLayer.weight = approach(postureLayer.weight, postureLayer.active ? 1 : 0, POSTURE_FADE_RATE, delta);
+      postureWeight = postureLayer.weight;
+      if (!postureLayer.active && postureLayer.weight < 0.01) {
+        postureLayer.upper.stop();
+        postureLayer.lower.stop();
+        for (const clip of postureLayer.clips) {
+          state.mixer.uncacheAction(clip);
+          state.mixer.uncacheClip(clip);
+        }
+        state.posture = null;
+        postureWeight = 0;
+      }
+    }
+
     // ---- gesture layers -----------------------------------------------------------
     let upperTakeover = 0;
-    let lowerTakeover = 0;
+    let gestureLowerTakeover = 0;
     for (const layer of state.gestures) {
       const remaining = layer.duration - layer.action.time;
-      const fadeOutCap = layer.fadingOut ? 0 : THREE.MathUtils.clamp(remaining / GESTURE_FADE_OUT, 0, 1);
+      // A hold gesture stays at full weight on its last frame; a one-shot
+      // fades out as it reaches the end.
+      const fadeOutCap = layer.fadingOut ? 0 : layer.hold ? 1 : THREE.MathUtils.clamp(remaining / GESTURE_FADE_OUT, 0, 1);
       if (layer.fadingOut) {
         layer.weight = Math.max(0, layer.weight - delta / GESTURE_FADE_IN);
       } else {
         layer.weight = Math.min(fadeOutCap, layer.weight + delta / GESTURE_FADE_IN);
       }
       upperTakeover += layer.weight;
-      if (layer.fullBody) lowerTakeover += layer.weight;
+      if (layer.fullBody) gestureLowerTakeover += layer.weight;
     }
     upperTakeover = Math.min(1, upperTakeover);
-    lowerTakeover = Math.min(1, lowerTakeover);
+    gestureLowerTakeover = Math.min(1, gestureLowerTakeover);
 
     const finished = state.gestures.filter(
-      (layer) => layer.weight <= 0 && (layer.fadingOut || layer.action.time >= layer.duration - 1e-3)
+      (layer) => layer.weight <= 0 && (layer.fadingOut || (!layer.hold && layer.action.time >= layer.duration - 1e-3))
     );
     if (finished.length) {
       for (const layer of finished) {
@@ -333,10 +439,18 @@ export function AvatarAnimator({ vrm, getPosition, gesture = null, gestureSeq = 
     }
 
     // ---- apply weights --------------------------------------------------------
+    // Gestures win the upper body; the posture keeps whatever is left of it
+    // and always owns the lower body; locomotion gets the remainder.
+    const postureUpper = postureWeight * (1 - upperTakeover);
+    const lowerTakeover = Math.min(1, gestureLowerTakeover + postureWeight);
     for (const loco of [state.idle, state.walk, state.run]) {
       if (!loco) continue;
-      loco.upper.setEffectiveWeight(loco.weight * (1 - upperTakeover));
+      loco.upper.setEffectiveWeight(loco.weight * (1 - upperTakeover) * (1 - postureWeight));
       loco.lower.setEffectiveWeight(loco.weight * (1 - lowerTakeover));
+    }
+    if (state.posture) {
+      state.posture.upper.setEffectiveWeight(postureUpper);
+      state.posture.lower.setEffectiveWeight(postureWeight);
     }
     for (const layer of state.gestures) layer.action.setEffectiveWeight(layer.weight);
 
