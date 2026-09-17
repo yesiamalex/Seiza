@@ -621,8 +621,15 @@ export function AvatarAnimator({
    * this a simple feedback loop — correct by the error, smooth it, repeat —
    * that converges in a few frames and then holds still.
    *
-   * Priority 1 puts it after VrmAvatar's vrm.update() at priority 0, so the
-   * bones being measured are the ones about to be drawn.
+   * This measures the raw bones as they stood after the *previous* frame's
+   * `vrm.update()` (VrmAvatar.tsx, priority 0) rather than this frame's —
+   * a one-frame lag that a smoothed offset never shows. That's deliberate:
+   * a render priority greater than zero tells react-three-fiber "I will call
+   * gl.render() myself", which switches the whole canvas to manual rendering
+   * and — since nothing here ever calls it — left every canvas in the app
+   * (this preview included) drawing nothing but its own clear color.
+   * Priority -1 keeps this on the same automatic footing as the pose layer
+   * above, just in its own pass.
    */
   useFrame((_, rawDelta) => {
     const state = stateRef.current;
@@ -670,7 +677,7 @@ export function AvatarAnimator({
     // The renderer refreshes world matrices from here on its own; writing the
     // local position is enough.
     vrm.scene.position.y = state.groundOffset;
-  }, 1);
+  }, -1);
 
   return null;
 }
