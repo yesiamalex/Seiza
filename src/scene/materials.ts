@@ -164,9 +164,21 @@ export function getWorldMaterials(): WorldMaterials {
     furnitureTop: standard("#e7cfa6", { roughness: 0.5 }),
     metal: standard("#9aa3ab", { roughness: 0.4, metalness: 0.25 }),
     board: standard("#3d6152", { roughness: 0.85 }),
-    glass: new THREE.MeshStandardMaterial({ color: "#d6ecf7", roughness: 0.12, transparent: true, opacity: 0.4 }),
+    // Faintly lit from within, so the panes glow with the low sun outside
+    // instead of reading as flat blue slabs.
+    glass: new THREE.MeshStandardMaterial({
+      color: "#ffe2bd",
+      roughness: 0.1,
+      transparent: true,
+      opacity: 0.45,
+      emissive: new THREE.Color("#ffbc73"),
+      emissiveIntensity: 0.55,
+      side: THREE.DoubleSide,
+    }),
     lantern: new THREE.MeshStandardMaterial({ color: "#fff1d2", emissive: new THREE.Color("#ffce85"), emissiveIntensity: 0.9, roughness: 0.6 }),
-    paper: standard("#fbf6ea", { roughness: 0.95 }),
+    // Double-sided: a sheet of paper is a flat plane, and from behind a
+    // single-sided one simply isn't there.
+    paper: standard("#fbf6ea", { roughness: 0.95, side: THREE.DoubleSide }),
     planter: standard("#c1714f", { roughness: 0.8 }),
     foliage: standard("#6f9f56", { roughness: 0.9 }),
     foliageDark: standard("#557f43", { roughness: 0.9 }),

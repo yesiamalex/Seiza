@@ -63,9 +63,12 @@ export default function App() {
   const localGestureRef = useRef<{ gesture: GestureDefinition; seq: number } | null>(null);
   localGestureRef.current = localGesture;
   const [seat, setSeat] = useState<Seat | null>(null);
-  // Mirrors `seat` for the frame loop and callbacks, which must not send a
-  // stand-up message on every frame a movement key is held.
+  // A held full-body pose: sitting when on a seat, kneeling for seiza.
+  const [posture, setPostureState] = useState<GestureDefinition | null>(null);
+  // These mirror the state for the frame loop and callbacks, which must not
+  // send a stand-up message on every frame a movement key is held.
   const seatRef = useRef<Seat | null>(null);
+  const postureRef = useRef<GestureDefinition | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
   // Touch devices start in third person: seeing your own avatar makes the
@@ -129,7 +132,7 @@ export default function App() {
     moveObject,
     removeObject,
     sendChat,
-    setPosture,
+    setPosture: sendPosture,
     connected,
     connectionState,
     editorPasswordRequired,
@@ -185,10 +188,49 @@ export default function App() {
     send({ type: "gesture", gesture: null });
   }, [send]);
 
+  const applyPosture = useCallback(
+    (next: GestureDefinition | null) => {
+      postureRef.current = next;
+      setPostureState(next);
+      sendPosture(next?.name ?? null);
+    },
+    [sendPosture]
+  );
+
+  const sitDown = useCallback(
+    (target: Seat) => {
+      seatRef.current = target;
+      setSeat(target);
+      applyPosture(sitGesture);
+      moveTargetRef.current = null;
+      movePathRef.current = null;
+    },
+    [applyPosture, sitGesture]
+  );
+
+  /** Leaves a seat, or drops a held pose like seiza. */
+  const standUp = useCallback(() => {
+    if (!seatRef.current && !postureRef.current) return;
+    seatRef.current = null;
+    setSeat(null);
+    applyPosture(null);
+  }, [applyPosture]);
+
   const requestGesture = useCallback(
     (name: string) => {
       const gesture = findGesture(gestures, name);
       if (!gesture) return;
+      // A held full-body pose (seiza) is a posture, and its key toggles it:
+      // press once to kneel, again to stand. Moving stands up too.
+      if (gesture.hold && gesture.fullBody) {
+        if (postureRef.current?.name === gesture.name) standUp();
+        else {
+          seatRef.current = null;
+          setSeat(null);
+          applyPosture(gesture);
+        }
+        return;
+      }
       // Re-triggering a gesture that's already being held would restart the
       // clip on every key repeat, which is exactly the spam a held pose is
       // meant to avoid.
@@ -205,7 +247,7 @@ export default function App() {
         gestureTimerRef.current = window.setTimeout(endGesture, ((gesture.duration ?? GESTURE_FALLBACK_SECONDS) + 1) * 1000);
       }
     },
-    [gestures, send, endGesture]
+    [gestures, send, endGesture, applyPosture, standUp]
   );
 
   /** Lets go of a held pose. With no name, releases whatever is held. */
@@ -219,24 +261,6 @@ export default function App() {
     },
     [send]
   );
-
-  const sitDown = useCallback(
-    (target: Seat) => {
-      seatRef.current = target;
-      setSeat(target);
-      setPosture("sit");
-      moveTargetRef.current = null;
-      movePathRef.current = null;
-    },
-    [setPosture]
-  );
-
-  const standUp = useCallback(() => {
-    if (!seatRef.current) return;
-    seatRef.current = null;
-    setSeat(null);
-    setPosture("stand");
-  }, [setPosture]);
 
   // Keyboard: C toggles the avatar menu, Escape closes it, and 1–9 plus 0
   // play gestures. A hold gesture (raise hand) lasts as long as the key is
@@ -256,6 +280,10 @@ export default function App() {
       }
       if (event.code === "Escape") {
         setAvatarMenuOpen(false);
+        return;
+      }
+      if (event.code === "KeyV") {
+        setViewMode((mode) => (mode === "first" ? "third" : "first"));
         return;
       }
       if (!joined) return;
@@ -417,6 +445,7 @@ export default function App() {
             movePathRef={movePathRef}
             touchInputRef={touchInputRef}
             sitAnchor={seat ? { position: seat.position, rotationY: seat.rotationY } : null}
+            postureHeld={!!posture}
             onStandUp={standUp}
           >
             <VrmAvatar url={joined.localUrl ?? joined.url} onLoaded={setLocalVrm} />
@@ -426,7 +455,7 @@ export default function App() {
               gesture={localGesture?.gesture ?? null}
               gestureSeq={localGesture?.seq ?? 0}
               onGestureEnd={endGesture}
-              posture={seat ? sitGesture : null}
+              posture={posture}
             />
           </PlayerRig>
           <RemotePlayers players={players} selfId={selfId} speakingLevels={voice.speakingLevels} gestures={gestures} />
@@ -498,8 +527,8 @@ export default function App() {
           </div>
         )}
       >
-        {seat && (
-          <button type="button" style={pillButtonActiveStyle} onClick={standUp} title="Or just walk away">
+        {(seat || posture) && (
+          <button type="button" style={pillButtonActiveStyle} onClick={standUp} title="Or just move">
             <PersonIcon /> Stand up
           </button>
         )}
@@ -513,6 +542,7 @@ export default function App() {
           lastGesture={localGesture ? { name: localGesture.gesture.name, seq: localGesture.seq } : null}
           onRequestGesture={requestGesture}
           onReleaseGesture={releaseGesture}
+          activePosture={posture?.name ?? null}
           showShortcuts={hasHoverPointer}
         />
         <ChatPanel

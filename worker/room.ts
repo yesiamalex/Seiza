@@ -1,5 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
-import { POSTURES, type ClientMessage, type PlayerState, type Posture, type ServerMessage, type WorldObject } from "../src/multiplayer/types";
+import type { ClientMessage, PlayerState, Posture, ServerMessage, WorldObject } from "../src/multiplayer/types";
 import type { Env } from "./index";
 
 const OBJECTS_STORAGE_KEY = "objects";
@@ -146,7 +146,7 @@ export class SeizaRoom extends DurableObject<Env> {
           rotationY: 0,
           activeGesture: null,
           gestureSeq: 0,
-          posture: "stand",
+          posture: null,
         };
         ws.serializeAttachment({ connId: attachment.connId, player } satisfies ConnectionAttachment);
 
@@ -204,8 +204,11 @@ export class SeizaRoom extends DurableObject<Env> {
       }
       case "setPosture": {
         if (!attachment.player) return;
-        if (!(POSTURES as readonly string[]).includes(message.posture as string)) return;
-        const posture = message.posture as Posture;
+        // Same shape rule as a gesture name, since a posture *is* the name
+        // of a clip. null means standing.
+        const raw = message.posture;
+        if (raw !== null && (typeof raw !== "string" || !GESTURE_NAME.test(raw))) return;
+        const posture = raw as Posture;
         if (attachment.player.posture === posture) return;
         attachment.player.posture = posture;
         ws.serializeAttachment(attachment);

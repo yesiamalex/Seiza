@@ -331,7 +331,7 @@ function HallFurniture({ m }: { m: WorldMaterials }) {
           <mesh position={[0, 2.75, 0]} material={m.lantern}>
             <sphereGeometry args={[0.26, 20, 14]} />
           </mesh>
-          {post.light && <pointLight position={[0, 2.75, 0]} intensity={16} distance={20} decay={2} color="#ffd9a8" />}
+          {post.light && <pointLight position={[0, 2.75, 0]} intensity={13} distance={20} decay={2} color="#ffd2a0" />}
         </group>
       ))}
 
@@ -466,7 +466,9 @@ function ClassroomShell({ m }: { m: WorldMaterials }) {
           </mesh>
         </group>
       ))}
-      <pointLight position={[0, CLASSROOM_WALL_HEIGHT - 0.4, -17.2]} intensity={20} distance={22} decay={2} color="#fff3dd" />
+      <pointLight position={[0, CLASSROOM_WALL_HEIGHT - 0.4, -17.2]} intensity={15} distance={22} decay={2} color="#ffeccd" />
+      {/* The glow of a low sun coming through the window wall. */}
+      <pointLight position={[CLASSROOM.minX + 1.2, 2, -17]} intensity={12} distance={16} decay={2} color="#ffb877" />
     </group>
   );
 }

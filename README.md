@@ -80,10 +80,15 @@ Japanese XR conference, April 2027).
   a script in this repo, so there's no licensing question. Deployers can add
   their own `.vrma` clips, or replace built-ins, in `world.json`. Press
   `1`–`9` and `0` on desktop.
-- **Held poses** — the raised hand stays up for as long as you hold the key
-  or the button, rather than looping or replaying, so it can't be spammed.
-  Sitting works the same way and is tracked separately from gestures, so a
-  seated player who waves stays seated for everyone else.
+- **Held poses** — the raised hand stays up for as long as you hold the key,
+  rather than looping or replaying, so it can't be spammed. Seiza and sitting
+  are postures: they stay until you press the key again, click Stand up, or
+  simply move. Postures are tracked separately from gestures, so a seated or
+  kneeling player who waves stays put on everyone else's screen.
+- **Furniture you can't walk through** — benches, desks, the reception
+  counter, lockers, posts and planters all push you around them, and the
+  tatami platform is a real step up. The third-person camera stays inside the
+  building instead of zooming out through a wall.
 
 ## Deploy your own instance
 
@@ -247,7 +252,9 @@ protection this does and doesn't provide.
 | Zoom | Scroll | Pinch |
 | Walk to a spot | Double-click the floor | Double-tap the floor |
 | Sit down | Click a chair or bench | Tap a chair or bench |
+| Kneel (seiza) | `3`, and `3` again to stand | The Seiza button |
 | Stand up | Move, jump, or the Stand up button | D-pad, or the Stand up button |
+| Switch view | `V` or the camera button | Camera button |
 | Avatar menu | `C` or the Avatar button | Avatar button |
 | Gestures | `1`–`9`, `0`, or the Gestures menu | Gestures menu |
 | Hold a pose | Hold its number key | Press and hold its button |
@@ -273,9 +280,25 @@ blocked.
 Seats come from the same file. Each one is a position and a facing; a click
 pad floats invisibly above each chair and bench, and is excluded from the
 navmesh (`navIgnore`) so those pads don't become little walkable platforms
-in mid-air. Sitting eases the player onto the seat, faces them the way the
+in mid-air. Sitting eases the player onto the seat, a little forward of its
+middle so their back isn't buried in the backrest, faces them the way the
 seat faces, and hands movement input back as a request to stand, so nobody
-can get stuck in a chair.
+can get stuck in a chair. `standUpSpot` picks where they end up: behind the
+seat if that's clear, otherwise to a side or a diagonal, because stepping
+back off a classroom chair would otherwise walk them into the desk behind.
+
+Furniture collision is a list of boxes in the same file, resolved by pushing
+a walker out along whichever axis they're least far inside. A desk and its
+chair are deliberately one box rather than two: as separate boxes the gap
+between them is narrower than a person, and a walker got squeezed back and
+forth between the pair. The numbers are checked by measurement — the aisles
+are wide enough to walk down, and every seat has a free spot to stand up
+into.
+
+Avatars get a soft blob shadow rather than a real cast shadow. A skinned mesh
+has to be re-rendered into the shadow map every frame it moves, which is the
+per-frame cost the rest of the world deliberately avoids; a textured disc
+costs one draw call and still says where someone's feet are.
 
 ### What an avatar is on the wire
 
@@ -338,11 +361,23 @@ its left side toward +X, and rotation order is XZY. `@pixiv/three-vrm-animation`
 converts the clips for VRM 0.x models at load time. Use the T-pose button in
 any avatar preview to check a model's rig before blaming a clip.
 
-Two flags in that script shape how a clip is used. `hold` means the clip
-ends on the pose it should keep, rather than returning to a relaxed stance —
-the raised hand and the sitting pose both do. `hidden` keeps a clip out of
-the menu and off the number keys because something else triggers it, which
-is how `sit` stays out of the gesture list while chairs still use it.
+Two flags in that script shape how a clip is used. `hold` means the clip ends
+on the pose it should keep, rather than returning to a relaxed stance — the
+raised hand, seiza and sitting all do. A `hold` clip that is also `fullBody`
+becomes a posture, toggled by its key instead of held down. `hidden` keeps a
+clip out of the menu and off the number keys because something else triggers
+it, which is how `sit` stays out of the gesture list while chairs still use
+it.
+
+**Hands are the hard part, so they're measured, not guessed.** Where a palm
+ends up pointing depends on the shoulder, both arm bones and the forearm roll
+together, and getting it wrong is what turns a gasshō into a dab. The angles
+in the generator were solved against a real VRM rig in Node: build an avatar,
+play a candidate pose, and measure in world space where each hand landed and
+which way its palm faced, scoring against what the pose should be. The same
+harness re-checks every clip afterwards — palms together for gasshō, palm
+toward the viewer for a wave and a raised hand, palms up for a shrug, hands
+on the thighs for seiza and sitting.
 
 ### Custom gestures
 
@@ -444,11 +479,11 @@ deliberate limitations (paper Section 7 has the fuller discussion):
 - **Multiplayer sync is untested at scale.** Works correctly in small
   local testing; no load testing has been done against `maxOccupants`-
   sized rooms.
-- **No world/object physics.** Movement bounds are a clamp to the built-in
-  world's room rectangles, which keeps players out of the outer walls and
-  makes the corridor the only route between the two rooms — but there's no
-  collision with furniture or placed objects, so you can walk through a
-  desk. Click-to-move routes around them; direct input doesn't. Placed objects don't
+- **Physics is a clamp and a box list, not a simulation.** Players are kept
+  inside the room rectangles and pushed out of the built-in furniture, which
+  covers walls, benches, desks and the like. Objects placed through the
+  editor are not in that list, so you can still walk through those, and
+  nothing stacks, falls or collides with anything else. Placed objects don't
   fall, roll, or collide — there's no rigid-body simulation. VRM's own
   spring-bone physics (hair/skirt secondary motion) is real and does run
   via `vrm.update()`, so avatars aren't *entirely* without physics. A

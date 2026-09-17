@@ -31,7 +31,7 @@ app reads names, labels, durations, and the full-body flag from.
 |---|---|---|---|---|
 | 1 | `wave` | Wave | upper | one-shot |
 | 2 | `bow` | Bow (ojigi) | upper | one-shot |
-| 3 | `seiza` | Seiza (formal kneel) | full | one-shot |
+| 3 | `seiza` | Seiza (hold) | full | hold, toggle |
 | 4 | `nod` | Nod | upper | one-shot |
 | 5 | `clap` | Clap | upper | one-shot |
 | 6 | `cheer` | Cheer | upper | one-shot |
@@ -44,11 +44,21 @@ app reads names, labels, durations, and the full-body flag from.
 Upper-body gestures layer over walking, so you can wave while moving. Full-body
 gestures also drive the legs and take over from walking while they play.
 
-A **hold** clip ends on the pose it should keep and stays there until the key
-or button is released, instead of playing through or looping. A **hidden**
-clip is triggered by the app rather than the menu: `sit` is played when a
-player clicks a chair, and sitting is tracked as a posture, so a seated
-player who waves stays seated.
+A **hold** clip ends on the pose it should keep and stays there instead of
+playing through. How it's released depends on which half of the body it
+drives:
+
+- An upper-body hold (the raised hand) lasts while you hold its key or
+  button, and drops when you let go.
+- A full-body hold is a **posture**: its key toggles it, so seiza stays until
+  you press 3 again or move. Sitting works the same way, triggered by
+  clicking a chair instead of by a key.
+
+Postures are tracked separately from gestures on the wire, which is what lets
+a seated or kneeling player wave without standing up on everyone's screen.
+
+A **hidden** clip never appears in the menu or on the number keys because
+something else triggers it — `sit` is played when a player clicks a chair.
 
 Replacing `sit` with your own clip changes how everyone sits in your world.
 Keep the hips drop in the final pose equal to `SEAT_HEIGHT` in
@@ -84,7 +94,8 @@ Rules, enforced in `src/avatar/gestures.ts`:
 - `fullBody: true` for clips that move the legs (sitting, kneeling, dancing).
   Leave it out for arm, head, and torso gestures.
 - `hold: true` for a pose that should stay until released. Author the clip so
-  its last frame *is* that pose, since that's the frame it holds.
+  its last frame *is* that pose, since that's the frame it holds. Combined
+  with `fullBody: true` it becomes a posture, toggled by its key.
 - To hide some built-ins, list the ones to keep in `enabledGestures`. Custom
   gestures are always shown.
 
@@ -104,6 +115,14 @@ relaxed standing pose, because the app blends in and out over a fraction of a
 second and a clip that ends mid-motion will visibly snap back; a `hold` clip
 should instead end exactly on the pose it keeps. Clips that animate
 `expressions` or `lookAt` are fine; only humanoid bone tracks are required.
+
+**Watch the palms.** The forearm's X rotation rolls the wrist, and it is the
+difference between a wave and a shrug reading correctly or looking like the
+hand is on backwards. On a left arm at rest, -90 turns the palm forward, 0
+faces it inward toward the thigh, and +90 turns it backward; the right
+forearm is mirrored. The built-in clips set these angles from measurements
+taken on a real rig rather than by eye — see the notes at the top of
+`scripts/generate-motions.mjs`.
 
 Test a new clip on both a VRM 0.x and a VRM 1.0 avatar. The two formats use
 mirrored axis conventions, and three-vrm corrects for that automatically only

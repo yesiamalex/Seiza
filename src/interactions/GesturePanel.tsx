@@ -10,6 +10,8 @@ interface GesturePanelProps {
   onRequestGesture: (name: string) => void;
   /** Lets go of a held pose (see GestureDefinition.hold). */
   onReleaseGesture: (name: string) => void;
+  /** Name of the held full-body pose, if any, so its button reads as on. */
+  activePosture: string | null;
   /** Show number-key hints (desktop). */
   showShortcuts: boolean;
 }
@@ -23,7 +25,14 @@ interface GesturePanelProps {
  * so it's clear which is which; a custom clip that replaced a built-in is
  * listed under Custom with a note. See src/avatar/gestures.ts.
  */
-export function GesturePanel({ gestures, lastGesture, onRequestGesture, onReleaseGesture, showShortcuts }: GesturePanelProps) {
+export function GesturePanel({
+  gestures,
+  lastGesture,
+  onRequestGesture,
+  onReleaseGesture,
+  activePosture,
+  showShortcuts,
+}: GesturePanelProps) {
   const [open, setOpen] = useState(false);
   const [practice, setPractice] = useState(false);
   const [target, setTarget] = useState<string | null>(null);
@@ -50,12 +59,14 @@ export function GesturePanel({ gestures, lastGesture, onRequestGesture, onReleas
 
   const renderButton = (g: GestureDefinition) => {
     const index = gestures.indexOf(g);
-    const isActive = practice && target === g.name;
+    const isActive = (practice && target === g.name) || activePosture === g.name;
     // 1–9 then 0, matching the keyboard shortcuts in App.tsx.
     const shortcut = index < 10 ? (index === 9 ? "0" : String(index + 1)) : null;
-    // A held pose follows the button the way it follows the key: press and
-    // keep holding, let go to drop it.
-    const holdHandlers = g.hold
+    // A full-body held pose toggles: press to take it up, press again to
+    // stand. Anything else held follows the button, press and hold.
+    const holdHandlers = g.hold && g.fullBody
+      ? { onClick: () => onRequestGesture(g.name) }
+      : g.hold
       ? {
           onPointerDown: () => onRequestGesture(g.name),
           onPointerUp: () => onReleaseGesture(g.name),
@@ -71,9 +82,11 @@ export function GesturePanel({ gestures, lastGesture, onRequestGesture, onReleas
         title={
           g.overridesBuiltin
             ? "Custom clip replacing the built-in gesture of the same name"
-            : g.hold
-              ? "Press and hold to keep the pose"
-              : undefined
+            : g.hold && g.fullBody
+              ? "Stays until you press again or move"
+              : g.hold
+                ? "Press and hold to keep the pose"
+                : undefined
         }
         {...holdHandlers}
       >
@@ -119,7 +132,9 @@ export function GesturePanel({ gestures, lastGesture, onRequestGesture, onReleas
                 </Section>
               )}
               {gestures.some((g) => g.hold) && (
-                <small style={{ opacity: 0.6 }}>Poses marked "hold" stay up while you hold the key or the button.</small>
+                <small style={{ opacity: 0.6 }}>
+                  A raised hand stays up while you hold its key. Seiza stays until you press its key again, or move.
+                </small>
               )}
               <small style={{ opacity: 0.6 }}>Click a chair or bench in the world to sit down.</small>
               <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>

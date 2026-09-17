@@ -30,7 +30,7 @@ export interface MultiplayerState {
   moveObject: (id: string, position: [number, number, number], rotationY: number) => void;
   removeObject: (id: string) => void;
   sendChat: (text: string) => void;
-  /** Sit down or stand up, so other clients can hold the pose. */
+  /** Take up or drop a held pose, so other clients hold it too. */
   setPosture: (posture: Posture) => void;
   connected: boolean;
   connectionState: ConnectionState;

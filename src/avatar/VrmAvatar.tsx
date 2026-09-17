@@ -14,6 +14,35 @@ export interface VrmAvatarProps {
 // Beyond this much movement in one frame, treat it as a teleport and let
 // the spring bones start fresh instead of whipping across the gap.
 const TELEPORT_DISTANCE = 1.5;
+const SHADOW_RADIUS = 0.34;
+
+/**
+ * Soft blob shadow under every avatar.
+ *
+ * Avatars deliberately don't cast real shadows: a skinned mesh has to be
+ * re-rendered into the shadow map every frame it moves, which is exactly the
+ * per-frame cost the rest of the world avoids (see Scene.tsx). A single
+ * textured disc costs one draw call, always points the right way, and does
+ * the job a contact shadow actually does — telling you where someone's feet
+ * are.
+ */
+let shadowTexture: THREE.Texture | null | undefined;
+function getShadowTexture(): THREE.Texture | null {
+  if (shadowTexture !== undefined) return shadowTexture;
+  if (typeof document === "undefined") return (shadowTexture = null);
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 64;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return (shadowTexture = null);
+  const gradient = ctx.createRadialGradient(32, 32, 2, 32, 32, 32);
+  gradient.addColorStop(0, "rgba(0,0,0,0.55)");
+  gradient.addColorStop(0.55, "rgba(0,0,0,0.28)");
+  gradient.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, 64, 64);
+  shadowTexture = new THREE.CanvasTexture(canvas);
+  return shadowTexture;
+}
 // Spring-bone integration explodes on long frames (tab switch, hitch).
 const MAX_SPRING_DELTA = 1 / 30;
 
@@ -71,9 +100,16 @@ export function VrmAvatar({ url, position = [0, 0, 0], rotationY = 0, onLoaded }
   }
 
   const facingOffset = vrm.meta.metaVersion === "1" ? Math.PI : 0;
+  const shadow = getShadowTexture();
   return (
     <group position={position} rotation={[0, rotationY, 0]}>
       <primitive object={vrm.scene} rotation={[0, facingOffset, 0]} />
+      {shadow && (
+        <mesh position={[0, 0.015, 0]} rotation={[-Math.PI / 2, 0, 0]} userData={{ navIgnore: true }} renderOrder={-1}>
+          <circleGeometry args={[SHADOW_RADIUS, 20]} />
+          <meshBasicMaterial map={shadow} transparent depthWrite={false} opacity={0.75} />
+        </mesh>
+      )}
     </group>
   );
 }

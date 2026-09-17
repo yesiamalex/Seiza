@@ -3,7 +3,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useXR, useXRControllerLocomotion, XROrigin } from "@react-three/xr";
 import * as THREE from "three";
 import type { TouchMoveInput } from "./touchInput";
-import { clampToRooms, SEATED_EYE_HEIGHT } from "../scene/layout";
+import { CAMERA_RADIUS, clampToRooms, floorHeightAt, resolveObstacles, SEATED_EYE_HEIGHT, standUpSpot } from "../scene/layout";
 
 export type ViewMode = "first" | "third";
 
@@ -13,6 +13,9 @@ const RUN_MULTIPLIER = 1.9; // hold Shift, or double-tap forward on the D-pad
 // How fast a player slides onto a seat, and turns to face the way it faces.
 const SIT_EASE_RATE = 9;
 const SIT_TURN_RATE = 6;
+// The walkable area is already inset by the player's radius (layout.ts);
+// this is that inset, so the camera can be allowed closer to walls.
+const PLAYER_RADIUS_MARGIN = 0.4;
 
 const THIRD_PERSON_MIN_DISTANCE = 1.5;
 const THIRD_PERSON_MAX_DISTANCE = 8;
@@ -64,6 +67,9 @@ interface PlayerRigProps {
   /** Seat the player is sitting on, or null when standing. While seated,
    *  movement input stands them up instead of walking. */
   sitAnchor?: { position: [number, number, number]; rotationY: number } | null;
+  /** True while the player holds any pose that moving should cancel, such
+   *  as kneeling in seiza (which has no seat to sit on). */
+  postureHeld?: boolean;
   onStandUp?: () => void;
   children?: ReactNode;
 }
@@ -100,6 +106,7 @@ export function PlayerRig({
   movePathRef,
   touchInputRef,
   sitAnchor = null,
+  postureHeld = false,
   onStandUp,
   children,
 }: PlayerRigProps) {
@@ -116,10 +123,15 @@ export function PlayerRig({
   const viewModeRef = useRef(viewMode);
   viewModeRef.current = viewMode;
   const sitAnchorRef = useRef(sitAnchor);
+  const previousSitAnchorRef = useRef(sitAnchor);
   sitAnchorRef.current = sitAnchor;
+  const postureHeldRef = useRef(postureHeld);
+  postureHeldRef.current = postureHeld;
   const onStandUpRef = useRef(onStandUp);
   onStandUpRef.current = onStandUp;
-  const groundEyeY = spawnPoint[1] + EYE_HEIGHT;
+  // Eye height over whatever the player is standing on, updated each frame
+  // so stepping onto the tatami platform raises them instead of sinking them.
+  const groundEyeYRef = useRef(spawnPoint[1] + EYE_HEIGHT);
 
   useEffect(() => {
     virtualCameraRef.current!.position.set(spawnPoint[0], spawnPoint[1] + EYE_HEIGHT, spawnPoint[2]);
@@ -157,7 +169,7 @@ export function PlayerRig({
           return;
         }
         const vcam = virtualCameraRef.current!;
-        if (vcam.position.y <= groundEyeY + GROUNDED_EPSILON) {
+        if (vcam.position.y <= groundEyeYRef.current + GROUNDED_EPSILON) {
           verticalVelocityRef.current = JUMP_SPEED;
         }
       }
@@ -174,7 +186,7 @@ export function PlayerRig({
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("blur", onBlur);
     };
-  }, [moveTargetRef, movePathRef, groundEyeY]);
+  }, [moveTargetRef, movePathRef]);
 
   // Look and zoom input. One pointer-event handler covers mouse, pen, and
   // touch; deltas come from clientX/clientY because movementX/Y reports 0
@@ -336,7 +348,7 @@ export function PlayerRig({
       if (touch.jumpRequested) {
         touch.jumpRequested = false; // consume — one press, one jump
         jumpPressed = true;
-        if (!sitAnchorRef.current && vcam.position.y <= groundEyeY + GROUNDED_EPSILON) {
+        if (!sitAnchorRef.current && vcam.position.y <= groundEyeYRef.current + GROUNDED_EPSILON) {
           verticalVelocityRef.current = JUMP_SPEED;
         }
       }
@@ -361,6 +373,10 @@ export function PlayerRig({
         const behind = new THREE.Vector3(0, 0, thirdPersonDistanceRef.current).applyQuaternion(vcam.quaternion);
         camera.position.copy(vcam.position).add(behind);
         camera.position.y += THIRD_PERSON_HEIGHT_OFFSET;
+        // Keep the camera inside the building: zooming out through a wall
+        // showed the room from outside and looked broken.
+        clampToRooms(camera.position, PLAYER_RADIUS_MARGIN - CAMERA_RADIUS);
+        camera.position.y = Math.max(camera.position.y, floorHeightAt(camera.position.x, camera.position.z) + 0.25);
         camera.quaternion.copy(vcam.quaternion);
       } else {
         camera.position.copy(vcam.position);
@@ -378,6 +394,17 @@ export function PlayerRig({
     // movement input is that request, which is also why sitting can't trap
     // anyone — there's no "stand up" button to find first.
     const sit = sitAnchorRef.current;
+    const leftSeat = !sit && previousSitAnchorRef.current;
+    if (leftSeat) {
+      // Step clear of the seat rather than standing up inside it. Which way
+      // is clear depends on the seat — see standUpSpot.
+      const previous = previousSitAnchorRef.current!;
+      const [x, , z] = standUpSpot(previous.position, previous.rotationY);
+      vcam.position.x = x;
+      vcam.position.z = z;
+    }
+    previousSitAnchorRef.current = sit;
+
     if (sit) {
       if (move.lengthSq() > 0 || jumpPressed) {
         onStandUpRef.current?.();
@@ -395,6 +422,9 @@ export function PlayerRig({
         applyTransforms(sit.position[1]);
         return;
       }
+    } else if (postureHeldRef.current && (move.lengthSq() > 0 || jumpPressed)) {
+      // Kneeling has no seat to leave, but moving still ends it.
+      onStandUpRef.current?.();
     }
 
     const heading = new THREE.Vector3();
@@ -414,9 +444,13 @@ export function PlayerRig({
       }
     }
     clampToRooms(vcam.position);
+    resolveObstacles(vcam.position);
 
-    // Gravity/jump — applied every frame so landing on the flat floor is a
-    // clean clamp back to eye height rather than separate ground detection.
+    // Gravity/jump — applied every frame so landing is a clean clamp back to
+    // eye height rather than separate ground detection. The ground is not
+    // always y=0: the tatami platform is a step up.
+    const groundEyeY = floorHeightAt(vcam.position.x, vcam.position.z) + EYE_HEIGHT;
+    groundEyeYRef.current = groundEyeY;
     verticalVelocityRef.current -= GRAVITY * delta;
     vcam.position.y += verticalVelocityRef.current * delta;
     if (vcam.position.y <= groundEyeY) {

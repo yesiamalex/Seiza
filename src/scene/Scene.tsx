@@ -76,9 +76,10 @@ class SceneLoadBoundary extends Component<{ children: ReactNode }, { failed: boo
   }
 }
 
-// Where the sun is. Shared by the light and the sky so the shadows fall the
-// way the sky says they should.
-const SUN: [number, number, number] = [16, 22, 12];
+// Late afternoon: the sun sits low, off the classroom's window wall, so the
+// light comes through the windows and rakes across the floor. Shared by the
+// light and the sky so the shadows fall the way the sky says they should.
+const SUN: [number, number, number] = [-34, 9, 14];
 
 /**
  * Lighting is lights and a procedural sky shader, not an image-based
@@ -108,13 +109,17 @@ export const Scene = memo(function Scene({
   return (
     <>
       <OnDemandShadows refreshKey={shadowRefreshKey} />
-      <Sky sunPosition={SUN} turbidity={4} rayleigh={1.4} mieCoefficient={0.006} mieDirectionalG={0.85} />
-      <hemisphereLight args={["#eaf1ff", "#caa87e", 0.9]} />
-      <ambientLight intensity={0.32} />
+      {/* Higher turbidity and rayleigh is what turns the sky orange. */}
+      <Sky sunPosition={SUN} turbidity={9} rayleigh={2.6} mieCoefficient={0.012} mieDirectionalG={0.92} />
+      {/* Warm sky above, warmer bounce off the wooden floor below. A big
+          share of the light comes from here rather than the sun, which is
+          what keeps the shadows soft. */}
+      <hemisphereLight args={["#ffe3c2", "#d9b48a", 1.05]} />
+      <ambientLight intensity={0.42} color="#ffeada" />
       <directionalLight
         position={SUN}
-        intensity={1.25}
-        color="#fff4e2"
+        intensity={0.95}
+        color="#ffcd96"
         castShadow
         // 1024 is plenty for a room this size and a quarter of the fill
         // cost of 2048 on the frames where shadows do get re-rendered.

@@ -11,7 +11,9 @@ their license clearly allows redistribution. Nothing here needs one:
   and a window wall. Every chair and bench can be sat on by clicking it.
   The floor plan lives in `src/scene/layout.ts`, and the wood, tatami and
   plaster textures are drawn onto a canvas at startup, so there is still
-  nothing to download or license. Set `sceneUrl` in `world.json` to any
+  nothing to download or license. The same file lists the furniture players
+  bump into instead of walking through, and the tatami platform is a step up
+  rather than something to sink into. Set `sceneUrl` in `world.json` to any
   glTF 2.0 file to use your own space instead; if it fails to load, the app
   falls back to the built-in rooms.
 - **Everyone gets a real avatar.** With `defaultAvatarUrl` empty (as here), a

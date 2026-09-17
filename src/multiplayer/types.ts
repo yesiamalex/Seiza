@@ -1,5 +1,14 @@
-export const POSTURES = ["stand", "sit"] as const;
-export type Posture = (typeof POSTURES)[number];
+/**
+ * A held full-body pose, named after the gesture clip that holds it — "sit"
+ * when on a chair, "seiza" when kneeling, or a deployment's own clip. null
+ * means standing.
+ *
+ * It's separate from `activeGesture` because a gesture ends and a posture
+ * doesn't: a seated player who waves has to stay seated once the wave is
+ * over. The server only checks the name's shape; each client resolves it
+ * against its own gesture registry and ignores names it doesn't know.
+ */
+export type Posture = string | null;
 
 export interface PlayerState {
   id: string;
@@ -8,9 +17,7 @@ export interface PlayerState {
   position: [number, number, number];
   rotationY: number;
   activeGesture: string | null;
-  /** Held body posture, independent of gestures: sitting persists while
-   *  the player waves or claps, and a transient gesture ending doesn't
-   *  stand them up. Set by sitting on a chair — see src/scene/layout.ts. */
+  /** Held pose, or null when standing. See the Posture type. */
   posture: Posture;
   /** Incremented by the server every time this player starts a gesture.
    *  Lets clients replay the same gesture twice in a row, and lets a
@@ -46,8 +53,8 @@ export type ClientMessage =
   // rules as `join` (see sanitizeAssetUrl in worker/room.ts), including
   // designer avatars (`seiza-avatar:v1:…`).
   | { type: "setAvatar"; avatarUrl: string }
-  // Sits down or stands up. Separate from `gesture` because it's a state,
-  // not a one-shot: it has to outlast any gesture played while seated.
+  // Takes up or drops a held pose (sitting, kneeling). Separate from
+  // `gesture` because it's a state, not a one-shot.
   | { type: "setPosture"; posture: Posture }
   | { type: "objectAdd"; object: Omit<WorldObject, "id" | "ownerId"> }
   | { type: "objectMove"; id: string; position: [number, number, number]; rotationY: number }

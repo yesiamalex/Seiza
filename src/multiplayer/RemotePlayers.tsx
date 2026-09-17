@@ -4,7 +4,7 @@ import * as THREE from "three";
 import type { VRM } from "@pixiv/three-vrm";
 import { VrmAvatar } from "../avatar/VrmAvatar";
 import { AvatarAnimator } from "../avatar/AvatarAnimator";
-import { findGesture, SIT_GESTURE_NAME, type GestureDefinition } from "../avatar/gestures";
+import { findGesture, type GestureDefinition } from "../avatar/gestures";
 import { NameTag } from "./NameTag";
 import type { PlayerState } from "./types";
 
@@ -75,9 +75,10 @@ function RemotePlayerAvatar({ player, speaking, gestures }: { player: PlayerStat
   // Names this client's world.json doesn't define are ignored.
   const seq = player.gestureSeq ?? 0;
   const gesture = findGesture(gestures, player.activeGesture);
-  // Sitting is a posture, not a gesture, so it survives them: a seated
-  // player who waves stays seated here too.
-  const posture = player.posture === "sit" ? findGesture(gestures, SIT_GESTURE_NAME) : null;
+  // A posture is a held pose, not a gesture, so it survives them: a seated
+  // player who waves stays seated here too. Unknown names are ignored, so a
+  // deployment that removed a clip just shows that player standing.
+  const posture = findGesture(gestures, player.posture ?? null);
 
   return (
     <group ref={groupRef}>

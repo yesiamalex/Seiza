@@ -45,11 +45,11 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
   },
   {
     "name": "seiza",
-    "label": "Seiza (formal kneel)",
+    "label": "Seiza (hold)",
     "url": "/gestures/builtin/seiza.vrma",
-    "duration": 5.4,
+    "duration": 1.8,
     "fullBody": true,
-    "hold": false,
+    "hold": true,
     "hidden": false
   },
   {

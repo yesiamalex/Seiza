@@ -28,6 +28,17 @@
 //     left upper arm   -Z  lowers the arm;  +Z raises it.  Right arm: mirrored.
 //     arm (lowered)    +X  swings it back;  -X swings it forward
 //     left lower arm   -Y  bends the elbow forward.  Right arm: +Y.
+//     left lower arm    X  ROLLS the forearm, which is what aims the palm:
+//                          at rest, -90 faces it forward, 0 faces it inward
+//                          toward the thigh, +90 faces it backward. The right
+//                          forearm is mirrored, so negate the angle.
+//
+// The palm angles below were not guessed: they were solved against a real VRM
+// rig and checked by measuring, in world space, where each hand ended up and
+// which way its palm pointed. Reaching a specific point — palms meeting for
+// gasshō, hands landing on the thighs — needs the shoulder, both arm bones
+// and the forearm roll together, which is why those poses carry more numbers
+// than the rest.
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -224,7 +235,26 @@ const LOCOMOTION = [
 // chair) and the avatar stays there until released, rather than the clip
 // looping or snapping back. AvatarAnimator clamps the final frame for those.
 // ---------------------------------------------------------------------------
-const WAVE_UP = { rightUpperArm: { z: -40, x: -10 }, head: { z: -4, y: -4 } };
+/** Right arm up beside the head, palm toward whoever is watching. */
+const waveUp = (swing) => ({
+  rightUpperArm: { z: -50 },
+  rightLowerArm: { y: swing, x: -90 },
+  spine: { z: -2 },
+  head: { z: -4, y: -4 },
+});
+
+/** Hands in front of the chest, palms facing each other. `close` runs from
+ *  the open position to palms touching. */
+const palmsTogether = (close) => ({
+  leftShoulder: { z: -25 },
+  rightShoulder: { z: 25 },
+  leftUpperArm: { z: -85 - 25 * close, y: -18 + 13 * close, x: -3 },
+  rightUpperArm: { z: 85 + 25 * close, y: 18 - 13 * close, x: -3 },
+  leftLowerArm: { y: -(107 - 8 * close), x: -26 + 20 * close },
+  rightLowerArm: { y: 107 - 8 * close, x: 26 - 20 * close },
+  leftHand: { z: -28 },
+  rightHand: { z: 28 },
+});
 const GESTURES = [
   {
     name: "wave",
@@ -232,12 +262,12 @@ const GESTURES = [
     fullBody: false,
     keys: [
       { t: 0, pose: {} },
-      { t: 0.4, pose: { ...WAVE_UP, rightLowerArm: { z: -60 } } },
-      { t: 0.7, pose: { ...WAVE_UP, rightLowerArm: { z: -85 } } },
-      { t: 1.0, pose: { ...WAVE_UP, rightLowerArm: { z: -45 } } },
-      { t: 1.3, pose: { ...WAVE_UP, rightLowerArm: { z: -85 } } },
-      { t: 1.6, pose: { ...WAVE_UP, rightLowerArm: { z: -45 } } },
-      { t: 1.9, pose: { ...WAVE_UP, rightLowerArm: { z: -70 } } },
+      { t: 0.4, pose: waveUp(20) },
+      { t: 0.7, pose: waveUp(52) },
+      { t: 1.0, pose: waveUp(20) },
+      { t: 1.3, pose: waveUp(52) },
+      { t: 1.6, pose: waveUp(22) },
+      { t: 1.9, pose: waveUp(40) },
       { t: 2.4, pose: {} },
     ],
   },
@@ -275,26 +305,32 @@ const GESTURES = [
     ],
   },
   {
+    // Kneels and stays kneeling: pressing the key again (or moving) stands
+    // back up, rather than the avatar popping up on its own after a few
+    // seconds. Hands rest on the thighs, measured against a real rig.
     name: "seiza",
-    label: "Seiza (formal kneel)",
+    label: "Seiza (hold)",
     fullBody: true,
+    hold: true,
     keys: [
       { t: 0, pose: {} },
       {
-        t: 0.6,
+        t: 0.7,
         pose: {
           spine: { x: 14 },
           leftUpperLeg: { x: -35 },
           rightUpperLeg: { x: -35 },
           leftLowerLeg: { x: 70 },
           rightLowerLeg: { x: 70 },
+          leftUpperArm: { z: -80, x: -12 },
+          rightUpperArm: { z: 80, x: -12 },
           _hips: [0, -0.26, 0],
         },
       },
       {
-        t: 1.2,
+        t: 1.5,
         pose: {
-          spine: { x: 2 },
+          spine: { x: 3 },
           head: { x: 4 },
           leftUpperLeg: { x: -62 },
           rightUpperLeg: { x: -62 },
@@ -302,43 +338,13 @@ const GESTURES = [
           rightLowerLeg: { x: 152 },
           leftFoot: { x: 60 },
           rightFoot: { x: 60 },
-          leftUpperArm: { z: -72, x: -34 },
-          rightUpperArm: { z: 72, x: -34 },
-          leftLowerArm: { y: -58 },
-          rightLowerArm: { y: 58 },
+          leftUpperArm: { z: -99, x: -19 },
+          rightUpperArm: { z: 99, x: -19 },
+          leftLowerArm: { y: -2, x: 120 },
+          rightLowerArm: { y: 2, x: -120 },
           _hips: [0, -0.61, 0],
         },
       },
-      {
-        t: 3.2,
-        pose: {
-          spine: { x: 2 },
-          head: { x: 6 },
-          leftUpperLeg: { x: -62 },
-          rightUpperLeg: { x: -62 },
-          leftLowerLeg: { x: 152 },
-          rightLowerLeg: { x: 152 },
-          leftFoot: { x: 60 },
-          rightFoot: { x: 60 },
-          leftUpperArm: { z: -72, x: -34 },
-          rightUpperArm: { z: 72, x: -34 },
-          leftLowerArm: { y: -58 },
-          rightLowerArm: { y: 58 },
-          _hips: [0, -0.61, 0],
-        },
-      },
-      {
-        t: 3.8,
-        pose: {
-          spine: { x: 14 },
-          leftUpperLeg: { x: -35 },
-          rightUpperLeg: { x: -35 },
-          leftLowerLeg: { x: 70 },
-          rightLowerLeg: { x: 70 },
-          _hips: [0, -0.26, 0],
-        },
-      },
-      { t: 4.5, pose: {} },
     ],
   },
   {
@@ -357,45 +363,38 @@ const GESTURES = [
     name: "clap",
     label: "Clap",
     fullBody: false,
-    keys: (() => {
-      const arms = (flex) => ({
-        leftUpperArm: { y: -70, x: 30, z: 0 },
-        rightUpperArm: { y: 70, x: 30, z: 0 },
-        leftLowerArm: { y: -flex },
-        rightLowerArm: { y: flex },
-      });
-      return [
-        { t: 0, pose: {} },
-        { t: 0.4, pose: arms(55) },
-        { t: 0.55, pose: arms(80) },
-        { t: 0.75, pose: arms(55) },
-        { t: 0.9, pose: arms(80) },
-        { t: 1.1, pose: arms(55) },
-        { t: 1.25, pose: arms(80) },
-        { t: 1.45, pose: arms(55) },
-        { t: 2.2, pose: {} },
-      ];
-    })(),
+    keys: [
+      { t: 0, pose: {} },
+      { t: 0.4, pose: palmsTogether(0) },
+      { t: 0.55, pose: palmsTogether(1) },
+      { t: 0.75, pose: palmsTogether(0) },
+      { t: 0.9, pose: palmsTogether(1) },
+      { t: 1.1, pose: palmsTogether(0) },
+      { t: 1.25, pose: palmsTogether(1) },
+      { t: 1.45, pose: palmsTogether(0.3) },
+      { t: 2.2, pose: {} },
+    ],
   },
   {
     name: "cheer",
     label: "Cheer",
     fullBody: false,
     keys: (() => {
+      // Solved on a rig: arms up in a V with the palms facing forward.
       const up = (lift) => ({
         spine: { x: -4 },
         head: { x: -8 },
-        leftUpperArm: { z: lift, x: -10 },
-        rightUpperArm: { z: -lift, x: -10 },
-        leftLowerArm: { y: -10, z: 10 },
-        rightLowerArm: { y: 10, z: -10 },
+        leftUpperArm: { z: lift, x: 4 },
+        rightUpperArm: { z: -lift, x: 4 },
+        leftLowerArm: { y: -11, x: -90 },
+        rightLowerArm: { y: 11, x: 90 },
       });
       return [
         { t: 0, pose: {} },
-        { t: 0.45, pose: up(62) },
-        { t: 0.8, pose: up(44) },
-        { t: 1.15, pose: up(62) },
-        { t: 1.5, pose: up(48) },
+        { t: 0.45, pose: up(80) },
+        { t: 0.8, pose: up(60) },
+        { t: 1.15, pose: up(80) },
+        { t: 1.5, pose: up(64) },
         { t: 2.2, pose: {} },
       ];
     })(),
@@ -405,13 +404,17 @@ const GESTURES = [
     label: "Shrug",
     fullBody: false,
     keys: (() => {
+      // Solved on a rig: forearms out with the palms turned up — the
+      // "who knows" half of the gesture.
       const shrug = {
         leftShoulder: { z: 12 },
         rightShoulder: { z: -12 },
-        leftUpperArm: { z: -70, x: -6 },
-        rightUpperArm: { z: 70, x: -6 },
-        leftLowerArm: { y: -75 },
-        rightLowerArm: { y: 75 },
+        leftUpperArm: { z: -85, x: -40 },
+        rightUpperArm: { z: 85, x: -40 },
+        leftLowerArm: { y: -72, x: -105 },
+        rightLowerArm: { y: 72, x: 105 },
+        leftHand: { x: -40 },
+        rightHand: { x: 40 },
         head: { z: 8 },
       };
       return [
@@ -427,7 +430,14 @@ const GESTURES = [
     label: "Point",
     fullBody: false,
     keys: (() => {
-      const point = { rightUpperArm: { y: 85, x: 4, z: 0 }, rightLowerArm: { y: 4 }, head: { y: -6 }, chest: { y: -4 } };
+      // Arm out front, palm turned inward so the hand reads as pointing
+      // rather than presenting.
+      const point = {
+        rightUpperArm: { y: 85, x: 4, z: 0 },
+        rightLowerArm: { y: 4, x: -45 },
+        head: { y: -6 },
+        chest: { y: -4 },
+      };
       return [
         { t: 0, pose: {} },
         { t: 0.45, pose: point },
@@ -444,15 +454,21 @@ const GESTURES = [
     label: "Gasshō (thanks)",
     fullBody: false,
     keys: (() => {
+      // Solved on a real rig: the hands meet at the chest, about a
+      // centimetre apart, with the palms facing each other and the fingers
+      // up. Getting there needs the shoulders drawn in and the upper arms
+      // rotated inward, not just a bent elbow.
       const palms = (bow) => ({
         spine: { x: bow },
         chest: { x: bow * 0.55 },
         neck: { x: 6 + bow * 0.2 },
         head: { x: 8 + bow * 0.25 },
-        leftUpperArm: { y: -66, x: 32, z: -8 },
-        rightUpperArm: { y: 66, x: 32, z: 8 },
-        leftLowerArm: { y: -80 },
-        rightLowerArm: { y: 80 },
+        leftShoulder: { z: -25 },
+        rightShoulder: { z: 25 },
+        leftUpperArm: { z: -35, y: -89, x: 37 },
+        rightUpperArm: { z: 35, y: 89, x: 37 },
+        leftLowerArm: { y: -114, x: -1 },
+        rightLowerArm: { y: 114, x: 1 },
         leftHand: { z: 12 },
         rightHand: { z: -12 },
       });
@@ -479,7 +495,7 @@ const GESTURES = [
         t: 0.45,
         pose: {
           rightUpperArm: { z: -94, x: -8 },
-          rightLowerArm: { y: 6 },
+          rightLowerArm: { y: 6, x: -85 },
           spine: { z: -3 },
           head: { x: -6, z: 5 },
         },
@@ -488,7 +504,8 @@ const GESTURES = [
         t: 0.9,
         pose: {
           rightUpperArm: { z: -87, x: -6 },
-          rightLowerArm: { y: 10 },
+          // Rolled so the palm faces forward, the way a raised hand reads.
+          rightLowerArm: { y: 10, x: -85 },
           rightHand: { z: -6 },
           spine: { z: -2 },
           head: { x: -4, z: 4 },
@@ -533,10 +550,11 @@ const GESTURES = [
           rightLowerLeg: { x: 84 },
           leftFoot: { x: 6 },
           rightFoot: { x: 6 },
-          leftUpperArm: { z: -66, x: -30 },
-          rightUpperArm: { z: 66, x: -30 },
-          leftLowerArm: { y: -34 },
-          rightLowerArm: { y: 34 },
+          // Hands resting on the thighs (measured against a real rig).
+          leftUpperArm: { z: -85, x: -35 },
+          rightUpperArm: { z: 85, x: -35 },
+          leftLowerArm: { y: -30, x: 105 },
+          rightLowerArm: { y: 30, x: -105 },
           _hips: [0, -0.45, 0],
         },
       },
