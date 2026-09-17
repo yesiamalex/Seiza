@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { WorldObject } from "../multiplayer/types";
 import { optimizeVrmAvatar } from "../avatar/optimizeVrm";
 import { inputStyle, panelStyle, pillButtonActiveStyle, pillButtonStyle, popoverStyle } from "../ui/styles";
-import { EditIcon } from "../ui/icons";
+import { EditIcon, ScreenShareIcon, TextBoardIcon } from "../ui/icons";
 
 interface EditToolbarProps {
   enabled: boolean;
@@ -15,7 +15,8 @@ interface EditToolbarProps {
   connected: boolean;
   editMode: boolean;
   onToggleEditMode: () => void;
-  onSpawn: (kind: WorldObject["kind"], modelUrl?: string) => void;
+  /** `pitch` tilts what's placed; a note is a board laid flat. */
+  onSpawn: (kind: WorldObject["kind"], modelUrl?: string, pitch?: number) => void;
   selectedId: string | null;
   transformMode: "translate" | "rotate";
   onTransformModeChange: (mode: "translate" | "rotate") => void;
@@ -208,7 +209,7 @@ export function EditToolbar({
               <button style={transformMode === "rotate" ? pillButtonActiveStyle : pillButtonStyle} onClick={() => onTransformModeChange("rotate")}>Rotate</button>
             </div>
           )}
-          <div style={{ display: "flex", gap: 6 }}>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             <button style={pillButtonStyle} disabled={!connected} onClick={() => onSpawn("box")}>
               + Box
             </button>
@@ -219,6 +220,27 @@ export function EditToolbar({
               + Cylinder
             </button>
           </div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <button style={pillButtonStyle} disabled={!connected} onClick={() => onSpawn("text")} title="A board to write on">
+              <TextBoardIcon /> Board
+            </button>
+            <button
+              style={pillButtonStyle}
+              disabled={!connected}
+              // Laid flat, which is what makes it a sheet of paper rather
+              // than a board (see WorldObjects.tsx).
+              onClick={() => onSpawn("text", undefined, -Math.PI / 2)}
+              title="A sheet of paper for a desk"
+            >
+              <TextBoardIcon /> Note
+            </button>
+            <button style={pillButtonStyle} disabled={!connected} onClick={() => onSpawn("screen")} title="A display to present on">
+              <ScreenShareIcon /> Screen
+            </button>
+          </div>
+          <small style={{ opacity: 0.7 }}>
+            Leave edit mode to use them: click a board or note to write on it, a screen to present on it.
+          </small>
           <div style={{ display: "flex", flexDirection: "column", gap: 5, borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 8 }}>
             <strong>Environment</strong>
             <small style={{ opacity: 0.7 }}>

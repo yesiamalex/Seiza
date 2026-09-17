@@ -1,4 +1,5 @@
 import type { CustomGestureConfig } from "../avatar/gestures";
+import type { WorldObjectKind } from "../multiplayer/types";
 
 export interface WorldConfig {
   id: string;
@@ -39,6 +40,26 @@ export interface WorldConfig {
    * scripts/fetch-assets.mjs for wiring them into a setup step.
    */
   defaultAvatars?: AvatarPreset[];
+  /**
+   * Objects this world starts with: notice boards, notes on desks, a screen
+   * to present on. They are placed once, by the first person to enter an
+   * empty room, and then live in the room like anything else — movable,
+   * writable, deletable. Leave it out and the room simply starts bare.
+   */
+  defaultObjects?: DefaultWorldObject[];
+}
+
+export interface DefaultWorldObject {
+  kind: WorldObjectKind;
+  position: [number, number, number];
+  rotationY?: number;
+  /** Tilt about X; use -1.5708 to lay a note flat on a desk. */
+  pitch?: number;
+  scale?: number;
+  color?: string;
+  /** For "text": first line is the heading. */
+  text?: string;
+  modelUrl?: string;
 }
 
 export interface AvatarPreset {

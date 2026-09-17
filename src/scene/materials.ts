@@ -164,16 +164,20 @@ export function getWorldMaterials(): WorldMaterials {
     furnitureTop: standard("#e7cfa6", { roughness: 0.5 }),
     metal: standard("#9aa3ab", { roughness: 0.4, metalness: 0.25 }),
     board: standard("#3d6152", { roughness: 0.85 }),
-    // Faintly lit from within, so the panes glow with the low sun outside
-    // instead of reading as flat blue slabs.
+    // Mostly see-through now that windows are real openings in the wall
+    // (see DressedWall's `windows` prop) rather than a pane in front of
+    // solid plaster — low opacity so the sunset sky and light actually show
+    // through, with just enough tint and a faint warm glow to still read as
+    // glass instead of an empty hole.
     glass: new THREE.MeshStandardMaterial({
-      color: "#ffe2bd",
-      roughness: 0.1,
+      color: "#ffe9d2",
+      roughness: 0.08,
       transparent: true,
-      opacity: 0.45,
+      opacity: 0.16,
       emissive: new THREE.Color("#ffbc73"),
-      emissiveIntensity: 0.55,
+      emissiveIntensity: 0.18,
       side: THREE.DoubleSide,
+      depthWrite: false,
     }),
     lantern: new THREE.MeshStandardMaterial({ color: "#fff1d2", emissive: new THREE.Color("#ffce85"), emissiveIntensity: 0.9, roughness: 0.6 }),
     // Double-sided: a sheet of paper is a flat plane, and from behind a

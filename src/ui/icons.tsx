@@ -41,6 +41,36 @@ export function MicIcon(props: IconProps) {
   );
 }
 
+export function CameraIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="2" y="6" width="13" height="12" rx="2.5" />
+      <path d="M15 10.5 22 7v10l-7-3.5z" />
+    </Svg>
+  );
+}
+
+export function ScreenShareIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="2.5" y="4" width="19" height="12.5" rx="2" />
+      <path d="M9 20h6" />
+      <path d="M12 9.5v4" />
+      <path d="M9.8 11.7 12 9.5l2.2 2.2" />
+    </Svg>
+  );
+}
+
+export function TextBoardIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="3" y="4" width="18" height="14" rx="2" />
+      <path d="M7 9h10" />
+      <path d="M7 13h6" />
+    </Svg>
+  );
+}
+
 export function MicOffIcon(props: IconProps) {
   return (
     <Svg {...props}>

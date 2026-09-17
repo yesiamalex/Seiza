@@ -109,8 +109,13 @@ export const Scene = memo(function Scene({
   return (
     <>
       <OnDemandShadows refreshKey={shadowRefreshKey} />
-      {/* Higher turbidity and rayleigh is what turns the sky orange. */}
-      <Sky sunPosition={SUN} turbidity={9} rayleigh={2.6} mieCoefficient={0.012} mieDirectionalG={0.92} />
+      {/* Higher turbidity and rayleigh is what turns the sky orange.
+          `distance` (drei's Sky defaults to 1000) has to stay inside the
+          Canvas camera's far plane (App.tsx sets it to 260, tightened to
+          stop nearby surfaces z-fighting) or the sky dome sits beyond the
+          far clip and never renders at all — which is what made the newly
+          opened windows look out at nothing, rather than the sunset. */}
+      <Sky sunPosition={SUN} distance={200} turbidity={9} rayleigh={2.6} mieCoefficient={0.012} mieDirectionalG={0.92} />
       {/* Warm sky above, warmer bounce off the wooden floor below. A big
           share of the light comes from here rather than the sun, which is
           what keeps the shadows soft. */}

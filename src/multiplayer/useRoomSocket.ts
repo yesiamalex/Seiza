@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ChatMessage, ClientMessage, PlayerState, Posture, ServerMessage, WorldObject } from "./types";
+import type { ChatMessage, ClientMessage, PlayerMedia, PlayerState, Posture, ServerMessage, WorldObject } from "./types";
 
 // The production Worker serves both the app and the Durable Object route, so
 // same-origin is the reliable default. Set VITE_SEIZA_ROOM_HOST only when the
@@ -32,6 +32,12 @@ export interface MultiplayerState {
   sendChat: (text: string) => void;
   /** Take up or drop a held pose, so other clients hold it too. */
   setPosture: (posture: Posture) => void;
+  /** Write on a board or a note. */
+  setObjectText: (id: string, text: string) => void;
+  /** Claim a screen to present on, or hand it back. */
+  presentOnObject: (id: string, active: boolean) => void;
+  /** Publish which of our live streams is which (see PlayerMedia). */
+  setMedia: (media: PlayerMedia) => void;
   connected: boolean;
   connectionState: ConnectionState;
   /** Whether this deployment has SEIZA_EDITOR_PASSWORD set at all — if
@@ -63,7 +69,7 @@ export interface MultiplayerState {
  * with a URL scheme of this project's own choosing.
  *
  * `onVoiceSignal` is a ref-stable escape hatch for WebRTC signaling
- * (see src/voice/useVoiceChat.ts) — those messages are relay-only and
+ * (see src/media/useRealtimeMedia.ts) — those messages are relay-only and
  * don't belong in `players`/`objects` state, so they're handed off via
  * callback instead of being buffered here.
  */
@@ -121,6 +127,9 @@ export function useRoomSocket(
   const removeObject = useCallback((id: string) => send({ type: "objectRemove", id }), [send]);
   const sendChat = useCallback((text: string) => send({ type: "chat", text }), [send]);
   const setPosture = useCallback((posture: Posture) => send({ type: "setPosture", posture }), [send]);
+  const setObjectText = useCallback((id: string, text: string) => send({ type: "objectSetText", id, text }), [send]);
+  const presentOnObject = useCallback((id: string, active: boolean) => send({ type: "objectPresent", id, active }), [send]);
+  const setMedia = useCallback((media: PlayerMedia) => send({ type: "setMedia", media }), [send]);
   const setEnvironment = useCallback((url: string | null) => send({ type: "setEnvironment", url }), [send]);
   const authEditor = useCallback(
     (password: string) => {
@@ -232,6 +241,12 @@ export function useRoomSocket(
               prev[msg.id] ? { ...prev, [msg.id]: { ...prev[msg.id], position: msg.position, rotationY: msg.rotationY } } : prev
             );
             break;
+          case "objectUpdated":
+            setObjects((prev) => ({ ...prev, [msg.object.id]: msg.object }));
+            break;
+          case "playerMedia":
+            setPlayers((prev) => (prev[msg.id] ? { ...prev, [msg.id]: { ...prev[msg.id], media: msg.media } } : prev));
+            break;
           case "objectRemoved":
             setObjects((prev) => {
               const next = { ...prev };
@@ -303,6 +318,9 @@ export function useRoomSocket(
     removeObject,
     sendChat,
     setPosture,
+    setObjectText,
+    presentOnObject,
+    setMedia,
     connected: connectionState === "connected",
     connectionState,
     editorPasswordRequired,

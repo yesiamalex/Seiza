@@ -243,17 +243,21 @@ const waveUp = (swing) => ({
   head: { z: -4, y: -4 },
 });
 
-/** Hands in front of the chest, palms facing each other. `close` runs from
- *  the open position to palms touching. */
+/**
+ * Hands in front of the chest, palms facing each other. `close` runs from
+ * the open position to palms touching. Re-solved on a rig at true chest
+ * height (~1.06m — the sternum, not the collarbone) after the first pass
+ * landed the open hands up near the shoulder/chin and read as clipped.
+ */
 const palmsTogether = (close) => ({
   leftShoulder: { z: -25 },
   rightShoulder: { z: 25 },
-  leftUpperArm: { z: -85 - 25 * close, y: -18 + 13 * close, x: -3 },
-  rightUpperArm: { z: 85 + 25 * close, y: 18 - 13 * close, x: -3 },
-  leftLowerArm: { y: -(107 - 8 * close), x: -26 + 20 * close },
-  rightLowerArm: { y: 107 - 8 * close, x: 26 - 20 * close },
-  leftHand: { z: -28 },
-  rightHand: { z: 28 },
+  leftUpperArm: { z: -62 - 37 * close, y: -14 - 7 * close, x: 21 - 1 * close },
+  rightUpperArm: { z: 62 + 37 * close, y: 14 + 7 * close, x: 21 - 1 * close },
+  leftLowerArm: { y: -(97 - 10 * close), x: -23 + 16 * close },
+  rightLowerArm: { y: 97 - 10 * close, x: 23 - 16 * close },
+  leftHand: { z: -19 },
+  rightHand: { z: 19 },
 });
 const GESTURES = [
   {
@@ -338,10 +342,14 @@ const GESTURES = [
           rightLowerLeg: { x: 152 },
           leftFoot: { x: 60 },
           rightFoot: { x: 60 },
-          leftUpperArm: { z: -99, x: -19 },
-          rightUpperArm: { z: 99, x: -19 },
-          leftLowerArm: { y: -2, x: 120 },
-          rightLowerArm: { y: 2, x: -120 },
+          // Re-solved with the elbow held to a genuinely relaxed ~28° bend
+          // instead of the earlier near-straight arm — the first pass
+          // minimized hand-to-thigh distance with no regard for the elbow,
+          // which is what read as a stiff, clipped-looking arm.
+          leftUpperArm: { z: -82, x: -17 },
+          rightUpperArm: { z: 82, x: -17 },
+          leftLowerArm: { y: -28, x: 111, z: 20 },
+          rightLowerArm: { y: 28, x: -111, z: -20 },
           _hips: [0, -0.61, 0],
         },
       },
@@ -454,10 +462,13 @@ const GESTURES = [
     label: "Gasshō (thanks)",
     fullBody: false,
     keys: (() => {
-      // Solved on a real rig: the hands meet at the chest, about a
-      // centimetre apart, with the palms facing each other and the fingers
-      // up. Getting there needs the shoulders drawn in and the upper arms
-      // rotated inward, not just a bent elbow.
+      // Solved on a real rig at true chest/sternum height (~1.1m — the
+      // original solve minimized only hand-to-hand distance and palm
+      // facing, with no height target, and landed near the collarbone,
+      // which read as hands held up by the face rather than at the chest).
+      // Getting the hands together there needs a wrist bend too, not just
+      // the shoulder and elbow, so the fingers still angle upward instead
+      // of flattening out toward the chest.
       const palms = (bow) => ({
         spine: { x: bow },
         chest: { x: bow * 0.55 },
@@ -465,12 +476,12 @@ const GESTURES = [
         head: { x: 8 + bow * 0.25 },
         leftShoulder: { z: -25 },
         rightShoulder: { z: 25 },
-        leftUpperArm: { z: -35, y: -89, x: 37 },
-        rightUpperArm: { z: 35, y: 89, x: 37 },
-        leftLowerArm: { y: -114, x: -1 },
-        rightLowerArm: { y: 114, x: 1 },
-        leftHand: { z: 12 },
-        rightHand: { z: -12 },
+        leftUpperArm: { z: -100, y: 60, x: -51 },
+        rightUpperArm: { z: 100, y: -60, x: -51 },
+        leftLowerArm: { y: -98, x: -1 },
+        rightLowerArm: { y: 98, x: 1 },
+        leftHand: { z: -40, x: -50 },
+        rightHand: { z: 40, x: -50 },
       });
       return [
         { t: 0, pose: {} },
@@ -516,8 +527,12 @@ const GESTURES = [
   {
     // Sitting on a chair or bench. Triggered by clicking a seat rather
     // than from the gesture menu (hence `hidden`), and held until the
-    // player stands up. The 0.45m hips drop matches SEAT_HEIGHT in
-    // src/scene/layout.ts, so feet land on the floor and hips on the seat.
+    // player stands up. The 0.40m hips drop clears SEAT_HEIGHT in
+    // src/scene/layout.ts (0.45 - 0.40 leaves the hips ~0.55m up, a few
+    // centimetres above the seat cushion) — the original -0.45 drop landed
+    // the hips almost exactly level with the cushion, which is what read as
+    // sinking into the chair on avatars with slightly different proportions
+    // than the one this was tuned against.
     name: "sit",
     label: "Sit",
     fullBody: true,
@@ -544,18 +559,25 @@ const GESTURES = [
           spine: { x: 4 },
           chest: { x: -2 },
           head: { x: 2 },
-          leftUpperLeg: { x: -86, z: 5 },
-          rightUpperLeg: { x: -86, z: -5 },
-          leftLowerLeg: { x: 84 },
-          rightLowerLeg: { x: 84 },
-          leftFoot: { x: 6 },
-          rightFoot: { x: 6 },
-          // Hands resting on the thighs (measured against a real rig).
-          leftUpperArm: { z: -85, x: -35 },
-          rightUpperArm: { z: 85, x: -35 },
-          leftLowerArm: { y: -30, x: 105 },
-          rightLowerArm: { y: 30, x: -105 },
-          _hips: [0, -0.45, 0],
+          // Less extreme than the first pass (thigh was fully horizontal,
+          // shin bent further back) — a slightly more upright seat, with a
+          // bit more hip clearance above the chair (see the note above).
+          leftUpperLeg: { x: -78, z: 5 },
+          rightUpperLeg: { x: -78, z: -5 },
+          leftLowerLeg: { x: 76 },
+          rightLowerLeg: { x: 76 },
+          leftFoot: { x: 8 },
+          rightFoot: { x: 8 },
+          // Hands resting lightly on top of the thighs. The elbow bend
+          // (30°) is pinned rather than left for the solver to pick: an
+          // unconstrained search happily flattens the arm to nearly
+          // straight (it still lands near the thigh that way), which is
+          // what read as a stiff, locked elbow.
+          leftUpperArm: { z: -81, x: -29 },
+          rightUpperArm: { z: 81, x: -29 },
+          leftLowerArm: { y: -30, x: 102 },
+          rightLowerArm: { y: 30, x: -102 },
+          _hips: [0, -0.4, 0],
         },
       },
     ],

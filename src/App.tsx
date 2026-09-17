@@ -15,10 +15,12 @@ import { PlayerRig, type ViewMode } from "./player/PlayerRig";
 import { TouchControls } from "./player/TouchControls";
 import { createTouchMoveInput, type TouchMoveInput } from "./player/touchInput";
 import { useNavMesh } from "./nav/useNavMesh";
-import { useVoiceChat } from "./voice/useVoiceChat";
-import { VoiceControls } from "./voice/VoiceControls";
+import { useRealtimeMedia } from "./media/useRealtimeMedia";
+import { MediaControls } from "./media/MediaControls";
+import { CameraBadge } from "./media/CameraBadge";
 import { WorldObjects } from "./edit/WorldObjects";
 import { EditToolbar } from "./edit/EditToolbar";
+import { TextEditorDialog } from "./edit/TextEditorDialog";
 import { GesturePanel } from "./interactions/GesturePanel";
 import { ChatPanel } from "./chat/ChatPanel";
 import { HUD } from "./ui/HUD";
@@ -29,13 +31,17 @@ import { useMediaQuery, useWantsTouchControls } from "./ui/useMediaQuery";
 import { saveProfile } from "./profile/profileStore";
 import { panelStyle, pillButtonActiveStyle, pillButtonStyle } from "./ui/styles";
 import { CloseIcon, PersonIcon, VrHeadsetIcon } from "./ui/icons";
-import type { WorldObject } from "./multiplayer/types";
+import type { WorldObject, WorldObjectKind } from "./multiplayer/types";
 
 // Keep baseline immersive VR compatible with headsets that do not implement
 // optional scene-understanding or DOM-overlay features. These are not needed
 // for Seiza's controller-based locomotion or in-world UI.
 const xrStore = createXRStore({ meshDetection: false, planeDetection: false, domOverlay: false });
 const OBJECT_COLORS = ["#c94f4f", "#4f8fc9", "#4fc97e", "#c9a94f", "#9a4fc9"];
+// Boards and screens get the app's accent rather than a random colour.
+const ACCENT_OBJECT_COLOR = "#e8c37a";
+// How far a "share my screen" from the toolbar will reach for a display.
+const SHARE_REACH = 30;
 const NETWORK_TICK_MS = 200;
 // Custom clips don't declare a duration up front. AvatarAnimator reports
 // the real end; this only bounds how long a stuck gesture can stay "active".
@@ -133,6 +139,9 @@ export default function App() {
     removeObject,
     sendChat,
     setPosture: sendPosture,
+    setObjectText,
+    presentOnObject,
+    setMedia,
     connected,
     connectionState,
     editorPasswordRequired,
@@ -159,19 +168,26 @@ export default function App() {
   }, [joined, environmentUrl, navMesh]);
 
   const sendSignal = useCallback((to: string, data: unknown) => send({ type: "voiceSignal", to, data }), [send]);
-  const voice = useVoiceChat({ selfId, players, sendSignal });
-  voiceSignalHandlerRef.current = voice.handleSignal;
+  const media = useRealtimeMedia({ selfId, players, sendSignal });
+  voiceSignalHandlerRef.current = media.handleSignal;
+
+  // Tell the room which of our streams is which, so receivers can put each
+  // one where it belongs (spatial audio, the panel beside us, a screen).
+  useEffect(() => {
+    if (!connected) return;
+    setMedia(media.localMedia);
+  }, [connected, media.localMedia, setMedia]);
 
   const positionRef = useRef<[number, number, number]>([0, 0, 0]);
   const rotationRef = useRef(0);
   const lookYawRef = useRef(0);
 
-  // voice.updateSpatial is recreated whenever `players` changes (i.e.
+  // media.updateSpatial is recreated whenever `players` changes (i.e.
   // often) — read it through a ref inside the interval below rather than
   // as an effect dependency, so the interval doesn't need to be torn
   // down and rebuilt on every remote-player update.
-  const updateSpatialRef = useRef(voice.updateSpatial);
-  updateSpatialRef.current = voice.updateSpatial;
+  const updateSpatialRef = useRef(media.updateSpatial);
+  updateSpatialRef.current = media.updateSpatial;
 
   useEffect(() => {
     if (!connected) return;
@@ -314,24 +330,149 @@ export default function App() {
   }, [menuGestures, requestGesture, releaseGesture, joined]);
 
   const handleSpawn = useCallback(
-    (kind: WorldObject["kind"], modelUrl?: string) => {
+    (kind: WorldObjectKind, modelUrl?: string, pitch = 0) => {
       const [px, py, pz] = positionRef.current;
       // In front of the camera, not the avatar: in third person those differ,
       // and you want the object where you're looking.
       const yaw = lookYawRef.current;
-      const distance = 2;
-      const spawnPosition: [number, number, number] = [px - Math.sin(yaw) * distance, py + 1, pz - Math.cos(yaw) * distance];
+      const flat = Math.abs(pitch) > 0.6;
+      // Put each kind where it's actually used: a note on a desk, a board at
+      // eye level, a screen a little above that.
+      const distance = flat ? 1.1 : 2;
+      const height = flat ? 0.78 : kind === "screen" ? 1.9 : kind === "text" ? 1.6 : 1;
+      const spawnPosition: [number, number, number] = [
+        px - Math.sin(yaw) * distance,
+        py + height,
+        pz - Math.cos(yaw) * distance,
+      ];
       addObject({
         kind,
         modelUrl,
-        color: OBJECT_COLORS[Math.floor(Math.random() * OBJECT_COLORS.length)],
+        color:
+          kind === "text" || kind === "screen"
+            ? ACCENT_OBJECT_COLOR
+            : OBJECT_COLORS[Math.floor(Math.random() * OBJECT_COLORS.length)],
         position: spawnPosition,
-        rotationY: 0,
+        // Boards and screens face whoever placed them.
+        rotationY: yaw + Math.PI,
+        pitch,
         scale: 1,
+        text: kind === "text" ? "" : undefined,
       });
     },
     [addObject]
   );
+
+  // --- boards, notes and screens --------------------------------------------
+  const [editingText, setEditingText] = useState<WorldObject | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const canEditWorld = world?.editingEnabled !== false && (!editorPasswordRequired || isEditor);
+
+  const screens = useMemo(() => Object.values(objects).filter((object) => object.kind === "screen"), [objects]);
+  const myScreenId = useMemo(() => screens.find((screen) => screen.presenterId === selfId)?.id ?? null, [screens, selfId]);
+  const myScreenIdRef = useRef<string | null>(null);
+  myScreenIdRef.current = myScreenId;
+
+  const handleEditText = useCallback(
+    (object: WorldObject) => {
+      if (!canEditWorld) {
+        setNotice("This world needs the editor password before you can write on a board.");
+        return;
+      }
+      setEditingText(object);
+    },
+    [canEditWorld]
+  );
+
+  const presentOn = useCallback(
+    async (object: WorldObject) => {
+      if (object.presenterId === selfId) {
+        presentOnObject(object.id, false);
+        media.stopScreen();
+        return;
+      }
+      if (object.presenterId) {
+        setNotice("Someone else is presenting on that screen.");
+        return;
+      }
+      // Capture first, claim second: claiming and then having the picker
+      // dismissed would lock a screen to a presenter with nothing to show.
+      const started = media.screenOn || (await media.startScreen());
+      if (!started) return;
+      presentOnObject(object.id, true);
+    },
+    [media, presentOnObject, selfId]
+  );
+
+  /** "Share your screen" from the toolbar picks the nearest free display. */
+  const shareOnNearestScreen = useCallback((): string | null => {
+    const free = screens.filter((screen) => !screen.presenterId || screen.presenterId === selfId);
+    if (free.length === 0) return "There's no screen in this world yet. Place one from Edit world, then click it.";
+    const [px, py, pz] = positionRef.current;
+    const nearest = free
+      .map((screen) => ({
+        screen,
+        distance: Math.hypot(screen.position[0] - px, screen.position[1] - py, screen.position[2] - pz),
+      }))
+      .sort((a, b) => a.distance - b.distance)[0];
+    if (nearest.distance > SHARE_REACH) return "Walk closer to a screen, then click it to present.";
+    void presentOn(nearest.screen);
+    return null;
+  }, [presentOn, screens, selfId]);
+
+  const stopSharing = useCallback(() => {
+    const id = myScreenIdRef.current;
+    if (id) presentOnObject(id, false);
+    media.stopScreen();
+  }, [media, presentOnObject]);
+
+  // A share can also end on its own, from the browser's own "Stop sharing"
+  // button. Give the screen back rather than leaving it claimed and blank.
+  const screenOn = media.screenOn;
+  useEffect(() => {
+    if (screenOn) return;
+    const id = myScreenIdRef.current;
+    if (id) presentOnObject(id, false);
+  }, [screenOn, presentOnObject]);
+
+  const resolveScreenStream = useCallback(
+    (object: WorldObject) => {
+      if (!object.presenterId) return null;
+      if (object.presenterId === selfId) return media.localScreenStream;
+      return media.getStream(object.presenterId, players[object.presenterId]?.media?.screen);
+    },
+    // streamsVersion is the signal that a remote stream has arrived.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [media.getStream, media.localScreenStream, media.streamsVersion, players, selfId]
+  );
+
+  // The first person into an empty room places whatever the world config says
+  // it should start with. Only when alone, so two people arriving together
+  // don't both place a set.
+  const seededRef = useRef(false);
+  useEffect(() => {
+    if (seededRef.current || !world || !joined || !connected) return;
+    const defaults = world.defaultObjects ?? [];
+    if (defaults.length === 0) return;
+    if (Object.keys(objects).length > 0) {
+      seededRef.current = true; // this room already has its furniture
+      return;
+    }
+    if (!canEditWorld || Object.keys(players).length !== 1) return;
+    seededRef.current = true;
+    for (const object of defaults) {
+      addObject({
+        kind: object.kind,
+        modelUrl: object.modelUrl,
+        color: object.color ?? ACCENT_OBJECT_COLOR,
+        position: object.position,
+        rotationY: object.rotationY ?? 0,
+        pitch: object.pitch ?? 0,
+        scale: object.scale ?? 1,
+        text: object.text,
+      });
+    }
+  }, [addObject, canEditWorld, connected, joined, objects, players, world]);
 
   const handleDeleteSelected = useCallback(() => {
     if (!selectedObjectId) return;
@@ -449,6 +590,8 @@ export default function App() {
             onStandUp={standUp}
           >
             <VrmAvatar url={joined.localUrl ?? joined.url} onLoaded={setLocalVrm} />
+            {/* Your own camera, so you can see what everyone else sees. */}
+            <CameraBadge stream={media.localCameraStream} mirrored />
             <AvatarAnimator
               vrm={localVrm}
               getPosition={() => positionRef.current}
@@ -458,7 +601,14 @@ export default function App() {
               posture={posture}
             />
           </PlayerRig>
-          <RemotePlayers players={players} selfId={selfId} speakingLevels={voice.speakingLevels} gestures={gestures} />
+          <RemotePlayers
+            players={players}
+            selfId={selfId}
+            speakingLevels={media.speakingLevels}
+            gestures={gestures}
+            getStream={media.getStream}
+            streamsVersion={media.streamsVersion}
+          />
           <WorldObjects
             objects={objects}
             editMode={editMode && editingEnabled && isEditor}
@@ -466,6 +616,9 @@ export default function App() {
             transformMode={transformMode}
             onSelect={setSelectedObjectId}
             onMove={moveObject}
+            onEditText={handleEditText}
+            onPresentToggle={(object) => void presentOn(object)}
+            resolveScreenStream={resolveScreenStream}
           />
         </XR>
       </Canvas>
@@ -536,7 +689,12 @@ export default function App() {
           <VrHeadsetIcon /> Enter VR
         </button>
         <CameraViewToggle viewMode={viewMode} onToggle={() => setViewMode((v) => (v === "first" ? "third" : "first"))} />
-        {voiceVisible && <VoiceControls voice={voice} />}
+        <MediaControls
+          media={media}
+          voiceEnabled={voiceVisible}
+          onShareScreen={shareOnNearestScreen}
+          onStopScreen={stopSharing}
+        />
         <GesturePanel
           gestures={menuGestures}
           lastGesture={localGesture ? { name: localGesture.gesture.name, seq: localGesture.seq } : null}
@@ -578,6 +736,17 @@ export default function App() {
         />
       </HUD>
       {showTouchControls && !webglLost && <TouchControls inputRef={touchInputRef} />}
+      {editingText && (
+        <TextEditorDialog
+          initialText={editingText.text ?? ""}
+          surface={Math.abs(editingText.pitch ?? 0) > 0.6 ? "note" : "board"}
+          onSave={(text) => {
+            setObjectText(editingText.id, text);
+            setEditingText(null);
+          }}
+          onCancel={() => setEditingText(null)}
+        />
+      )}
       {webglLost && (
         <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", pointerEvents: "auto", background: "rgba(6,7,9,0.86)", color: "white", fontFamily: "system-ui, sans-serif", padding: 24, textAlign: "center" }}>
           <div style={{ maxWidth: 420 }}>
@@ -586,9 +755,13 @@ export default function App() {
           </div>
         </div>
       )}
-      {xrError && (
-        <div role="alert" style={{ position: "absolute", left: "50%", bottom: 82, transform: "translateX(-50%)", maxWidth: "min(420px, 90vw)", padding: "10px 14px", borderRadius: 10, backgroundColor: "rgba(80,30,24,0.94)", color: "white", fontFamily: "system-ui, sans-serif", fontSize: 13, textAlign: "center", pointerEvents: "auto" }}>
-          {xrError}
+      {(xrError || notice) && (
+        <div
+          role="alert"
+          onClick={() => setNotice(null)}
+          style={{ position: "absolute", left: "50%", bottom: 82, transform: "translateX(-50%)", maxWidth: "min(420px, 90vw)", padding: "10px 14px", borderRadius: 10, backgroundColor: xrError ? "rgba(80,30,24,0.94)" : "rgba(28,34,46,0.94)", color: "white", fontFamily: "system-ui, sans-serif", fontSize: 13, textAlign: "center", pointerEvents: "auto", cursor: notice ? "pointer" : "default" }}
+        >
+          {xrError ?? notice}
         </div>
       )}
     </div>

@@ -15,7 +15,7 @@ const RING_RADIUS_OUTER = 0.45;
 
 /** Floating, always-camera-facing label + a pulsing ring at the feet
  *  while the player's mic is active (reuses the voice level data already
- *  computed in useVoiceChat — see App.tsx/RemotePlayers.tsx wiring). */
+ *  computed in useRealtimeMedia — see App.tsx/RemotePlayers.tsx wiring). */
 export function NameTag({ name, position, speaking }: NameTagProps) {
   return (
     <>

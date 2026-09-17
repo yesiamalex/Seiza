@@ -165,9 +165,13 @@ export const TEACHER_DESK: [number, number, number] = [-3.4, 0, CLASSROOM_FRONT_
 /**
  * How far forward of the seat's middle an avatar actually sits. Sitting a
  * body exactly on the centre of the seat buries its back in the backrest,
- * which is the clipping you see on any chair that isn't a stool.
+ * which is the clipping you see on any chair that isn't a stool. Wider than
+ * a bare anatomical fit needs, because clothing (a skirt, a long coat) has
+ * no cloth simulation and doesn't fold the way a real seated person's does —
+ * it stays roughly rigid, so it needs the extra clearance from the backrest
+ * that a real garment would find for itself.
  */
-const SEAT_FORWARD_OFFSET = 0.12;
+const SEAT_FORWARD_OFFSET = 0.17;
 
 /** Unit vector an avatar at this yaw faces (avatars face -Z at yaw 0). */
 export function facingVector(rotationY: number): [number, number] {

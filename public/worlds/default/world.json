@@ -8,5 +8,38 @@
   "editingEnabled": true,
   "allowAvatarUpload": true,
   "defaultAvatars": [],
-  "customGestures": []
+  "customGestures": [],
+  "defaultObjects": [
+    {
+      "kind": "text",
+      "position": [11.55, 2.1, 9],
+      "rotationY": -1.5708,
+      "text": "Welcome\n- Click a chair or bench to sit down\n- Press 1-9 and 0 for gestures\n- Click this board to change what it says"
+    },
+    {
+      "kind": "screen",
+      "position": [-11.5, 2.2, 7],
+      "rotationY": 1.5708
+    },
+    {
+      "kind": "screen",
+      "position": [4.3, 2, -23.55],
+      "rotationY": 0,
+      "scale": 0.9
+    },
+    {
+      "kind": "text",
+      "position": [-3.6, 0.78, -19.8],
+      "rotationY": 0,
+      "pitch": -1.5708,
+      "text": "Today\n- Write here"
+    },
+    {
+      "kind": "text",
+      "position": [3.6, 0.78, -19.8],
+      "rotationY": 0,
+      "pitch": -1.5708,
+      "text": ""
+    }
+  ]
 }

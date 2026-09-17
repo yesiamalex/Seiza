@@ -19,6 +19,8 @@ export interface PlayerState {
   activeGesture: string | null;
   /** Held pose, or null when standing. See the Posture type. */
   posture: Posture;
+  /** Live stream ids, so receivers know what each stream is for. */
+  media: PlayerMedia;
   /** Incremented by the server every time this player starts a gesture.
    *  Lets clients replay the same gesture twice in a row, and lets a
    *  newly joined client tell "already playing before I arrived" apart
@@ -26,15 +28,42 @@ export interface PlayerState {
   gestureSeq: number;
 }
 
+export const WORLD_OBJECT_KINDS = ["box", "sphere", "cylinder", "model", "text", "screen"] as const;
+export type WorldObjectKind = (typeof WORLD_OBJECT_KINDS)[number];
+
+/** Longest text a board or note will hold. Long enough for a notice, short
+ *  enough that it stays readable on a panel and cheap to sync. */
+export const MAX_OBJECT_TEXT_LENGTH = 600;
+
 export interface WorldObject {
   id: string;
-  kind: "box" | "sphere" | "cylinder" | "model";
+  kind: WorldObjectKind;
   modelUrl?: string;
   color: string;
   position: [number, number, number];
   rotationY: number;
+  /** Tilt about X. Lets a note lie flat on a desk instead of standing up. */
+  pitch?: number;
   scale: number;
   ownerId: string;
+  /** Contents of a "text" object: first line is the heading. */
+  text?: string;
+  /** Who is presenting on a "screen" object, or null when it's free. */
+  presenterId?: string | null;
+}
+
+/**
+ * Which of a player's live streams is which.
+ *
+ * WebRTC hands a receiver a stream but not what it's for, so each player
+ * publishes the ids here and every client matches the incoming stream to
+ * the right place: the microphone to spatial audio, the camera to the panel
+ * beside their avatar, the screen to whichever display they're presenting on.
+ */
+export interface PlayerMedia {
+  mic?: string | null;
+  camera?: string | null;
+  screen?: string | null;
 }
 
 export interface ChatMessage {
@@ -59,6 +88,13 @@ export type ClientMessage =
   | { type: "objectAdd"; object: Omit<WorldObject, "id" | "ownerId"> }
   | { type: "objectMove"; id: string; position: [number, number, number]; rotationY: number }
   | { type: "objectRemove"; id: string }
+  // Writes on a text board or a note.
+  | { type: "objectSetText"; id: string; text: string }
+  // Claims a screen to present on, or gives it back up. Only the presenter
+  // can release their own screen; leaving the room releases it too.
+  | { type: "objectPresent"; id: string; active: boolean }
+  // Publishes which live stream is which (see PlayerMedia).
+  | { type: "setMedia"; media: PlayerMedia }
   | { type: "chat"; text: string }
   // Swaps the room's environment model for everyone, live. `null` falls
   // back to the deployment's own world.json sceneUrl (or the procedural
@@ -98,7 +134,10 @@ export type ServerMessage =
   | { type: "playerLeft"; id: string }
   | { type: "objectAdded"; object: WorldObject }
   | { type: "objectMoved"; id: string; position: [number, number, number]; rotationY: number }
+  /** A whole object changed (its text, or who is presenting on it). */
+  | { type: "objectUpdated"; object: WorldObject }
   | { type: "objectRemoved"; id: string }
+  | { type: "playerMedia"; id: string; media: PlayerMedia }
   | { type: "chat"; message: ChatMessage }
   | { type: "editorAuthResult"; granted: boolean }
   | { type: "voiceSignal"; from: string; data: unknown };

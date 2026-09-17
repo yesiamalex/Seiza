@@ -1,5 +1,15 @@
 import { DurableObject } from "cloudflare:workers";
-import type { ClientMessage, PlayerState, Posture, ServerMessage, WorldObject } from "../src/multiplayer/types";
+import {
+  MAX_OBJECT_TEXT_LENGTH,
+  WORLD_OBJECT_KINDS,
+  type ClientMessage,
+  type PlayerMedia,
+  type PlayerState,
+  type Posture,
+  type ServerMessage,
+  type WorldObject,
+  type WorldObjectKind,
+} from "../src/multiplayer/types";
 import type { Env } from "./index";
 
 const OBJECTS_STORAGE_KEY = "objects";
@@ -12,7 +22,14 @@ const ENVIRONMENT_STORAGE_KEY = "environmentUrl";
 // editingEnabled/allowAvatarUpload.
 const MAX_OBJECTS = 300;
 const CHAT_MIN_INTERVAL_MS = 400;
-const VALID_OBJECT_KINDS = new Set(["box", "sphere", "cylinder", "model"]);
+const VALID_OBJECT_KINDS = new Set<string>(WORLD_OBJECT_KINDS);
+// Writing on a board, taking over a screen and publishing stream ids are all
+// broadcast to the whole room, so each gets a minimum gap per connection.
+const TEXT_EDIT_MIN_INTERVAL_MS = 250;
+const PRESENT_MIN_INTERVAL_MS = 400;
+const MEDIA_MIN_INTERVAL_MS = 300;
+// MediaStream ids are browser-generated (UUID-ish, occasionally braced).
+const STREAM_ID = /^[A-Za-z0-9._:{}-]{1,128}$/;
 const BOUNDS_LIMIT = 100; // generous outer bound — BaseEnvironment's own radius is smaller; this just rejects nonsense values, not enforcing gameplay bounds
 // A shared password, not per-user accounts — this project's "lean,
 // anyone-can-self-deploy" constraint rules out standing up real auth
@@ -51,6 +68,9 @@ interface ConnectionAttachment {
   lastChatAt?: number;
   lastGestureAt?: number;
   lastAvatarChangeAt?: number;
+  lastTextAt?: number;
+  lastPresentAt?: number;
+  lastMediaAt?: number;
   isEditor?: boolean;
   authAttempts?: number;
 }
@@ -147,6 +167,7 @@ export class SeizaRoom extends DurableObject<Env> {
           activeGesture: null,
           gestureSeq: 0,
           posture: null,
+          media: {},
         };
         ws.serializeAttachment({ connId: attachment.connId, player } satisfies ConnectionAttachment);
 
@@ -293,6 +314,61 @@ export class SeizaRoom extends DurableObject<Env> {
         this.broadcast({ type: "objectRemoved", id: message.id });
         break;
       }
+      case "objectSetText": {
+        // Writing on a board is an edit, so it follows the same permission
+        // rule as placing one.
+        if (this.env.SEIZA_EDITOR_PASSWORD && !attachment.isEditor) return;
+        if (!attachment.player) return;
+        const object = this.objects.get(message.id);
+        if (!object || object.kind !== "text") return;
+        const now = Date.now();
+        if (attachment.lastTextAt && now - attachment.lastTextAt < TEXT_EDIT_MIN_INTERVAL_MS) return;
+        if (typeof message.text !== "string") return;
+        attachment.lastTextAt = now;
+        ws.serializeAttachment(attachment);
+        object.text = sanitizeText(message.text);
+        this.persistObjects();
+        // Echoed to everyone including the writer: an object's text lives
+        // only in synced state, same reasoning as objectMoved.
+        this.broadcast({ type: "objectUpdated", object });
+        break;
+      }
+      case "objectPresent": {
+        // Deliberately not editor-gated: presenting is using the room, not
+        // changing it. A screen can only be claimed when free, and only the
+        // presenter can give it back.
+        if (!attachment.player) return;
+        const object = this.objects.get(message.id);
+        if (!object || object.kind !== "screen") return;
+        const now = Date.now();
+        if (attachment.lastPresentAt && now - attachment.lastPresentAt < PRESENT_MIN_INTERVAL_MS) return;
+        attachment.lastPresentAt = now;
+        ws.serializeAttachment(attachment);
+        if (message.active === true) {
+          if (object.presenterId && object.presenterId !== attachment.connId) return; // taken
+          object.presenterId = attachment.connId;
+        } else {
+          if (object.presenterId !== attachment.connId) return;
+          object.presenterId = null;
+        }
+        // Not persisted deliberately: who is presenting is about who is
+        // currently connected, and persisting it would restore a presenter
+        // who has long since left.
+        this.broadcast({ type: "objectUpdated", object });
+        break;
+      }
+      case "setMedia": {
+        if (!attachment.player) return;
+        const now = Date.now();
+        if (attachment.lastMediaAt && now - attachment.lastMediaAt < MEDIA_MIN_INTERVAL_MS) return;
+        const media = sanitizeMedia(message.media);
+        if (!media) return;
+        attachment.lastMediaAt = now;
+        attachment.player.media = media;
+        ws.serializeAttachment(attachment);
+        this.broadcast({ type: "playerMedia", id: attachment.connId, media }, attachment.connId);
+        break;
+      }
       case "setEnvironment": {
         if (this.env.SEIZA_EDITOR_PASSWORD && !attachment.isEditor) return;
         // null clears the override; anything else goes through the same
@@ -338,6 +414,14 @@ export class SeizaRoom extends DurableObject<Env> {
   async webSocketClose(ws: WebSocket) {
     const attachment = ws.deserializeAttachment() as ConnectionAttachment | null;
     if (attachment?.player) {
+      // Free any screen they were presenting on, or it would stay claimed by
+      // someone who isn't here any more.
+      for (const object of this.objects.values()) {
+        if (object.kind === "screen" && object.presenterId === attachment.connId) {
+          object.presenterId = null;
+          this.broadcast({ type: "objectUpdated", object });
+        }
+      }
       this.broadcast({ type: "playerLeft", id: attachment.connId });
     }
   }
@@ -403,7 +487,7 @@ function validateNewObject(input: unknown): Omit<WorldObject, "id" | "ownerId"> 
   const obj = input as Record<string, unknown>;
 
   if (typeof obj.kind !== "string" || !VALID_OBJECT_KINDS.has(obj.kind)) return null;
-  const kind = obj.kind as WorldObject["kind"];
+  const kind = obj.kind as WorldObjectKind;
 
   if (typeof obj.color !== "string" || obj.color.length === 0 || obj.color.length > 32) return null;
 
@@ -422,7 +506,46 @@ function validateNewObject(input: unknown): Omit<WorldObject, "id" | "ownerId"> 
     modelUrl = sanitized;
   }
 
-  return { kind, modelUrl, color: obj.color, position, rotationY: obj.rotationY, scale };
+  // Tilt, so a note can lie flat on a desk. Clamped rather than rejected:
+  // it's cosmetic, and a nonsense value shouldn't lose the whole object.
+  const pitch =
+    typeof obj.pitch === "number" && Number.isFinite(obj.pitch) ? Math.min(Math.PI, Math.max(-Math.PI, obj.pitch)) : 0;
+
+  const text = kind === "text" ? sanitizeText(obj.text) : undefined;
+  // `presenterId` is never accepted from a client: a screen is claimed
+  // through objectPresent, which checks it's actually free.
+  const presenterId = kind === "screen" ? null : undefined;
+
+  return { kind, modelUrl, color: obj.color, position, rotationY: obj.rotationY, pitch, scale, text, presenterId };
+}
+
+/**
+ * Board and note text. Control characters go (they'd break rendering and
+ * could smuggle escapes into a deployer's logs) but ordinary newlines stay,
+ * because the first line is the heading and the rest is the body.
+ */
+function sanitizeText(input: unknown): string {
+  if (typeof input !== "string") return "";
+  let cleaned = "";
+  for (const ch of input) {
+    const code = ch.codePointAt(0) ?? 0;
+    if (ch === "\n" || (code >= 0x20 && code !== 0x7f)) cleaned += ch;
+  }
+  return cleaned.slice(0, MAX_OBJECT_TEXT_LENGTH);
+}
+
+/** Stream ids are opaque browser-generated strings; anything else is dropped. */
+function sanitizeMedia(input: unknown): PlayerMedia | null {
+  if (typeof input !== "object" || input === null) return null;
+  const raw = input as Record<string, unknown>;
+  const media: PlayerMedia = {};
+  for (const key of ["mic", "camera", "screen"] as const) {
+    const value = raw[key];
+    if (value === undefined || value === null) continue;
+    if (typeof value !== "string" || !STREAM_ID.test(value)) return null;
+    media[key] = value;
+  }
+  return media;
 }
 
 /**

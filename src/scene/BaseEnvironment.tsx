@@ -161,9 +161,27 @@ function WallRun({
   );
 }
 
+/** A window opening in a wall run: centred at `center` along the wall's
+ *  length, `width` wide, cut between `sillY` and `headerY`. */
+interface WindowOpening {
+  center: number;
+  width: number;
+  sillY: number;
+  headerY: number;
+}
+
 /**
  * Plaster wall with a wood wainscot along the bottom and a trim band at
  * the top — the thing that stops a procedural room reading as grey boxes.
+ *
+ * `windows`, when given, cuts real openings into the plaster rather than
+ * just mounting a decorative pane in front of solid wall: the plaster layer
+ * splits into three stacked bands (below the sill, the window band itself,
+ * above the header), and the window band gets an extra length-wise gap per
+ * window — the same mechanism `WallRun`'s `gaps` already uses for doorways,
+ * just applied to a height slice instead of the wall's full height. The
+ * wainscot and trim bands don't need splitting: at this room's proportions
+ * neither one's height range overlaps where windows sit.
  */
 function DressedWall(props: {
   axis: "x" | "z";
@@ -173,8 +191,29 @@ function DressedWall(props: {
   height: number;
   gaps?: Gap[];
   m: WorldMaterials;
+  windows?: WindowOpening[];
 }) {
-  const { m, ...run } = props;
+  const { m, windows, ...run } = props;
+  const doorGaps = run.gaps ?? [];
+
+  if (windows && windows.length > 0) {
+    // All the openings here are assumed to share one sill/header band —
+    // true for every wall this is used on — so the surrounding wall only
+    // needs three bands total, not one pair per window.
+    const sillY = Math.min(...windows.map((w) => w.sillY));
+    const headerY = Math.max(...windows.map((w) => w.headerY));
+    const windowGaps = windows.map((w) => ({ from: w.center - w.width / 2, to: w.center + w.width / 2 }));
+    return (
+      <group>
+        <WallRun {...run} height={sillY} centerY={sillY / 2} gaps={doorGaps} material={m.wall} />
+        <WallRun {...run} height={headerY - sillY} centerY={(sillY + headerY) / 2} gaps={[...doorGaps, ...windowGaps]} material={m.wall} />
+        <WallRun {...run} height={run.height - headerY} centerY={(headerY + run.height) / 2} gaps={doorGaps} material={m.wall} />
+        <WallRun {...run} height={0.95} centerY={0.475} material={m.wainscot} thickness={WALL_THICKNESS + 0.08} />
+        <WallRun {...run} height={0.16} centerY={run.height - 0.12} material={m.trim} thickness={WALL_THICKNESS + 0.2} />
+      </group>
+    );
+  }
+
   return (
     <group>
       {/* The wainscot and trim stand proud of the wall by clearly different
@@ -223,6 +262,12 @@ function Window({
   );
 }
 
+const HALL_WINDOW_Z = [1.5, 5.5, 9.5, 13.5];
+const HALL_WINDOW_WIDTH = 2;
+const HALL_WINDOW_CENTER_Y = 2.3;
+const HALL_WINDOW_SILL = 1.5;
+const HALL_WINDOW_HEADER = 3.12;
+
 function HallShell({ m }: { m: WorldMaterials }) {
   return (
     <group>
@@ -237,15 +282,33 @@ function HallShell({ m }: { m: WorldMaterials }) {
         gaps={[{ from: -DOOR_HALF_WIDTH, to: DOOR_HALF_WIDTH }]}
         m={m}
       />
-      <DressedWall axis="z" at={HALL.minX} from={HALL.minZ} to={HALL.maxZ} height={WALL_HEIGHT} m={m} />
-      <DressedWall axis="z" at={HALL.maxX} from={HALL.minZ} to={HALL.maxZ} height={WALL_HEIGHT} m={m} />
+      <DressedWall
+        axis="z"
+        at={HALL.minX}
+        from={HALL.minZ}
+        to={HALL.maxZ}
+        height={WALL_HEIGHT}
+        m={m}
+        windows={HALL_WINDOW_Z.map((center) => ({ center, width: HALL_WINDOW_WIDTH, sillY: HALL_WINDOW_SILL, headerY: HALL_WINDOW_HEADER }))}
+      />
+      <DressedWall
+        axis="z"
+        at={HALL.maxX}
+        from={HALL.minZ}
+        to={HALL.maxZ}
+        height={WALL_HEIGHT}
+        m={m}
+        windows={HALL_WINDOW_Z.map((center) => ({ center, width: HALL_WINDOW_WIDTH, sillY: HALL_WINDOW_SILL, headerY: HALL_WINDOW_HEADER }))}
+      />
 
-      {/* Daylight on both long walls. */}
-      {[1.5, 5.5, 9.5, 13.5].map((z) => (
-        <Window key={`w-${z}`} position={[HALL.minX + 0.2, 2.3, z]} rotationY={Math.PI / 2} m={m} />
+      {/* Real openings now (see DressedWall's `windows` prop), not a pane
+          mounted on solid plaster — the sunset sky and low sun show
+          through, on both long walls. */}
+      {HALL_WINDOW_Z.map((z) => (
+        <Window key={`w-${z}`} position={[HALL.minX + 0.2, HALL_WINDOW_CENTER_Y, z]} rotationY={Math.PI / 2} width={HALL_WINDOW_WIDTH} m={m} />
       ))}
-      {[1.5, 5.5, 9.5, 13.5].map((z) => (
-        <Window key={`e-${z}`} position={[HALL.maxX - 0.2, 2.3, z]} rotationY={-Math.PI / 2} m={m} />
+      {HALL_WINDOW_Z.map((z) => (
+        <Window key={`e-${z}`} position={[HALL.maxX - 0.2, HALL_WINDOW_CENTER_Y, z]} rotationY={-Math.PI / 2} width={HALL_WINDOW_WIDTH} m={m} />
       ))}
 
       {/* Entrance doors (decorative — the walls are the real boundary). */}
@@ -430,6 +493,13 @@ function CorridorShell({ m }: { m: WorldMaterials }) {
   );
 }
 
+const CLASSROOM_WINDOW_Z = [-20.5, -17.5, -14.5, -11.6];
+const CLASSROOM_WINDOW_WIDTH = 2.2;
+const CLASSROOM_WINDOW_HEIGHT = 1.7;
+const CLASSROOM_WINDOW_CENTER_Y = 2;
+const CLASSROOM_WINDOW_SILL = 1.08;
+const CLASSROOM_WINDOW_HEADER = 2.92;
+
 function ClassroomShell({ m }: { m: WorldMaterials }) {
   return (
     <group>
@@ -443,7 +513,20 @@ function ClassroomShell({ m }: { m: WorldMaterials }) {
         m={m}
       />
       <DressedWall axis="x" at={CLASSROOM.minZ} from={CLASSROOM.minX} to={CLASSROOM.maxX} height={CLASSROOM_WALL_HEIGHT} m={m} />
-      <DressedWall axis="z" at={CLASSROOM.minX} from={CLASSROOM.minZ} to={CLASSROOM.maxZ} height={CLASSROOM_WALL_HEIGHT} m={m} />
+      <DressedWall
+        axis="z"
+        at={CLASSROOM.minX}
+        from={CLASSROOM.minZ}
+        to={CLASSROOM.maxZ}
+        height={CLASSROOM_WALL_HEIGHT}
+        m={m}
+        windows={CLASSROOM_WINDOW_Z.map((center) => ({
+          center,
+          width: CLASSROOM_WINDOW_WIDTH,
+          sillY: CLASSROOM_WINDOW_SILL,
+          headerY: CLASSROOM_WINDOW_HEADER,
+        }))}
+      />
       <DressedWall axis="z" at={CLASSROOM.maxX} from={CLASSROOM.minZ} to={CLASSROOM.maxZ} height={CLASSROOM_WALL_HEIGHT} m={m} />
       <mesh
         position={[0, CLASSROOM_WALL_HEIGHT - 0.02, (CLASSROOM.minZ + CLASSROOM.maxZ) / 2]}
@@ -453,9 +536,18 @@ function ClassroomShell({ m }: { m: WorldMaterials }) {
         <planeGeometry args={[CLASSROOM.maxX - CLASSROOM.minX, CLASSROOM.maxZ - CLASSROOM.minZ]} />
       </mesh>
 
-      {/* Window wall, the way a Japanese classroom is usually laid out. */}
-      {[-20.5, -17.5, -14.5, -11.6].map((z) => (
-        <Window key={z} position={[CLASSROOM.minX + 0.2, 2, z]} rotationY={Math.PI / 2} width={2.2} height={1.7} m={m} />
+      {/* Window wall, the way a Japanese classroom is usually laid out —
+          real openings (see DressedWall's `windows` prop), so the sunset
+          outside and its low light actually come through. */}
+      {CLASSROOM_WINDOW_Z.map((z) => (
+        <Window
+          key={z}
+          position={[CLASSROOM.minX + 0.2, CLASSROOM_WINDOW_CENTER_Y, z]}
+          rotationY={Math.PI / 2}
+          width={CLASSROOM_WINDOW_WIDTH}
+          height={CLASSROOM_WINDOW_HEIGHT}
+          m={m}
+        />
       ))}
 
       {/* Ceiling lamps: two fixtures, one light between them. */}
@@ -531,10 +623,9 @@ function ClassroomFurniture({ m }: { m: WorldMaterials }) {
                 <boxGeometry args={[0.06, 0.7, 0.06]} />
               </mesh>
             ))}
-            {/* An open notebook, for a bit of colour on the desktop. */}
-            <mesh position={[0.08, 0.76, -0.04]} rotation={[-Math.PI / 2, 0, 0.08]} material={m.paper}>
-              <planeGeometry args={[0.42, 0.3]} />
-            </mesh>
+            {/* No paper drawn here on purpose: the notes on these desks are
+                real objects that can be written on and moved, placed from
+                world.json's defaultObjects. */}
           </group>
           <Chair position={[desk.position[0], 0, desk.position[2] + 0.78]} rotationY={0} m={m} />
         </group>
@@ -580,9 +671,13 @@ function Chair({ position, rotationY, m }: { position: [number, number, number];
       <mesh position={[0, SEAT_HEIGHT, 0]} material={m.furnitureLight} castShadow receiveShadow>
         <boxGeometry args={[0.46, 0.07, 0.46]} />
       </mesh>
-      {/* Behind the sitter, who faces -Z in local space. */}
-      <mesh position={[0, SEAT_HEIGHT + 0.3, 0.2]} rotation={[0.1, 0, 0]} material={m.furnitureLight} castShadow>
-        <boxGeometry args={[0.44, 0.42, 0.06]} />
+      {/* Behind the sitter, who faces -Z in local space and sits forward of
+          this chair's own centre (see SEAT_FORWARD_OFFSET in layout.ts) —
+          pushed back a little further and shortened so a coat or skirt,
+          which doesn't fold the way real cloth would, has room to sit
+          between the two without visibly poking through the backrest. */}
+      <mesh position={[0, SEAT_HEIGHT + 0.28, 0.24]} rotation={[0.08, 0, 0]} material={m.furnitureLight} castShadow>
+        <boxGeometry args={[0.44, 0.38, 0.06]} />
       </mesh>
       {[
         [-0.19, -0.19],
