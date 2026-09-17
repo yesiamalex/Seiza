@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import type * as THREE from "three";
 import type { ThreeEvent } from "@react-three/fiber";
 import { getWorldMaterials, type WorldMaterials } from "./materials";
@@ -44,7 +44,11 @@ interface BaseEnvironmentProps {
   occupiedSeatId?: string | null;
 }
 
-export function BaseEnvironment({ onFloorDoubleClick, onSit, occupiedSeatId }: BaseEnvironmentProps) {
+export const BaseEnvironment = memo(function BaseEnvironment({
+  onFloorDoubleClick,
+  onSit,
+  occupiedSeatId,
+}: BaseEnvironmentProps) {
   const m = getWorldMaterials();
   return (
     <group>
@@ -58,7 +62,7 @@ export function BaseEnvironment({ onFloorDoubleClick, onSit, occupiedSeatId }: B
         SEATS.map((seat) => <SeatPad key={seat.id} seat={seat} onSit={onSit} occupied={occupiedSeatId === seat.id} />)}
     </group>
   );
-}
+});
 
 // --- shells ----------------------------------------------------------------
 
@@ -173,9 +177,12 @@ function DressedWall(props: {
   const { m, ...run } = props;
   return (
     <group>
+      {/* The wainscot and trim stand proud of the wall by clearly different
+          amounts. Nearly-equal offsets put two parallel faces a hair apart,
+          which is what makes surfaces flicker as the camera turns. */}
       <WallRun {...run} material={m.wall} />
-      <WallRun {...run} height={0.95} centerY={0.475} material={m.wainscot} thickness={WALL_THICKNESS + 0.06} />
-      <WallRun {...run} height={0.16} centerY={run.height - 0.12} material={m.trim} thickness={WALL_THICKNESS + 0.08} />
+      <WallRun {...run} height={0.95} centerY={0.475} material={m.wainscot} thickness={WALL_THICKNESS + 0.08} />
+      <WallRun {...run} height={0.16} centerY={run.height - 0.12} material={m.trim} thickness={WALL_THICKNESS + 0.2} />
     </group>
   );
 }
@@ -274,7 +281,8 @@ function HallFurniture({ m }: { m: WorldMaterials }) {
     <group>
       {/* Tatami platform the benches face — where seiza practice happens. */}
       <group position={[HALL_CENTRE[0], 0, HALL_CENTRE[1]]}>
-        <mesh position={[0, 0.07, 0]} receiveShadow material={m.tatami}>
+        {/* Sunk a hair so its underside isn't coplanar with the floor. */}
+        <mesh position={[0, 0.06, 0]} receiveShadow material={m.tatami}>
           <boxGeometry args={[9, 0.14, 7]} />
         </mesh>
         {[
@@ -306,21 +314,24 @@ function HallFurniture({ m }: { m: WorldMaterials }) {
         </mesh>
       </group>
 
-      {/* Posts with paper lanterns, and the warm light they cast. */}
+      {/* Posts with paper lanterns. Only two of the four carry an actual
+          light: every extra point light is paid for by every material in
+          the scene, avatars included, and the lanterns read as lit from
+          their emissive glow either way. */}
       {[
-        [-8.6, 0.8],
-        [8.6, 0.8],
-        [-8.6, 12.2],
-        [8.6, 12.2],
-      ].map(([x, z]) => (
-        <group key={`${x}-${z}`} position={[x, 0, z]}>
+        { x: -8.6, z: 0.8, light: true },
+        { x: 8.6, z: 0.8, light: false },
+        { x: -8.6, z: 12.2, light: false },
+        { x: 8.6, z: 12.2, light: true },
+      ].map((post) => (
+        <group key={`${post.x}-${post.z}`} position={[post.x, 0, post.z]}>
           <mesh position={[0, WALL_HEIGHT / 2, 0]} material={m.trim} castShadow>
             <boxGeometry args={[0.34, WALL_HEIGHT, 0.34]} />
           </mesh>
           <mesh position={[0, 2.75, 0]} material={m.lantern}>
             <sphereGeometry args={[0.26, 20, 14]} />
           </mesh>
-          <pointLight position={[0, 2.75, 0]} intensity={9} distance={13} decay={2} color="#ffd9a8" />
+          {post.light && <pointLight position={[0, 2.75, 0]} intensity={16} distance={20} decay={2} color="#ffd9a8" />}
         </group>
       ))}
 
@@ -379,18 +390,23 @@ function CorridorShell({ m }: { m: WorldMaterials }) {
     <group>
       <DressedWall axis="z" at={CORRIDOR.minX} from={CORRIDOR.minZ} to={CORRIDOR.maxZ} height={3.2} m={m} />
       <DressedWall axis="z" at={CORRIDOR.maxX} from={CORRIDOR.minZ} to={CORRIDOR.maxZ} height={3.2} m={m} />
-      <mesh position={[0, 3.2, (CORRIDOR.minZ + CORRIDOR.maxZ) / 2]} rotation={[Math.PI / 2, 0, 0]} material={m.ceiling}>
+      {/* Just under the wall tops: level with them, the ceiling and the wall
+          caps would be coplanar and flicker along every edge. */}
+      <mesh position={[0, 3.18, (CORRIDOR.minZ + CORRIDOR.maxZ) / 2]} rotation={[Math.PI / 2, 0, 0]} material={m.ceiling}>
         <planeGeometry args={[CORRIDOR.maxX - CORRIDOR.minX, CORRIDOR.maxZ - CORRIDOR.minZ]} />
       </mesh>
-      {/* Doorway frames at both ends. */}
+      {/* Doorway frames, sized to stand inside the opening rather than
+          straddling the wall's edge. Sharing a face with the wall there put
+          two coplanar surfaces at identical depth, which is exactly the
+          flicker that showed up when looking at a doorway from an angle. */}
       {[CORRIDOR.minZ, CORRIDOR.maxZ].map((z) => (
         <group key={z} position={[0, 0, z]}>
           <mesh position={[0, 2.45, 0]} material={m.trim} castShadow>
-            <boxGeometry args={[DOOR_HALF_WIDTH * 2 + 0.3, 0.3, 0.45]} />
+            <boxGeometry args={[DOOR_HALF_WIDTH * 2 - 0.2, 0.3, 0.5]} />
           </mesh>
           {[-1, 1].map((side) => (
-            <mesh key={side} position={[side * (DOOR_HALF_WIDTH + 0.08), 1.2, 0]} material={m.trim} castShadow>
-              <boxGeometry args={[0.16, 2.6, 0.45]} />
+            <mesh key={side} position={[side * (DOOR_HALF_WIDTH - 0.18), 1.2, 0]} material={m.trim} castShadow>
+              <boxGeometry args={[0.22, 2.6, 0.5]} />
             </mesh>
           ))}
         </group>
@@ -430,7 +446,7 @@ function ClassroomShell({ m }: { m: WorldMaterials }) {
       <DressedWall axis="z" at={CLASSROOM.minX} from={CLASSROOM.minZ} to={CLASSROOM.maxZ} height={CLASSROOM_WALL_HEIGHT} m={m} />
       <DressedWall axis="z" at={CLASSROOM.maxX} from={CLASSROOM.minZ} to={CLASSROOM.maxZ} height={CLASSROOM_WALL_HEIGHT} m={m} />
       <mesh
-        position={[0, CLASSROOM_WALL_HEIGHT, (CLASSROOM.minZ + CLASSROOM.maxZ) / 2]}
+        position={[0, CLASSROOM_WALL_HEIGHT - 0.02, (CLASSROOM.minZ + CLASSROOM.maxZ) / 2]}
         rotation={[Math.PI / 2, 0, 0]}
         material={m.ceiling}
       >
@@ -442,15 +458,15 @@ function ClassroomShell({ m }: { m: WorldMaterials }) {
         <Window key={z} position={[CLASSROOM.minX + 0.2, 2, z]} rotationY={Math.PI / 2} width={2.2} height={1.7} m={m} />
       ))}
 
-      {/* Ceiling lamps. */}
+      {/* Ceiling lamps: two fixtures, one light between them. */}
       {[-20, -14.5].map((z) => (
         <group key={z} position={[0, CLASSROOM_WALL_HEIGHT - 0.25, z]}>
           <mesh material={m.lantern}>
             <cylinderGeometry args={[0.7, 0.7, 0.12, 20]} />
           </mesh>
-          <pointLight intensity={14} distance={16} decay={2} color="#fff3dd" />
         </group>
       ))}
+      <pointLight position={[0, CLASSROOM_WALL_HEIGHT - 0.4, -17.2]} intensity={20} distance={22} decay={2} color="#fff3dd" />
     </group>
   );
 }

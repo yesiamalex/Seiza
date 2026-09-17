@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 
 /**
@@ -120,5 +120,9 @@ export function useNavMesh(sourceRef: React.MutableRefObject<THREE.Object3D | nu
     }
   }, []);
 
-  return { findPath, rebuild };
+  // Memoized: this object ends up in the dependencies of the floor-click
+  // handler, which is a prop of the (memoized) scene. Returning a fresh
+  // object each render would invalidate that chain on every state change
+  // and re-render the whole world.
+  return useMemo(() => ({ findPath, rebuild }), [findPath, rebuild]);
 }

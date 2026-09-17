@@ -2,7 +2,12 @@ import { useEffect, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { VRMAnimationLoaderPlugin, createVRMAnimationClip, type VRMAnimation } from "@pixiv/three-vrm-animation";
+import {
+  VRMAnimationLoaderPlugin,
+  VRMLookAtQuaternionProxy,
+  createVRMAnimationClip,
+  type VRMAnimation,
+} from "@pixiv/three-vrm-animation";
 import { VRMHumanBoneList, type VRM, type VRMHumanBoneName } from "@pixiv/three-vrm";
 import { LOCOMOTION_CLIPS } from "./builtinMotions.generated";
 import type { GestureDefinition } from "./gestures";
@@ -72,6 +77,22 @@ const GESTURE_FADE_OUT = 0.3;
 const POSTURE_FADE_RATE = 7; // sitting down and standing up ease in/out
 const MAX_DELTA = 1 / 20;
 
+/**
+ * Retargeting a clip onto one avatar is the expensive part of playing a
+ * gesture, so it happens once per avatar per clip and is kept.
+ *
+ * It used to happen on every single trigger, and the cost was worse than it
+ * looked: when an avatar has no VRMLookAtQuaternionProxy,
+ * `createVRMAnimationClip` builds one and adds it to the avatar's scene, so
+ * every gesture click also permanently grew the scene graph. Playing with
+ * the gesture menu for a minute left a visibly slower page behind.
+ */
+interface ClipBundle {
+  full: THREE.AnimationClip;
+  upper: THREE.AnimationClip;
+  lower: THREE.AnimationClip;
+}
+
 interface SplitActions {
   upper: THREE.AnimationAction;
   lower: THREE.AnimationAction;
@@ -83,16 +104,15 @@ interface LocomotionState extends SplitActions {
 }
 
 interface PostureState extends SplitActions {
-  clips: THREE.AnimationClip[];
   url: string;
   weight: number;
-  /** False once released: weight eases to 0, then it's disposed. */
+  /** False once released: weight eases to 0, then the actions stop. */
   active: boolean;
 }
 
 interface GestureLayer {
+  url: string;
   action: THREE.AnimationAction;
-  clip: THREE.AnimationClip;
   duration: number;
   fullBody: boolean;
   hold: boolean;
@@ -109,9 +129,35 @@ interface AnimatorState {
   run: LocomotionState | null;
   posture: PostureState | null;
   gestures: GestureLayer[];
+  /** Retargeted clips for this avatar, keyed by clip URL. */
+  clips: Map<string, ClipBundle>;
   phase: number;
   speed: number;
   lastPosition: THREE.Vector3 | null;
+}
+
+/**
+ * Without this, three-vrm creates one per clip and adds it to the avatar,
+ * warning each time. Creating it once up front silences the warning and
+ * keeps repeated gestures from growing the scene.
+ */
+function ensureLookAtProxy(vrm: VRM) {
+  if (!vrm.lookAt) return;
+  if (vrm.scene.children.some((child) => child instanceof VRMLookAtQuaternionProxy)) return;
+  const proxy = new VRMLookAtQuaternionProxy(vrm.lookAt);
+  proxy.name = "VRMLookAtQuaternionProxy";
+  vrm.scene.add(proxy);
+}
+
+function getClipBundle(state: AnimatorState, url: string, animation: VRMAnimation): ClipBundle {
+  const cached = state.clips.get(url);
+  if (cached) return cached;
+  const full = createVRMAnimationClip(animation, state.vrm);
+  full.name = `seiza:${url}`;
+  const { upper, lower } = splitClip(full, state.vrm);
+  const bundle = { full, upper, lower };
+  state.clips.set(url, bundle);
+  return bundle;
 }
 
 export interface AvatarAnimatorProps {
@@ -169,6 +215,7 @@ export function AvatarAnimator({
   // Per-avatar setup: mixer now, locomotion clips as soon as they load.
   useEffect(() => {
     if (!vrm) return;
+    ensureLookAtProxy(vrm);
     const mixer = new THREE.AnimationMixer(vrm.scene);
     const state: AnimatorState = {
       vrm,
@@ -178,6 +225,7 @@ export function AvatarAnimator({
       run: null,
       posture: null,
       gestures: [],
+      clips: new Map(),
       phase: 0,
       speed: 0,
       lastPosition: null,
@@ -189,8 +237,8 @@ export function AvatarAnimator({
     vrm.scene.visible = false;
     let cancelled = false;
 
-    const build = (animation: VRMAnimation, loop: boolean): LocomotionState => {
-      const { upper, lower } = splitClip(createVRMAnimationClip(animation, vrm), vrm);
+    const build = (animation: VRMAnimation, url: string, loop: boolean): LocomotionState => {
+      const { upper, lower } = getClipBundle(state, url, animation);
       const make = (clip: THREE.AnimationClip) => {
         const action = mixer.clipAction(clip);
         action.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, Infinity);
@@ -208,13 +256,13 @@ export function AvatarAnimator({
     ]).then(([idle, walk, run]) => {
       if (cancelled) return;
       if (idle.status === "fulfilled") {
-        state.idle = build(idle.value, true);
+        state.idle = build(idle.value, LOCOMOTION_CLIPS.idle, true);
         state.idle.weight = 1;
       } else {
         console.warn("Idle animation failed to load; avatar will stand in its rest pose.", idle.reason);
       }
-      if (walk.status === "fulfilled") state.walk = build(walk.value, true);
-      if (run.status === "fulfilled") state.run = build(run.value, true);
+      if (walk.status === "fulfilled") state.walk = build(walk.value, LOCOMOTION_CLIPS.walk, true);
+      if (run.status === "fulfilled") state.run = build(run.value, LOCOMOTION_CLIPS.run, true);
       for (const moving of [state.walk, state.run]) {
         // Walk/run are positioned by hand from ground speed, not by clock.
         if (moving) {
@@ -229,6 +277,7 @@ export function AvatarAnimator({
       cancelled = true;
       mixer.stopAllAction();
       mixer.uncacheRoot(vrm.scene);
+      state.clips.clear();
       vrm.humanoid.resetNormalizedPose();
       vrm.scene.visible = true;
       if (stateRef.current === state) stateRef.current = null;
@@ -254,23 +303,33 @@ export function AvatarAnimator({
         // Marked here, not when the effect starts, so React StrictMode's
         // mount-cleanup-mount in development doesn't swallow the gesture.
         playedSeqRef.current = gestureSeq;
-        const clip = createVRMAnimationClip(animation, vrm);
-        clip.name = `gesture:${gestureUrl}:${gestureSeq}`;
-        const action = state.mixer.clipAction(clip);
-        action.setLoop(THREE.LoopOnce, 1);
-        action.clampWhenFinished = true;
-        action.setEffectiveWeight(0);
-        action.play();
-        for (const layer of state.gestures) layer.fadingOut = true;
-        state.gestures.push({
-          action,
-          clip,
-          duration: clip.duration,
-          fullBody: gestureFullBody,
-          hold: gestureHold,
-          weight: 0,
-          fadingOut: false,
-        });
+        const bundle = getClipBundle(state, gestureUrl, animation);
+        // Replaying the same gesture reuses its layer and rewinds it,
+        // rather than stacking a second copy of the same clip.
+        let layer = state.gestures.find((existing) => existing.url === gestureUrl);
+        if (!layer) {
+          layer = {
+            url: gestureUrl,
+            action: state.mixer.clipAction(bundle.full),
+            duration: bundle.full.duration,
+            fullBody: gestureFullBody,
+            hold: gestureHold,
+            weight: 0,
+            fadingOut: false,
+          };
+          state.gestures.push(layer);
+        }
+        layer.fullBody = gestureFullBody;
+        layer.hold = gestureHold;
+        layer.fadingOut = false;
+        layer.action.setLoop(THREE.LoopOnce, 1);
+        layer.action.clampWhenFinished = true;
+        layer.action.reset();
+        layer.action.setEffectiveWeight(layer.weight);
+        layer.action.play();
+        for (const other of state.gestures) {
+          if (other !== layer) other.fadingOut = true;
+        }
       })
       .catch((error) => {
         console.warn(`Gesture clip failed to load (${gestureUrl}):`, error);
@@ -311,10 +370,11 @@ export function AvatarAnimator({
       .then((animation) => {
         const current = stateRef.current;
         if (cancelled || !current || current.vrm !== vrm) return;
-        if (current.posture) current.posture.active = false;
-        const clip = createVRMAnimationClip(animation, vrm);
-        clip.name = `posture:${postureUrl}`;
-        const { upper, lower } = splitClip(clip, vrm);
+        if (current.posture) {
+          current.posture.upper.stop();
+          current.posture.lower.stop();
+        }
+        const bundle = getClipBundle(current, postureUrl, animation);
         const make = (part: THREE.AnimationClip) => {
           const action = current.mixer.clipAction(part);
           action.setLoop(THREE.LoopOnce, 1);
@@ -324,7 +384,7 @@ export function AvatarAnimator({
           action.play();
           return action;
         };
-        current.posture = { upper: make(upper), lower: make(lower), clips: [upper, lower], url: postureUrl, weight: 0, active: true };
+        current.posture = { upper: make(bundle.upper), lower: make(bundle.lower), url: postureUrl, weight: 0, active: true };
       })
       .catch((error) => console.warn(`Posture clip failed to load (${postureUrl}):`, error));
     return () => {
@@ -394,12 +454,9 @@ export function AvatarAnimator({
       postureLayer.weight = approach(postureLayer.weight, postureLayer.active ? 1 : 0, POSTURE_FADE_RATE, delta);
       postureWeight = postureLayer.weight;
       if (!postureLayer.active && postureLayer.weight < 0.01) {
+        // Stopped, but the retargeted clip stays cached for the next sit.
         postureLayer.upper.stop();
         postureLayer.lower.stop();
-        for (const clip of postureLayer.clips) {
-          state.mixer.uncacheAction(clip);
-          state.mixer.uncacheClip(clip);
-        }
         state.posture = null;
         postureWeight = 0;
       }
@@ -428,11 +485,7 @@ export function AvatarAnimator({
       (layer) => layer.weight <= 0 && (layer.fadingOut || (!layer.hold && layer.action.time >= layer.duration - 1e-3))
     );
     if (finished.length) {
-      for (const layer of finished) {
-        layer.action.stop();
-        state.mixer.uncacheAction(layer.clip);
-        state.mixer.uncacheClip(layer.clip);
-      }
+      for (const layer of finished) layer.action.stop();
       const endedNaturally = finished.some((layer) => !layer.fadingOut);
       state.gestures = state.gestures.filter((layer) => !finished.includes(layer));
       if (endedNaturally && state.gestures.length === 0) onGestureEndRef.current?.();

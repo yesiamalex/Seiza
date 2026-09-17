@@ -369,8 +369,17 @@ export default function App() {
   return (
     <div style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden" }}>
       <Canvas
-        camera={{ position: [0, 1.6, 4] }}
+        // near/far are deliberately tight around the world's actual size.
+        // The default 0.1–1000 range spends most of the depth buffer on
+        // distance nothing occupies, which shows up as surfaces flickering
+        // against each other when the camera moves.
+        camera={{ position: [0, 1.6, 4], near: 0.12, far: 260 }}
         shadows
+        // Rendering at the full device pixel ratio means four times the
+        // pixels on a typical high-density screen, which is what pushed
+        // weaker GPUs into dropped frames and lost contexts.
+        dpr={[1, 1.5]}
+        gl={{ powerPreference: "high-performance" }}
         fallback={<CenteredMessage text="3D graphics are unavailable in this browser." />}
         onCreated={({ gl }) => {
           gl.domElement.addEventListener("webglcontextlost", (event) => {
@@ -392,6 +401,9 @@ export default function App() {
               // seats stop accepting clicks entirely.
               onSit={editMode ? undefined : sitDown}
               occupiedSeatId={seat?.id ?? null}
+              // Placed objects cast shadows and can be dragged, so the
+              // otherwise-frozen shadow map refreshes when they change.
+              shadowRefreshKey={objects}
             />
           </group>
           <PlayerRig

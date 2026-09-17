@@ -1,5 +1,6 @@
-import { Component, Suspense, type ReactNode } from "react";
+import { Component, Suspense, memo, useEffect, type ReactNode } from "react";
 import { useGLTF, Sky } from "@react-three/drei";
+import { useThree } from "@react-three/fiber";
 import type * as THREE from "three";
 import { BaseEnvironment } from "./BaseEnvironment";
 import type { Seat } from "./layout";
@@ -9,6 +10,44 @@ interface SceneProps {
   onFloorDoubleClick?: (point: THREE.Vector3) => void;
   onSit?: (seat: Seat) => void;
   occupiedSeatId?: string | null;
+  /** Any value that changes when shadow-casting geometry changes. */
+  shadowRefreshKey?: unknown;
+}
+
+/** How often the frozen shadow map refreshes anyway, to pick up geometry
+ *  that arrived late (a streamed glTF, a newly joined player). */
+const SHADOW_HEARTBEAT_MS = 2000;
+
+/**
+ * The built-in world doesn't move, so re-rendering the whole scene into the
+ * shadow map on every single frame was pure waste — and it was the most
+ * expensive thing on the page after the avatars. This renders shadows on
+ * demand instead: once at startup, whenever shadow-casting geometry
+ * changes, and on a slow heartbeat for anything that loads late.
+ *
+ * Avatars don't cast shadows (see VrmAvatar.tsx), so nothing that moves
+ * continuously depends on this being per-frame.
+ */
+function OnDemandShadows({ refreshKey }: { refreshKey?: unknown }) {
+  const gl = useThree((state) => state.gl);
+
+  useEffect(() => {
+    gl.shadowMap.autoUpdate = false;
+    gl.shadowMap.needsUpdate = true;
+    const heartbeat = window.setInterval(() => {
+      gl.shadowMap.needsUpdate = true;
+    }, SHADOW_HEARTBEAT_MS);
+    return () => {
+      window.clearInterval(heartbeat);
+      gl.shadowMap.autoUpdate = true;
+    };
+  }, [gl]);
+
+  useEffect(() => {
+    gl.shadowMap.needsUpdate = true;
+  }, [gl, refreshKey]);
+
+  return null;
 }
 
 function SceneModel({ sceneUrl }: { sceneUrl: string }) {
@@ -53,9 +92,22 @@ const SUN: [number, number, number] = [16, 22, 12];
  * few metres around the origin — with the built-in world's two rooms, the
  * classroom would have had no shadows at all.
  */
-export function Scene({ sceneUrl, onFloorDoubleClick, onSit, occupiedSeatId }: SceneProps) {
+/**
+ * Memoized, and worth being careful about: the built-in world is a few
+ * hundred meshes, and without this every unrelated state change in App —
+ * playing a gesture, a voice level tick five times a second — re-rendered
+ * all of them. Keep every prop here stable (see App.tsx's callbacks).
+ */
+export const Scene = memo(function Scene({
+  sceneUrl,
+  onFloorDoubleClick,
+  onSit,
+  occupiedSeatId,
+  shadowRefreshKey,
+}: SceneProps) {
   return (
     <>
+      <OnDemandShadows refreshKey={shadowRefreshKey} />
       <Sky sunPosition={SUN} turbidity={4} rayleigh={1.4} mieCoefficient={0.006} mieDirectionalG={0.85} />
       <hemisphereLight args={["#eaf1ff", "#caa87e", 0.9]} />
       <ambientLight intensity={0.32} />
@@ -64,7 +116,9 @@ export function Scene({ sceneUrl, onFloorDoubleClick, onSit, occupiedSeatId }: S
         intensity={1.25}
         color="#fff4e2"
         castShadow
-        shadow-mapSize={[2048, 2048]}
+        // 1024 is plenty for a room this size and a quarter of the fill
+        // cost of 2048 on the frames where shadows do get re-rendered.
+        shadow-mapSize={[1024, 1024]}
         shadow-bias={-0.0004}
         shadow-camera-left={-30}
         shadow-camera-right={30}
@@ -83,4 +137,4 @@ export function Scene({ sceneUrl, onFloorDoubleClick, onSit, occupiedSeatId }: S
       )}
     </>
   );
-}
+});
