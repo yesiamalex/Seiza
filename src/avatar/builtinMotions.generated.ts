@@ -61,7 +61,7 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
   {
     "name": "seiza",
     "label": "Seiza (hold)",
-    "url": "/gestures/builtin/seiza.vrma?v=1efb1e1e",
+    "url": "/gestures/builtin/seiza.vrma?v=64db4be0",
     "duration": 1.8,
     "fullBody": true,
     "hold": true,
@@ -81,7 +81,7 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
   {
     "name": "clap",
     "label": "Clap",
-    "url": "/gestures/builtin/clap.vrma?v=4ea5f109",
+    "url": "/gestures/builtin/clap.vrma?v=885e5456",
     "duration": 2.64,
     "fullBody": false,
     "hold": false,
@@ -121,7 +121,7 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
   {
     "name": "gassho",
     "label": "Gasshō (thanks)",
-    "url": "/gestures/builtin/gassho.vrma?v=7c45eaf6",
+    "url": "/gestures/builtin/gassho.vrma?v=6a9d8d04",
     "duration": 4.32,
     "fullBody": false,
     "hold": false,
@@ -141,7 +141,7 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
   {
     "name": "sit",
     "label": "Sit",
-    "url": "/gestures/builtin/sit.vrma?v=e6c47f94",
+    "url": "/gestures/builtin/sit.vrma?v=b1a7af59",
     "duration": 1.14,
     "fullBody": true,
     "hold": true,

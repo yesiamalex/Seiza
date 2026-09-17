@@ -60,16 +60,16 @@ const PITCH_LIMIT = Math.PI / 2 - 0.05;
  * clicking a seat harder to land.
  */
 const BOB_STRIDE = 3.2; // metres per full cycle, matching the walk clip
-const BOB_VERTICAL = 0.018; // metres of dip at walking pace
-const BOB_LATERAL = 0.01; // metres of sway at walking pace
-const BOB_ROLL = 0.003; // radians of roll at walking pace
+const BOB_VERTICAL = 0.009; // metres of dip at walking pace
+const BOB_LATERAL = 0.005; // metres of sway at walking pace
+const BOB_ROLL = 0.0015; // radians of roll at walking pace
 /** How fast the bob fades in when you start moving and out when you stop. */
 const BOB_EASE_RATE = 7;
 /** Running bobs harder, but not proportionally — 1.9x the speed at 1.9x the
  *  amplitude is nauseating rather than energetic. */
-const BOB_MAX_AMOUNT = 0.85;
+const BOB_MAX_AMOUNT = 0.5;
 /** Eye height while kneeling in seiza, measured from the floor. */
-const SEIZA_EYE_HEIGHT = 0.98;
+const SEIZA_EYE_HEIGHT = 0.82;
 /** A frame that moves further than this isn't a step, it's a teleport
  *  (spawning, standing up off a seat) — don't advance the stride for it. */
 const BOB_TELEPORT_DISTANCE = 0.6;
@@ -564,7 +564,7 @@ export function PlayerRig({
     // eye height rather than separate ground detection. The ground is not
     // always y=0: the tatami platform is a step up.
     const floorY = floorHeightAt(vcam.position.x, vcam.position.z);
-    const postureEye = postureHeldRef.current ? postureEyeHeightRef.current : null;
+    const postureEye = postureHeldRef.current ? postureEyeHeightRef.current ?? SEIZA_EYE_HEIGHT : null;
     const groundEyeY = floorY + (postureEye ?? EYE_HEIGHT);
     groundEyeYRef.current = groundEyeY;
     if (postureEye !== null) {
