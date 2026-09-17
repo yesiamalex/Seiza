@@ -599,6 +599,7 @@ export default function App() {
             touchInputRef={touchInputRef}
             sitAnchor={seat ? { position: seat.position, rotationY: seat.rotationY } : null}
             postureHeld={!!posture}
+              postureEyeHeight={posture?.name === "seiza" ? 0.98 : null}
             onStandUp={standUp}
           >
             <VrmAvatar url={joined.localUrl ?? joined.url} onLoaded={setLocalVrm} />

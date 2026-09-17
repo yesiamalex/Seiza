@@ -257,12 +257,12 @@ const waveUp = (swing) => ({
  * made the shoulders droop and the arms cross into an X.
  */
 const palmsTogether = (close) => ({
-  leftUpperArm: { z: -61 + 30 * close, y: -60 - 13 * close, x: 47 + 13 * close },
-  rightUpperArm: { z: 61 - 30 * close, y: 60 + 13 * close, x: 47 + 13 * close },
-  leftLowerArm: { y: -(107 - close), x: 25 - 27 * close },
-  rightLowerArm: { y: 107 - close, x: -(25 - 27 * close) },
-  leftHand: { z: 50, x: -3 },
-  rightHand: { z: -50, x: -3 },
+  leftUpperArm: { z: -61 + 27 * close, y: -58 - 10 * close, x: 47 + 10 * close },
+  rightUpperArm: { z: 61 - 27 * close, y: 58 + 10 * close, x: 47 + 10 * close },
+  leftLowerArm: { y: -(104 - close), x: 25 - 22 * close },
+  rightLowerArm: { y: 104 - close, x: -(25 - 22 * close) },
+  leftHand: { z: 46, x: -1 },
+  rightHand: { z: -46, x: -1 },
 });
 const GESTURES = [
   {
@@ -361,12 +361,12 @@ const GESTURES = [
           // without dragging the hand off the leg; with them, the palm
           // normal points 83% of the way straight down on every rig,
           // against 46% before. Elbow bend is held at a relaxed 28 degrees.
-          leftUpperArm: { z: -78, x: -26 },
-          rightUpperArm: { z: 78, x: -26 },
-          leftLowerArm: { y: -28, x: 103 },
-          rightLowerArm: { y: 28, x: -103 },
-          leftHand: { z: 30, x: 2 },
-          rightHand: { z: -30, x: 2 },
+          leftUpperArm: { z: -74, x: -22 },
+          rightUpperArm: { z: 74, x: -22 },
+          leftLowerArm: { y: -24, x: 94 },
+          rightLowerArm: { y: 24, x: -94 },
+          leftHand: { z: 22, x: 0 },
+          rightHand: { z: -22, x: 0 },
           _hips: [0, -0.61, 0],
         },
       },
@@ -391,11 +391,11 @@ const GESTURES = [
     keys: [
       { t: 0, pose: {} },
       { t: 0.4, pose: palmsTogether(0) },
-      { t: 0.55, pose: palmsTogether(1) },
+      { t: 0.55, pose: palmsTogether(0.9) },
       { t: 0.75, pose: palmsTogether(0) },
-      { t: 0.9, pose: palmsTogether(1) },
+      { t: 0.9, pose: palmsTogether(0.9) },
       { t: 1.1, pose: palmsTogether(0) },
-      { t: 1.25, pose: palmsTogether(1) },
+      { t: 1.25, pose: palmsTogether(0.9) },
       { t: 1.45, pose: palmsTogether(0.3) },
       { t: 2.2, pose: {} },
     ],
@@ -435,12 +435,12 @@ const GESTURES = [
       // flung them well outside the body, which is what read as arms
       // sticking out sideways.
       const shrug = {
-        leftUpperArm: { z: -90, x: -40 },
-        rightUpperArm: { z: 90, x: -40 },
-        leftLowerArm: { y: -40, x: -47 },
-        rightLowerArm: { y: 40, x: 47 },
-        leftHand: { x: -40 },
-        rightHand: { x: -40 },
+        leftUpperArm: { z: -84, x: -32 },
+        rightUpperArm: { z: 84, x: -32 },
+        leftLowerArm: { y: -34, x: -58 },
+        rightLowerArm: { y: 34, x: -58 },
+        leftHand: { x: -30 },
+        rightHand: { x: -30 },
         head: { z: 8 },
       };
       return [
@@ -489,12 +489,12 @@ const GESTURES = [
         chest: { x: bow * 0.55 },
         neck: { x: 6 + bow * 0.2 },
         head: { x: 8 + bow * 0.25 },
-        leftUpperArm: { z: -37, y: -75, x: 60 },
-        rightUpperArm: { z: 37, y: 75, x: 60 },
-        leftLowerArm: { y: -112, x: 0 },
-        rightLowerArm: { y: 112, x: 0 },
-        leftHand: { z: 50, x: 26 },
-        rightHand: { z: -50, x: 26 },
+        leftUpperArm: { z: -39, y: -72, x: 56 },
+        rightUpperArm: { z: 39, y: 72, x: 56 },
+        leftLowerArm: { y: -108, x: 2 },
+        rightLowerArm: { y: 108, x: 2 },
+        leftHand: { z: 43, x: 20 },
+        rightHand: { z: -43, x: 20 },
       });
       return [
         { t: 0, pose: {} },
@@ -588,12 +588,12 @@ const GESTURES = [
           // contact, four rigs, wrists included. A deeper elbow bend than
           // seiza because a seated thigh is closer to horizontal, so the
           // hand has further to travel forward to land on it.
-          leftUpperArm: { z: -69, x: -26 },
-          rightUpperArm: { z: 69, x: -26 },
-          leftLowerArm: { y: -40, x: 91 },
-          rightLowerArm: { y: 40, x: -91 },
-          leftHand: { z: 30, x: 14 },
-          rightHand: { z: -30, x: 14 },
+          leftUpperArm: { z: -66, x: -22 },
+          rightUpperArm: { z: 66, x: -22 },
+          leftLowerArm: { y: -34, x: 84 },
+          rightLowerArm: { y: 34, x: -84 },
+          leftHand: { z: 22, x: 9 },
+          rightHand: { z: -22, x: 9 },
           // Only a starting point. The app measures each avatar's hips
           // against the real seat height every frame and slides the body
           // to meet it (ground: "seat" above), so no baked number here has

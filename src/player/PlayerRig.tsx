@@ -60,14 +60,16 @@ const PITCH_LIMIT = Math.PI / 2 - 0.05;
  * clicking a seat harder to land.
  */
 const BOB_STRIDE = 3.2; // metres per full cycle, matching the walk clip
-const BOB_VERTICAL = 0.035; // metres of dip at walking pace
-const BOB_LATERAL = 0.022; // metres of sway at walking pace
-const BOB_ROLL = 0.0075; // radians of roll at walking pace
+const BOB_VERTICAL = 0.018; // metres of dip at walking pace
+const BOB_LATERAL = 0.01; // metres of sway at walking pace
+const BOB_ROLL = 0.003; // radians of roll at walking pace
 /** How fast the bob fades in when you start moving and out when you stop. */
 const BOB_EASE_RATE = 7;
 /** Running bobs harder, but not proportionally — 1.9x the speed at 1.9x the
  *  amplitude is nauseating rather than energetic. */
-const BOB_MAX_AMOUNT = 1.4;
+const BOB_MAX_AMOUNT = 0.85;
+/** Eye height while kneeling in seiza, measured from the floor. */
+const SEIZA_EYE_HEIGHT = 0.98;
 /** A frame that moves further than this isn't a step, it's a teleport
  *  (spawning, standing up off a seat) — don't advance the stride for it. */
 const BOB_TELEPORT_DISTANCE = 0.6;
@@ -107,6 +109,8 @@ interface PlayerRigProps {
   /** True while the player holds any pose that moving should cancel, such
    *  as kneeling in seiza (which has no seat to sit on). */
   postureHeld?: boolean;
+  /** Eye height for a held floor posture, or null when the posture is seated. */
+  postureEyeHeight?: number | null;
   onStandUp?: () => void;
   children?: ReactNode;
 }
@@ -144,6 +148,7 @@ export function PlayerRig({
   touchInputRef,
   sitAnchor = null,
   postureHeld = false,
+  postureEyeHeight = null,
   onStandUp,
   children,
 }: PlayerRigProps) {
@@ -164,6 +169,8 @@ export function PlayerRig({
   sitAnchorRef.current = sitAnchor;
   const postureHeldRef = useRef(postureHeld);
   postureHeldRef.current = postureHeld;
+  const postureEyeHeightRef = useRef(postureEyeHeight);
+  postureEyeHeightRef.current = postureEyeHeight;
   const onStandUpRef = useRef(onStandUp);
   onStandUpRef.current = onStandUp;
   // Eye height over whatever the player is standing on, updated each frame
@@ -556,12 +563,22 @@ export function PlayerRig({
     // Gravity/jump — applied every frame so landing is a clean clamp back to
     // eye height rather than separate ground detection. The ground is not
     // always y=0: the tatami platform is a step up.
-    const groundEyeY = floorHeightAt(vcam.position.x, vcam.position.z) + EYE_HEIGHT;
+    const floorY = floorHeightAt(vcam.position.x, vcam.position.z);
+    const postureEye = postureHeldRef.current ? postureEyeHeightRef.current : null;
+    const groundEyeY = floorY + (postureEye ?? EYE_HEIGHT);
     groundEyeYRef.current = groundEyeY;
-    verticalVelocityRef.current -= GRAVITY * delta;
-    vcam.position.y += verticalVelocityRef.current * delta;
-    if (vcam.position.y <= groundEyeY) {
-      vcam.position.y = groundEyeY;
+    if (postureEye !== null) {
+      verticalVelocityRef.current = 0;
+      vcam.position.y = THREE.MathUtils.damp(vcam.position.y, groundEyeY, SIT_EASE_RATE, delta);
+    } else {
+      verticalVelocityRef.current -= GRAVITY * delta;
+      vcam.position.y += verticalVelocityRef.current * delta;
+      if (vcam.position.y <= groundEyeY) {
+        vcam.position.y = groundEyeY;
+        verticalVelocityRef.current = 0;
+      }
+    }
+    if (vcam.position.y <= groundEyeY && postureEye === null) {
       verticalVelocityRef.current = 0;
     }
 
@@ -573,7 +590,10 @@ export function PlayerRig({
       avatarYawRef.current = lerpAngle(avatarYawRef.current, targetYaw, 1 - Math.exp(-AVATAR_TURN_RATE * delta));
     }
 
-    applyTransforms(vcam.position.y - EYE_HEIGHT, vcam.position.y <= groundEyeY + GROUNDED_EPSILON);
+    applyTransforms(
+      postureEye !== null ? floorY : vcam.position.y - EYE_HEIGHT,
+      vcam.position.y <= groundEyeY + GROUNDED_EPSILON
+    );
   });
 
   return (
