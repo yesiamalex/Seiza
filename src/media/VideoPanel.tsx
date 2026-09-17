@@ -47,6 +47,14 @@ export function VideoPanel({ stream, width, height, maxDistance = 30, active = t
     element.muted = true;
     element.playsInline = true;
     element.autoplay = false;
+    // Kept in the document, one pixel wide and transparent. A <video> that
+    // is never attached — or is attached with display:none — is treated as
+    // not visible, and browsers are free to skip decoding it entirely,
+    // which is exactly how a shared screen ends up as a black rectangle for
+    // everyone except the person sharing it.
+    element.style.cssText =
+      "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0.01;pointer-events:none;z-index:-1";
+    document.body.appendChild(element);
     return element;
   }, [stream]);
 
@@ -73,6 +81,7 @@ export function VideoPanel({ stream, width, height, maxDistance = 30, active = t
       video.removeEventListener("resize", onMetadata);
       video.pause();
       video.srcObject = null;
+      video.remove();
     };
   }, [video]);
 

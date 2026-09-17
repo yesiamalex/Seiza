@@ -3,7 +3,15 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useXR, useXRControllerLocomotion, XROrigin } from "@react-three/xr";
 import * as THREE from "three";
 import type { TouchMoveInput } from "./touchInput";
-import { CAMERA_RADIUS, clampToRooms, floorHeightAt, resolveObstacles, SEATED_EYE_HEIGHT, standUpSpot } from "../scene/layout";
+import {
+  CAMERA_RADIUS,
+  ceilingHeightAt,
+  clampToRooms,
+  floorHeightAt,
+  resolveObstacles,
+  SEATED_EYE_HEIGHT,
+  standUpSpot,
+} from "../scene/layout";
 
 export type ViewMode = "first" | "third";
 
@@ -17,10 +25,12 @@ const SIT_TURN_RATE = 6;
 // this is that inset, so the camera can be allowed closer to walls.
 const PLAYER_RADIUS_MARGIN = 0.4;
 
-const THIRD_PERSON_MIN_DISTANCE = 1.5;
-const THIRD_PERSON_MAX_DISTANCE = 8;
-const THIRD_PERSON_DEFAULT_DISTANCE = 3.5;
-const THIRD_PERSON_HEIGHT_OFFSET = 0.5;
+const THIRD_PERSON_MIN_DISTANCE = 1.2;
+const THIRD_PERSON_MAX_DISTANCE = 7;
+const THIRD_PERSON_DEFAULT_DISTANCE = 3;
+/** Height above the feet the third-person camera orbits around — roughly
+ *  the chest, so the whole avatar sits in frame at any angle. */
+const ORBIT_PIVOT_HEIGHT = 1.15;
 const FOV_MIN = 50;
 const FOV_MAX = 90;
 const FOV_DEFAULT = 75;
@@ -370,14 +380,25 @@ export function PlayerRig({
       if (lookYawRef) lookYawRef.current = lookYaw;
 
       if (viewMode === "third") {
-        const behind = new THREE.Vector3(0, 0, thirdPersonDistanceRef.current).applyQuaternion(vcam.quaternion);
-        camera.position.copy(vcam.position).add(behind);
-        camera.position.y += THIRD_PERSON_HEIGHT_OFFSET;
+        // Orbit around the avatar rather than sitting behind the eye and
+        // looking the same way it does. The old arrangement meant that
+        // tilting down showed the top of the head and pushed the character
+        // off to the edge; orbiting keeps them centred at any angle, and
+        // zooming moves toward them instead of past them.
+        const pivot = new THREE.Vector3(vcam.position.x, feetY + ORBIT_PIVOT_HEIGHT, vcam.position.z);
+        const back = new THREE.Vector3(0, 0, 1).applyQuaternion(vcam.quaternion).multiplyScalar(thirdPersonDistanceRef.current);
+        camera.position.copy(pivot).add(back);
         // Keep the camera inside the building: zooming out through a wall
-        // showed the room from outside and looked broken.
+        // showed the room from outside, and rising over the top showed the
+        // room from above with no roof on it.
         clampToRooms(camera.position, PLAYER_RADIUS_MARGIN - CAMERA_RADIUS);
-        camera.position.y = Math.max(camera.position.y, floorHeightAt(camera.position.x, camera.position.z) + 0.25);
-        camera.quaternion.copy(vcam.quaternion);
+        const floor = floorHeightAt(camera.position.x, camera.position.z);
+        camera.position.y = THREE.MathUtils.clamp(
+          camera.position.y,
+          floor + 0.3,
+          ceilingHeightAt(camera.position.x, camera.position.z)
+        );
+        camera.lookAt(pivot);
       } else {
         camera.position.copy(vcam.position);
         camera.quaternion.copy(vcam.quaternion);

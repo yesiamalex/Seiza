@@ -18,17 +18,20 @@ export interface BuiltinGesture {
   hidden: boolean;
 }
 
+// The ?v= is a content hash: regenerating a clip changes its URL, so a
+// browser that cached the old bytes fetches the new ones instead of quietly
+// keeping the old motion.
 export const LOCOMOTION_CLIPS = {
-  idle: "/animations/idle.vrma",
-  walk: "/animations/walk.vrma",
-  run: "/animations/run.vrma",
+  idle: "/animations/idle.vrma?v=63a77fff",
+  walk: "/animations/walk.vrma?v=902a38c7",
+  run: "/animations/run.vrma?v=f5ace1fc",
 } as const;
 
 export const BUILTIN_GESTURES: BuiltinGesture[] = [
   {
     "name": "wave",
     "label": "Wave",
-    "url": "/gestures/builtin/wave.vrma",
+    "url": "/gestures/builtin/wave.vrma?v=88be498f",
     "duration": 2.88,
     "fullBody": false,
     "hold": false,
@@ -37,7 +40,7 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
   {
     "name": "bow",
     "label": "Bow (ojigi)",
-    "url": "/gestures/builtin/bow.vrma",
+    "url": "/gestures/builtin/bow.vrma?v=d817d6f0",
     "duration": 3.12,
     "fullBody": false,
     "hold": false,
@@ -46,7 +49,7 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
   {
     "name": "seiza",
     "label": "Seiza (hold)",
-    "url": "/gestures/builtin/seiza.vrma",
+    "url": "/gestures/builtin/seiza.vrma?v=691f2d1c",
     "duration": 1.8,
     "fullBody": true,
     "hold": true,
@@ -55,7 +58,7 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
   {
     "name": "nod",
     "label": "Nod",
-    "url": "/gestures/builtin/nod.vrma",
+    "url": "/gestures/builtin/nod.vrma?v=14386a3d",
     "duration": 1.92,
     "fullBody": false,
     "hold": false,
@@ -64,7 +67,7 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
   {
     "name": "clap",
     "label": "Clap",
-    "url": "/gestures/builtin/clap.vrma",
+    "url": "/gestures/builtin/clap.vrma?v=b0126313",
     "duration": 2.64,
     "fullBody": false,
     "hold": false,
@@ -73,7 +76,7 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
   {
     "name": "cheer",
     "label": "Cheer",
-    "url": "/gestures/builtin/cheer.vrma",
+    "url": "/gestures/builtin/cheer.vrma?v=d479f0b6",
     "duration": 2.64,
     "fullBody": false,
     "hold": false,
@@ -82,7 +85,7 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
   {
     "name": "shrug",
     "label": "Shrug",
-    "url": "/gestures/builtin/shrug.vrma",
+    "url": "/gestures/builtin/shrug.vrma?v=44d74ea6",
     "duration": 2.28,
     "fullBody": false,
     "hold": false,
@@ -91,7 +94,7 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
   {
     "name": "point",
     "label": "Point",
-    "url": "/gestures/builtin/point.vrma",
+    "url": "/gestures/builtin/point.vrma?v=39108dad",
     "duration": 2.4,
     "fullBody": false,
     "hold": false,
@@ -100,7 +103,7 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
   {
     "name": "gassho",
     "label": "Gasshō (thanks)",
-    "url": "/gestures/builtin/gassho.vrma",
+    "url": "/gestures/builtin/gassho.vrma?v=50637355",
     "duration": 4.32,
     "fullBody": false,
     "hold": false,
@@ -109,7 +112,7 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
   {
     "name": "raisehand",
     "label": "Raise hand (hold)",
-    "url": "/gestures/builtin/raisehand.vrma",
+    "url": "/gestures/builtin/raisehand.vrma?v=352c210f",
     "duration": 1.08,
     "fullBody": false,
     "hold": true,
@@ -118,7 +121,7 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
   {
     "name": "sit",
     "label": "Sit",
-    "url": "/gestures/builtin/sit.vrma",
+    "url": "/gestures/builtin/sit.vrma?v=9e98976c",
     "duration": 1.14,
     "fullBody": true,
     "hold": true,

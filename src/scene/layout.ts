@@ -351,3 +351,15 @@ export const TATAMI = {
 export function floorHeightAt(x: number, z: number): number {
   return contains(TATAMI, x, z) ? TATAMI.height : 0;
 }
+
+/**
+ * How high the third-person camera may rise before it would be looking at
+ * the room from above. The hall has an open beam ceiling rather than a solid
+ * one, so without this the camera simply floated out over the top of the
+ * walls and showed a roofless set.
+ */
+export function ceilingHeightAt(x: number, z: number): number {
+  if (contains(CLASSROOM, x, z)) return CLASSROOM_WALL_HEIGHT - 0.25;
+  if (contains(CORRIDOR, x, z)) return 2.95;
+  return WALL_HEIGHT - 0.5;
+}

@@ -248,8 +248,9 @@ protection this does and doesn't provide.
 | Run | Hold Shift | Double-tap forward and hold |
 | Jump | Space | Jump button |
 | Look | Drag with any mouse button | Drag with one finger |
+| Orbit around yourself | Drag in third person | Drag in third person |
 | Look in Edit Mode | Drag with right or middle button | Drag with two fingers |
-| Zoom | Scroll | Pinch |
+| Zoom toward yourself | Scroll | Pinch |
 | Walk to a spot | Double-click the floor | Double-tap the floor |
 | Sit down | Click a chair or bench | Tap a chair or bench |
 | Kneel (seiza) | `3`, and `3` again to stand | The Seiza button |
@@ -299,6 +300,20 @@ Avatars get a soft blob shadow rather than a real cast shadow. A skinned mesh
 has to be re-rendered into the shadow map every frame it moves, which is the
 per-frame cost the rest of the world deliberately avoids; a textured disc
 costs one draw call and still says where someone's feet are.
+
+The third-person camera orbits a point at the avatar's chest rather than
+sitting behind the eye and looking wherever the eye looks. That keeps the
+character centred at any angle and makes zoom move toward them instead of
+past them. It's held inside the building on all sides, including above:
+`ceilingHeightAt` caps it below the roofline, since the hall's ceiling is
+open beams and the camera would otherwise drift up and show a roofless set.
+
+Windows are real openings. The wall's plaster layer splits into three bands
+(below the sill, the window band, above the header) and the window band gets
+a length-wise gap per window, reusing the same mechanism doorways use. The
+frame is four bars around an open pane — it used to be a single solid box
+spanning the whole opening, which is why cutting a hole in the wall behind it
+changed nothing you could see.
 
 ### What an avatar is on the wire
 
@@ -372,12 +387,35 @@ it.
 **Hands are the hard part, so they're measured, not guessed.** Where a palm
 ends up pointing depends on the shoulder, both arm bones and the forearm roll
 together, and getting it wrong is what turns a gasshō into a dab. The angles
-in the generator were solved against a real VRM rig in Node: build an avatar,
-play a candidate pose, and measure in world space where each hand landed and
-which way its palm faced, scoring against what the pose should be. The same
-harness re-checks every clip afterwards — palms together for gasshō, palm
-toward the viewer for a wave and a raised hand, palms up for a shrug, hands
-on the thighs for seiza and sitting.
+in the generator were solved in Node by building an avatar, playing a
+candidate pose, measuring in world space where each hand landed and which way
+its palm faced, and scoring that against what the pose should be.
+
+Two things about that harness are worth knowing, because both were learned
+the hard way:
+
+- **It solves against several bodies at once**, not one. Rotations retarget
+  cleanly between rigs; absolute heights do not. A pose solved to put the
+  hands at "y = 1.06" on one avatar put them at the belly of a shorter one.
+  Every target is therefore expressed against that body's own landmarks —
+  its sternum, its thigh line, its shoulder width — and a solution has to
+  work on all of them.
+- **VRM 0.x rigs face the other way.** three-vrm's animation importer
+  mirrors a clip onto them by negating the quaternion's x and z. Anything
+  that poses a rig directly has to do the same, or half the test avatars
+  quietly produce mirrored nonsense — in one run, arms above the head in a
+  pose that should have had the hands resting on the thighs.
+
+The same harness re-checks every clip afterwards, on each rig, through the
+real playback path: hands meeting at the sternum for gasshō, a clap that
+actually closes, palms up and elbows in for a shrug, hands resting on the
+thigh line (and not outboard of it) for seiza and sitting, and a seated
+backside that clears the chair cushion.
+
+Clip URLs in the generated manifest carry a `?v=` content hash. Regenerating
+a motion rewrites the file but not its path, so without that a browser keeps
+serving the bytes it already had — which is indistinguishable from the fix
+not working.
 
 ### Custom gestures
 

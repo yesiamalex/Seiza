@@ -79,7 +79,11 @@ class SceneLoadBoundary extends Component<{ children: ReactNode }, { failed: boo
 // Late afternoon: the sun sits low, off the classroom's window wall, so the
 // light comes through the windows and rakes across the floor. Shared by the
 // light and the sky so the shadows fall the way the sky says they should.
-const SUN: [number, number, number] = [-34, 9, 14];
+// The lower it sits, the more the atmosphere shader reddens — at the old
+// 14° elevation the sky came out pale blue rather than a sunset.
+const SUN: [number, number, number] = [-34, 4.6, 14];
+/** Radius of the outdoor ground, comfortably inside the camera's far plane. */
+const GROUND_RADIUS = 150;
 
 /**
  * Lighting is lights and a procedural sky shader, not an image-based
@@ -115,7 +119,21 @@ export const Scene = memo(function Scene({
           stop nearby surfaces z-fighting) or the sky dome sits beyond the
           far clip and never renders at all — which is what made the newly
           opened windows look out at nothing, rather than the sunset. */}
-      <Sky sunPosition={SUN} distance={200} turbidity={9} rayleigh={2.6} mieCoefficient={0.012} mieDirectionalG={0.92} />
+      <Sky sunPosition={SUN} distance={200} turbidity={10} rayleigh={3.4} mieCoefficient={0.02} mieDirectionalG={0.94} />
+      {/* Ground outside the building. Without it the newly opened windows
+          look out over a void below the horizon, because the rooms' own
+          floors stop at their walls. Flagged navIgnore so the navmesh
+          doesn't treat the whole outdoors as somewhere to walk to. */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]} userData={{ navIgnore: true }}>
+        <circleGeometry args={[GROUND_RADIUS, 48]} />
+        <meshBasicMaterial color="#b08c63" toneMapped={false} />
+      </mesh>
+      {/* A band of treetops along the horizon, so the ground has an edge to
+          meet the sky at instead of running flat to infinity. */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.4, 0]} userData={{ navIgnore: true }}>
+        <ringGeometry args={[GROUND_RADIUS * 0.55, GROUND_RADIUS, 48]} />
+        <meshBasicMaterial color="#6f7f52" toneMapped={false} />
+      </mesh>
       {/* Warm sky above, warmer bounce off the wooden floor below. A big
           share of the light comes from here rather than the sun, which is
           what keeps the shadows soft. */}

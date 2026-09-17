@@ -240,23 +240,38 @@ function Window({
   height?: number;
   m: WorldMaterials;
 }) {
+  // Four bars around an open pane. This used to be a single solid box
+  // spanning the whole opening, which is why cutting a real hole in the wall
+  // behind it changed nothing you could see: the "frame" itself was still a
+  // solid slab plugging the gap.
+  const bar = 0.11;
+  const depth = 0.14;
   return (
     <group position={position} rotation={[0, rotationY, 0]}>
+      <mesh position={[0, height / 2 - bar / 2, 0]} material={m.trim} castShadow>
+        <boxGeometry args={[width, bar, depth]} />
+      </mesh>
+      <mesh position={[0, -height / 2 + bar / 2, 0]} material={m.trim} castShadow>
+        <boxGeometry args={[width, bar, depth]} />
+      </mesh>
+      {[-1, 1].map((side) => (
+        <mesh key={side} position={[side * (width / 2 - bar / 2), 0, 0]} material={m.trim} castShadow>
+          <boxGeometry args={[bar, height - bar * 2, depth]} />
+        </mesh>
+      ))}
+      {/* The pane itself: mostly clear, so the sky outside comes through. */}
+      <mesh material={m.glass}>
+        <planeGeometry args={[width - bar * 2, height - bar * 2]} />
+      </mesh>
+      {/* Muntin bars, so the opening still reads as a window. */}
       <mesh material={m.trim}>
-        <boxGeometry args={[width, height, 0.1]} />
+        <boxGeometry args={[0.05, height - bar * 2, 0.05]} />
       </mesh>
-      <mesh position={[0, 0, 0.04]} material={m.glass}>
-        <boxGeometry args={[width - 0.18, height - 0.18, 0.04]} />
+      <mesh material={m.trim}>
+        <boxGeometry args={[width - bar * 2, 0.05, 0.05]} />
       </mesh>
-      {/* Muntin bars, so the glass reads as a window and not a blue slab. */}
-      <mesh position={[0, 0, 0.06]} material={m.trim}>
-        <boxGeometry args={[0.05, height - 0.18, 0.05]} />
-      </mesh>
-      <mesh position={[0, 0, 0.06]} material={m.trim}>
-        <boxGeometry args={[width - 0.18, 0.05, 0.05]} />
-      </mesh>
-      <mesh position={[0, -height / 2 - 0.04, 0.08]} material={m.furnitureTop}>
-        <boxGeometry args={[width + 0.1, 0.08, 0.26]} />
+      <mesh position={[0, -height / 2 - 0.02, 0.08]} material={m.furnitureTop} castShadow>
+        <boxGeometry args={[width + 0.1, 0.07, 0.24]} />
       </mesh>
     </group>
   );

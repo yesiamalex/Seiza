@@ -40,6 +40,7 @@
 // and the forearm roll together, which is why those poses carry more numbers
 // than the rest.
 
+import { createHash } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -245,19 +246,23 @@ const waveUp = (swing) => ({
 
 /**
  * Hands in front of the chest, palms facing each other. `close` runs from
- * the open position to palms touching. Re-solved on a rig at true chest
- * height (~1.06m — the sternum, not the collarbone) after the first pass
- * landed the open hands up near the shoulder/chin and read as clipped.
+ * the open position to palms touching.
+ *
+ * Solved against three rigs at once — the built-in designer avatar and two
+ * real .vrm files — with the height target tied to each body's own sternum
+ * rather than a fixed world height. Earlier passes solved on one rig at an
+ * absolute height; rotations retarget fine between rigs, but absolute
+ * heights don't, so on the (shorter) real avatars those hands landed at the
+ * belly. The shoulder bones are left alone here too: rotating them is what
+ * made the shoulders droop and the arms cross into an X.
  */
 const palmsTogether = (close) => ({
-  leftShoulder: { z: -25 },
-  rightShoulder: { z: 25 },
-  leftUpperArm: { z: -62 - 37 * close, y: -14 - 7 * close, x: 21 - 1 * close },
-  rightUpperArm: { z: 62 + 37 * close, y: 14 + 7 * close, x: 21 - 1 * close },
-  leftLowerArm: { y: -(97 - 10 * close), x: -23 + 16 * close },
-  rightLowerArm: { y: 97 - 10 * close, x: 23 - 16 * close },
-  leftHand: { z: -19 },
-  rightHand: { z: 19 },
+  leftUpperArm: { z: -61 + 30 * close, y: -60 - 13 * close, x: 47 + 13 * close },
+  rightUpperArm: { z: 61 - 30 * close, y: 60 + 13 * close, x: 47 + 13 * close },
+  leftLowerArm: { y: -(107 - close), x: 25 - 27 * close },
+  rightLowerArm: { y: 107 - close, x: -(25 - 27 * close) },
+  leftHand: { z: 50, x: -3 },
+  rightHand: { z: -50, x: -3 },
 });
 const GESTURES = [
   {
@@ -342,14 +347,15 @@ const GESTURES = [
           rightLowerLeg: { x: 152 },
           leftFoot: { x: 60 },
           rightFoot: { x: 60 },
-          // Re-solved with the elbow held to a genuinely relaxed ~28° bend
-          // instead of the earlier near-straight arm — the first pass
-          // minimized hand-to-thigh distance with no regard for the elbow,
-          // which is what read as a stiff, clipped-looking arm.
-          leftUpperArm: { z: -82, x: -17 },
-          rightUpperArm: { z: 82, x: -17 },
-          leftLowerArm: { y: -28, x: 111, z: 20 },
-          rightLowerArm: { y: 28, x: -111, z: -20 },
+          // Hands resting on the thighs, solved across three rigs against
+          // each one's own thigh line — and scored on staying ON that line
+          // rather than outboard of it, which is what had the arms hanging
+          // out beside the legs. The elbow is pinned to a relaxed bend so
+          // the solver can't flatten it straight to shave a centimetre.
+          leftUpperArm: { z: -79, x: -26 },
+          rightUpperArm: { z: 79, x: -26 },
+          leftLowerArm: { y: -32, x: 98 },
+          rightLowerArm: { y: 32, x: -98 },
           _hips: [0, -0.61, 0],
         },
       },
@@ -412,17 +418,18 @@ const GESTURES = [
     label: "Shrug",
     fullBody: false,
     keys: (() => {
-      // Solved on a rig: forearms out with the palms turned up — the
-      // "who knows" half of the gesture.
+      // Elbows in at the sides, forearms out front, palms up — the
+      // "who knows" half of the gesture. Re-solved across three rigs with
+      // the hands held to roughly shoulder width: the previous version
+      // flung them well outside the body, which is what read as arms
+      // sticking out sideways.
       const shrug = {
-        leftShoulder: { z: 12 },
-        rightShoulder: { z: -12 },
-        leftUpperArm: { z: -85, x: -40 },
-        rightUpperArm: { z: 85, x: -40 },
-        leftLowerArm: { y: -72, x: -105 },
-        rightLowerArm: { y: 72, x: 105 },
+        leftUpperArm: { z: -90, x: -40 },
+        rightUpperArm: { z: 90, x: -40 },
+        leftLowerArm: { y: -40, x: -47 },
+        rightLowerArm: { y: 40, x: 47 },
         leftHand: { x: -40 },
-        rightHand: { x: 40 },
+        rightHand: { x: -40 },
         head: { z: 8 },
       };
       return [
@@ -462,26 +469,21 @@ const GESTURES = [
     label: "Gasshō (thanks)",
     fullBody: false,
     keys: (() => {
-      // Solved on a real rig at true chest/sternum height (~1.1m — the
-      // original solve minimized only hand-to-hand distance and palm
-      // facing, with no height target, and landed near the collarbone,
-      // which read as hands held up by the face rather than at the chest).
-      // Getting the hands together there needs a wrist bend too, not just
-      // the shoulder and elbow, so the fingers still angle upward instead
-      // of flattening out toward the chest.
+      // Solved against three rigs at once, with the height tied to each
+      // body's own sternum (see palmsTogether above for why that matters).
+      // The hands meet 3-8cm apart on every one of them, palms inward,
+      // fingers up.
       const palms = (bow) => ({
         spine: { x: bow },
         chest: { x: bow * 0.55 },
         neck: { x: 6 + bow * 0.2 },
         head: { x: 8 + bow * 0.25 },
-        leftShoulder: { z: -25 },
-        rightShoulder: { z: 25 },
-        leftUpperArm: { z: -100, y: 60, x: -51 },
-        rightUpperArm: { z: 100, y: -60, x: -51 },
-        leftLowerArm: { y: -98, x: -1 },
-        rightLowerArm: { y: 98, x: 1 },
-        leftHand: { z: -40, x: -50 },
-        rightHand: { z: 40, x: -50 },
+        leftUpperArm: { z: -37, y: -75, x: 60 },
+        rightUpperArm: { z: 37, y: 75, x: 60 },
+        leftLowerArm: { y: -112, x: 0 },
+        rightLowerArm: { y: 112, x: 0 },
+        leftHand: { z: 50, x: 26 },
+        rightHand: { z: -50, x: 26 },
       });
       return [
         { t: 0, pose: {} },
@@ -550,7 +552,7 @@ const GESTURES = [
           rightLowerLeg: { x: 45 },
           leftUpperArm: { z: -70, x: -14 },
           rightUpperArm: { z: 70, x: -14 },
-          _hips: [0, -0.22, 0],
+          _hips: [0, -0.18, 0],
         },
       },
       {
@@ -568,16 +570,19 @@ const GESTURES = [
           rightLowerLeg: { x: 76 },
           leftFoot: { x: 8 },
           rightFoot: { x: 8 },
-          // Hands resting lightly on top of the thighs. The elbow bend
-          // (30°) is pinned rather than left for the solver to pick: an
-          // unconstrained search happily flattens the arm to nearly
-          // straight (it still lands near the thigh that way), which is
-          // what read as a stiff, locked elbow.
-          leftUpperArm: { z: -81, x: -29 },
-          rightUpperArm: { z: 81, x: -29 },
-          leftLowerArm: { y: -30, x: 102 },
-          rightLowerArm: { y: 30, x: -102 },
-          _hips: [0, -0.4, 0],
+          // Hands on the thighs, solved the same way as seiza's.
+          leftUpperArm: { z: -76, x: -27 },
+          rightUpperArm: { z: 76, x: -27 },
+          leftLowerArm: { y: -32, x: 85 },
+          rightLowerArm: { y: 32, x: -85 },
+          // Measured, not guessed: at a 0.40 drop the hips ended up only
+          // 3-4cm above the cushion on real avatars, so the backside sank
+          // into the chair. 0.33 leaves a 9-10cm gap — enough for the body
+          // to sit ON the seat — at the cost of the feet hovering 4-5cm off
+          // the floor, because a 0.45m chair is proportionally tall for a
+          // ~1.5m avatar. Of the two, floating feet read far better than a
+          // body buried in the seat.
+          _hips: [0, -0.33, 0],
         },
       },
     ],
@@ -694,11 +699,26 @@ function emit(relativePath, bytes) {
   console.log(`  ${relativePath}  ${(bytes.byteLength / 1024).toFixed(1)} KB`);
 }
 
+/**
+ * Short content hash, appended to each clip's URL in the manifest.
+ *
+ * Regenerating a motion rewrites the file but leaves its path alone, so a
+ * browser (or a CDN) that already has the old bytes happily keeps serving
+ * them — which looks exactly like the fix not working. A hash in the query
+ * string gives changed clips a new URL and leaves unchanged ones cacheable.
+ */
+function contentHash(bytes) {
+  return createHash("sha256").update(bytes).digest("hex").slice(0, 8);
+}
+
 const allBones = BONES.map(([bone]) => bone);
 console.log("Generating Seiza motions:");
 
+const locomotionUrls = {};
 for (const clip of LOCOMOTION) {
-  emit(`public/animations/${clip.name}.vrma`, writeVrma({ ...clip, loop: true, bones: allBones }));
+  const bytes = writeVrma({ ...clip, loop: true, bones: allBones });
+  emit(`public/animations/${clip.name}.vrma`, bytes);
+  locomotionUrls[clip.name] = `/animations/${clip.name}.vrma?v=${contentHash(bytes)}`;
 }
 
 const manifest = [];
@@ -706,14 +726,12 @@ for (const gesture of GESTURES) {
   const keys = gesture.keys.map((key) => ({ ...key, t: Number((key.t * GESTURE_TIME_SCALE).toFixed(3)) }));
   const duration = keys[keys.length - 1].t;
   const bones = gesture.fullBody ? allBones : allBones.filter((b) => UPPER_BODY.has(b));
-  emit(
-    `public/gestures/builtin/${gesture.name}.vrma`,
-    writeVrma({ name: gesture.name, duration, sample: keyed(keys), loop: false, bones })
-  );
+  const bytes = writeVrma({ name: gesture.name, duration, sample: keyed(keys), loop: false, bones });
+  emit(`public/gestures/builtin/${gesture.name}.vrma`, bytes);
   manifest.push({
     name: gesture.name,
     label: gesture.label,
-    url: `/gestures/builtin/${gesture.name}.vrma`,
+    url: `/gestures/builtin/${gesture.name}.vrma?v=${contentHash(bytes)}`,
     duration,
     fullBody: gesture.fullBody,
     hold: gesture.hold === true,
@@ -741,10 +759,13 @@ export interface BuiltinGesture {
   hidden: boolean;
 }
 
+// The ?v= is a content hash: regenerating a clip changes its URL, so a
+// browser that cached the old bytes fetches the new ones instead of quietly
+// keeping the old motion.
 export const LOCOMOTION_CLIPS = {
-  idle: "/animations/idle.vrma",
-  walk: "/animations/walk.vrma",
-  run: "/animations/run.vrma",
+  idle: ${JSON.stringify(locomotionUrls.idle)},
+  walk: ${JSON.stringify(locomotionUrls.walk)},
+  run: ${JSON.stringify(locomotionUrls.run)},
 } as const;
 
 export const BUILTIN_GESTURES: BuiltinGesture[] = ${JSON.stringify(manifest, null, 2)};

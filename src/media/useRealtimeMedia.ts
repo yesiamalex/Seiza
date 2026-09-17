@@ -70,6 +70,10 @@ interface Peer {
   ignoreOffer: boolean;
   streams: Map<string, MediaStream>;
   audio: Map<string, RemoteAudio>;
+  /** Candidates that arrived before the remote description did. Adding one
+   *  early throws, and a dropped candidate can be the one route that would
+   *  have connected — which shows up as a stream that never paints. */
+  pendingCandidates: RTCIceCandidateInit[];
 }
 
 export interface RealtimeMediaState {
@@ -249,6 +253,7 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
         ignoreOffer: false,
         streams: new Map(),
         audio: new Map(),
+        pendingCandidates: [],
       };
       peersRef.current.set(peerId, peer);
 
@@ -339,6 +344,11 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
             peer.ignoreOffer = !peer.polite && collision;
             if (peer.ignoreOffer) return;
             await connection.setRemoteDescription(description);
+            // Anything that arrived early can go in now that there's a
+            // remote description to attach it to.
+            for (const candidate of peer.pendingCandidates.splice(0)) {
+              await connection.addIceCandidate(candidate).catch(() => {});
+            }
             if (description.type === "offer") {
               await connection.setLocalDescription();
               if (connection.localDescription) {
@@ -347,6 +357,10 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
             }
             applySendCaps(peer);
           } else if (data.kind === "ice" && data.candidate) {
+            if (!connection.remoteDescription) {
+              peer.pendingCandidates.push(data.candidate);
+              return;
+            }
             try {
               await connection.addIceCandidate(data.candidate);
             } catch (err) {

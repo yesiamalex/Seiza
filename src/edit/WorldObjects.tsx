@@ -209,19 +209,23 @@ function TextSurfaceObject({ object }: { object: WorldObject }) {
 
   return (
     <group>
+      {/* The frame sits behind the writing surface and is deliberately a
+          little smaller in front: its front face used to land at exactly
+          z=0, the same plane as the text, so the two fought for pixels and
+          the brown showed through the white. */}
       {!flat && (
-        <mesh position={[0, 0, -0.035]} castShadow receiveShadow>
+        <mesh position={[0, 0, -0.045]} castShadow receiveShadow>
           <boxGeometry args={[width + 0.1, height + 0.1, 0.07]} />
           <meshStandardMaterial color="#9d6a41" roughness={0.65} />
         </mesh>
       )}
       {flat && (
-        <mesh position={[0, 0, -0.004]} receiveShadow>
+        <mesh position={[0, 0, -0.008]} receiveShadow>
           <boxGeometry args={[width + 0.01, height + 0.01, 0.006]} />
           <meshStandardMaterial color="#ffffff" roughness={0.95} />
         </mesh>
       )}
-      <mesh>
+      <mesh position={[0, 0, 0.004]}>
         <planeGeometry args={[width, height]} />
         <meshStandardMaterial map={drawn.texture} roughness={0.85} />
       </mesh>
