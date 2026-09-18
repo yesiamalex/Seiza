@@ -1,6 +1,7 @@
-import { memo } from "react";
+import { memo, useRef, useState } from "react";
 import type * as THREE from "three";
 import type { ThreeEvent } from "@react-three/fiber";
+import { useFrame } from "@react-three/fiber";
 import { getWorldMaterials, type WorldMaterials } from "./materials";
 import { Chair } from "./Chair";
 import { SeatPad } from "./SeatPad";
@@ -340,6 +341,7 @@ function HallShell({ m }: { m: WorldMaterials }) {
           <boxGeometry args={[0.28, 2.5, 0.35]} />
         </mesh>
       ))}
+      <GardenDoor m={m} />
 
       {/* Open beam ceiling: keeps the hall bright while giving it a top. */}
       {[-1.5, 2, 5.5, 9, 12.5, 15.5].map((z) => (
@@ -350,6 +352,42 @@ function HallShell({ m }: { m: WorldMaterials }) {
       <mesh position={[0, WALL_HEIGHT - 0.52, (HALL.minZ + HALL.maxZ) / 2]} material={m.beam} castShadow>
         <boxGeometry args={[0.32, 0.32, HALL.maxZ - HALL.minZ]} />
       </mesh>
+    </group>
+  );
+}
+
+function GardenDoor({ m }: { m: WorldMaterials }) {
+  const [open, setOpen] = useState(false);
+  const leftRef = useRef<THREE.Group>(null);
+  const rightRef = useRef<THREE.Group>(null);
+  useFrame((_, delta) => {
+    const amount = 1 - Math.exp(-7 * Math.min(delta, 0.05));
+    const target = open ? Math.PI * 0.52 : 0;
+    if (leftRef.current) leftRef.current.rotation.y += (target - leftRef.current.rotation.y) * amount;
+    if (rightRef.current) rightRef.current.rotation.y += (-target - rightRef.current.rotation.y) * amount;
+  });
+  const toggle = (event: ThreeEvent<MouseEvent>) => {
+    event.stopPropagation();
+    setOpen((value) => !value);
+  };
+  return (
+    <group>
+      <group ref={leftRef} position={[-DOOR_HALF_WIDTH + 0.16, 0, HALL.maxZ - 0.18]}>
+        <mesh position={[0.65, 1.2, 0]} material={m.trim} castShadow onClick={toggle}>
+          <boxGeometry args={[1.3, 2.4, 0.08]} />
+        </mesh>
+        <mesh position={[0.42, 1.75, -0.05]} material={m.glass} onClick={toggle}>
+          <boxGeometry args={[0.78, 0.86, 0.04]} />
+        </mesh>
+      </group>
+      <group ref={rightRef} position={[DOOR_HALF_WIDTH - 0.16, 0, HALL.maxZ - 0.18]}>
+        <mesh position={[-0.65, 1.2, 0]} material={m.trim} castShadow onClick={toggle}>
+          <boxGeometry args={[1.3, 2.4, 0.08]} />
+        </mesh>
+        <mesh position={[-0.42, 1.75, -0.05]} material={m.glass} onClick={toggle}>
+          <boxGeometry args={[0.78, 0.86, 0.04]} />
+        </mesh>
+      </group>
     </group>
   );
 }

@@ -78,7 +78,12 @@ const contains = (rect: Rect, x: number, z: number) => x >= rect.minX && x <= re
 const CORRIDOR_MOUTH = WALL_THICKNESS / 2 + PLAYER_RADIUS;
 const WALKABLE: Rect[] = [
   inset(HALL, PLAYER_RADIUS),
-  inset(OUTDOOR, PLAYER_RADIUS),
+  {
+    ...inset(OUTDOOR, PLAYER_RADIUS),
+    // Overlap the hall's inset at the entrance so movement can cross the
+    // threshold instead of being snapped back by the rectangular clamp.
+    minZ: HALL.maxZ - PLAYER_RADIUS,
+  },
   {
     ...inset(CORRIDOR, PLAYER_RADIUS),
     minZ: CORRIDOR.minZ - CORRIDOR_MOUTH,
