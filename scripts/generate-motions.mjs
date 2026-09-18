@@ -487,9 +487,9 @@ const GESTURES = [
           // normal points 83% of the way straight down on every rig,
           // against 46% before. Elbow bend is held at a relaxed 28 degrees.
           ...mirror({
-            leftUpperArm: { z: -62, x: -34 },
-            leftLowerArm: { y: -38, x: 72 },
-            leftHand: { z: 16, x: -4 },
+            leftUpperArm: { x: -24, y: -10, z: -75 },
+            leftLowerArm: { x: 111, y: -40 },
+            leftHand: { x: -5, y: 18, z: 34 },
             ...leftHand(RELAXED),
           }),
           _hips: [0, -0.61, 0],
@@ -632,7 +632,7 @@ const GESTURES = [
         neck: { x: 6 + bow * 0.2 },
         head: { x: 8 + bow * 0.25 },
         ...mirror({
-          leftUpperArm: { x: 5, y: -34, z: -56 },
+          leftUpperArm: { x: 5, y: -38, z: -56 },
           leftLowerArm: { x: 44, y: -106 },
           leftHand: { x: -10, y: -30, z: 61 },
           ...leftHand(PRESSED),
@@ -730,9 +730,9 @@ const GESTURES = [
           // seiza because a seated thigh is closer to horizontal, so the
           // hand has further to travel forward to land on it.
           ...mirror({
-            leftUpperArm: { z: -58, x: -32 },
-            leftLowerArm: { y: -42, x: 68 },
-            leftHand: { z: 16, x: 2 },
+            leftUpperArm: { x: -24, y: -10, z: -72 },
+            leftLowerArm: { x: 102, y: -40 },
+            leftHand: { x: 3, y: 21, z: 40 },
             ...leftHand(RELAXED),
           }),
           // Only a starting point. The app measures each avatar's hips

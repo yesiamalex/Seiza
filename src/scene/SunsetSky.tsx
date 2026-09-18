@@ -1,4 +1,6 @@
 import { useMemo } from "react";
+import { useLoader } from "@react-three/fiber";
+import { TextureLoader } from "three";
 import * as THREE from "three";
 
 /**
@@ -120,3 +122,16 @@ export function SunsetSky({ sunPosition, radius = 200 }: SunsetSkyProps) {
 
 /** The sunset's horizon colour, for fog that fades the treeline into it. */
 export const SUNSET_HORIZON_COLOR = HORIZON;
+
+/** Displays an uploaded equirectangular panorama as the room's sky. */
+export function ImageSkybox({ url, radius = 200 }: { url: string; radius?: number }) {
+  const texture = useLoader(TextureLoader, url);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.needsUpdate = true;
+  return (
+    <mesh scale={[-1, 1, 1]} renderOrder={-1000} frustumCulled={false} userData={{ navIgnore: true }}>
+      <sphereGeometry args={[radius, 48, 32]} />
+      <meshBasicMaterial map={texture} side={THREE.BackSide} toneMapped={false} depthWrite={false} />
+    </mesh>
+  );
+}

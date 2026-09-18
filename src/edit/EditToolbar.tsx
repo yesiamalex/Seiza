@@ -36,6 +36,8 @@ interface EditToolbarProps {
    *  world.json sceneUrl (or the procedural base room) is in use. */
   environmentUrl: string | null;
   onSetEnvironment: (url: string | null) => void;
+  skyboxUrl: string | null;
+  onSetSkybox: (url: string | null) => void;
 }
 
 /**
@@ -64,6 +66,8 @@ export function EditToolbar({
   onAuthEditor,
   environmentUrl,
   onSetEnvironment,
+  skyboxUrl,
+  onSetSkybox,
 }: EditToolbarProps) {
   const [modelUrl, setModelUrl] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
@@ -190,6 +194,38 @@ export function EditToolbar({
       setAssetMessage(`${asset.name} is now this room's environment for everyone.`);
     } catch (error) {
       setAssetMessage(error instanceof Error ? error.message : "Environment upload failed.");
+    } finally {
+      setAssetUploading(false);
+    }
+  }
+
+  async function uploadSkybox(file: File) {
+    setAssetMessage(null);
+    setAssetUploading(true);
+    try {
+      const compressed = await compressImage(file);
+      const response = await fetch("/api/assets", {
+        method: "POST",
+        body: compressed.blob,
+        headers: {
+          "x-seiza-asset-name": compressed.name,
+          "x-seiza-asset-kind": "image",
+          ...(passwordDraft ? { "x-seiza-editor-password": passwordDraft } : {}),
+        },
+      });
+      const result = (await response.json().catch(() => ({}))) as {
+        id?: string;
+        url?: string;
+        name?: string;
+        error?: string;
+      };
+      if (!response.ok || !result.id || !result.url) throw new Error(result.error ?? `Upload failed (${response.status}).`);
+      const asset = { id: result.id, url: result.url, name: result.name ?? compressed.name, kind: "image" as const };
+      setAssets((previous) => [...previous, asset]);
+      onSetSkybox(asset.url);
+      setAssetMessage(`${asset.name} is now the room skybox for everyone.`);
+    } catch (error) {
+      setAssetMessage(error instanceof Error ? error.message : "Skybox upload failed.");
     } finally {
       setAssetUploading(false);
     }
@@ -382,6 +418,44 @@ export function EditToolbar({
               {environmentUrl && (
                 <button style={pillButtonStyle} disabled={!connected} onClick={() => onSetEnvironment(null)}>
                   Reset to default
+                </button>
+              )}
+            </div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 5, borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 8 }}>
+            <strong>Skybox</strong>
+            <small style={{ opacity: 0.7 }}>
+              {skyboxUrl ? "A custom panorama is visible outside the room for everyone." : "Using the built-in sunset sky."}
+              {" "}Use a wide 2:1 equirectangular image for the cleanest wrap.
+            </small>
+            <label style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+              Upload panorama image
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                disabled={!connected || assetUploading}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void uploadSkybox(file);
+                  event.currentTarget.value = "";
+                }}
+              />
+            </label>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {assets.filter((asset) => asset.kind === "image").map((asset) => (
+                <button
+                  key={`sky-${asset.id}`}
+                  style={{ ...pillButtonStyle, maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis" }}
+                  disabled={!connected}
+                  onClick={() => onSetSkybox(asset.url)}
+                  title={`Use ${asset.name} as the skybox`}
+                >
+                  Use {asset.name}
+                </button>
+              ))}
+              {skyboxUrl && (
+                <button style={pillButtonStyle} disabled={!connected} onClick={() => onSetSkybox(null)}>
+                  Use sunset
                 </button>
               )}
             </div>

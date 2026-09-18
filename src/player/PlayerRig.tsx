@@ -21,6 +21,7 @@ const RUN_MULTIPLIER = 1.9; // hold Shift, or double-tap forward on the D-pad
 // How fast a player slides onto a seat, and turns to face the way it faces.
 const SIT_EASE_RATE = 9;
 const SIT_TURN_RATE = 6;
+const POSTURE_CAMERA_EASE_RATE = 6;
 // The walkable area is already inset by the player's radius (layout.ts);
 // this is that inset, so the camera can be allowed closer to walls.
 const PLAYER_RADIUS_MARGIN = 0.4;
@@ -119,6 +120,9 @@ function lerpAngle(from: number, to: number, t: number) {
   return from + Math.atan2(Math.sin(to - from), Math.cos(to - from)) * t;
 }
 
+const approach = (current: number, target: number, rate: number, delta: number) =>
+  current + (target - current) * (1 - Math.exp(-rate * delta));
+
 /**
  * Owns local movement and the camera: WASD / D-pad / click-to-move, jump,
  * drag-to-look, scroll and pinch zoom, a first/third-person toggle, and VR
@@ -171,6 +175,10 @@ export function PlayerRig({
   postureHeldRef.current = postureHeld;
   const postureEyeHeightRef = useRef(postureEyeHeight);
   postureEyeHeightRef.current = postureEyeHeight;
+  const lastPostureEyeHeightRef = useRef(SEIZA_EYE_HEIGHT);
+  if (postureEyeHeight !== null) lastPostureEyeHeightRef.current = postureEyeHeight;
+  const postureCameraBlendRef = useRef(0);
+  const seatedExitRef = useRef(false);
   const onStandUpRef = useRef(onStandUp);
   onStandUpRef.current = onStandUp;
   // Eye height over whatever the player is standing on, updated each frame
@@ -516,6 +524,7 @@ export function PlayerRig({
       const [x, , z] = standUpSpot(previous.position, previous.rotationY);
       vcam.position.x = x;
       vcam.position.z = z;
+      seatedExitRef.current = true;
     }
     previousSitAnchorRef.current = sit;
 
@@ -524,7 +533,7 @@ export function PlayerRig({
         onStandUpRef.current?.();
       } else {
         const seatEye = new THREE.Vector3(sit.position[0], sit.position[1] + SEATED_EYE_HEIGHT, sit.position[2]);
-        vcam.position.lerp(seatEye, 1 - Math.exp(-SIT_EASE_RATE * delta));
+        vcam.position.lerp(seatEye, 1 - Math.exp(-POSTURE_CAMERA_EASE_RATE * delta));
         verticalVelocityRef.current = 0;
         moveTargetRef.current = null;
         if (movePathRef) movePathRef.current = null;
@@ -564,12 +573,24 @@ export function PlayerRig({
     // eye height rather than separate ground detection. The ground is not
     // always y=0: the tatami platform is a step up.
     const floorY = floorHeightAt(vcam.position.x, vcam.position.z);
-    const postureEye = postureHeldRef.current ? postureEyeHeightRef.current ?? SEIZA_EYE_HEIGHT : null;
+    const postureTarget = postureHeldRef.current
+      ? postureEyeHeightRef.current ?? SEIZA_EYE_HEIGHT
+      : lastPostureEyeHeightRef.current;
+    const postureBlendTarget = postureHeldRef.current ? 1 : 0;
+    postureCameraBlendRef.current = approach(
+      postureCameraBlendRef.current,
+      postureBlendTarget,
+      POSTURE_CAMERA_EASE_RATE,
+      delta
+    );
+    const postureBlend = postureCameraBlendRef.current;
+    const postureEye = postureBlend > 0.001 ? THREE.MathUtils.lerp(EYE_HEIGHT, postureTarget, postureBlend) : null;
     const groundEyeY = floorY + (postureEye ?? EYE_HEIGHT);
     groundEyeYRef.current = groundEyeY;
-    if (postureEye !== null) {
+    if (postureEye !== null || seatedExitRef.current) {
       verticalVelocityRef.current = 0;
-      vcam.position.y = THREE.MathUtils.damp(vcam.position.y, groundEyeY, SIT_EASE_RATE, delta);
+      vcam.position.y = THREE.MathUtils.damp(vcam.position.y, groundEyeY, POSTURE_CAMERA_EASE_RATE, delta);
+      if (seatedExitRef.current && Math.abs(vcam.position.y - groundEyeY) < 0.01) seatedExitRef.current = false;
     } else {
       verticalVelocityRef.current -= GRAVITY * delta;
       vcam.position.y += verticalVelocityRef.current * delta;
@@ -578,7 +599,7 @@ export function PlayerRig({
         verticalVelocityRef.current = 0;
       }
     }
-    if (vcam.position.y <= groundEyeY && postureEye === null) {
+    if (vcam.position.y <= groundEyeY && postureEye === null && !seatedExitRef.current) {
       verticalVelocityRef.current = 0;
     }
 

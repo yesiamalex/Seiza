@@ -152,6 +152,8 @@ export default function App() {
     roomFull,
     environmentUrl,
     setEnvironment,
+    skyboxUrl,
+    setSkybox,
   } = useRoomSocket(
     roomId,
     joined?.displayName ?? "",
@@ -577,6 +579,7 @@ export default function App() {
           <group ref={navSourceRef}>
             <Scene
               sceneUrl={environmentUrl ?? world.sceneUrl}
+              skyboxUrl={skyboxUrl}
               onFloorDoubleClick={handleFloorClick}
               // In Edit Mode a click belongs to the object gizmos, so the
               // seats stop accepting clicks entirely.
@@ -767,6 +770,8 @@ export default function App() {
           onAuthEditor={authEditor}
           environmentUrl={environmentUrl}
           onSetEnvironment={setEnvironment}
+          skyboxUrl={skyboxUrl}
+          onSetSkybox={setSkybox}
         />
       </HUD>
       {showTouchControls && !webglLost && <TouchControls inputRef={touchInputRef} />}

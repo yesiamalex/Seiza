@@ -1,13 +1,15 @@
 import { Component, Suspense, memo, useEffect, type ReactNode } from "react";
-import { useGLTF, Sky } from "@react-three/drei";
+import { useGLTF } from "@react-three/drei";
 import { useThree } from "@react-three/fiber";
 import type * as THREE from "three";
 import { BaseEnvironment } from "./BaseEnvironment";
 import { Outdoors } from "./Outdoors";
+import { ImageSkybox, SunsetSky, SUNSET_HORIZON_COLOR } from "./SunsetSky";
 import type { Seat } from "./layout";
 
 interface SceneProps {
   sceneUrl?: string;
+  skyboxUrl?: string | null;
   onFloorDoubleClick?: (point: THREE.Vector3) => void;
   onSit?: (seat: Seat) => void;
   occupiedSeatId?: string | null;
@@ -64,7 +66,7 @@ function SceneModel({ sceneUrl }: { sceneUrl: string }) {
  * would crash the whole app instead of just falling back to
  * BaseEnvironment underneath it.
  */
-class SceneLoadBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+class SceneLoadBoundary extends Component<{ children: ReactNode; fallback?: ReactNode }, { failed: boolean }> {
   state = { failed: false };
   static getDerivedStateFromError() {
     return { failed: true };
@@ -73,7 +75,7 @@ class SceneLoadBoundary extends Component<{ children: ReactNode }, { failed: boo
     console.warn("Deployer-supplied scene failed to load; showing the base environment instead.", error);
   }
   render() {
-    return this.state.failed ? null : this.props.children;
+    return this.state.failed ? this.props.fallback ?? null : this.props.children;
   }
 }
 
@@ -109,6 +111,7 @@ const FOG_FAR = 210;
  */
 export const Scene = memo(function Scene({
   sceneUrl,
+  skyboxUrl = null,
   onFloorDoubleClick,
   onSit,
   occupiedSeatId,
@@ -117,14 +120,16 @@ export const Scene = memo(function Scene({
   return (
     <>
       <OnDemandShadows refreshKey={shadowRefreshKey} />
-      {/* Higher turbidity and rayleigh is what turns the sky orange.
-          `distance` (drei's Sky defaults to 1000) has to stay inside the
-          Canvas camera's far plane (App.tsx sets it to 260, tightened to
-          stop nearby surfaces z-fighting) or the sky dome sits beyond the
-          far clip and never renders at all — which is what made the newly
-          opened windows look out at nothing, rather than the sunset. */}
-      <Sky sunPosition={SUN} distance={200} turbidity={10} rayleigh={3.4} mieCoefficient={0.02} mieDirectionalG={0.94} />
-      <fog attach="fog" args={[FOG_COLOR, FOG_NEAR, FOG_FAR]} />
+      {skyboxUrl ? (
+        <SceneLoadBoundary fallback={<SunsetSky sunPosition={SUN} />}>
+          <Suspense fallback={<SunsetSky sunPosition={SUN} />}>
+            <ImageSkybox url={skyboxUrl} />
+          </Suspense>
+        </SceneLoadBoundary>
+      ) : (
+        <SunsetSky sunPosition={SUN} />
+      )}
+      <fog attach="fog" args={[SUNSET_HORIZON_COLOR, FOG_NEAR, FOG_FAR]} />
       <Outdoors />
       {/* Warm sky above, warmer bounce off the wooden floor below. A big
           share of the light comes from here rather than the sun, which is
