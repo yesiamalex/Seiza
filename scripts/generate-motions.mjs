@@ -487,7 +487,7 @@ const GESTURES = [
           // normal points 83% of the way straight down on every rig,
           // against 46% before. Elbow bend is held at a relaxed 28 degrees.
           ...mirror({
-            leftUpperArm: { x: -24, y: -10, z: -75 },
+            leftUpperArm: { x: -24, y: -10, z: -68 },
             leftLowerArm: { x: 111, y: -40 },
             leftHand: { x: -5, y: 18, z: 34 },
             ...leftHand(RELAXED),
@@ -730,7 +730,7 @@ const GESTURES = [
           // seiza because a seated thigh is closer to horizontal, so the
           // hand has further to travel forward to land on it.
           ...mirror({
-            leftUpperArm: { x: -24, y: -10, z: -68 },
+            leftUpperArm: { x: -24, y: -10, z: -62 },
             leftLowerArm: { x: 102, y: -40 },
             leftHand: { x: 3, y: 21, z: 40 },
             ...leftHand(RELAXED),

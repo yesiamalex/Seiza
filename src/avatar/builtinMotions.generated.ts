@@ -61,7 +61,7 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
   {
     "name": "seiza",
     "label": "Seiza (hold)",
-    "url": "/gestures/builtin/seiza.vrma?v=9581964e",
+    "url": "/gestures/builtin/seiza.vrma?v=3fe699f2",
     "duration": 1.8,
     "fullBody": true,
     "hold": true,
@@ -141,7 +141,7 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
   {
     "name": "sit",
     "label": "Sit",
-    "url": "/gestures/builtin/sit.vrma?v=4855efff",
+    "url": "/gestures/builtin/sit.vrma?v=37ac7789",
     "duration": 1.14,
     "fullBody": true,
     "hold": true,
