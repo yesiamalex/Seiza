@@ -632,7 +632,7 @@ const GESTURES = [
         neck: { x: 6 + bow * 0.2 },
         head: { x: 8 + bow * 0.25 },
         ...mirror({
-          leftUpperArm: { x: 5, y: -46, z: -56 },
+          leftUpperArm: { x: 5, y: -60, z: -56 },
           leftLowerArm: { x: 44, y: -106 },
           leftHand: { x: -10, y: -30, z: 61 },
           ...leftHand(PRESSED),
@@ -730,7 +730,7 @@ const GESTURES = [
           // seiza because a seated thigh is closer to horizontal, so the
           // hand has further to travel forward to land on it.
           ...mirror({
-            leftUpperArm: { x: -24, y: -10, z: -72 },
+            leftUpperArm: { x: -24, y: -10, z: -68 },
             leftLowerArm: { x: 102, y: -40 },
             leftHand: { x: 3, y: 21, z: 40 },
             ...leftHand(RELAXED),

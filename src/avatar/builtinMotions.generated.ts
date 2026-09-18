@@ -121,7 +121,7 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
   {
     "name": "gassho",
     "label": "Gasshō (thanks)",
-    "url": "/gestures/builtin/gassho.vrma?v=a21b1717",
+    "url": "/gestures/builtin/gassho.vrma?v=207a422e",
     "duration": 4.32,
     "fullBody": false,
     "hold": false,
@@ -141,7 +141,7 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
   {
     "name": "sit",
     "label": "Sit",
-    "url": "/gestures/builtin/sit.vrma?v=717a5678",
+    "url": "/gestures/builtin/sit.vrma?v=4855efff",
     "duration": 1.14,
     "fullBody": true,
     "hold": true,

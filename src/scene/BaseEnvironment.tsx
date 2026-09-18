@@ -14,6 +14,7 @@ import {
   DOOR_HALF_WIDTH,
   HALL,
   HALL_CENTRE,
+  OUTDOOR,
   SEATS,
   SEAT_HEIGHT,
   TEACHER_DESK,
@@ -57,6 +58,7 @@ export const BaseEnvironment = memo(function BaseEnvironment({
       <Floors m={m} onFloorDoubleClick={onFloorDoubleClick} />
       <HallShell m={m} />
       <HallFurniture m={m} />
+      <OutdoorGarden m={m} />
       <CorridorShell m={m} />
       <ClassroomShell m={m} />
       <ClassroomFurniture m={m} />
@@ -78,6 +80,7 @@ function Floors({ m, onFloorDoubleClick }: { m: WorldMaterials; onFloorDoubleCli
   return (
     <group>
       <FloorPlane rect={HALL} material={m.hallFloor} onDoubleClick={handleDoubleClick} />
+      <FloorPlane rect={OUTDOOR} material={m.classroomFloor} onDoubleClick={handleDoubleClick} />
       <FloorPlane rect={CORRIDOR} material={m.corridorFloor} onDoubleClick={handleDoubleClick} />
       <FloorPlane rect={CLASSROOM} material={m.classroomFloor} onDoubleClick={handleDoubleClick} />
     </group>
@@ -289,7 +292,7 @@ function HallShell({ m }: { m: WorldMaterials }) {
   return (
     <group>
       {/* North wall is the entrance; south opens into the corridor. */}
-      <DressedWall axis="x" at={HALL.maxZ} from={HALL.minX} to={HALL.maxX} height={WALL_HEIGHT} m={m} />
+      <DressedWall axis="x" at={HALL.maxZ} from={HALL.minX} to={HALL.maxX} height={WALL_HEIGHT} gaps={[{ from: -DOOR_HALF_WIDTH, to: DOOR_HALF_WIDTH }]} m={m} />
       <DressedWall
         axis="x"
         at={HALL.minZ}
@@ -328,19 +331,14 @@ function HallShell({ m }: { m: WorldMaterials }) {
         <Window key={`e-${z}`} position={[HALL.maxX - 0.2, HALL_WINDOW_CENTER_Y, z]} rotationY={-Math.PI / 2} width={HALL_WINDOW_WIDTH} m={m} />
       ))}
 
-      {/* Entrance doors (decorative — the walls are the real boundary). */}
-      {[-0.62, 0.62].map((x) => (
-        <group key={x} position={[x, 1.2, HALL.maxZ - 0.22]}>
-          <mesh material={m.trim} castShadow>
-            <boxGeometry args={[1.18, 2.4, 0.08]} />
-          </mesh>
-          <mesh position={[x > 0 ? -0.45 : 0.45, 0, -0.07]} material={m.metal}>
-            <boxGeometry args={[0.05, 0.5, 0.05]} />
-          </mesh>
-          <mesh position={[0, 0.55, -0.05]} material={m.glass}>
-            <boxGeometry args={[0.8, 0.9, 0.04]} />
-          </mesh>
-        </group>
+      {/* Open entrance into the bounded garden beyond the hall. */}
+      <mesh position={[0, 2.5, HALL.maxZ]} material={m.trim} castShadow>
+        <boxGeometry args={[DOOR_HALF_WIDTH * 2, 0.28, 0.35]} />
+      </mesh>
+      {[-1, 1].map((side) => (
+        <mesh key={side} position={[side * (DOOR_HALF_WIDTH - 0.16), 1.25, HALL.maxZ]} material={m.trim} castShadow>
+          <boxGeometry args={[0.28, 2.5, 0.35]} />
+        </mesh>
       ))}
 
       {/* Open beam ceiling: keeps the hall bright while giving it a top. */}
@@ -352,6 +350,31 @@ function HallShell({ m }: { m: WorldMaterials }) {
       <mesh position={[0, WALL_HEIGHT - 0.52, (HALL.minZ + HALL.maxZ) / 2]} material={m.beam} castShadow>
         <boxGeometry args={[0.32, 0.32, HALL.maxZ - HALL.minZ]} />
       </mesh>
+    </group>
+  );
+}
+
+function OutdoorGarden({ m }: { m: WorldMaterials }) {
+  return (
+    <group>
+      <mesh position={[0, 0.04, 27]} material={m.glass} receiveShadow>
+        <cylinderGeometry args={[2.7, 2.7, 0.08, 32]} />
+      </mesh>
+      <mesh position={[0, 0.09, 27]} material={m.accentBlue}>
+        <cylinderGeometry args={[2.35, 2.35, 0.04, 32]} />
+      </mesh>
+      {[-5.2, 5.2].map((x) => (
+        <group key={x} position={[x, 0, 23.5]} rotation={[0, x < 0 ? -0.16 : 0.16, 0]}>
+          <mesh position={[0, 0.48, 0]} material={m.furnitureWarm} castShadow>
+            <boxGeometry args={[3.2, 0.14, 0.45]} />
+          </mesh>
+          {[-1.15, 1.15].map((leg) => (
+            <mesh key={leg} position={[leg, 0.23, 0]} material={m.trim} castShadow>
+              <boxGeometry args={[0.16, 0.46, 0.4]} />
+            </mesh>
+          ))}
+        </group>
+      ))}
     </group>
   );
 }

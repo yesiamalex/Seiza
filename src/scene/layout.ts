@@ -28,9 +28,11 @@ export interface Rect {
 }
 
 export const HALL: Rect = { minX: -12, maxX: 12, minZ: -4, maxZ: 16 };
+/** Bounded garden beyond the hall entrance. */
+export const OUTDOOR: Rect = { minX: -10, maxX: 10, minZ: 16, maxZ: 38 };
 export const CORRIDOR: Rect = { minX: -2.6, maxX: 2.6, minZ: -10, maxZ: -4 };
 export const CLASSROOM: Rect = { minX: -9, maxX: 9, minZ: -24, maxZ: -10 };
-export const ROOMS: Rect[] = [HALL, CORRIDOR, CLASSROOM];
+export const ROOMS: Rect[] = [HALL, OUTDOOR, CORRIDOR, CLASSROOM];
 
 export const WALL_HEIGHT = 4.2;
 export const WALL_THICKNESS = 0.3;
@@ -76,6 +78,7 @@ const contains = (rect: Rect, x: number, z: number) => x >= rect.minX && x <= re
 const CORRIDOR_MOUTH = WALL_THICKNESS / 2 + PLAYER_RADIUS;
 const WALKABLE: Rect[] = [
   inset(HALL, PLAYER_RADIUS),
+  inset(OUTDOOR, PLAYER_RADIUS),
   {
     ...inset(CORRIDOR, PLAYER_RADIUS),
     minZ: CORRIDOR.minZ - CORRIDOR_MOUTH,

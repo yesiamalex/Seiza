@@ -68,6 +68,7 @@ export function MediaControls({ media, voiceEnabled, onShareScreen, onStopScreen
         onClick={() => setOpen((value) => !value)}
       >
         <CameraIcon />
+        <span className={BAR_LABEL_CLASS}>Video</span>
         {media.micEnabled && (
           <span
             aria-hidden
