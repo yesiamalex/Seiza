@@ -91,9 +91,9 @@ const FLOOR_CONTACT_BONES: VRMHumanBoneName[] = [
 /** Hips height of the skeleton the built-in clips were authored against. */
 const REFERENCE_HIPS_HEIGHT = 0.95;
 /** Distance from a shin or ankle joint to the skin, at reference scale. */
-const LIMB_RADIUS = 0.045;
+const LIMB_RADIUS = 0.05;
 /** Distance from the hip joint down to the part that meets the cushion. */
-const HIP_TO_SEAT = 0.15;
+const HIP_TO_SEAT = 0.19;
 /** How fast the grounding offset chases its target. Fast enough to keep up
  *  with sitting down, slow enough that a noisy frame doesn't pop the body. */
 const GROUND_SETTLE_RATE = 14;
