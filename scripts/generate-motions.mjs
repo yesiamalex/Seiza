@@ -632,7 +632,7 @@ const GESTURES = [
         neck: { x: 6 + bow * 0.2 },
         head: { x: 8 + bow * 0.25 },
         ...mirror({
-          leftUpperArm: { x: 5, y: -42, z: -56 },
+          leftUpperArm: { x: 5, y: -34, z: -56 },
           leftLowerArm: { x: 44, y: -106 },
           leftHand: { x: -10, y: -30, z: 61 },
           ...leftHand(PRESSED),
