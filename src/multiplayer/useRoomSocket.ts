@@ -54,6 +54,9 @@ export interface MultiplayerState {
    *  the deployment's own world.json sceneUrl should be used. */
   environmentUrl: string | null;
   setEnvironment: (url: string | null) => void;
+  /** Room-level sky image, or null for the built-in sunset. */
+  skyboxUrl: string | null;
+  setSkybox: (url: string | null) => void;
 }
 
 /**
@@ -91,6 +94,7 @@ export function useRoomSocket(
   const [editorAuthFailed, setEditorAuthFailed] = useState(false);
     const [roomFull, setRoomFull] = useState<number | null>(null);
   const [environmentUrl, setEnvironmentUrl] = useState<string | null>(null);
+  const [skyboxUrl, setSkyboxUrl] = useState<string | null>(null);
   const onVoiceSignalRef = useRef(onVoiceSignal);
   onVoiceSignalRef.current = onVoiceSignal;
   // Read at connect time rather than being effect dependencies: changing
@@ -131,6 +135,7 @@ export function useRoomSocket(
   const presentOnObject = useCallback((id: string, active: boolean) => send({ type: "objectPresent", id, active }), [send]);
   const setMedia = useCallback((media: PlayerMedia) => send({ type: "setMedia", media }), [send]);
   const setEnvironment = useCallback((url: string | null) => send({ type: "setEnvironment", url }), [send]);
+  const setSkybox = useCallback((url: string | null) => send({ type: "setSkybox", url }), [send]);
   const authEditor = useCallback(
     (password: string) => {
       setEditorAuthPending(true);
@@ -192,8 +197,13 @@ export function useRoomSocket(
             setEditorPasswordRequired(msg.editorPasswordRequired);
             setIsEditor(!msg.editorPasswordRequired);
             setEnvironmentUrl(msg.environmentUrl);
+            // Older room servers predate skyboxes and omit the field.
+            setSkyboxUrl(msg.skyboxUrl ?? null);
             break;
           }
+          case "skyboxChanged":
+            setSkyboxUrl(msg.url);
+            break;
           case "environmentChanged":
             setEnvironmentUrl(msg.url);
             break;
@@ -331,5 +341,7 @@ export function useRoomSocket(
     roomFull,
     environmentUrl,
     setEnvironment,
+    skyboxUrl,
+    setSkybox,
   };
 }

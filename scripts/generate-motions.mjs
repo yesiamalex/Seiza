@@ -28,10 +28,19 @@
 //     left upper arm   -Z  lowers the arm;  +Z raises it.  Right arm: mirrored.
 //     arm (lowered)    +X  swings it back;  -X swings it forward
 //     left lower arm   -Y  bends the elbow forward.  Right arm: +Y.
-//     left lower arm    X  ROLLS the forearm, which is what aims the palm:
-//                          at rest, -90 faces it forward, 0 faces it inward
-//                          toward the thigh, +90 faces it backward. The right
-//                          forearm is mirrored, so negate the angle.
+//     left lower arm    X  swings the (bent) forearm round the upper arm,
+//                          which is also what turns the palm.
+//     left fingers     -Z  curl toward the palm.  Right hand: +Z.
+//
+//   MIRRORING. The right side of a symmetric pose is the left side with Y and
+//   Z negated and X LEFT ALONE: reflecting across the body's midline flips
+//   rotations about the up and forward axes, but not about the side-to-side
+//   one. This file used to say the forearm's X should be negated too. It
+//   shouldn't, and every pose written that way (seiza, sitting, the clap) put
+//   the right hand somewhere the left one wasn't: out at the side, palm up,
+//   while the left rested on the thigh. Symmetric poses are therefore written
+//   once, for the left side, and the right is derived by mirror() below, so
+//   the two can't drift apart again.
 //
 // The palm angles below were not guessed: they were solved against a real VRM
 // rig and checked by measuring, in world space, where each hand ended up and
@@ -77,6 +86,36 @@ const BONES = [
   ["rightFoot", "rightLowerLeg", [0, -0.42, 0]],
   ["rightToes", "rightFoot", [0, -0.05, 0.12]],
 ];
+
+// Fingers, for the few clips that need them (see `fingers` on a gesture). The
+// left hand points along +X with the palm down and the thumb forward; the
+// right hand is its mirror image. Only the hierarchy matters here: a clip
+// carries rotations, and those retarget onto each avatar's own finger bones.
+// Fingers are optional in VRM, and a rig without them simply ignores these
+// tracks (three-vrm skips humanoid bones the avatar doesn't have).
+const FINGER_REST = [
+  ["ThumbMetacarpal", "Hand", [0.025, -0.01, 0.025]],
+  ["ThumbProximal", "ThumbMetacarpal", [0.035, 0, 0.02]],
+  ["ThumbDistal", "ThumbProximal", [0.03, 0, 0.012]],
+  ["IndexProximal", "Hand", [0.085, 0, 0.022]],
+  ["IndexIntermediate", "IndexProximal", [0.035, 0, 0]],
+  ["IndexDistal", "IndexIntermediate", [0.022, 0, 0]],
+  ["MiddleProximal", "Hand", [0.088, 0, 0.004]],
+  ["MiddleIntermediate", "MiddleProximal", [0.04, 0, 0]],
+  ["MiddleDistal", "MiddleIntermediate", [0.024, 0, 0]],
+  ["RingProximal", "Hand", [0.084, 0, -0.013]],
+  ["RingIntermediate", "RingProximal", [0.036, 0, 0]],
+  ["RingDistal", "RingIntermediate", [0.022, 0, 0]],
+  ["LittleProximal", "Hand", [0.076, 0, -0.03]],
+  ["LittleIntermediate", "LittleProximal", [0.028, 0, 0]],
+  ["LittleDistal", "LittleIntermediate", [0.018, 0, 0]],
+];
+for (const side of ["left", "right"]) {
+  for (const [name, parent, [x, y, z]] of FINGER_REST) {
+    BONES.push([`${side}${name}`, `${side}${parent}`, [side === "left" ? x : -x, y, z]]);
+  }
+}
+const FINGER_BONES = new Set(BONES.map(([bone]) => bone).filter((bone) => /(Thumb|Index|Middle|Ring|Little)/.test(bone)));
 const REST_HIPS = BONES[0][2];
 
 /** Upper-body gestures only carry these bones, so walking legs keep going
@@ -85,6 +124,7 @@ const UPPER_BODY = new Set([
   "spine", "chest", "upperChest", "neck", "head",
   "leftShoulder", "leftUpperArm", "leftLowerArm", "leftHand",
   "rightShoulder", "rightUpperArm", "rightLowerArm", "rightHand",
+  ...FINGER_BONES,
 ]);
 
 // Relaxed standing pose every clip starts from, so nothing a clip doesn't
@@ -143,6 +183,56 @@ function keyed(keys) {
 }
 
 const pos = (v) => Math.max(0, v);
+
+/**
+ * The right-side twin of a left-side pose: every `left*` bone copied to its
+ * `right*` counterpart with Y and Z negated and X kept (see MIRRORING at the
+ * top of this file). Bones that aren't sided pass through unchanged.
+ */
+function mirror(pose) {
+  const out = {};
+  for (const [bone, r] of Object.entries(pose)) {
+    out[bone] = r;
+    if (bone.startsWith("left")) {
+      out[`right${bone.slice(4)}`] = { x: r.x ?? 0, y: -(r.y ?? 0), z: -(r.z ?? 0) };
+    }
+  }
+  return out;
+}
+
+// How far each finger joint bends in a full curl, in degrees: roughly a loose
+// fist. The middle joint does the most, the tip the least.
+const CURL = { Proximal: 70, Intermediate: 90, Distal: 60 };
+
+/**
+ * A hand shape for the LEFT hand (pass it through mirror() for the right).
+ * Each finger takes a curl from 0 (straight) to 1 (curled into the palm).
+ * `thumb` folds the thumb in across the palm by the same measure, and
+ * `spread` fans the four fingers apart (negative draws them together).
+ */
+function leftHand({ thumb = 0, index = 0, middle = 0, ring = 0, little = 0, spread = 0 } = {}) {
+  const pose = {};
+  const fans = { Index: 1, Middle: 0, Ring: -1, Little: -2 };
+  for (const [name, curl] of Object.entries({ Index: index, Middle: middle, Ring: ring, Little: little })) {
+    // Curling toward the palm is -Z on the left hand, the same way that
+    // lowers the left arm. Fanning is about Y, within the plane of the palm.
+    pose[`left${name}Proximal`] = { z: -CURL.Proximal * curl, y: -fans[name] * spread };
+    pose[`left${name}Intermediate`] = { z: -CURL.Intermediate * curl };
+    pose[`left${name}Distal`] = { z: -CURL.Distal * curl };
+  }
+  // +Y swings the left thumb from its rest angle (out and forward) in across
+  // the palm; -Z then closes it down onto the fingers.
+  pose.leftThumbMetacarpal = { y: 28 * thumb, z: -10 * thumb };
+  pose.leftThumbProximal = { y: 14 * thumb, z: -32 * thumb };
+  pose.leftThumbDistal = { z: -38 * thumb };
+  return pose;
+}
+
+// Hand shapes used below. A hand left at the model's rest pose is flat and
+// splayed: fine on a waving hand, wrong almost everywhere else.
+const RELAXED = { thumb: 0.25, index: 0.18, middle: 0.24, ring: 0.3, little: 0.36, spread: -2 };
+const FLAT = { thumb: 0.05, index: 0.04, middle: 0.04, ring: 0.05, little: 0.06, spread: -3 };
+const POINTING = { thumb: 0.85, index: 0, middle: 0.95, ring: 1.0, little: 1.0, spread: -1 };
 
 // ---------------------------------------------------------------------------
 // Locomotion loops (functions of time; the last sample equals the first)
@@ -245,25 +335,55 @@ const waveUp = (swing) => ({
 });
 
 /**
- * Hands in front of the chest, palms facing each other. `close` runs from
- * the open position to palms touching.
- *
- * Solved against three rigs at once — the built-in designer avatar and two
- * real .vrm files — with the height target tied to each body's own sternum
- * rather than a fixed world height. Earlier passes solved on one rig at an
- * absolute height; rotations retarget fine between rigs, but absolute
- * heights don't, so on the (shorter) real avatars those hands landed at the
- * belly. The shoulder bones are left alone here too: rotating them is what
- * made the shoulders droop and the arms cross into an X.
+ * Linear blend between two poses written as { bone: { x, y, z } }. Used where
+ * a gesture moves between two solved end points (the clap's open and closed
+ * hands), so every frame in between stays on the path the solver found.
  */
-const palmsTogether = (close) => ({
-  leftUpperArm: { z: -58 + 24 * close, y: -53 - 8 * close, x: 44 + 8 * close },
-  rightUpperArm: { z: 58 - 24 * close, y: 53 + 8 * close, x: 44 + 8 * close },
-  leftLowerArm: { y: -(99 - close), x: 22 - 18 * close },
-  rightLowerArm: { y: 99 - close, x: -(22 - 18 * close) },
-  leftHand: { z: 40, x: 2 },
-  rightHand: { z: -40, x: 2 },
+function blendPose(a, b, u) {
+  const out = {};
+  for (const bone of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    const p = a[bone] ?? {};
+    const q = b[bone] ?? {};
+    out[bone] = {
+      x: (p.x ?? 0) + ((q.x ?? 0) - (p.x ?? 0)) * u,
+      y: (p.y ?? 0) + ((q.y ?? 0) - (p.y ?? 0)) * u,
+      z: (p.z ?? 0) + ((q.z ?? 0) - (p.z ?? 0)) * u,
+    };
+  }
+  return out;
+}
+
+// Palms facing, fingers straight and together, thumb laid along the index
+// finger instead of sticking up, which is the shape both the clap and
+// gassho need.
+const PRESSED = { thumb: 0.32, index: 0.04, middle: 0.04, ring: 0.05, little: 0.06, spread: -4 };
+
+/**
+ * Hands in front of the chest, palms facing each other. `close` runs from
+ * the open position to the moment of the clap.
+ *
+ * Both ends were solved across four real avatars at once (three VRoid models,
+ * one of them a VRM 0.x download, and a VRM 1.0 sample), scoring the palms
+ * themselves rather than the wrists: each palm must face the other, the
+ * fingers must point forward and up at 40 degrees, and the two palms must
+ * stop 4-5cm apart centre to centre. That last number is the fix for
+ * "overlapping": the old closed pose put the knuckles 1.5cm apart, which is
+ * inside each other once there's a hand around the bones. Written for the
+ * left side only and mirrored, so the two hands can't be unequal.
+ */
+const CLAP_OPEN = mirror({
+  leftUpperArm: { x: 34, y: -37, z: -43 },
+  leftLowerArm: { x: 6, y: -96 },
+  leftHand: { x: -33, y: -30, z: 30 },
+  ...leftHand(PRESSED),
 });
+const CLAP_CLOSED = mirror({
+  leftUpperArm: { x: 41, y: -55, z: -63 },
+  leftLowerArm: { x: 22, y: -87 },
+  leftHand: { x: -17, y: -30, z: 35 },
+  ...leftHand(PRESSED),
+});
+const palmsTogether = (close) => blendPose(CLAP_OPEN, CLAP_CLOSED, close);
 const GESTURES = [
   {
     name: "wave",
@@ -321,6 +441,7 @@ const GESTURES = [
     label: "Seiza (hold)",
     fullBody: true,
     hold: true,
+    fingers: true,
     // Settled onto the floor at runtime: the hip drop below is only a
     // starting point, and the app lowers or lifts each avatar until its
     // shins actually rest on the ground.
@@ -331,12 +452,11 @@ const GESTURES = [
         t: 0.7,
         pose: {
           spine: { x: 14 },
-          leftUpperLeg: { x: -35 },
-          rightUpperLeg: { x: -35 },
-          leftLowerLeg: { x: 70 },
-          rightLowerLeg: { x: 70 },
-          leftUpperArm: { z: -80, x: -12 },
-          rightUpperArm: { z: 80, x: -12 },
+          ...mirror({
+            leftUpperLeg: { x: -35 },
+            leftLowerLeg: { x: 70 },
+            leftUpperArm: { z: -80, x: -12 },
+          }),
           _hips: [0, -0.26, 0],
         },
       },
@@ -345,12 +465,17 @@ const GESTURES = [
         pose: {
           spine: { x: 3 },
           head: { x: 4 },
-          leftUpperLeg: { x: -62 },
-          rightUpperLeg: { x: -62 },
-          leftLowerLeg: { x: 152 },
-          rightLowerLeg: { x: 152 },
-          leftFoot: { x: 60 },
-          rightFoot: { x: 60 },
+          ...mirror({
+            // Sitting back onto the heels: thighs close to level, the knee
+            // folded right up, and each shin angled in a touch so the feet
+            // meet under the body instead of sticking out behind the hips.
+            leftUpperLeg: { x: -68 },
+            leftLowerLeg: { x: 158, z: -7 },
+            // Pointed right out, so the top of the foot lies flat on the
+            // floor with the sole up, the way seiza is actually sat.
+            leftFoot: { x: 84 },
+            leftToes: { x: 20 },
+          }),
           // Hands resting ON the thighs, solved across four real rigs
           // (including a VRM 0.x VRoid Hub model) against each one's own
           // thigh line, and measured at the PALM rather than the wrist —
@@ -361,12 +486,12 @@ const GESTURES = [
           // without dragging the hand off the leg; with them, the palm
           // normal points 83% of the way straight down on every rig,
           // against 46% before. Elbow bend is held at a relaxed 28 degrees.
-          leftUpperArm: { z: -62, x: -34 },
-          rightUpperArm: { z: 62, x: -34 },
-          leftLowerArm: { y: -38, x: 72 },
-          rightLowerArm: { y: 38, x: -72 },
-          leftHand: { z: 16, x: -4 },
-          rightHand: { z: -16, x: -4 },
+          ...mirror({
+            leftUpperArm: { z: -62, x: -34 },
+            leftLowerArm: { y: -38, x: 72 },
+            leftHand: { z: 16, x: -4 },
+            ...leftHand(RELAXED),
+          }),
           _hips: [0, -0.61, 0],
         },
       },
@@ -388,6 +513,7 @@ const GESTURES = [
     name: "clap",
     label: "Clap",
     fullBody: false,
+    fingers: true,
     keys: [
       { t: 0, pose: {} },
       { t: 0.4, pose: palmsTogether(0) },
@@ -406,14 +532,13 @@ const GESTURES = [
     fullBody: false,
     keys: (() => {
       // Solved on a rig: arms up in a V with the palms facing forward.
-      const up = (lift) => ({
-        spine: { x: -4 },
-        head: { x: -8 },
-        leftUpperArm: { z: lift, x: 4 },
-        rightUpperArm: { z: -lift, x: 4 },
-        leftLowerArm: { y: -11, x: -90 },
-        rightLowerArm: { y: 11, x: 90 },
-      });
+      const up = (lift) =>
+        mirror({
+          spine: { x: -4 },
+          head: { x: -8 },
+          leftUpperArm: { z: lift, x: 4 },
+          leftLowerArm: { y: -11, x: -90 },
+        });
       return [
         { t: 0, pose: {} },
         { t: 0.45, pose: up(80) },
@@ -435,12 +560,11 @@ const GESTURES = [
       // flung them well outside the body, which is what read as arms
       // sticking out sideways.
       const shrug = {
-        leftUpperArm: { z: -84, x: -32 },
-        rightUpperArm: { z: 84, x: -32 },
-        leftLowerArm: { y: -34, x: -58 },
-        rightLowerArm: { y: 34, x: -58 },
-        leftHand: { x: -30 },
-        rightHand: { x: -30 },
+        ...mirror({
+          leftUpperArm: { z: -84, x: -32 },
+          leftLowerArm: { y: -34, x: -58 },
+          leftHand: { x: -30 },
+        }),
         head: { z: 8 },
       };
       return [
@@ -455,14 +579,26 @@ const GESTURES = [
     name: "point",
     label: "Point",
     fullBody: false,
+    fingers: true,
     keys: (() => {
-      // Arm out front, palm turned inward so the hand reads as pointing
-      // rather than presenting.
+      // What makes a point read as a point is the hand: one finger out,
+      // the rest closed. The old version had neither, and a dead-straight
+      // arm raised at shoulder height with a flat open palm is a salute, not
+      // a point. So: the index finger extended and the others curled in,
+      // the upper arm forward and below the shoulder, and the elbow bent so
+      // the forearm lifts to aim, which is how people actually point at
+      // something across a room. The chest and head turn a little with it.
+      const pointingHand = mirror(leftHand(POINTING));
       const point = {
-        rightUpperArm: { y: 85, x: 4, z: 0 },
-        rightLowerArm: { y: 4, x: -45 },
-        head: { y: -6 },
-        chest: { y: -4 },
+        rightUpperArm: { z: 72, x: -30, y: 20 },
+        rightLowerArm: { y: 50 },
+        rightHand: { z: -6 },
+        // The other hand hangs relaxed rather than flat and splayed.
+        ...leftHand(RELAXED),
+        ...Object.fromEntries(Object.entries(pointingHand).filter(([bone]) => bone.startsWith("right"))),
+        chest: { y: -6 },
+        neck: { y: -3 },
+        head: { y: -6, x: -2 },
       };
       return [
         { t: 0, pose: {} },
@@ -479,22 +615,28 @@ const GESTURES = [
     name: "gassho",
     label: "Gasshō (thanks)",
     fullBody: false,
+    fingers: true,
     keys: (() => {
-      // Solved against three rigs at once, with the height tied to each
-      // body's own sternum (see palmsTogether above for why that matters).
-      // The hands meet 3-8cm apart on every one of them, palms inward,
-      // fingers up.
+      // Palms pressed flat together at the sternum, fingers pointing up and
+      // a little forward, elbows relaxed at the sides. Solved the same way as
+      // the clap (see palmsTogether): on all four test avatars each palm
+      // faces the other exactly, the fingers point within a degree of the
+      // target, and the palm centres sit 3-3.3cm apart, which is two palms
+      // touching rather than one sunk into the other. Each palm is scored on
+      // facing the OTHER palm from its own side of the body; a looser score
+      // let the hands cross over and meet back to back. The previous
+      // version cupped the hands palms-up in a V, with the fingers forward.
       const palms = (bow) => ({
         spine: { x: bow },
         chest: { x: bow * 0.55 },
         neck: { x: 6 + bow * 0.2 },
         head: { x: 8 + bow * 0.25 },
-        leftUpperArm: { z: -34, y: -65, x: 50 },
-        rightUpperArm: { z: 34, y: 65, x: 50 },
-        leftLowerArm: { y: -101, x: 5 },
-        rightLowerArm: { y: 101, x: 5 },
-        leftHand: { z: 36, x: 14 },
-        rightHand: { z: -36, x: 14 },
+        ...mirror({
+          leftUpperArm: { x: 5, y: -34, z: -56 },
+          leftLowerArm: { x: 44, y: -106 },
+          leftHand: { x: -10, y: -30, z: 61 },
+          ...leftHand(PRESSED),
+        }),
       });
       return [
         { t: 0, pose: {} },
@@ -551,6 +693,7 @@ const GESTURES = [
     fullBody: true,
     hold: true,
     hidden: true,
+    fingers: true,
     // Settled onto the seat at runtime rather than trusting the baked hip
     // height, which can only ever be right for one set of proportions.
     ground: "seat",
@@ -560,12 +703,11 @@ const GESTURES = [
         t: 0.45,
         pose: {
           spine: { x: 8 },
-          leftUpperLeg: { x: -45, z: 3 },
-          rightUpperLeg: { x: -45, z: -3 },
-          leftLowerLeg: { x: 45 },
-          rightLowerLeg: { x: 45 },
-          leftUpperArm: { z: -70, x: -14 },
-          rightUpperArm: { z: 70, x: -14 },
+          ...mirror({
+            leftUpperLeg: { x: -45, z: 3 },
+            leftLowerLeg: { x: 45 },
+            leftUpperArm: { z: -70, x: -14 },
+          }),
           _hips: [0, -0.18, 0],
         },
       },
@@ -578,22 +720,21 @@ const GESTURES = [
           // Less extreme than the first pass (thigh was fully horizontal,
           // shin bent further back) — a slightly more upright seat, with a
           // bit more hip clearance above the chair (see the note above).
-          leftUpperLeg: { x: -78, z: 5 },
-          rightUpperLeg: { x: -78, z: -5 },
-          leftLowerLeg: { x: 76 },
-          rightLowerLeg: { x: 76 },
-          leftFoot: { x: 8 },
-          rightFoot: { x: 8 },
+          ...mirror({
+            leftUpperLeg: { x: -78, z: 5 },
+            leftLowerLeg: { x: 76 },
+            leftFoot: { x: 8 },
+          }),
           // Hands on the thighs, solved the same way as seiza's: palm
           // contact, four rigs, wrists included. A deeper elbow bend than
           // seiza because a seated thigh is closer to horizontal, so the
           // hand has further to travel forward to land on it.
-          leftUpperArm: { z: -58, x: -32 },
-          rightUpperArm: { z: 58, x: -32 },
-          leftLowerArm: { y: -42, x: 68 },
-          rightLowerArm: { y: 42, x: -68 },
-          leftHand: { z: 16, x: 2 },
-          rightHand: { z: -16, x: 2 },
+          ...mirror({
+            leftUpperArm: { z: -58, x: -32 },
+            leftLowerArm: { y: -42, x: 68 },
+            leftHand: { z: 16, x: 2 },
+            ...leftHand(RELAXED),
+          }),
           // Only a starting point. The app measures each avatar's hips
           // against the real seat height every frame and slides the body
           // to meet it (ground: "seat" above), so no baked number here has
@@ -729,11 +870,13 @@ function contentHash(bytes) {
 }
 
 const allBones = BONES.map(([bone]) => bone);
+// Locomotion never touches the fingers: the idle hand is the model's own.
+const bodyBones = allBones.filter((b) => !FINGER_BONES.has(b));
 console.log("Generating Seiza motions:");
 
 const locomotionUrls = {};
 for (const clip of LOCOMOTION) {
-  const bytes = writeVrma({ ...clip, loop: true, bones: allBones });
+  const bytes = writeVrma({ ...clip, loop: true, bones: bodyBones });
   emit(`public/animations/${clip.name}.vrma`, bytes);
   locomotionUrls[clip.name] = `/animations/${clip.name}.vrma?v=${contentHash(bytes)}`;
 }
@@ -742,7 +885,11 @@ const manifest = [];
 for (const gesture of GESTURES) {
   const keys = gesture.keys.map((key) => ({ ...key, t: Number((key.t * GESTURE_TIME_SCALE).toFixed(3)) }));
   const duration = keys[keys.length - 1].t;
-  const bones = gesture.fullBody ? allBones : allBones.filter((b) => UPPER_BODY.has(b));
+  // Finger tracks only go into clips that shape the hand; everywhere else
+  // the avatar's own resting hand is left alone.
+  const bones = (gesture.fullBody ? allBones : allBones.filter((b) => UPPER_BODY.has(b))).filter(
+    (b) => gesture.fingers === true || !FINGER_BONES.has(b)
+  );
   const bytes = writeVrma({ name: gesture.name, duration, sample: keyed(keys), loop: false, bones });
   emit(`public/gestures/builtin/${gesture.name}.vrma`, bytes);
   manifest.push({

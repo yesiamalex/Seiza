@@ -118,6 +118,10 @@ export type ClientMessage =
   // BaseEnvironment when that isn't set either). Editor-gated exactly
   // like object edits — see worker/room.ts.
   | { type: "setEnvironment"; url: string | null }
+  // Swaps the sky for everyone, live: an uploaded 360° panorama (2:1) or a
+  // cube-map cross (4:3 / 3:4). `null` restores the built-in sunset.
+  // Editor-gated and URL-checked exactly like setEnvironment.
+  | { type: "setSkybox"; url: string | null }
   // Unlocks editing for this connection if the deployer has configured
   // SEIZA_EDITOR_PASSWORD (see worker/room.ts) — a shared password, not
   // per-user accounts. If the deployer hasn't set one, editing stays
@@ -140,8 +144,12 @@ export type ServerMessage =
       /** Room-level environment override set via the editor, or null to
        *  use the deployment's own world.json sceneUrl. */
       environmentUrl: string | null;
+      /** Room-level sky image set via the editor, or null for the
+       *  built-in sunset. */
+      skyboxUrl: string | null;
     }
   | { type: "environmentChanged"; url: string | null }
+  | { type: "skyboxChanged"; url: string | null }
   | { type: "roomFull"; maxOccupants: number }
   | { type: "playerJoined"; player: PlayerState }
   | { type: "playerUpdated"; id: string; position: [number, number, number]; rotationY: number }

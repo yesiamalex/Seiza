@@ -14,6 +14,7 @@ import type { Env } from "./index";
 
 const OBJECTS_STORAGE_KEY = "objects";
 const ENVIRONMENT_STORAGE_KEY = "environmentUrl";
+const SKYBOX_STORAGE_KEY = "skyboxUrl";
 // No permission system yet (see class doc below) — these are the actual
 // abuse guards for an open room: a cap on total placed objects (storage
 // growth + everyone's render load) and a per-connection minimum gap
@@ -99,6 +100,7 @@ interface ConnectionAttachment {
 export class SeizaRoom extends DurableObject<Env> {
   objects = new Map<string, WorldObject>();
   environmentUrl: string | null = null;
+  skyboxUrl: string | null = null;
   private ready: Promise<void>;
 
   constructor(ctx: DurableObjectState, env: Env) {
@@ -112,6 +114,7 @@ export class SeizaRoom extends DurableObject<Env> {
       const stored = await ctx.storage.get<WorldObject[]>(OBJECTS_STORAGE_KEY);
       if (stored) for (const obj of stored) this.objects.set(obj.id, obj);
       this.environmentUrl = (await ctx.storage.get<string | null>(ENVIRONMENT_STORAGE_KEY)) ?? null;
+      this.skyboxUrl = (await ctx.storage.get<string | null>(SKYBOX_STORAGE_KEY)) ?? null;
     });
   }
 
@@ -178,6 +181,7 @@ export class SeizaRoom extends DurableObject<Env> {
           objects: Array.from(this.objects.values()),
           editorPasswordRequired: !!this.env.SEIZA_EDITOR_PASSWORD,
           environmentUrl: this.environmentUrl,
+          skyboxUrl: this.skyboxUrl,
         };
         ws.send(JSON.stringify(welcome));
         this.broadcast({ type: "playerJoined", player }, attachment.connId);
@@ -382,6 +386,22 @@ export class SeizaRoom extends DurableObject<Env> {
         this.environmentUrl = next;
         void this.ctx.storage.put(ENVIRONMENT_STORAGE_KEY, next);
         this.broadcast({ type: "environmentChanged", url: next });
+        break;
+      }
+      case "setSkybox": {
+        if (this.env.SEIZA_EDITOR_PASSWORD && !attachment.isEditor) return;
+        // Same rules as the environment: every client fetches this, so it
+        // goes through the asset URL sanitizer. A designer-avatar spec is a
+        // valid avatar URL but never an image, so it's refused here.
+        let next: string | null = null;
+        if (message.url !== null) {
+          next = sanitizeAssetUrl(message.url, { allowEmpty: false });
+          if (!next || next.startsWith("seiza-avatar:")) return;
+        }
+        if (next === this.skyboxUrl) return;
+        this.skyboxUrl = next;
+        void this.ctx.storage.put(SKYBOX_STORAGE_KEY, next);
+        this.broadcast({ type: "skyboxChanged", url: next });
         break;
       }
       case "chat": {
