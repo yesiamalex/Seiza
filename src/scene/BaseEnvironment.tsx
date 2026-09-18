@@ -16,6 +16,7 @@ import {
   HALL,
   HALL_CENTRE,
   OUTDOOR,
+  OUTDOOR_BENCHES,
   SEATS,
   SEAT_HEIGHT,
   TEACHER_DESK,
@@ -373,19 +374,19 @@ function GardenDoor({ m }: { m: WorldMaterials }) {
   return (
     <group>
       <group ref={leftRef} position={[-DOOR_HALF_WIDTH + 0.16, 0, HALL.maxZ - 0.18]}>
-        <mesh position={[0.65, 1.2, 0]} material={m.trim} castShadow onClick={toggle}>
-          <boxGeometry args={[1.3, 2.4, 0.08]} />
+        <mesh position={[1.22, 1.2, 0]} material={m.trim} castShadow onClick={toggle}>
+          <boxGeometry args={[2.44, 2.4, 0.08]} />
         </mesh>
-        <mesh position={[0.42, 1.75, -0.05]} material={m.glass} onClick={toggle}>
-          <boxGeometry args={[0.78, 0.86, 0.04]} />
+        <mesh position={[0.82, 1.75, -0.05]} material={m.glass} onClick={toggle}>
+          <boxGeometry args={[1.45, 0.86, 0.04]} />
         </mesh>
       </group>
       <group ref={rightRef} position={[DOOR_HALF_WIDTH - 0.16, 0, HALL.maxZ - 0.18]}>
-        <mesh position={[-0.65, 1.2, 0]} material={m.trim} castShadow onClick={toggle}>
-          <boxGeometry args={[1.3, 2.4, 0.08]} />
+        <mesh position={[-1.22, 1.2, 0]} material={m.trim} castShadow onClick={toggle}>
+          <boxGeometry args={[2.44, 2.4, 0.08]} />
         </mesh>
-        <mesh position={[-0.42, 1.75, -0.05]} material={m.glass} onClick={toggle}>
-          <boxGeometry args={[0.78, 0.86, 0.04]} />
+        <mesh position={[-0.82, 1.75, -0.05]} material={m.glass} onClick={toggle}>
+          <boxGeometry args={[1.45, 0.86, 0.04]} />
         </mesh>
       </group>
     </group>
@@ -395,23 +396,25 @@ function GardenDoor({ m }: { m: WorldMaterials }) {
 function OutdoorGarden({ m }: { m: WorldMaterials }) {
   return (
     <group>
-      <mesh position={[0, 0.04, 27]} material={m.glass} receiveShadow>
-        <cylinderGeometry args={[2.7, 2.7, 0.08, 32]} />
+      {OUTDOOR_BENCHES.map((bench, i) => <Bench key={`outdoor-bench-${i}`} placement={bench} m={m} />)}
+      <mesh position={[0, 0.04, 27]} material={m.trim} receiveShadow>
+        <cylinderGeometry args={[2.85, 2.95, 0.12, 32]} />
       </mesh>
-      <mesh position={[0, 0.09, 27]} material={m.accentBlue}>
-        <cylinderGeometry args={[2.35, 2.35, 0.04, 32]} />
+      <mesh position={[0, 0.12, 27]} material={m.glass} receiveShadow>
+        <cylinderGeometry args={[2.55, 2.55, 0.05, 32]} />
       </mesh>
-      {[-5.2, 5.2].map((x) => (
-        <group key={x} position={[x, 0, 23.5]} rotation={[0, x < 0 ? -0.16 : 0.16, 0]}>
-          <mesh position={[0, 0.48, 0]} material={m.furnitureWarm} castShadow>
-            <boxGeometry args={[3.2, 0.14, 0.45]} />
+      {Array.from({ length: 8 }, (_, i) => {
+        const angle = (i / 8) * Math.PI * 2;
+        return (
+          <mesh key={`pond-stone-${i}`} position={[Math.cos(angle) * 2.72, 0.16, 27 + Math.sin(angle) * 2.72]} material={m.tatamiBorder} castShadow>
+            <sphereGeometry args={[0.28, 10, 6]} />
           </mesh>
-          {[-1.15, 1.15].map((leg) => (
-            <mesh key={leg} position={[leg, 0.23, 0]} material={m.trim} castShadow>
-              <boxGeometry args={[0.16, 0.46, 0.4]} />
-            </mesh>
-          ))}
-        </group>
+        );
+      })}
+      {[[-0.7, 26.7], [0.85, 27.5], [0.25, 26.3]].map(([x, z], i) => (
+        <mesh key={`lily-${i}`} position={[x, 0.17, z]} rotation={[-Math.PI / 2, 0, i * 0.7]} material={m.foliage}>
+          <circleGeometry args={[0.32, 8]} />
+        </mesh>
       ))}
     </group>
   );

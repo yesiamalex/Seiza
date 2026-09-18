@@ -140,6 +140,12 @@ export const BENCHES: BenchPlacement[] = Array.from({ length: BENCH_COUNT }, (_,
   return { position: [x, 0, z], rotationY: Math.atan2(x - HALL_CENTRE[0], z - HALL_CENTRE[1]) };
 });
 
+/** Benches in the garden, also registered as real seats below. */
+export const OUTDOOR_BENCHES: BenchPlacement[] = [
+  { position: [-5.2, 0, 23.5], rotationY: -0.16 },
+  { position: [5.2, 0, 23.5], rotationY: 0.16 },
+];
+
 export const CLASSROOM_ROWS = 3;
 export const CLASSROOM_COLUMNS = 4;
 // Wide enough that a person fits between the rows: a desk and its chair
@@ -239,6 +245,20 @@ export const SEATS: Seat[] = [
       ),
       rotationY: bench.rotationY,
       label: "Bench",
+    }));
+  }),
+  ...OUTDOOR_BENCHES.flatMap((bench, i) => {
+    const alongX = Math.cos(bench.rotationY);
+    const alongZ = -Math.sin(bench.rotationY);
+    return [-1, 1].map((side) => ({
+      id: `outdoor-bench-${i}-${side > 0 ? "r" : "l"}`,
+      position: seatAt(
+        bench.position[0] + alongX * side * BENCH_LENGTH * 0.25,
+        bench.position[2] + alongZ * side * BENCH_LENGTH * 0.25,
+        bench.rotationY
+      ),
+      rotationY: bench.rotationY,
+      label: "Garden bench",
     }));
   }),
   ...DESKS.map((desk) => ({
