@@ -435,7 +435,7 @@ function ClassroomDoor({ m }: { m: WorldMaterials }) {
   // Each panel's resting (closed) offset from center, and how far it
   // slides outward — tucked just past the doorway's outer edge, as if
   // into a wall pocket either side of the frame.
-  const closedOffset = SHOJI_PANEL_WIDTH / 2 + 0.05;
+  const closedOffset = SHOJI_PANEL_WIDTH / 2 - 0.05;
   const openOffset = DOOR_HALF_WIDTH + SHOJI_PANEL_WIDTH / 2 + 0.04;
 
   // See the identical effect on GardenDoor above for why this exists: a
