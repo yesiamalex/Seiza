@@ -28,6 +28,13 @@ export interface Env {
    *  `wrangler secret put SEIZA_EDITOR_PASSWORD`, never committed to the
    *  repo. Undefined means editing stays open to everyone (the default). */
   SEIZA_EDITOR_PASSWORD?: string;
+  /** Optional. When set, supersedes SEIZA_EDITOR_PASSWORD for gating
+   *  Edit Mode and additionally unlocks moderation (kick/mute/gather) —
+   *  see ADMIN.md. Also a Worker secret: `wrangler secret put
+   *  SEIZA_ADMIN_KEY`, never a plaintext wrangler.jsonc var, for the
+   *  same reason as SEIZA_EDITOR_PASSWORD above. Undefined means there
+   *  is no admin concept active on this deployment at all. */
+  SEIZA_ADMIN_KEY?: string;
   /** Maximum simultaneous joined players for the deployed world. */
   SEIZA_MAX_OCCUPANTS?: string;
 }
@@ -253,7 +260,7 @@ async function handleAssetUpload(request: Request, env: Env): Promise<Response> 
   // and supplied it is explicitly trusted, and building out a world can
   // legitimately mean more than ten uploads in an hour — so that case
   // skips the limit rather than fighting it.
-  if (!env.SEIZA_EDITOR_PASSWORD) {
+  if (!hasEditGate(env)) {
     const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
     if (isRateLimited(ip)) {
       return jsonError("Too many uploads from this address recently — try again later.", 429);
@@ -357,7 +364,7 @@ async function handleAssetList(request: Request, env: Env): Promise<Response> {
   // `public` cached copy of an authorized listing is the wrong thing to
   // leave lying around for shared proxies/browsers on a password-gated
   // deployment — the KV list operations saved aren't worth that.
-  const cacheable = !env.SEIZA_EDITOR_PASSWORD;
+  const cacheable = !hasEditGate(env);
   if (cacheable) {
     const cached = await caches.default.match(request);
     if (cached) return cached;
@@ -411,15 +418,31 @@ async function handleGetAsset(request: Request, key: string, env: Env): Promise<
 }
 
 /**
- * A deployment with no SEIZA_EDITOR_PASSWORD configured leaves the asset
- * endpoints open — that's the documented default (editing is open unless
- * a deployer opts into the shared password; see worker/room.ts). When one
- * IS set, every asset endpoint requires it, compared in constant time by
- * the same helper the WebSocket path uses so the two can't drift apart.
+ * A deployment with neither SEIZA_EDITOR_PASSWORD nor SEIZA_ADMIN_KEY
+ * configured leaves the asset endpoints open — that's the documented
+ * default (editing is open unless a deployer opts into one of the two
+ * secrets; see worker/room.ts). When either IS set, an asset endpoint
+ * accepts whichever one matches, compared in constant time by the same
+ * helper the WebSocket path uses so the two can't drift apart. The admin
+ * key is checked via its own header (x-seiza-admin-key) rather than
+ * overloading x-seiza-editor-password, so a request can unambiguously
+ * prove *which* secret it's presenting.
  */
 function isEditorAuthorized(request: Request, env: Env): boolean {
-  if (!env.SEIZA_EDITOR_PASSWORD) return true;
-  return timingSafeEqual(request.headers.get("x-seiza-editor-password"), env.SEIZA_EDITOR_PASSWORD);
+  if (!env.SEIZA_EDITOR_PASSWORD && !env.SEIZA_ADMIN_KEY) return true;
+  if (env.SEIZA_ADMIN_KEY && timingSafeEqual(request.headers.get("x-seiza-admin-key"), env.SEIZA_ADMIN_KEY)) return true;
+  if (env.SEIZA_EDITOR_PASSWORD && timingSafeEqual(request.headers.get("x-seiza-editor-password"), env.SEIZA_EDITOR_PASSWORD)) {
+    return true;
+  }
+  return false;
+}
+
+/** Whether *either* secret is configured — used only for the "should this
+ *  response be treated as public/cacheable and rate-limited" questions
+ *  around it, which care about "is this deployment gated at all", not
+ *  about which specific secret is doing the gating. */
+function hasEditGate(env: Env): boolean {
+  return !!(env.SEIZA_EDITOR_PASSWORD || env.SEIZA_ADMIN_KEY);
 }
 
 function jsonError(message: string, status: number): Response {

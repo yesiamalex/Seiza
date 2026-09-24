@@ -92,7 +92,7 @@ export interface ChatMessage {
 }
 
 export type ClientMessage =
-  | { type: "join"; displayName: string; avatarUrl: string }
+  | { type: "join"; displayName: string; avatarUrl: string; roomPassword?: string }
   | { type: "state"; position: [number, number, number]; rotationY: number }
   | { type: "gesture"; gesture: string | null }
   // Changes this player's avatar in place, without reconnecting. Same URL
@@ -127,6 +127,45 @@ export type ClientMessage =
   // per-user accounts. If the deployer hasn't set one, editing stays
   // open to everyone and this message is never needed.
   | { type: "authEditor"; password: string }
+  // Unlocks *admin* status for this connection if the deployer has
+  // configured SEIZA_ADMIN_KEY (see worker/room.ts and ADMIN.md). When an
+  // admin key is configured it supersedes SEIZA_EDITOR_PASSWORD as far as
+  // the client's Edit Mode gate goes (see App.tsx), and a successful
+  // authAdmin also sets isEditor server-side — an admin can always edit,
+  // on top of the moderation actions below. A deployment with no admin
+  // key configured has no admin concept active at all: none of the
+  // adminX messages below are ever honored there, at any privilege
+  // level, because there's no key to have proven you hold.
+  | { type: "authAdmin"; key: string }
+  // --- Admin-only moderation (see ADMIN.md) ----------------------------
+  // The server re-checks admin status on every one of these; the client
+  // only hides the UI for a non-admin, it never enforces the permission.
+  /** Disconnects `targetId`. The target gets `youWereKicked` first, then
+   *  the socket is closed; everyone else just sees the ordinary
+   *  `playerLeft` any disconnect produces. */
+  | { type: "adminKick"; targetId: string }
+  /** Tells `targetId`'s own client to enable/disable its microphone.
+   *  "Mute" is enforceable this way; "unmute" is really a request the
+   *  target's client fulfills, since the server never has access to
+   *  anyone's audio to begin with (media is peer-to-peer — see
+   *  src/voice/useVoiceChat.ts). */
+  | { type: "adminSetMute"; targetId: string; muted: boolean }
+  // Asks the server to relay `gatherRequest` (this connection's current
+  // known position) to every other connection in the room. There's no
+  // adminTeleportTo counterpart: an admin moving *themselves* to another
+  // player's position needs no server involvement — every client already
+  // knows every other player's position from ordinary `state` sync (see
+  // App.tsx's teleportToPlayer).
+  | { type: "adminGatherAll" }
+  // Sets or clears (password: null) a password required to join this
+  // room at all — see ADMIN.md's "room entry password" section for why
+  // this is deliberately a *third*, separate secret from the editor
+  // password and the admin key, and deliberately mutable at runtime
+  // (persisted in this room's own Durable Object storage) rather than a
+  // Worker secret like the other two: it's the one of the three whose
+  // worst-case leak is "an uninvited guest gets in", not "someone can
+  // edit or moderate", and the one most likely to change per-event.
+  | { type: "adminSetRoomPassword"; password: string | null }
   // Opaque WebRTC signaling payload (SDP offer/answer or ICE candidate),
   // relayed peer-to-peer through the room server. The server never
   // inspects `data` — it just forwards it to the connection named `to`.
@@ -139,8 +178,21 @@ export type ServerMessage =
       players: PlayerState[];
       objects: WorldObject[];
       /** True if this deployment has SEIZA_EDITOR_PASSWORD set — the
-       *  client should prompt for it before allowing Edit Mode. */
+       *  client should prompt for it before allowing Edit Mode. Ignored
+       *  by the client when adminKeyRequired is true (see App.tsx). */
       editorPasswordRequired: boolean;
+      /** True if this deployment has SEIZA_ADMIN_KEY set. When true, the
+       *  admin key — not the editor password — gates Edit Mode, and a
+       *  successful authAdmin additionally grants the moderation actions
+       *  in ClientMessage. When false, there is no admin concept active
+       *  in this room at all (see authAdmin's doc comment). */
+      adminKeyRequired: boolean;
+      /** Whether this room currently has an entry password set (via
+       *  adminSetRoomPassword) — never the password itself. Visible to
+       *  everyone already in the room (you only reach `welcome` at all
+       *  once past the gate) mainly so an admin's UI can show current
+       *  status without having to remember whether they set one. */
+      roomPasswordSet: boolean;
       /** Room-level environment override set via the editor, or null to
        *  use the deployment's own world.json sceneUrl. */
       environmentUrl: string | null;
@@ -151,6 +203,13 @@ export type ServerMessage =
   | { type: "environmentChanged"; url: string | null }
   | { type: "skyboxChanged"; url: string | null }
   | { type: "roomFull"; maxOccupants: number }
+  // Sent instead of welcome when this room has an entry password (see
+  // adminSetRoomPassword) and the join message either omitted one or got
+  // it wrong. The connection is left open — the client just resends
+  // `join` with the correct password over the same socket, the same
+  // retry shape authEditor/authAdmin already use, rather than needing to
+  // reconnect.
+  | { type: "passwordRequired" }
   | { type: "playerJoined"; player: PlayerState }
   | { type: "playerUpdated"; id: string; position: [number, number, number]; rotationY: number }
   | { type: "playerGesture"; id: string; gesture: string | null; seq: number }
@@ -165,4 +224,23 @@ export type ServerMessage =
   | { type: "playerMedia"; id: string; media: PlayerMedia }
   | { type: "chat"; message: ChatMessage }
   | { type: "editorAuthResult"; granted: boolean }
+  | { type: "adminAuthResult"; granted: boolean }
+  // Sent to a connection just before the server closes it in response to
+  // an adminKick, so that client can show "an admin removed you from
+  // this room" instead of the ordinary reconnect-and-retry a dropped
+  // connection otherwise gets.
+  | { type: "youWereKicked" }
+  // Sent only to the targeted connection; that client is what actually
+  // enables/disables the microphone track (see useRealtimeMedia.ts's
+  // forceMute) and re-publishes its PlayerMedia — the server has no
+  // access to anyone's audio to mute it directly, since media never
+  // passes through the server at all.
+  | { type: "forceMute"; muted: boolean }
+  // Broadcast to every connection except the requesting admin, in
+  // response to adminGatherAll. Each receiving client teleports its own
+  // local avatar to `position` and resumes reporting its position from
+  // there via ordinary `state` messages — nothing here moves anyone's
+  // avatar directly, consistent with every player always being the sole
+  // authority over their own position.
+  | { type: "gatherRequest"; position: [number, number, number] }
   | { type: "voiceSignal"; from: string; data: unknown };

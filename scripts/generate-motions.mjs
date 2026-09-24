@@ -315,6 +315,43 @@ const LOCOMOTION = [
       });
     },
   },
+  {
+    name: "jump",
+    // A held mid-air tuck: knees drawn up, arms reaching up for momentum.
+    // Unlike walk/run this isn't phase-locked to ground speed by
+    // AvatarAnimator.tsx — it just free-runs and crossfades in based on
+    // vertical velocity — so it only needs to be a periodic function of
+    // time that loops cleanly on its own, the same way idle does, in case
+    // a big jump keeps it airborne for longer than one cycle.
+    duration: 0.5,
+    sample: (t) => {
+      const p = (2 * Math.PI * t) / 0.5;
+      const wobble = Math.sin(p);
+      const arms = mirror({
+        // Reaching up and slightly forward, same family of angles as
+        // cheer's proven "arms in a V" (up() helper above) rather than
+        // untested values.
+        leftUpperArm: { z: 68 + 3 * wobble, x: 6 },
+        leftLowerArm: { y: -11, x: -78 },
+      });
+      const thigh = -52 - 4 * wobble;
+      const knee = 78 + 5 * wobble;
+      return withBase({
+        spine: { x: 6 + 1.5 * wobble },
+        chest: { x: 2 },
+        head: { x: -8 },
+        hips: { x: -4 },
+        leftUpperLeg: { x: thigh },
+        rightUpperLeg: { x: thigh },
+        leftLowerLeg: { x: knee },
+        rightLowerLeg: { x: knee },
+        leftFoot: { x: -0.3 * (thigh + knee) },
+        rightFoot: { x: -0.3 * (thigh + knee) },
+        ...arms,
+        _hips: [0, 0.05 + 0.01 * wobble, 0],
+      });
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -941,6 +978,7 @@ export const LOCOMOTION_CLIPS = {
   idle: ${JSON.stringify(locomotionUrls.idle)},
   walk: ${JSON.stringify(locomotionUrls.walk)},
   run: ${JSON.stringify(locomotionUrls.run)},
+  jump: ${JSON.stringify(locomotionUrls.jump)},
 } as const;
 
 export const BUILTIN_GESTURES: BuiltinGesture[] = ${JSON.stringify(manifest, null, 2)};

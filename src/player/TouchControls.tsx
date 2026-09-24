@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import type { TouchMoveInput } from "./touchInput";
+import { PAD_BUTTON_SIZE, PAD_GAP_PX, JUMP_BUTTON_SIZE, TOUCH_WRAPPER_BOTTOM_OFFSET_PX } from "./touchControlsMetrics";
 
 interface TouchControlsProps {
   inputRef: MutableRefObject<TouchMoveInput>;
 }
 
 const DOUBLE_TAP_MS = 320;
-const PAD_BUTTON = 54;
 
 /**
  * On-screen movement for touch devices: a four-way D-pad, a jump button,
@@ -150,7 +150,7 @@ const wrapperStyle: React.CSSProperties = {
   position: "absolute",
   // Sits above the safe-area inset so it clears iOS' home indicator and
   // Android's gesture bar instead of being half-swallowed by them.
-  bottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)",
+  bottom: `calc(env(safe-area-inset-bottom, 0px) + ${TOUCH_WRAPPER_BOTTOM_OFFSET_PX}px)`,
   left: 0,
   right: 0,
   display: "flex",
@@ -166,15 +166,15 @@ const padGridStyle: React.CSSProperties = {
   position: "relative",
   display: "grid",
   gridTemplateAreas: '". up ." "left . right" ". down ."',
-  gridTemplateColumns: `repeat(3, ${PAD_BUTTON}px)`,
-  gridTemplateRows: `repeat(3, ${PAD_BUTTON}px)`,
-  gap: 4,
+  gridTemplateColumns: `repeat(3, ${PAD_BUTTON_SIZE})`,
+  gridTemplateRows: `repeat(3, ${PAD_BUTTON_SIZE})`,
+  gap: PAD_GAP_PX,
   pointerEvents: "auto",
 };
 
 const padButtonStyle: React.CSSProperties = {
-  width: PAD_BUTTON,
-  height: PAD_BUTTON,
+  width: PAD_BUTTON_SIZE,
+  height: PAD_BUTTON_SIZE,
   borderRadius: 12,
   border: "1px solid rgba(255,255,255,0.22)",
   background: "rgba(18,18,22,0.6)",
@@ -199,8 +199,8 @@ const padButtonPressedStyle: React.CSSProperties = {
 
 const jumpButtonStyle: React.CSSProperties = {
   ...padButtonStyle,
-  width: 76,
-  height: 76,
+  width: JUMP_BUTTON_SIZE,
+  height: JUMP_BUTTON_SIZE,
   borderRadius: "50%",
   fontSize: 13,
   letterSpacing: "0.08em",

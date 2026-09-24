@@ -15,6 +15,7 @@ import type { Env } from "./index";
 const OBJECTS_STORAGE_KEY = "objects";
 const ENVIRONMENT_STORAGE_KEY = "environmentUrl";
 const SKYBOX_STORAGE_KEY = "skyboxUrl";
+const ROOM_PASSWORD_STORAGE_KEY = "roomPassword";
 // No permission system yet (see class doc below) — these are the actual
 // abuse guards for an open room: a cap on total placed objects (storage
 // growth + everyone's render load) and a per-connection minimum gap
@@ -43,6 +44,16 @@ const BOUNDS_LIMIT = 100; // generous outer bound — BaseEnvironment's own radi
 // appropriate for the classroom-scale threat model this targets, not a
 // claim of real security hardening.
 const MAX_AUTH_ATTEMPTS = 5;
+// Same shared-secret model and threat-model caveat as
+// SEIZA_EDITOR_PASSWORD above, for a deliberately separate, more
+// powerful capability: an admin key both supersedes the editor password
+// for Edit Mode (see editingRequiresAuth below) and unlocks the
+// moderation actions (adminKick/adminSetMute/adminGatherAll). Kept as a
+// wholly separate secret and attempt counter from the editor password so
+// guessing one doesn't consume the other's attempt budget, and so a
+// deployment can run with only a plain editor password and no admin
+// concept at all (the common case) with zero behavior change here.
+const MAX_ADMIN_AUTH_ATTEMPTS = 5;
 // `join` is client-controlled like everything else on this socket, and
 // both of these get broadcast to every other player and stored in this
 // connection's attachment (which has a hard 16KB serialization limit —
@@ -74,6 +85,11 @@ interface ConnectionAttachment {
   lastMediaAt?: number;
   isEditor?: boolean;
   authAttempts?: number;
+  /** Set once this connection's authAdmin succeeds. Distinct from
+   *  isEditor (which authAdmin also sets to true) so the room can tell
+   *  "can edit" apart from "can moderate" — see canModerate(). */
+  isAdmin?: boolean;
+  adminAuthAttempts?: number;
 }
 
 /**
@@ -101,6 +117,13 @@ export class SeizaRoom extends DurableObject<Env> {
   objects = new Map<string, WorldObject>();
   environmentUrl: string | null = null;
   skyboxUrl: string | null = null;
+  /** Entry password for this room, or null when anyone can join. Unlike
+   *  SEIZA_EDITOR_PASSWORD/SEIZA_ADMIN_KEY (Worker secrets, fixed at
+   *  deploy time), this is mutable at runtime via adminSetRoomPassword
+   *  and lives in this room's own Durable Object storage — see that
+   *  case's doc comment in types.ts for why this one secret is treated
+   *  differently from the other two. */
+  roomPassword: string | null = null;
   private ready: Promise<void>;
 
   constructor(ctx: DurableObjectState, env: Env) {
@@ -115,6 +138,7 @@ export class SeizaRoom extends DurableObject<Env> {
       if (stored) for (const obj of stored) this.objects.set(obj.id, obj);
       this.environmentUrl = (await ctx.storage.get<string | null>(ENVIRONMENT_STORAGE_KEY)) ?? null;
       this.skyboxUrl = (await ctx.storage.get<string | null>(SKYBOX_STORAGE_KEY)) ?? null;
+      this.roomPassword = (await ctx.storage.get<string | null>(ROOM_PASSWORD_STORAGE_KEY)) ?? null;
     });
   }
 
@@ -153,6 +177,17 @@ export class SeizaRoom extends DurableObject<Env> {
           ws.close(1008, "Room is full");
           return;
         }
+        // Checked before anything else about the join: no point telling
+        // someone the room is full, or letting them look at a room
+        // roster, before they've actually proven they're allowed in at
+        // all. The connection is left open either way — see
+        // "passwordRequired"'s doc comment in types.ts for the retry
+        // shape (client just resends `join` with the password filled in,
+        // same as authEditor/authAdmin's retry pattern).
+        if (this.roomPassword && !timingSafeEqual(message.roomPassword ?? "", this.roomPassword)) {
+          ws.send(JSON.stringify({ type: "passwordRequired" } satisfies ServerMessage));
+          return;
+        }
         // Same reasoning as validateNewObject below: the ClientMessage
         // type is a compile-time assertion about a JSON.parse result, not
         // a guarantee. An unvalidated avatarUrl here would be the exact
@@ -180,6 +215,8 @@ export class SeizaRoom extends DurableObject<Env> {
           players: this.listPlayers(),
           objects: Array.from(this.objects.values()),
           editorPasswordRequired: !!this.env.SEIZA_EDITOR_PASSWORD,
+          adminKeyRequired: !!this.env.SEIZA_ADMIN_KEY,
+          roomPasswordSet: !!this.roomPassword,
           environmentUrl: this.environmentUrl,
           skyboxUrl: this.skyboxUrl,
         };
@@ -273,15 +310,45 @@ export class SeizaRoom extends DurableObject<Env> {
         ws.send(JSON.stringify({ type: "editorAuthResult", granted } satisfies ServerMessage));
         break;
       }
+      case "authAdmin": {
+        if (!attachment.player) return;
+        const required = this.env.SEIZA_ADMIN_KEY;
+        if (!required) {
+          // No admin key configured on this deployment — there is no
+          // admin concept active at all (see authAdmin's doc comment in
+          // types.ts); reporting granted:false here (rather than true,
+          // the way authEditor reports success when its secret is unset)
+          // is deliberate — "no key exists" and "you proved you hold the
+          // key" are not the same thing, and moderation is powerful
+          // enough that this shouldn't default to on.
+          ws.send(JSON.stringify({ type: "adminAuthResult", granted: false } satisfies ServerMessage));
+          break;
+        }
+        const attempts = attachment.adminAuthAttempts ?? 0;
+        if (attempts >= MAX_ADMIN_AUTH_ATTEMPTS) {
+          ws.send(JSON.stringify({ type: "adminAuthResult", granted: false } satisfies ServerMessage));
+          break;
+        }
+        const granted = timingSafeEqual(message.key, required);
+        if (granted) {
+          attachment.isAdmin = true;
+          attachment.isEditor = true; // admin implies editor — see editingRequiresAuth's call sites
+        }
+        attachment.adminAuthAttempts = granted ? attempts : attempts + 1;
+        ws.serializeAttachment(attachment);
+        ws.send(JSON.stringify({ type: "adminAuthResult", granted } satisfies ServerMessage));
+        break;
+      }
       case "objectAdd": {
-        // Gated on isEditor only when a password is actually configured
-        // (this.env.SEIZA_EDITOR_PASSWORD) — the default, no-password
-        // deployment keeps editing open to everyone, same as before this
-        // feature existed. What's ALWAYS enforced regardless: a room-wide
-        // object cap and basic shape/range validation, since those aren't
-        // permission questions — they're "don't let one client wedge the
-        // room for everyone."
-        if (this.env.SEIZA_EDITOR_PASSWORD && !attachment.isEditor) return;
+        // Gated on isEditor only when editing actually requires proving
+        // something (editingRequiresAuth — an editor password or an admin
+        // key configured) — the default, no-secret deployment keeps
+        // editing open to everyone, same as before this feature existed.
+        // What's ALWAYS enforced regardless: a room-wide object cap and
+        // basic shape/range validation, since those aren't permission
+        // questions — they're "don't let one client wedge the room for
+        // everyone."
+        if (this.editingRequiresAuth() && !attachment.isEditor) return;
         if (this.objects.size >= MAX_OBJECTS) return;
         const validated = validateNewObject(message.object);
         if (!validated) return;
@@ -292,7 +359,7 @@ export class SeizaRoom extends DurableObject<Env> {
         break;
       }
       case "objectMove": {
-        if (this.env.SEIZA_EDITOR_PASSWORD && !attachment.isEditor) return;
+        if (this.editingRequiresAuth() && !attachment.isEditor) return;
         const object = this.objects.get(message.id);
         if (!object) return;
         // Same NaN/Infinity concern as "state" above — and this one is
@@ -312,7 +379,7 @@ export class SeizaRoom extends DurableObject<Env> {
         break;
       }
       case "objectRemove": {
-        if (this.env.SEIZA_EDITOR_PASSWORD && !attachment.isEditor) return;
+        if (this.editingRequiresAuth() && !attachment.isEditor) return;
         if (!this.objects.delete(message.id)) return;
         this.persistObjects();
         this.broadcast({ type: "objectRemoved", id: message.id });
@@ -321,7 +388,7 @@ export class SeizaRoom extends DurableObject<Env> {
       case "objectSetText": {
         // Writing on a board is an edit, so it follows the same permission
         // rule as placing one.
-        if (this.env.SEIZA_EDITOR_PASSWORD && !attachment.isEditor) return;
+        if (this.editingRequiresAuth() && !attachment.isEditor) return;
         if (!attachment.player) return;
         const object = this.objects.get(message.id);
         if (!object || object.kind !== "text") return;
@@ -374,7 +441,7 @@ export class SeizaRoom extends DurableObject<Env> {
         break;
       }
       case "setEnvironment": {
-        if (this.env.SEIZA_EDITOR_PASSWORD && !attachment.isEditor) return;
+        if (this.editingRequiresAuth() && !attachment.isEditor) return;
         // null clears the override; anything else goes through the same
         // URL sanitizer as placed models, since this makes every client
         // in the room fetch it.
@@ -389,7 +456,7 @@ export class SeizaRoom extends DurableObject<Env> {
         break;
       }
       case "setSkybox": {
-        if (this.env.SEIZA_EDITOR_PASSWORD && !attachment.isEditor) return;
+        if (this.editingRequiresAuth() && !attachment.isEditor) return;
         // Same rules as the environment: every client fetches this, so it
         // goes through the asset URL sanitizer. A designer-avatar spec is a
         // valid avatar URL but never an image, so it's refused here.
@@ -428,6 +495,43 @@ export class SeizaRoom extends DurableObject<Env> {
         target?.send(JSON.stringify({ type: "voiceSignal", from: attachment.connId, data: message.data } satisfies ServerMessage));
         break;
       }
+      case "adminKick": {
+        if (!attachment.isAdmin) return;
+        const target = this.findConnection(message.targetId);
+        if (!target || message.targetId === attachment.connId) return;
+        target.send(JSON.stringify({ type: "youWereKicked" } satisfies ServerMessage));
+        // The "close" code here is informational only (never surfaced to
+        // the client, which already has youWereKicked); webSocketClose
+        // still runs normally and broadcasts playerLeft to everyone else.
+        target.close(4001, "Removed by an admin");
+        break;
+      }
+      case "adminSetMute": {
+        if (!attachment.isAdmin) return;
+        const target = this.findConnection(message.targetId);
+        if (!target) return;
+        target.send(JSON.stringify({ type: "forceMute", muted: !!message.muted } satisfies ServerMessage));
+        break;
+      }
+      case "adminGatherAll": {
+        if (!attachment.isAdmin || !attachment.player) return;
+        this.broadcast({ type: "gatherRequest", position: attachment.player.position }, attachment.connId);
+        break;
+      }
+      case "adminSetRoomPassword": {
+        if (!attachment.isAdmin) return;
+        const password = typeof message.password === "string" ? message.password.slice(0, 200) : null;
+        this.roomPassword = password && password.length > 0 ? password : null;
+        void this.ctx.storage.put(ROOM_PASSWORD_STORAGE_KEY, this.roomPassword);
+        // No broadcast/ack here on purpose: the admin who just set it
+        // already knows what they sent (their own UI updates
+        // optimistically), and no one already connected is affected —
+        // this only ever gates a *future* join, never an existing
+        // session. A live "someone else changed the room password"
+        // notice to other already-open admin panels would be a
+        // reasonable follow-up, not implemented here.
+        break;
+      }
     }
   }
 
@@ -450,8 +554,16 @@ export class SeizaRoom extends DurableObject<Env> {
     await this.webSocketClose(ws);
   }
 
-  private listPlayers(): PlayerState[] {
-    return this.ctx
+  /** Whether Edit Mode requires proving *something* on this deployment —
+   *  either secret satisfies it (see authEditor/authAdmin, both of which
+   *  set attachment.isEditor on success). True the moment either secret
+   *  is configured, even before anyone's authenticated; every objectX/
+   *  setEnvironment/setSkybox case checks this alongside isEditor. */
+  private editingRequiresAuth(): boolean {
+    return !!(this.env.SEIZA_EDITOR_PASSWORD || this.env.SEIZA_ADMIN_KEY);
+  }
+
+  private listPlayers(): PlayerState[] {    return this.ctx
       .getWebSockets()
       .map((ws) => (ws.deserializeAttachment() as ConnectionAttachment | null)?.player)
       .filter((p): p is PlayerState => !!p);

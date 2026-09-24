@@ -150,12 +150,26 @@ interface AnimatorState {
   idle: LocomotionState | null;
   walk: LocomotionState | null;
   run: LocomotionState | null;
+  /** Held while airborne — see the vertical-velocity estimate around the
+   *  ground-speed block below. Free-running like idle (not phase-locked
+   *  to ground speed the way walk/run are), since a jump's timing has
+   *  nothing to do with how fast you were moving horizontally. */
+  jump: LocomotionState | null;
   posture: PostureState | null;
   gestures: GestureLayer[];
   /** Retargeted clips for this avatar, keyed by clip URL. */
   clips: Map<string, ClipBundle>;
   phase: number;
   speed: number;
+  /** Smoothed vertical speed (m/s, signed), estimated from consecutive
+   *  getPosition() samples — see the jump-weight block. There's no
+   *  explicit "I am jumping" signal from PlayerRig or over the network
+   *  (the realtime protocol only carries position/rotation; see
+   *  ClientMessage's "state" in multiplayer/types.ts), so this is
+   *  inferred the same way for both the local avatar and everyone
+   *  else's, uniformly, rather than needing one precise path for
+   *  yourself and a second guessed one for remote players. */
+  verticalVelocity: number;
   lastPosition: THREE.Vector3 | null;
   /** What the pose currently showing is resting on, and how much of it is
    *  blended in. Written by the animation pass, read by the grounding pass. */
@@ -281,11 +295,13 @@ export function AvatarAnimator({
       idle: null,
       walk: null,
       run: null,
+      jump: null,
       posture: null,
       gestures: [],
       clips: new Map(),
       phase: 0,
       speed: 0,
+      verticalVelocity: 0,
       lastPosition: null,
       groundMode: "none",
       groundWeight: 0,
@@ -315,7 +331,8 @@ export function AvatarAnimator({
       loadVrmAnimation(LOCOMOTION_CLIPS.idle),
       loadVrmAnimation(LOCOMOTION_CLIPS.walk),
       loadVrmAnimation(LOCOMOTION_CLIPS.run),
-    ]).then(([idle, walk, run]) => {
+      loadVrmAnimation(LOCOMOTION_CLIPS.jump),
+    ]).then(([idle, walk, run, jump]) => {
       if (cancelled) return;
       if (idle.status === "fulfilled") {
         state.idle = build(idle.value, LOCOMOTION_CLIPS.idle, true);
@@ -325,6 +342,10 @@ export function AvatarAnimator({
       }
       if (walk.status === "fulfilled") state.walk = build(walk.value, LOCOMOTION_CLIPS.walk, true);
       if (run.status === "fulfilled") state.run = build(run.value, LOCOMOTION_CLIPS.run, true);
+      // Missing entirely (load failure) just means no jump pose plays —
+      // falling back to idle/walk/run while airborne, same as this file
+      // already does for a missing walk/run above.
+      if (jump.status === "fulfilled") state.jump = build(jump.value, LOCOMOTION_CLIPS.jump, true);
       for (const moving of [state.walk, state.run]) {
         // Walk/run are positioned by hand from ground speed, not by clock.
         if (moving) {
@@ -490,15 +511,27 @@ export function AvatarAnimator({
         // A jump of more than ~25 m/s is a teleport (spawn, respawn,
         // network correction) — not something to animate a sprint for.
         if (instant < 25) state.speed = approach(state.speed, instant, 10, delta);
+        const verticalInstant = (position.y - state.lastPosition.y) / delta;
+        // Same teleport guard as horizontal speed above, so a respawn or a
+        // large network correction doesn't flash the jump pose.
+        if (Math.abs(verticalInstant) < 15) state.verticalVelocity = approach(state.verticalVelocity, verticalInstant, 18, delta);
       }
       state.lastPosition = (state.lastPosition ?? new THREE.Vector3()).copy(position);
     } else {
       state.speed = approach(state.speed, 0, 10, delta);
+      state.verticalVelocity = approach(state.verticalVelocity, 0, 10, delta);
     }
 
     // ---- locomotion blend -------------------------------------------------------
     const moving = THREE.MathUtils.smoothstep(state.speed, 0.15, 0.7);
     const running = THREE.MathUtils.smoothstep(state.speed, WALK_SPEED * 1.05, RUN_SPEED * 0.9);
+    // Above ~1.1 m/s of vertical speed is a jump's launch or its fall, not
+    // the small bob of walking over an uneven floor or up onto the tatami
+    // platform (see floorHeightAt in scene/layout.ts) — those settle in
+    // well under a second, gradually, while a jump's initial velocity
+    // (PlayerRig's JUMP_SPEED = 5 m/s) clears this with room to spare even
+    // after gravity has been eating into it for a few frames.
+    const jumpTarget = state.jump ? THREE.MathUtils.smoothstep(Math.abs(state.verticalVelocity), 1.1, 2.2) : 0;
     const targets = { idle: 1 - moving, walk: moving * (1 - running), run: moving * running };
     // Missing clips hand their share back to idle so weights still sum to 1.
     if (!state.run) {
@@ -509,10 +542,17 @@ export function AvatarAnimator({
       targets.idle += targets.walk;
       targets.walk = 0;
     }
+    // Jump takes its share off the top of whatever idle/walk/run would
+    // otherwise sum to, rather than being a fourth independent weight, so
+    // the four always still sum to 1 between them.
+    targets.idle *= 1 - jumpTarget;
+    targets.walk *= 1 - jumpTarget;
+    targets.run *= 1 - jumpTarget;
     for (const key of ["idle", "walk", "run"] as const) {
       const loco = state[key];
       if (loco) loco.weight = approach(loco.weight, targets[key], 8, delta);
     }
+    if (state.jump) state.jump.weight = approach(state.jump.weight, jumpTarget, 8, delta);
 
     if (moving > 0.001) {
       const stride = THREE.MathUtils.lerp(WALK_STRIDE, RUN_STRIDE, running);

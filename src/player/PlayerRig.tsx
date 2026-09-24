@@ -113,6 +113,15 @@ interface PlayerRigProps {
   /** Eye height for a held floor posture, or null when the posture is seated. */
   postureEyeHeight?: number | null;
   onStandUp?: () => void;
+  /** An instant relocation (as opposed to moveTargetRef's walk-there) —
+   *  used for the admin "teleport to this person" / "gather everyone
+   *  here" actions in App.tsx. Set `.current` to a world-space point to
+   *  warp there on the next frame; PlayerRig clears it back to null once
+   *  applied, so setting the same point twice in a row (e.g. gathering
+   *  to an admin who hasn't moved since the last gather) still warps
+   *  each time rather than being a no-op on an unchanged ref value. */
+  warpTargetRef?: MutableRefObject<THREE.Vector3 | null>;
+  onWarped?: () => void;
   children?: ReactNode;
 }
 
@@ -154,6 +163,8 @@ export function PlayerRig({
   postureHeld = false,
   postureEyeHeight = null,
   onStandUp,
+  warpTargetRef,
+  onWarped,
   children,
 }: PlayerRigProps) {
   const { camera, gl } = useThree();
@@ -181,6 +192,8 @@ export function PlayerRig({
   const seatedExitRef = useRef(false);
   const onStandUpRef = useRef(onStandUp);
   onStandUpRef.current = onStandUp;
+  const onWarpedRef = useRef(onWarped);
+  onWarpedRef.current = onWarped;
   // Eye height over whatever the player is standing on, updated each frame
   // so stepping onto the tatami platform raises them instead of sinking them.
   const groundEyeYRef = useRef(spawnPoint[1] + EYE_HEIGHT);
@@ -389,6 +402,23 @@ export function PlayerRig({
     // A long hitch (tab in background) would otherwise launch the player
     // through the bounds or deep into the floor in a single step.
     const delta = Math.min(rawDelta, 0.1);
+
+    // An instant relocation (admin teleport/gather — see warpTargetRef's
+    // doc comment) takes effect before anything else this frame, and
+    // before the isPresenting branch below, since it has to relocate
+    // whichever of the two position sources (the XR origin, or the
+    // virtual camera) that branch is about to read from.
+    if (warpTargetRef?.current) {
+      const target = warpTargetRef.current;
+      warpTargetRef.current = null;
+      moveTargetRef.current = null; // cancel any in-flight click-to-walk
+      if (movePathRef) movePathRef.current = null;
+      verticalVelocityRef.current = 0;
+      groundEyeYRef.current = target.y + EYE_HEIGHT;
+      virtualCameraRef.current!.position.set(target.x, target.y + EYE_HEIGHT, target.z);
+      xrOriginRef.current?.position.set(target.x, target.y, target.z);
+      onWarpedRef.current?.();
+    }
 
     if (isPresenting) {
       const origin = xrOriginRef.current;

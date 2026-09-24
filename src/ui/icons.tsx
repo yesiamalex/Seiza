@@ -196,3 +196,62 @@ export function SignalOffIcon(props: IconProps) {
     </Svg>
   );
 }
+
+/* ---- Added for the admin/moderation panel (see src/admin/) ------------ */
+
+export function ShieldIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 3.2l7 2.6v5.4c0 4.6-3 7.9-7 9.6-4-1.7-7-5-7-9.6V5.8z" />
+      <path d="M9 12l2.1 2.1L15.3 9.7" />
+    </Svg>
+  );
+}
+
+export function UsersIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="9" cy="8" r="3" />
+      <path d="M3.2 19c.9-3.1 3.3-4.8 5.8-4.8s4.9 1.7 5.8 4.8" />
+      <circle cx="17" cy="8.5" r="2.4" />
+      <path d="M15.2 14.4c2.1.2 4 1.7 4.7 4.6" />
+    </Svg>
+  );
+}
+
+export function LocationIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 21s-6.5-5.9-6.5-11A6.5 6.5 0 0 1 18.5 10c0 5.1-6.5 11-6.5 11z" />
+      <circle cx="12" cy="10" r="2.3" />
+    </Svg>
+  );
+}
+
+export function KickIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M15 3.5H8.5A1.5 1.5 0 0 0 7 5v14a1.5 1.5 0 0 0 1.5 1.5H15" />
+      <path d="M11 12h10M18 8.5l3.5 3.5-3.5 3.5" />
+    </Svg>
+  );
+}
+
+export function GatherIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="12" cy="12" r="2" />
+      <path d="M12 5v2.3M12 16.7V19M5 12h2.3M16.7 12H19" />
+      <path d="M7.4 7.4l1.6 1.6M15 15l1.6 1.6M16.6 7.4L15 9M9 15l-1.6 1.6" />
+    </Svg>
+  );
+}
+
+export function LockIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="5" y="10.5" width="14" height="9.5" rx="2" />
+      <path d="M8 10.5V7a4 4 0 0 1 8 0v3.5" />
+    </Svg>
+  );
+}

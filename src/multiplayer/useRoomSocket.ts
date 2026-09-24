@@ -49,6 +49,37 @@ export interface MultiplayerState {
   editorAuthPending: boolean;
   editorAuthFailed: boolean;
   authEditor: (password: string) => void;
+  /** Whether this deployment has SEIZA_ADMIN_KEY set. When true, it
+   *  supersedes the editor password for gating Edit Mode (see App.tsx's
+   *  canEditWorld) and unlocks moderation once authAdmin succeeds. A
+   *  deployment with no admin key configured has no admin concept
+   *  active at all — see authAdmin's doc comment in types.ts. */
+  adminKeyRequired: boolean;
+  /** Never defaults to true the way isEditor does when nothing's
+   *  configured — admin is opt-in only, proven fresh each connection
+   *  (see the "welcome" handler's comment on why this doesn't persist
+   *  across a reconnect). */
+  isAdmin: boolean;
+  adminAuthPending: boolean;
+  adminAuthFailed: boolean;
+  authAdmin: (key: string) => void;
+  /** True for exactly the session after an admin kicked this connection
+   *  — see the "close" handler's kicked-flag check, which is what stops
+   *  the ordinary reconnect logic from just silently rejoining. */
+  wasKicked: boolean;
+  adminKick: (targetId: string) => void;
+  adminSetMute: (targetId: string, muted: boolean) => void;
+  adminGatherAll: () => void;
+  /** Whether this room currently requires an entry password — visible
+   *  even to a non-admin so a "this room is locked" indicator can show
+   *  without exposing the password itself. */
+  roomPasswordSet: boolean;
+  /** True while the server is waiting on the *right* password — see
+   *  passwordRequired's doc comment in types.ts. App.tsx shows a gate
+   *  screen while this is true and calls joinWithPassword to retry. */
+  passwordRequired: boolean;
+  joinWithPassword: (password: string) => void;
+  adminSetRoomPassword: (password: string | null) => void;
   roomFull: number | null;
   /** Room-level environment override (see worker/room.ts), or null when
    *  the deployment's own world.json sceneUrl should be used. */
@@ -76,11 +107,28 @@ export interface MultiplayerState {
  * don't belong in `players`/`objects` state, so they're handed off via
  * callback instead of being buffered here.
  */
+/** Escape hatches for server messages App.tsx has to act on outside this
+ *  hook's own state (media control, avatar position) — an options bag
+ *  rather than more positional params so a future addition doesn't
+ *  reorder existing call sites, the same reasoning as onVoiceSignal. */
+export interface RoomSocketCallbacks {
+  /** This connection was told by an admin to mute/unmute its own mic —
+   *  see useRealtimeMedia.ts's forceMute. The server never has access to
+   *  anyone's audio itself (media is peer-to-peer), so "mute" only works
+   *  by asking the target's own client to act on it. */
+  onForceMute?: (muted: boolean) => void;
+  /** An admin gathered everyone to their position; teleport the local
+   *  avatar there — see App.tsx's teleportToPlayer for the same motion
+   *  triggered locally by an admin picking one specific person instead. */
+  onGatherRequest?: (position: [number, number, number]) => void;
+}
+
 export function useRoomSocket(
   roomId: string,
   displayName: string,
   avatarUrl: string,
-  onVoiceSignal?: (from: string, data: unknown) => void
+  onVoiceSignal?: (from: string, data: unknown) => void,
+  callbacks?: RoomSocketCallbacks
 ): MultiplayerState {
   const socketRef = useRef<WebSocket | null>(null);
   const [selfId, setSelfId] = useState<string | null>(null);
@@ -92,11 +140,24 @@ export function useRoomSocket(
   const [isEditor, setIsEditor] = useState(false);
   const [editorAuthPending, setEditorAuthPending] = useState(false);
   const [editorAuthFailed, setEditorAuthFailed] = useState(false);
-    const [roomFull, setRoomFull] = useState<number | null>(null);
+  const [adminKeyRequired, setAdminKeyRequired] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminAuthPending, setAdminAuthPending] = useState(false);
+  const [adminAuthFailed, setAdminAuthFailed] = useState(false);
+  const [wasKicked, setWasKicked] = useState(false);
+  const [roomPasswordSet, setRoomPasswordSet] = useState(false);
+  const [passwordRequired, setPasswordRequired] = useState(false);
+  const [roomFull, setRoomFull] = useState<number | null>(null);
   const [environmentUrl, setEnvironmentUrl] = useState<string | null>(null);
   const [skyboxUrl, setSkyboxUrl] = useState<string | null>(null);
   const onVoiceSignalRef = useRef(onVoiceSignal);
   onVoiceSignalRef.current = onVoiceSignal;
+  const callbacksRef = useRef(callbacks);
+  callbacksRef.current = callbacks;
+  // Filled in by joinWithPassword and read the next time `join` is sent
+  // (on this connection's retry, or a future reconnect) — not React
+  // state, since setting it should never itself trigger a re-render.
+  const roomPasswordRef = useRef<string | undefined>(undefined);
   // Read at connect time rather than being effect dependencies: changing
   // your avatar used to tear down and reopen the socket, which dropped
   // voice connections and showed you leaving and rejoining to everyone.
@@ -144,6 +205,33 @@ export function useRoomSocket(
     },
     [send]
   );
+  const authAdmin = useCallback(
+    (key: string) => {
+      setAdminAuthPending(true);
+      setAdminAuthFailed(false);
+      send({ type: "authAdmin", key });
+    },
+    [send]
+  );
+  const adminKick = useCallback((targetId: string) => send({ type: "adminKick", targetId }), [send]);
+  const adminSetMute = useCallback(
+    (targetId: string, muted: boolean) => send({ type: "adminSetMute", targetId, muted }),
+    [send]
+  );
+  const adminGatherAll = useCallback(() => send({ type: "adminGatherAll" }), [send]);
+  const adminSetRoomPassword = useCallback(
+    (password: string | null) => send({ type: "adminSetRoomPassword", password }),
+    [send]
+  );
+  const joinWithPassword = useCallback(
+    (password: string) => {
+      roomPasswordRef.current = password;
+      // Resent over the same still-open socket — see passwordRequired's
+      // doc comment in types.ts for why a reconnect isn't needed here.
+      send({ type: "join", displayName: displayNameRef.current, avatarUrl: avatarUrlRef.current, roomPassword: password });
+    },
+    [send]
+  );
 
   useEffect(() => {
     if (!roomId) return;
@@ -151,6 +239,14 @@ export function useRoomSocket(
     let cancelled = false;
     let reconnectAttempt = 0;
     let reconnectTimer: number | undefined;
+    // A kick is a deliberate removal, not a network drop — reconnecting
+    // would just rejoin (there's no ban list, only a one-time
+    // disconnect) and make "kick" look broken by silently undoing
+    // itself. Read inside "close" via a plain closure variable rather
+    // than React state, since that listener is created once per
+    // connect() and would otherwise see whatever `wasKicked` was at
+    // definition time, not its latest value.
+    let kicked = false;
 
     function connect() {
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -162,13 +258,18 @@ export function useRoomSocket(
         reconnectAttempt = 0;
         setConnectionState("connected");
         socket.send(
-          JSON.stringify({ type: "join", displayName: displayNameRef.current, avatarUrl: avatarUrlRef.current } satisfies ClientMessage)
+          JSON.stringify({
+            type: "join",
+            displayName: displayNameRef.current,
+            avatarUrl: avatarUrlRef.current,
+            roomPassword: roomPasswordRef.current,
+          } satisfies ClientMessage)
         );
       });
 
       socket.addEventListener("close", () => {
         socketRef.current = null;
-        if (cancelled) return;
+        if (cancelled || kicked) return;
         setConnectionState("reconnecting");
         const delay = Math.min(RECONNECT_MAX_DELAY_MS, RECONNECT_BASE_DELAY_MS * 2 ** reconnectAttempt);
         reconnectAttempt += 1;
@@ -186,6 +287,7 @@ export function useRoomSocket(
         switch (msg.type) {
           case "welcome": {
             setRoomFull(null);
+            setPasswordRequired(false);
             selfIdRef.current = msg.selfId;
             setSelfId(msg.selfId);
             const playerMap: Record<string, PlayerState> = {};
@@ -196,11 +298,21 @@ export function useRoomSocket(
             setObjects(objectMap);
             setEditorPasswordRequired(msg.editorPasswordRequired);
             setIsEditor(!msg.editorPasswordRequired);
+            // Older room servers predate the admin system and omit the field.
+            setAdminKeyRequired(msg.adminKeyRequired ?? false);
+            // Deliberately not restored across a reconnect the way
+            // isEditor is when no password is set: admin is proven fresh
+            // each connection via authAdmin, never granted by default.
+            setIsAdmin(false);
+            setRoomPasswordSet(msg.roomPasswordSet ?? false);
             setEnvironmentUrl(msg.environmentUrl);
             // Older room servers predate skyboxes and omit the field.
             setSkyboxUrl(msg.skyboxUrl ?? null);
             break;
           }
+          case "passwordRequired":
+            setPasswordRequired(true);
+            break;
           case "skyboxChanged":
             setSkyboxUrl(msg.url);
             break;
@@ -272,6 +384,25 @@ export function useRoomSocket(
             setIsEditor(msg.granted);
             setEditorAuthFailed(!msg.granted);
             break;
+          case "adminAuthResult":
+            setAdminAuthPending(false);
+            setIsAdmin(msg.granted);
+            setAdminAuthFailed(!msg.granted);
+            break;
+          case "youWereKicked":
+            kicked = true;
+            setWasKicked(true);
+            // The server closes this connection right after sending
+            // this; the "close" handler's `kicked` check (set here)
+            // skips its usual reconnect-with-backoff so this doesn't
+            // just silently rejoin a moment later.
+            break;
+          case "forceMute":
+            callbacksRef.current?.onForceMute?.(msg.muted);
+            break;
+          case "gatherRequest":
+            callbacksRef.current?.onGatherRequest?.(msg.position);
+            break;
           case "voiceSignal":
             onVoiceSignalRef.current?.(msg.from, msg.data);
             break;
@@ -338,6 +469,19 @@ export function useRoomSocket(
     editorAuthPending,
     editorAuthFailed,
     authEditor,
+    adminKeyRequired,
+    isAdmin,
+    adminAuthPending,
+    adminAuthFailed,
+    authAdmin,
+    wasKicked,
+    adminKick,
+    adminSetMute,
+    adminGatherAll,
+    roomPasswordSet,
+    passwordRequired,
+    joinWithPassword,
+    adminSetRoomPassword,
     roomFull,
     environmentUrl,
     setEnvironment,

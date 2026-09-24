@@ -2,20 +2,24 @@ import type { ReactNode } from "react";
 import { panelStyle } from "./styles";
 import { SignalIcon, SignalOffIcon } from "./icons";
 import type { ConnectionState } from "../multiplayer/useRoomSocket";
+import { TOUCH_CONTROLS_CLEARANCE_CSS } from "../player/touchControlsMetrics";
 
 interface HUDProps {
   connectionState: ConnectionState;
   worldName: string;
   topRight?: ReactNode;
+  /** Replaces the default world-name/connection pill entirely when
+   *  given — used to make that pill double as the participant-roster
+   *  trigger (see ParticipantRoster.tsx and App.tsx) without this
+   *  component needing to know anything about rosters or admin status
+   *  itself. Pointer events on it are the caller's responsibility, same
+   *  as topRight. */
+  topLeft?: ReactNode;
   /** Reserve room at the bottom for the on-screen D-pad/jump controls so
    *  the control bar doesn't sit underneath them on phones. */
   touchControlsVisible?: boolean;
   children?: ReactNode;
 }
-
-// Height the touch D-pad occupies (3 rows of 54px + gaps) plus breathing
-// room — see TouchControls.tsx.
-const TOUCH_CONTROLS_CLEARANCE_PX = 186;
 
 const STATUS_LABEL: Record<ConnectionState, string> = {
   connected: "connected",
@@ -23,9 +27,17 @@ const STATUS_LABEL: Record<ConnectionState, string> = {
   reconnecting: "reconnecting…",
 };
 
-export function HUD({ connectionState, worldName, topRight, touchControlsVisible, children }: HUDProps) {
+export function HUD({ connectionState, worldName, topRight, topLeft, touchControlsVisible, children }: HUDProps) {
   const connected = connectionState === "connected";
-  const bottomInset = touchControlsVisible ? TOUCH_CONTROLS_CLEARANCE_PX : 0;
+  // A CSS calc()/clamp() expression (see touchControlsMetrics.ts), not a
+  // fixed pixel number: the D-pad itself now shrinks on a short/landscape
+  // viewport, and this has to shrink by exactly the same amount or the
+  // two drift apart again — which is the bug this replaced. A flat "186px
+  // of clearance" was a small, unnoticeable reservation on a tall
+  // portrait phone and nearly half the screen on a 400px-tall landscape
+  // one, which is what pushed the whole control bar up into the visual
+  // middle of the screen.
+  const bottomInset = touchControlsVisible ? TOUCH_CONTROLS_CLEARANCE_CSS : "0px";
   return (
     <div
       style={{
@@ -34,7 +46,7 @@ export function HUD({ connectionState, worldName, topRight, touchControlsVisible
         pointerEvents: "none",
         padding: 16,
         paddingTop: "calc(12px + env(safe-area-inset-top, 0px))",
-        paddingBottom: `calc(16px + env(safe-area-inset-bottom, 0px) + ${bottomInset}px)`,
+        paddingBottom: `calc(16px + env(safe-area-inset-bottom, 0px) + ${bottomInset})`,
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
@@ -43,7 +55,7 @@ export function HUD({ connectionState, worldName, topRight, touchControlsVisible
         color: "white",
         // Consumed by the narrow-viewport popover rules below so panels
         // dock above the control bar (and above the D-pad when it's up).
-        ["--seiza-popover-bottom" as string]: `${88 + bottomInset}px`,
+        ["--seiza-popover-bottom" as string]: `calc(88px + ${bottomInset})`,
       }}
     >
       <style>{`
@@ -124,13 +136,15 @@ export function HUD({ connectionState, worldName, topRight, touchControlsVisible
         @media (prefers-reduced-motion: reduce) { .seiza-bar-btn { transition: none; } }
       `}</style>
       <div style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-        <div style={{ ...panelStyle, padding: "6px 12px", fontSize: 13, display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-          <strong style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{worldName}</strong>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, opacity: 0.85, flexShrink: 0 }}>
-            {connected ? <SignalIcon size={14} /> : <SignalOffIcon size={14} />}
-            {STATUS_LABEL[connectionState]}
-          </span>
-        </div>
+        {topLeft ?? (
+          <div style={{ ...panelStyle, padding: "6px 12px", fontSize: 13, display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+            <strong style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{worldName}</strong>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, opacity: 0.85, flexShrink: 0 }}>
+              {connected ? <SignalIcon size={14} /> : <SignalOffIcon size={14} />}
+              {STATUS_LABEL[connectionState]}
+            </span>
+          </div>
+        )}
         {topRight}
       </div>
       <div

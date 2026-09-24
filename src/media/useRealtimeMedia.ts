@@ -95,6 +95,9 @@ export interface RealtimeMediaState {
   enableMic: () => Promise<void>;
   disableMic: () => void;
   toggleMute: () => void;
+  /** See forceMute's implementation comment above for what this does and
+   *  why it exists alongside toggleMute. */
+  forceMute: (muted: boolean) => void;
   selectDevice: (deviceId: string) => Promise<void>;
   /** Resolves true once capture actually started. */
   startCamera: () => Promise<boolean>;
@@ -425,6 +428,17 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
     });
   }, []);
 
+  /** Sets mute to an explicit value rather than flipping it — used when
+   *  an admin's adminSetMute arrives (see App.tsx): the target's own
+   *  client is what actually has to act on it, since media is
+   *  peer-to-peer and the server never has access to anyone's audio to
+   *  mute directly. A no-op if the mic isn't on — nothing to mute yet. */
+  const forceMute = useCallback((next: boolean) => {
+    if (!micStreamRef.current) return;
+    setMuted(next);
+    micStreamRef.current.getAudioTracks().forEach((track) => (track.enabled = !next));
+  }, []);
+
   const selectDevice = useCallback(
     async (deviceId: string) => {
       if (!micStreamRef.current) return;
@@ -613,6 +627,7 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
     enableMic,
     disableMic,
     toggleMute,
+    forceMute,
     selectDevice,
     startCamera,
     stopCamera,

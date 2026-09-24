@@ -11,6 +11,8 @@ import type { Seat } from "./scene/layout";
 import type { VRM } from "@pixiv/three-vrm";
 import { useRoomSocket } from "./multiplayer/useRoomSocket";
 import { RemotePlayers } from "./multiplayer/RemotePlayers";
+import { ParticipantRoster } from "./admin/ParticipantRoster";
+import { AdminButton } from "./admin/AdminButton";
 import { PlayerRig, type ViewMode } from "./player/PlayerRig";
 import { TouchControls } from "./player/TouchControls";
 import { createTouchMoveInput, type TouchMoveInput } from "./player/touchInput";
@@ -29,8 +31,8 @@ import { CameraViewToggle } from "./ui/CameraViewToggle";
 import { AvatarChooser } from "./ui/AvatarChooser";
 import { useMediaQuery, useWantsTouchControls } from "./ui/useMediaQuery";
 import { saveProfile } from "./profile/profileStore";
-import { BAR_LABEL_CLASS, barButtonActiveStyle, barButtonStyle, panelStyle, pillButtonStyle } from "./ui/styles";
-import { CloseIcon, PersonIcon, VrHeadsetIcon } from "./ui/icons";
+import { BAR_LABEL_CLASS, barButtonActiveStyle, barButtonStyle, inputStyle, panelStyle, pillButtonStyle, primaryButtonStyle } from "./ui/styles";
+import { CloseIcon, LockIcon, PersonIcon, VrHeadsetIcon } from "./ui/icons";
 import type { WorldObject, WorldObjectKind } from "./multiplayer/types";
 
 // Keep baseline immersive VR compatible with headsets that do not implement
@@ -127,6 +129,14 @@ export default function App() {
   }, [localAvatarUrl]);
 
   const voiceSignalHandlerRef = useRef<(from: string, data: unknown) => void>(() => {});
+  // Forward-reference: the callback passed into useRoomSocket has to
+  // exist before `media` does (useRealtimeMedia needs selfId/players,
+  // which only exist *after* useRoomSocket returns) — same trick
+  // voiceSignalHandlerRef above already uses.
+  const forceMuteHandlerRef = useRef<(muted: boolean) => void>(() => {});
+  // Set by an admin's "teleport to this person" / "gather everyone
+  // here" — see PlayerRig's warpTargetRef doc comment.
+  const warpTargetRef = useRef<THREE.Vector3 | null>(null);
   const roomId = world && joined ? world.id : "";
   const {
     selfId,
@@ -149,6 +159,19 @@ export default function App() {
     editorAuthPending,
     editorAuthFailed,
     authEditor,
+    adminKeyRequired,
+    isAdmin,
+    adminAuthPending,
+    adminAuthFailed,
+    authAdmin,
+    wasKicked,
+    adminKick,
+    adminSetMute,
+    adminGatherAll,
+    roomPasswordSet,
+    passwordRequired,
+    joinWithPassword,
+    adminSetRoomPassword,
     roomFull,
     environmentUrl,
     setEnvironment,
@@ -158,7 +181,16 @@ export default function App() {
     roomId,
     joined?.displayName ?? "",
     joined?.url ?? "",
-    useCallback((from: string, data: unknown) => voiceSignalHandlerRef.current(from, data), [])
+    useCallback((from: string, data: unknown) => voiceSignalHandlerRef.current(from, data), []),
+    useMemo(
+      () => ({
+        onForceMute: (muted: boolean) => forceMuteHandlerRef.current(muted),
+        onGatherRequest: (position: [number, number, number]) => {
+          warpTargetRef.current = new THREE.Vector3(position[0], position[1], position[2]);
+        },
+      }),
+      []
+    )
   );
 
   // Rebuild the walkable surface whenever the environment changes — on
@@ -172,6 +204,7 @@ export default function App() {
   const sendSignal = useCallback((to: string, data: unknown) => send({ type: "voiceSignal", to, data }), [send]);
   const media = useRealtimeMedia({ selfId, players, sendSignal });
   voiceSignalHandlerRef.current = media.handleSignal;
+  forceMuteHandlerRef.current = media.forceMute;
 
   // Tell the room which of our streams is which, so receivers can put each
   // one where it belongs (spatial audio, the panel beside us, a screen).
@@ -380,7 +413,48 @@ export default function App() {
   // --- boards, notes and screens --------------------------------------------
   const [editingText, setEditingText] = useState<WorldObject | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const canEditWorld = world?.editingEnabled !== false && (!editorPasswordRequired || isEditor);
+  // When this deployment has an admin key configured, it supersedes the
+  // editor password for gating Edit Mode entirely (see ADMIN.md) — a
+  // deployment either uses the plain shared editor password (the
+  // original, still-default behavior below) or the admin key, not a mix
+  // of both gating the same toggle.
+  const canEditWorld =
+    world?.editingEnabled !== false && (adminKeyRequired ? isAdmin : !editorPasswordRequired || isEditor);
+
+  // Feeds EditToolbar's single auth gate from whichever secret actually
+  // governs it for this deployment — see authLabel's doc comment on
+  // EditToolbarProps for why the gate itself doesn't change, only which
+  // state/handler/copy it's wired to.
+  const editGateProps = adminKeyRequired
+    ? {
+        editorPasswordRequired: true,
+        isEditor: isAdmin,
+        editorAuthPending: adminAuthPending,
+        editorAuthFailed: adminAuthFailed,
+        onAuthEditor: authAdmin,
+        authLabel: "admin key",
+      }
+    : {
+        editorPasswordRequired,
+        isEditor,
+        editorAuthPending,
+        editorAuthFailed,
+        onAuthEditor: authEditor,
+        authLabel: "editor password",
+      };
+
+  // Admin moderation actions. Kick/mute are simple pass-throughs — the
+  // server is the actual authority and re-checks admin status itself
+  // (see types.ts) — but "teleport to this person" and "gather everyone
+  // here" both end in the same local warp, so they share this helper.
+  const teleportToPlayer = useCallback(
+    (targetId: string) => {
+      const target = players[targetId];
+      if (!target) return;
+      warpTargetRef.current = new THREE.Vector3(target.position[0], target.position[1], target.position[2]);
+    },
+    [players]
+  );
 
   const screens = useMemo(() => Object.values(objects).filter((object) => object.kind === "screen"), [objects]);
   const myScreenId = useMemo(() => screens.find((screen) => screen.presenterId === selfId)?.id ?? null, [screens, selfId]);
@@ -529,6 +603,8 @@ export default function App() {
   if (worldError) return <CenteredMessage text={`Couldn't load world: ${worldError.message}`} />;
   if (!world) return <CenteredMessage text="Loading world…" />;
   if (roomFull) return <CenteredMessage text={`This world is currently full (${roomFull} people). Please try again later.`} />;
+  if (wasKicked) return <CenteredMessage text="An admin removed you from this room. Reload the page if you'd like to rejoin." />;
+  if (passwordRequired) return <RoomPasswordGate onSubmit={joinWithPassword} />;
   if (!joined) return <JoinScreen world={world} onJoin={setJoined} />;
 
   const editingEnabled = world.editingEnabled !== false;
@@ -627,7 +703,7 @@ export default function App() {
           />
           <WorldObjects
             objects={objects}
-            editMode={editMode && editingEnabled && isEditor}
+            editMode={editMode && canEditWorld}
             selectedId={selectedObjectId}
             transformMode={transformMode}
             onSelect={setSelectedObjectId}
@@ -645,8 +721,32 @@ export default function App() {
         connectionState={connectionState}
         worldName={world.displayName}
         touchControlsVisible={showTouchControls}
+        topLeft={(
+          <ParticipantRoster
+            worldName={world.displayName}
+            connectionState={connectionState}
+            players={players}
+            selfId={selfId}
+            isAdmin={isAdmin}
+            onMute={(targetId, muted) => adminSetMute(targetId, muted)}
+            onKick={(targetId) => adminKick(targetId)}
+            onTeleportTo={teleportToPlayer}
+            onGatherAll={adminGatherAll}
+          />
+        )}
         topRight={(
-          <div style={{ position: "relative", pointerEvents: "auto", flexShrink: 0 }}>
+          <>
+            {adminKeyRequired && (
+              <AdminButton
+                isAdmin={isAdmin}
+                authPending={adminAuthPending}
+                authFailed={adminAuthFailed}
+                onSubmit={authAdmin}
+                roomPasswordSet={roomPasswordSet}
+                onSetRoomPassword={adminSetRoomPassword}
+              />
+            )}
+            <div style={{ position: "relative", pointerEvents: "auto", flexShrink: 0 }}>
             <button
               type="button"
               aria-expanded={avatarMenuOpen}
@@ -695,7 +795,8 @@ export default function App() {
                 {avatarMessage && <small style={{ color: "#7CFF9E" }}>{avatarMessage}</small>}
               </div>
             )}
-          </div>
+            </div>
+          </>
         )}
       >
         {(seat || posture) && (
@@ -763,11 +864,12 @@ export default function App() {
           onSnapToFloor={handleSnapToFloor}
           onDeselect={() => setSelectedObjectId(null)}
           onDeleteSelected={handleDeleteSelected}
-          editorPasswordRequired={editorPasswordRequired}
-          isEditor={isEditor}
-          editorAuthPending={editorAuthPending}
-          editorAuthFailed={editorAuthFailed}
-          onAuthEditor={authEditor}
+          editorPasswordRequired={editGateProps.editorPasswordRequired}
+          isEditor={editGateProps.isEditor}
+          editorAuthPending={editGateProps.editorAuthPending}
+          editorAuthFailed={editGateProps.editorAuthFailed}
+          onAuthEditor={editGateProps.onAuthEditor}
+          authLabel={editGateProps.authLabel}
           environmentUrl={environmentUrl}
           onSetEnvironment={setEnvironment}
           skyboxUrl={skyboxUrl}
@@ -824,6 +926,54 @@ function CenteredMessage({ text }: { text: string }) {
       }}
     >
       <p>{text}</p>
+    </div>
+  );
+}
+
+/**
+ * Shown instead of the world whenever useRoomSocket's `passwordRequired`
+ * is true (see that flag's doc comment) — a returning admin who's
+ * already inside can set/change this from AdminButton, but reaching it
+ * from the outside always goes through this gate first, no exceptions.
+ */
+function RoomPasswordGate({ onSubmit }: { onSubmit: (password: string) => void }) {
+  const [password, setPassword] = useState("");
+  return (
+    <div
+      style={{
+        display: "grid",
+        placeItems: "center",
+        width: "100%",
+        height: "100%",
+        padding: 16,
+        boxSizing: "border-box",
+        color: "white",
+        background: "#0c0e16",
+        fontFamily: "system-ui, sans-serif",
+      }}
+    >
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (password) onSubmit(password);
+        }}
+        style={{ ...panelStyle, width: "min(320px, 90vw)", padding: 20, display: "flex", flexDirection: "column", gap: 12 }}
+      >
+        <strong style={{ fontSize: 15, display: "flex", alignItems: "center", gap: 8 }}>
+          <LockIcon size={16} /> This room requires a password
+        </strong>
+        <input
+          type="password"
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          placeholder="Room password"
+          style={inputStyle}
+          autoFocus
+        />
+        <button type="submit" style={primaryButtonStyle} disabled={!password}>
+          Join
+        </button>
+      </form>
     </div>
   );
 }

@@ -285,6 +285,16 @@ export interface Obstacle {
   halfX: number;
   halfZ: number;
   rotationY: number;
+  /** True while this obstacle shouldn't block anyone — an open door's
+   *  footprint, most often. A plain mutable field rather than something
+   *  reactive on purpose: resolveObstacles runs once a frame from
+   *  PlayerRig's useFrame loop, so the door component that owns this
+   *  obstacle just flips this directly (see GardenDoor / ClassroomDoor in
+   *  BaseEnvironment.tsx) the same way moveTargetRef and touchInput.ts
+   *  are written to outside of React state, for the same reason: no
+   *  React render is needed for something the physics loop reads 60
+   *  times a second anyway. */
+  disabled?: boolean;
 }
 
 const obstacle = (x: number, z: number, halfX: number, halfZ: number, rotationY = 0): Obstacle => ({
@@ -295,6 +305,17 @@ const obstacle = (x: number, z: number, halfX: number, halfZ: number, rotationY 
   rotationY,
 });
 
+/** The garden door's closed-state footprint (see GardenDoor in
+ *  BaseEnvironment.tsx) — spans the doorway at the hall's south wall.
+ *  Exported (not just an anonymous entry below) so GardenDoor can flip
+ *  `.disabled` on the exact same object that's already sitting in
+ *  OBSTACLES, rather than needing a second lookup/id scheme. */
+export const GARDEN_DOOR_OBSTACLE: Obstacle = obstacle(0, HALL.maxZ - 0.18, DOOR_HALF_WIDTH - 0.05, 0.22);
+
+/** The new sliding door's closed-state footprint, at the corridor→
+ *  classroom threshold (see ClassroomDoor in BaseEnvironment.tsx). */
+export const CLASSROOM_DOOR_OBSTACLE: Obstacle = obstacle(0, CLASSROOM.maxZ, DOOR_HALF_WIDTH - 0.05, 0.16);
+
 /**
  * Furniture players bump into instead of walking through. Deliberately a
  * short list of boxes rather than real physics: it costs one loop per frame,
@@ -302,6 +323,8 @@ const obstacle = (x: number, z: number, halfX: number, halfZ: number, rotationY 
  * that is big enough to walk into.
  */
 export const OBSTACLES: Obstacle[] = [
+  GARDEN_DOOR_OBSTACLE,
+  CLASSROOM_DOOR_OBSTACLE,
   ...BENCHES.map((bench) => obstacle(bench.position[0], bench.position[2], BENCH_LENGTH / 2 + 0.05, 0.32, bench.rotationY)),
   // A desk and its chair are one obstacle, not two. As separate boxes the
   // gap between them is narrower than a person, so a walker got squeezed
@@ -333,6 +356,7 @@ export const OBSTACLES: Obstacle[] = [
  */
 export function resolveObstacles(position: THREE.Vector3, radius = PLAYER_RADIUS): void {
   for (const box of OBSTACLES) {
+    if (box.disabled) continue; // an open door — nothing to bump into here right now
     const sin = Math.sin(-box.rotationY);
     const cos = Math.cos(-box.rotationY);
     const dx = position.x - box.x;

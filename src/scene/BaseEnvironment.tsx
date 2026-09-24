@@ -1,4 +1,4 @@
-import { memo, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import type * as THREE from "three";
 import type { ThreeEvent } from "@react-three/fiber";
 import { useFrame } from "@react-three/fiber";
@@ -9,10 +9,12 @@ import {
   BENCHES,
   BENCH_LENGTH,
   CLASSROOM,
+  CLASSROOM_DOOR_OBSTACLE,
   CLASSROOM_WALL_HEIGHT,
   CORRIDOR,
   DESKS,
   DOOR_HALF_WIDTH,
+  GARDEN_DOOR_OBSTACLE,
   HALL,
   HALL_CENTRE,
   OUTDOOR,
@@ -361,6 +363,13 @@ function GardenDoor({ m }: { m: WorldMaterials }) {
   const [open, setOpen] = useState(false);
   const leftRef = useRef<THREE.Group>(null);
   const rightRef = useRef<THREE.Group>(null);
+  // Defends against a remount (e.g. an editor environment swap) landing
+  // on a GARDEN_DOOR_OBSTACLE left disabled by a previous instance that
+  // was open when it unmounted — this component's own `open` state
+  // always restarts closed, so the shared obstacle should too.
+  useEffect(() => {
+    GARDEN_DOOR_OBSTACLE.disabled = false;
+  }, []);
   useFrame((_, delta) => {
     const amount = 1 - Math.exp(-7 * Math.min(delta, 0.05));
     const target = open ? Math.PI * 0.52 : 0;
@@ -369,7 +378,17 @@ function GardenDoor({ m }: { m: WorldMaterials }) {
   });
   const toggle = (event: ThreeEvent<MouseEvent>) => {
     event.stopPropagation();
-    setOpen((value) => !value);
+    setOpen((value) => {
+      const next = !value;
+      // Collision follows the click immediately rather than waiting for
+      // the swing animation above to finish — the leaves take ~0.3s to
+      // visually settle, but nothing is actually standing in the
+      // doorway's footprint the instant you've told the door to open, so
+      // there's nothing to wait for. See resolveObstacles in layout.ts,
+      // which skips any obstacle with `disabled: true`.
+      GARDEN_DOOR_OBSTACLE.disabled = next;
+      return next;
+    });
   };
   return (
     <group>
@@ -392,6 +411,107 @@ function GardenDoor({ m }: { m: WorldMaterials }) {
     </group>
   );
 }
+
+/** Panel width/height shared between ClassroomDoor's two sliding leaves
+ *  and its fixed transom above them. */
+const SHOJI_PANEL_WIDTH = DOOR_HALF_WIDTH - 0.05;
+const SHOJI_PANEL_HEIGHT = 2.4;
+
+/**
+ * A two-panel shoji-style sliding door at the corridor→classroom
+ * threshold (see the matching gap cut into ClassroomShell's south wall).
+ * Structurally the same idea as GardenDoor — click to toggle, a lerped
+ * transform each frame, and a shared Obstacle disabled while open — but
+ * sliding along X instead of swinging on rotation.y, and with a lattice
+ * ("kumiko") look built from a handful of thin boxes over a paper pane
+ * rather than a loaded model, consistent with how the rest of this
+ * procedural environment is built.
+ */
+function ClassroomDoor({ m }: { m: WorldMaterials }) {
+  const [open, setOpen] = useState(false);
+  const leftRef = useRef<THREE.Group>(null);
+  const rightRef = useRef<THREE.Group>(null);
+  const doorZ = CLASSROOM.maxZ;
+  // Each panel's resting (closed) offset from center, and how far it
+  // slides outward — tucked just past the doorway's outer edge, as if
+  // into a wall pocket either side of the frame.
+  const closedOffset = SHOJI_PANEL_WIDTH / 2 + 0.05;
+  const openOffset = DOOR_HALF_WIDTH + SHOJI_PANEL_WIDTH / 2 + 0.04;
+
+  // See the identical effect on GardenDoor above for why this exists: a
+  // remounted door (e.g. after an editor environment swap) should never
+  // inherit a stale `disabled: true` from a previous instance that
+  // happened to be open when it unmounted.
+  useEffect(() => {
+    CLASSROOM_DOOR_OBSTACLE.disabled = false;
+  }, []);
+
+  useFrame((_, delta) => {
+    const amount = 1 - Math.exp(-7 * Math.min(delta, 0.05));
+    const target = open ? openOffset - closedOffset : 0;
+    if (leftRef.current) leftRef.current.position.x += (-target - leftRef.current.position.x) * amount;
+    if (rightRef.current) rightRef.current.position.x += (target - rightRef.current.position.x) * amount;
+  });
+
+  const toggle = (event: ThreeEvent<MouseEvent>) => {
+    event.stopPropagation();
+    setOpen((value) => {
+      const next = !value;
+      // Immediate, same reasoning as GardenDoor: nothing is standing in
+      // a doorway's footprint the instant you've told it to open, so
+      // collision doesn't need to wait for the ~0.3s slide to finish.
+      CLASSROOM_DOOR_OBSTACLE.disabled = next;
+      return next;
+    });
+  };
+
+  return (
+    <group>
+      {/* Floor track and header rail — grounds the panels visually and
+          reads as "these slide" rather than "these are stuck on". */}
+      <mesh position={[0, 0.02, doorZ]} material={m.trim} receiveShadow>
+        <boxGeometry args={[DOOR_HALF_WIDTH * 2 + 0.3, 0.04, 0.14]} />
+      </mesh>
+      <mesh position={[0, SHOJI_PANEL_HEIGHT + 0.06, doorZ]} material={m.trim} castShadow>
+        <boxGeometry args={[DOOR_HALF_WIDTH * 2 + 0.3, 0.12, 0.16]} />
+      </mesh>
+      {/* Fixed transom filling the rest of the wall opening above the
+          panels, so the doorway isn't an empty hole up to the ceiling. */}
+      <mesh position={[0, (SHOJI_PANEL_HEIGHT + 0.12 + CLASSROOM_WALL_HEIGHT) / 2, doorZ]} material={m.paper}>
+        <planeGeometry args={[DOOR_HALF_WIDTH * 2 - 0.1, Math.max(0.2, CLASSROOM_WALL_HEIGHT - SHOJI_PANEL_HEIGHT - 0.16)]} />
+      </mesh>
+
+      {[
+        { groupRef: leftRef, baseX: -closedOffset },
+        { groupRef: rightRef, baseX: closedOffset },
+      ].map(({ groupRef, baseX }, i) => (
+        <group key={i} ref={groupRef} position={[baseX, 0, doorZ]}>
+          {/* Outer frame (kamachi) — also the click target, same as GardenDoor's leaves. */}
+          <mesh position={[0, SHOJI_PANEL_HEIGHT / 2, 0]} material={m.trim} castShadow onClick={toggle}>
+            <boxGeometry args={[SHOJI_PANEL_WIDTH, SHOJI_PANEL_HEIGHT, 0.06]} />
+          </mesh>
+          {/* Washi paper inset. */}
+          <mesh position={[0, SHOJI_PANEL_HEIGHT / 2, 0.032]} material={m.paper} onClick={toggle}>
+            <planeGeometry args={[SHOJI_PANEL_WIDTH - 0.1, SHOJI_PANEL_HEIGHT - 0.1]} />
+          </mesh>
+          {/* Kumiko lattice: a few thin wood strips over the paper — enough
+              to read as shoji at a glance without modeling every muntin. */}
+          {[0.32, 0.56, 0.8].map((t) => (
+            <mesh key={`h-${t}`} position={[0, SHOJI_PANEL_HEIGHT * t, 0.045]} material={m.trim}>
+              <boxGeometry args={[SHOJI_PANEL_WIDTH - 0.1, 0.025, 0.014]} />
+            </mesh>
+          ))}
+          {[-0.26, 0, 0.26].map((x) => (
+            <mesh key={`v-${x}`} position={[x, SHOJI_PANEL_HEIGHT / 2, 0.045]} material={m.trim}>
+              <boxGeometry args={[0.025, SHOJI_PANEL_HEIGHT - 0.1, 0.014]} />
+            </mesh>
+          ))}
+        </group>
+      ))}
+    </group>
+  );
+}
+
 
 function OutdoorGarden({ m }: { m: WorldMaterials }) {
   return (
@@ -593,6 +713,7 @@ function ClassroomShell({ m }: { m: WorldMaterials }) {
         gaps={[{ from: -DOOR_HALF_WIDTH, to: DOOR_HALF_WIDTH }]}
         m={m}
       />
+      <ClassroomDoor m={m} />
       <DressedWall axis="x" at={CLASSROOM.minZ} from={CLASSROOM.minX} to={CLASSROOM.maxX} height={CLASSROOM_WALL_HEIGHT} m={m} />
       <DressedWall
         axis="z"

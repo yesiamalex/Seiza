@@ -32,6 +32,13 @@ interface EditToolbarProps {
   editorAuthPending: boolean;
   editorAuthFailed: boolean;
   onAuthEditor: (password: string) => void;
+  /** Lets App.tsx relabel this same gate as "admin key" when this
+   *  deployment has SEIZA_ADMIN_KEY configured (which then supersedes
+   *  the plain editor password for this gate — see App.tsx's
+   *  canEditWorld). The gate's behavior doesn't change, only its copy:
+   *  it's still one shared secret unlocking this connection's edit
+   *  privileges for its session, whichever secret it turns out to be. */
+  authLabel?: string;
   /** Room-level environment override, or null when the deployment's own
    *  world.json sceneUrl (or the procedural base room) is in use. */
   environmentUrl: string | null;
@@ -64,6 +71,7 @@ export function EditToolbar({
   editorAuthPending,
   editorAuthFailed,
   onAuthEditor,
+  authLabel = "editor password",
   environmentUrl,
   onSetEnvironment,
   skyboxUrl,
@@ -266,16 +274,16 @@ export function EditToolbar({
           className="seiza-popover"
           style={{ ...panelStyle, ...popoverStyle, display: "flex", flexDirection: "column", gap: 8, width: 240 }}
         >
-          <small style={{ opacity: 0.8 }}>This world requires an editor password.</small>
+          <small style={{ opacity: 0.8 }}>This world requires {authLabel === "editor password" ? "an" : "the"} {authLabel}.</small>
           <input
             type="password"
             value={passwordDraft}
             onChange={(e) => setPasswordDraft(e.target.value)}
-            placeholder="Editor password"
+            placeholder={authLabel[0].toUpperCase() + authLabel.slice(1)}
             style={inputStyle}
             autoFocus
           />
-          {editorAuthFailed && <small style={{ color: "#ff8a80" }}>Wrong password.</small>}
+          {editorAuthFailed && <small style={{ color: "#ff8a80" }}>{authLabel === "editor password" ? "Wrong password." : "Wrong key."}</small>}
           <button type="submit" style={pillButtonStyle} disabled={editorAuthPending || !passwordDraft}>
             {editorAuthPending ? "Checking…" : "Unlock editing"}
           </button>
