@@ -30,6 +30,8 @@ npx wrangler secret put SEIZA_EDITOR_PASSWORD
 npx wrangler secret put SEIZA_ADMIN_KEY
 ```
 
+**OR EDIT THE SECRETS VARIABLES with these values in your Cloudflare deployment dashboard UI!**
+
 When this is set, it **supersedes** `SEIZA_EDITOR_PASSWORD` for the Edit
 Mode gate specifically — clicking the pencil icon now asks for the admin
 key, not the editor password, and entering it correctly grants both
