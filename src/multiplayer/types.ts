@@ -16,6 +16,11 @@ export interface PlayerState {
   avatarUrl: string;
   position: [number, number, number];
   rotationY: number;
+  /** Where this player is looking vertically, in radians, or 0 for level.
+   *  Only sent in first person — see headPitch in PlayerRig.tsx for why
+   *  third person deliberately reports 0 rather than the camera's own
+   *  angle. Clamped by the server to the neck's real range. */
+  headPitch: number;
   activeGesture: string | null;
   /** Held pose, or null when standing. See the Posture type. */
   posture: Posture;
@@ -93,7 +98,7 @@ export interface ChatMessage {
 
 export type ClientMessage =
   | { type: "join"; displayName: string; avatarUrl: string; roomPassword?: string }
-  | { type: "state"; position: [number, number, number]; rotationY: number }
+  | { type: "state"; position: [number, number, number]; rotationY: number; headPitch?: number }
   | { type: "gesture"; gesture: string | null }
   // Changes this player's avatar in place, without reconnecting. Same URL
   // rules as `join` (see sanitizeAssetUrl in worker/room.ts), including
@@ -148,7 +153,7 @@ export type ClientMessage =
    *  "Mute" is enforceable this way; "unmute" is really a request the
    *  target's client fulfills, since the server never has access to
    *  anyone's audio to begin with (media is peer-to-peer — see
-   *  src/voice/useVoiceChat.ts). */
+   *  src/media/useRealtimeMedia.ts). */
   | { type: "adminSetMute"; targetId: string; muted: boolean }
   // Asks the server to relay `gatherRequest` (this connection's current
   // known position) to every other connection in the room. There's no
@@ -211,7 +216,7 @@ export type ServerMessage =
   // reconnect.
   | { type: "passwordRequired" }
   | { type: "playerJoined"; player: PlayerState }
-  | { type: "playerUpdated"; id: string; position: [number, number, number]; rotationY: number }
+  | { type: "playerUpdated"; id: string; position: [number, number, number]; rotationY: number; headPitch?: number }
   | { type: "playerGesture"; id: string; gesture: string | null; seq: number }
   | { type: "playerAvatarChanged"; id: string; avatarUrl: string }
   | { type: "playerPosture"; id: string; posture: Posture }

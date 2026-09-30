@@ -314,7 +314,11 @@ export const GARDEN_DOOR_OBSTACLE: Obstacle = obstacle(0, HALL.maxZ - 0.18, DOOR
 
 /** The new sliding door's closed-state footprint, at the corridor→
  *  classroom threshold (see ClassroomDoor in BaseEnvironment.tsx). */
-export const CLASSROOM_DOOR_OBSTACLE: Obstacle = obstacle(0, CLASSROOM.maxZ, DOOR_HALF_WIDTH - 0.05, 0.16);
+// Kept in sync by hand with ClassroomDoor's own DOOR_INSET in
+// BaseEnvironment.tsx (0.18) rather than importing it, to avoid a
+// layout.ts → BaseEnvironment.tsx → layout.ts import cycle; if you
+// change one, change the other.
+export const CLASSROOM_DOOR_OBSTACLE: Obstacle = obstacle(0, CLASSROOM.maxZ - 0.18, DOOR_HALF_WIDTH - 0.18 - 0.05, 0.16);
 
 /**
  * Furniture players bump into instead of walking through. Deliberately a
@@ -326,6 +330,9 @@ export const OBSTACLES: Obstacle[] = [
   GARDEN_DOOR_OBSTACLE,
   CLASSROOM_DOOR_OBSTACLE,
   ...BENCHES.map((bench) => obstacle(bench.position[0], bench.position[2], BENCH_LENGTH / 2 + 0.05, 0.32, bench.rotationY)),
+  // The outdoor benches were never added here — only the indoor ones —
+  // which is exactly why they had no collision at all.
+  ...OUTDOOR_BENCHES.map((bench) => obstacle(bench.position[0], bench.position[2], BENCH_LENGTH / 2 + 0.05, 0.32, bench.rotationY)),
   // A desk and its chair are one obstacle, not two. As separate boxes the
   // gap between them is narrower than a person, so a walker got squeezed
   // back and forth between the pair instead of walking around them.
@@ -350,12 +357,86 @@ export const OBSTACLES: Obstacle[] = [
 ];
 
 /**
+ * The obstacle set collision is currently resolved against.
+ *
+ * OBSTACLES above describes the *built-in* room, by hand. A deployment
+ * that layers its own uploaded .glb over it (see sceneUrl in
+ * worldConfig.ts) brings in geometry this file has never seen and which
+ * therefore has no collision. So the active set is swappable: Scene.tsx
+ * sets it to the built-in list plus boxes derived from that model, and
+ * back to the built-in list alone when the model is cleared.
+ *
+ * Deliberately a module-level mutable rather than React state, for the
+ * same reason `Obstacle.disabled` is: resolveObstacles runs from
+ * PlayerRig's useFrame loop, which reads this directly and must not
+ * re-render to see a change.
+ */
+let activeObstacles: Obstacle[] = OBSTACLES;
+
+export function setActiveObstacles(next: Obstacle[] | null): void {
+  activeObstacles = next ?? OBSTACLES;
+}
+
+export function getActiveObstacles(): readonly Obstacle[] {
+  return activeObstacles;
+}
+
+/**
+ * Derives collision boxes from arbitrary loaded geometry.
+ *
+ * Produces one axis-aligned box per mesh from its world bounding box,
+ * which is crude but is exactly the model `resolveObstacles` already
+ * works in, costs nothing per frame beyond the box count, and — unlike
+ * steering purely by navmesh — keeps walking behaving identically in the
+ * built-in room and a custom one.
+ *
+ * Meshes are skipped when they are:
+ *  - low enough to walk over (rugs, thresholds, floor plates),
+ *  - tall but starting above head height (ceilings, beams, hanging lights),
+ *  - enormous (the floor or a skybox shell, which would otherwise wrap
+ *    the whole world in one box nobody can enter),
+ *  - or marked `navIgnore`, the same opt-out the navmesh builder honours.
+ */
+export function deriveObstaclesFromObject(root: THREE.Object3D): Obstacle[] {
+  const MIN_HEIGHT = 0.25; // shorter than this, you step over it
+  const MAX_FLOOR_CLEARANCE = 1.9; // starts above this, you walk under it
+  const MAX_FOOTPRINT = 40; // metres; bigger than this is the ground, not furniture
+  const MIN_FOOTPRINT = 0.12;
+
+  const derived: Obstacle[] = [];
+  const box = new THREE.Box3();
+  const size = new THREE.Vector3();
+  const center = new THREE.Vector3();
+
+  root.updateMatrixWorld(true);
+  root.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) return;
+    if (child instanceof THREE.SkinnedMesh) return; // avatars move; they aren't scenery
+    if (!child.visible || child.userData.navIgnore === true) return;
+
+    box.setFromObject(child);
+    if (box.isEmpty()) return;
+    box.getSize(size);
+    box.getCenter(center);
+
+    if (size.y < MIN_HEIGHT) return;
+    if (box.min.y > MAX_FLOOR_CLEARANCE) return;
+    if (size.x > MAX_FOOTPRINT || size.z > MAX_FOOTPRINT) return;
+    if (size.x < MIN_FOOTPRINT && size.z < MIN_FOOTPRINT) return;
+
+    derived.push(obstacle(center.x, center.z, size.x / 2, size.z / 2));
+  });
+
+  return derived;
+}
+
+/**
  * Pushes a walker out of any furniture they've walked into, along whichever
  * axis of that piece they're least far inside — the cheap, stable way to
  * resolve a box overlap without a physics engine.
  */
 export function resolveObstacles(position: THREE.Vector3, radius = PLAYER_RADIUS): void {
-  for (const box of OBSTACLES) {
+  for (const box of activeObstacles) {
     if (box.disabled) continue; // an open door — nothing to bump into here right now
     const sin = Math.sin(-box.rotationY);
     const cos = Math.cos(-box.rotationY);

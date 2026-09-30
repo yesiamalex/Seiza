@@ -37,6 +37,117 @@ export interface Env {
   SEIZA_ADMIN_KEY?: string;
   /** Maximum simultaneous joined players for the deployed world. */
   SEIZA_MAX_OCCUPANTS?: string;
+  /** Optional pair for minting short-lived Cloudflare Realtime TURN
+   *  credentials (see handleTurnCredentials below, and README.md's
+   *  "Voice/video across different networks" for why this exists at all:
+   *  STUN alone — the only thing configured without it — cannot traverse
+   *  every NAT, and a peer pair split across two network types where at
+   *  least one is restrictive is exactly the "works on the same Wi-Fi,
+   *  fails on different ones" symptom this fixes). Create a TURN key at
+   *  dash.cloudflare.com -> Realtime -> TURN, then
+   *  `wrangler secret put CLOUDFLARE_TURN_KEY_ID` and
+   *  `wrangler secret put CLOUDFLARE_TURN_KEY_API_TOKEN`. Neither is a
+   *  client-side value — the API token in particular must never reach
+   *  the browser, which is the whole reason this endpoint exists instead
+   *  of the client calling Cloudflare's TURN API directly. */
+  CLOUDFLARE_TURN_KEY_ID?: string;
+  CLOUDFLARE_TURN_KEY_API_TOKEN?: string;
+}
+
+/** How long a minted TURN credential stays valid. Two hours comfortably
+ *  outlives a class or a meeting while keeping a leaked credential
+ *  short-lived; the client re-fetches on reload. */
+const TURN_CREDENTIAL_TTL_SECONDS = 7200;
+
+/**
+ * Mints short-lived ICE server credentials for the calling browser.
+ *
+ * Returns `{ iceServers: [] }` with a 404 when this deployment has no
+ * TURN key configured, which is a valid, supported state: the client
+ * falls back to STUN-only and works fine for everyone whose NAT allows
+ * it. That is deliberately not an error — most deployments will never
+ * set this up, and a red console error on every join would be noise.
+ */
+/**
+ * Credential mints allowed per IP per window.
+ *
+ * A credential is cheap to mint but expensive to hand out carelessly:
+ * anyone holding one can relay traffic through the deployer's Cloudflare
+ * Realtime allowance (1,000 GB/month included, $0.05/GB after) until it
+ * expires. A browser needs exactly one per page load, so a generous
+ * ceiling still shuts down a script looping on this endpoint to harvest
+ * relay credentials. Shares the upload limiter's window and, like it,
+ * is per-isolate rather than global — good enough to stop a loop, not a
+ * distributed abuse defence.
+ */
+const TURN_MINTS_PER_WINDOW = 20;
+const turnMintCounts = new Map<string, { count: number; windowStart: number }>();
+
+function isTurnRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const entry = turnMintCounts.get(ip);
+  if (!entry || now - entry.windowStart > RATE_LIMIT_WINDOW_MS) {
+    turnMintCounts.set(ip, { count: 1, windowStart: now });
+    return false;
+  }
+  entry.count += 1;
+  return entry.count > TURN_MINTS_PER_WINDOW;
+}
+
+async function handleTurnCredentials(request: Request, env: Env): Promise<Response> {
+  if (!env.CLOUDFLARE_TURN_KEY_ID || !env.CLOUDFLARE_TURN_KEY_API_TOKEN) {
+    return new Response(JSON.stringify({ iceServers: [] }), {
+      status: 404,
+      headers: { "content-type": "application/json" },
+    });
+  }
+
+  const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
+  if (isTurnRateLimited(ip)) {
+    // Empty list, not an error status the client would retry on: the
+    // caller falls back to STUN-only and the page still works.
+    return new Response(JSON.stringify({ iceServers: [] }), {
+      status: 429,
+      headers: { "content-type": "application/json", "cache-control": "no-store" },
+    });
+  }
+
+  let upstream: Response;
+  try {
+    upstream = await fetch(
+      `https://rtc.live.cloudflare.com/v1/turn/keys/${env.CLOUDFLARE_TURN_KEY_ID}/credentials/generate-ice-servers`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${env.CLOUDFLARE_TURN_KEY_API_TOKEN}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ ttl: TURN_CREDENTIAL_TTL_SECONDS }),
+      }
+    );
+  } catch {
+    return new Response(JSON.stringify({ iceServers: [] }), {
+      status: 502,
+      headers: { "content-type": "application/json" },
+    });
+  }
+
+  if (!upstream.ok) {
+    // The upstream body can quote the key id back; don't relay it.
+    return new Response(JSON.stringify({ iceServers: [] }), {
+      status: 502,
+      headers: { "content-type": "application/json" },
+    });
+  }
+
+  return new Response(await upstream.text(), {
+    headers: {
+      "content-type": "application/json",
+      // Credentials are per-browser and time-limited: never let a shared
+      // cache hand one browser's TURN credential to another.
+      "cache-control": "no-store",
+    },
+  });
 }
 
 export { SeizaRoom };
@@ -147,6 +258,10 @@ export default {
     }
     if (url.pathname === "/api/assets" && request.method === "GET") {
       return handleAssetList(request, env);
+    }
+
+    if (url.pathname === "/api/turn-credentials" && request.method === "GET") {
+      return handleTurnCredentials(request, env);
     }
 
     const assetMatch = url.pathname.match(/^\/api\/assets\/([a-f0-9-]+\.(?:glb|gltf|webp|png|jpg|gif))$/);

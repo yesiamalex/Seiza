@@ -5,10 +5,21 @@ import type * as THREE from "three";
 import { BaseEnvironment } from "./BaseEnvironment";
 import { Outdoors } from "./Outdoors";
 import { ImageSkybox, SunsetSky, SUNSET_HORIZON_COLOR } from "./SunsetSky";
+import { deriveObstaclesFromObject, OBSTACLES, setActiveObstacles } from "./layout";
 import type { Seat } from "./layout";
 
 interface SceneProps {
   sceneUrl?: string;
+  /** True when `sceneUrl` is a model somebody uploaded through the
+   *  in-world editor at runtime, rather than the deployment's own
+   *  configured `world.json` scene. Only an uploaded one gets collision
+   *  derived from it — see SceneModel. */
+  environmentIsCustom?: boolean;
+  /** Also derive collision boxes from an uploaded environment's own
+   *  geometry, on top of the built-in room's (see SceneModel). Off
+   *  means the uploaded model's geometry is walked straight through.
+   *  Defaults on. */
+  environmentCollision?: boolean;
   skyboxUrl?: string | null;
   onFloorDoubleClick?: (point: THREE.Vector3) => void;
   onSit?: (seat: Seat) => void;
@@ -53,8 +64,42 @@ function OnDemandShadows({ refreshKey }: { refreshKey?: unknown }) {
   return null;
 }
 
-function SceneModel({ sceneUrl }: { sceneUrl: string }) {
+function SceneModel({ sceneUrl, generateCollision }: { sceneUrl: string; generateCollision: boolean }) {
   const { scene } = useGLTF(sceneUrl);
+
+  // A deployer-supplied scene is layered *over* BaseEnvironment rather
+  // than replacing it (see the render tree below, and sceneUrl's doc
+  // comment in worldConfig.ts), so the built-in room is still standing
+  // and its hand-written OBSTACLES are still correct. Geometry brought
+  // in by this model, however, has no collision at all: OBSTACLES is a
+  // literal list in layout.ts and has never seen it. So the derived
+  // boxes are ADDED to the built-in ones, never substituted for them —
+  // substituting would delete the collision on walls that are still
+  // there, which is a worse bug than the one it fixes.
+  //
+  // Opt-out rather than mandatory, because derived boxes are
+  // approximations from mesh bounding boxes: a deployment whose model
+  // is meant to be walked through, or whose derived boxes come out
+  // wrong, turns this off and falls back to the built-in room's
+  // collision alone.
+  //
+  // Click-to-move needs no equivalent: useNavMesh already rebuilds from
+  // whatever is in the scene graph, so it adapts to this model on its own.
+  useEffect(() => {
+    if (!generateCollision) return;
+    const derived = deriveObstaclesFromObject(scene);
+    if (derived.length === 0) {
+      console.warn("No collision could be derived from this environment; nothing it adds will be solid.");
+      return;
+    }
+    setActiveObstacles([...OBSTACLES, ...derived]);
+    // Reverting is always available and always safe: clearing the
+    // uploaded environment from the editor unmounts this component, and
+    // this teardown puts the built-in room's own obstacles back exactly
+    // as they were. Nothing about the derived set is persisted.
+    return () => setActiveObstacles(null);
+  }, [scene, generateCollision]);
+
   return <primitive object={scene} />;
 }
 
@@ -111,6 +156,8 @@ const FOG_FAR = 210;
  */
 export const Scene = memo(function Scene({
   sceneUrl,
+  environmentIsCustom = false,
+  environmentCollision = true,
   skyboxUrl = null,
   onFloorDoubleClick,
   onSit,
@@ -156,7 +203,12 @@ export const Scene = memo(function Scene({
       {sceneUrl && (
         <SceneLoadBoundary>
           <Suspense fallback={null}>
-            <SceneModel sceneUrl={sceneUrl} />
+            {/* Collision is derived only for a model uploaded at
+                runtime. A deployment's own configured scene is part of
+                how that world was authored: whoever set it up also owns
+                layout.ts and can put real obstacles there, and deriving
+                boxes underneath them would silently double up. */}
+            <SceneModel sceneUrl={sceneUrl} generateCollision={environmentIsCustom && environmentCollision} />
           </Suspense>
         </SceneLoadBoundary>
       )}

@@ -329,7 +329,7 @@ export function useRoomSocket(
           case "playerUpdated":
             setPlayers((prev) =>
               prev[msg.id]
-                ? { ...prev, [msg.id]: { ...prev[msg.id], position: msg.position, rotationY: msg.rotationY } }
+                ? { ...prev, [msg.id]: { ...prev[msg.id], position: msg.position, rotationY: msg.rotationY, headPitch: msg.headPitch ?? 0 } }
                 : prev
             );
             break;

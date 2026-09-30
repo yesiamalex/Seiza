@@ -20,12 +20,14 @@ import { useNavMesh } from "./nav/useNavMesh";
 import { useRealtimeMedia } from "./media/useRealtimeMedia";
 import { MediaControls } from "./media/MediaControls";
 import { CameraBadge } from "./media/CameraBadge";
+import { ScreenZoomOverlay } from "./media/ScreenZoomOverlay";
 import { WorldObjects } from "./edit/WorldObjects";
 import { EditToolbar } from "./edit/EditToolbar";
 import { TextEditorDialog } from "./edit/TextEditorDialog";
 import { GesturePanel } from "./interactions/GesturePanel";
 import { ChatPanel } from "./chat/ChatPanel";
 import { HUD } from "./ui/HUD";
+import { Toast } from "./ui/Toast";
 import { JoinScreen, type JoinedIdentity } from "./ui/JoinScreen";
 import { CameraViewToggle } from "./ui/CameraViewToggle";
 import { AvatarChooser } from "./ui/AvatarChooser";
@@ -91,6 +93,8 @@ export default function App() {
   const [webglLost, setWebglLost] = useState(false);
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [avatarMessage, setAvatarMessage] = useState<string | null>(null);
+  /** Id of the screen object currently blown up to fill the viewport. */
+  const [zoomedScreenId, setZoomedScreenId] = useState<string | null>(null);
   const moveTargetRef = useRef<THREE.Vector3 | null>(null);
   const movePathRef = useRef<THREE.Vector3[] | null>(null);
   // Environment geometry the navmesh is generated from — Scene's own
@@ -216,6 +220,7 @@ export default function App() {
   const positionRef = useRef<[number, number, number]>([0, 0, 0]);
   const rotationRef = useRef(0);
   const lookYawRef = useRef(0);
+  const lookPitchRef = useRef(0);
 
   // media.updateSpatial is recreated whenever `players` changes (i.e.
   // often) — read it through a ref inside the interval below rather than
@@ -227,7 +232,7 @@ export default function App() {
   useEffect(() => {
     if (!connected) return;
     const interval = window.setInterval(() => {
-      send({ type: "state", position: positionRef.current, rotationY: rotationRef.current });
+      send({ type: "state", position: positionRef.current, rotationY: rotationRef.current, headPitch: lookPitchRef.current });
       updateSpatialRef.current(positionRef.current);
     }, NETWORK_TICK_MS);
     return () => window.clearInterval(interval);
@@ -421,6 +426,15 @@ export default function App() {
   const canEditWorld =
     world?.editingEnabled !== false && (adminKeyRequired ? isAdmin : !editorPasswordRequired || isEditor);
 
+  // Restructuring the room (canEditWorld) and taking part in it are two
+  // different permissions, deliberately. Anyone who has joined may write
+  // on a board that already exists and may present on a screen that's
+  // free; only an editor/admin may place, move, or delete those objects
+  // or swap the environment. The server enforces exactly this split —
+  // see the comments on objectSetText and objectPresent in worker/room.ts
+  // — and this constant exists so the UI stops pretending otherwise.
+  const canParticipate = world?.editingEnabled !== false;
+
   // Feeds EditToolbar's single auth gate from whichever secret actually
   // governs it for this deployment — see authLabel's doc comment on
   // EditToolbarProps for why the gate itself doesn't change, only which
@@ -463,13 +477,16 @@ export default function App() {
 
   const handleEditText = useCallback(
     (object: WorldObject) => {
-      if (!canEditWorld) {
-        setNotice("This world needs the editor password before you can write on a board.");
+      // Writing on an existing board is participation, not editing — the
+      // only thing that can withhold it is a world with editing switched
+      // off wholesale in its config.
+      if (!canParticipate) {
+        setNotice("Writing on boards is turned off in this world.");
         return;
       }
       setEditingText(object);
     },
-    [canEditWorld]
+    [canParticipate]
   );
 
   const presentOn = useCallback(
@@ -480,7 +497,10 @@ export default function App() {
         return;
       }
       if (object.presenterId) {
-        setNotice("Someone else is presenting on that screen.");
+        // Someone else has this screen. Clicking it used to be a refusal;
+        // showing them what's on it is the more useful answer, and it is
+        // free — the stream is already arriving.
+        setZoomedScreenId(object.id);
         return;
       }
       // Capture first, claim second: claiming and then having the picker
@@ -523,6 +543,20 @@ export default function App() {
     if (id) presentOnObject(id, false);
   }, [screenOn, presentOnObject]);
 
+  // Most recent message per speaker, for the bubbles over their heads
+  // (ChatBubble.tsx). Derived from the chat log that already exists
+  // rather than carried on a second channel, so a bubble and the panel
+  // can never disagree about what somebody said.
+  const lastMessages = useMemo(() => {
+    const latest: Record<string, { id: string; text: string }> = {};
+    // Newest wins: the log is chronological, so a later message simply
+    // overwrites the entry for that sender.
+    for (const message of messages) {
+      latest[message.senderId] = { id: message.id, text: message.text };
+    }
+    return latest;
+  }, [messages]);
+
   const resolveScreenStream = useCallback(
     (object: WorldObject) => {
       if (!object.presenterId) return null;
@@ -533,6 +567,20 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [media.getStream, media.localScreenStream, media.streamsVersion, players, selfId]
   );
+
+  // The zoom overlay closes itself if the presentation ends underneath
+  // it — the object is deleted, the presenter leaves, or they stop
+  // sharing — rather than leaving a frozen last frame on screen.
+  const zoomedScreen = zoomedScreenId ? objects[zoomedScreenId] : null;
+  const zoomedStream = zoomedScreen ? resolveScreenStream(zoomedScreen) : null;
+  const zoomedPresenterName =
+    zoomedScreen?.presenterId === selfId
+      ? "Your screen"
+      : `${players[zoomedScreen?.presenterId ?? ""]?.displayName ?? "Someone"}'s screen`;
+  useEffect(() => {
+    if (zoomedScreenId && !zoomedStream) setZoomedScreenId(null);
+  }, [zoomedScreenId, zoomedStream]);
+
 
   // The first person into an empty room places whatever the world config says
   // it should start with. Only when alone, so two people arriving together
@@ -655,6 +703,8 @@ export default function App() {
           <group ref={navSourceRef}>
             <Scene
               sceneUrl={environmentUrl ?? world.sceneUrl}
+              environmentIsCustom={!!environmentUrl}
+              environmentCollision={currentWorld.environmentCollision !== false}
               skyboxUrl={skyboxUrl}
               onFloorDoubleClick={handleFloorClick}
               // In Edit Mode a click belongs to the object gizmos, so the
@@ -671,6 +721,7 @@ export default function App() {
             positionRef={positionRef}
             rotationRef={rotationRef}
             lookYawRef={lookYawRef}
+            lookPitchRef={lookPitchRef}
             editMode={editMode}
             viewMode={viewMode}
             moveTargetRef={moveTargetRef}
@@ -691,12 +742,14 @@ export default function App() {
               gestureSeq={localGesture?.seq ?? 0}
               onGestureEnd={endGesture}
               posture={posture}
+              speakingLevel={media.localSpeakingLevel}
             />
           </PlayerRig>
           <RemotePlayers
             players={players}
             selfId={selfId}
             speakingLevels={media.speakingLevels}
+            lastMessages={lastMessages}
             gestures={gestures}
             getStream={media.getStream}
             streamsVersion={media.streamsVersion}
@@ -716,6 +769,14 @@ export default function App() {
           />
         </XR>
       </Canvas>
+
+      {zoomedScreen && zoomedStream && (
+        <ScreenZoomOverlay
+          stream={zoomedStream}
+          label={zoomedPresenterName}
+          onClose={() => setZoomedScreenId(null)}
+        />
+      )}
 
       <HUD
         connectionState={connectionState}
@@ -896,14 +957,15 @@ export default function App() {
           </div>
         </div>
       )}
+      {/* An XR error outranks a plain notice, but either one must be able
+          to leave the screen — see Toast.tsx for why that's stated so
+          firmly. Whichever is showing is the one `onDismiss` clears. */}
       {(xrError || notice) && (
-        <div
-          role="alert"
-          onClick={() => setNotice(null)}
-          style={{ position: "absolute", left: "50%", bottom: 82, transform: "translateX(-50%)", maxWidth: "min(420px, 90vw)", padding: "10px 14px", borderRadius: 10, backgroundColor: xrError ? "rgba(80,30,24,0.94)" : "rgba(28,34,46,0.94)", color: "white", fontFamily: "system-ui, sans-serif", fontSize: 13, textAlign: "center", pointerEvents: "auto", cursor: notice ? "pointer" : "default" }}
-        >
-          {xrError ?? notice}
-        </div>
+        <Toast
+          message={xrError ?? notice ?? ""}
+          tone={xrError ? "error" : "info"}
+          onDismiss={() => (xrError ? setXrError(null) : setNotice(null))}
+        />
       )}
     </div>
   );

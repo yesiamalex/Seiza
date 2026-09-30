@@ -85,6 +85,61 @@ export function VideoPanel({ stream, width, height, maxDistance = 30, active = t
     };
   }, [video]);
 
+  /**
+   * Re-attach when the stream gains a track after this element was built.
+   *
+   * This is the fix for "a shared screen is black for everyone until they
+   * reload". `ontrack` fires once per track, but a screen share with
+   * audio — and a renegotiated camera — deliver their tracks in separate
+   * events against the *same* MediaStream object. The element above is
+   * memoised on the stream reference, which by definition does not change
+   * when a track is added to it, so a panel first built from an
+   * audio-only stream keeps an `srcObject` it has already decided has no
+   * video, sits at readyState 0, and paints black. Reloading fixed it
+   * only because a fresh join has every track present in the initial
+   * offer, so the element is built once, complete.
+   *
+   * Re-assigning `srcObject` to the same stream is what forces the
+   * element to re-evaluate its tracks. A received track also starts
+   * `muted` until the first frame arrives, so `unmute` gets the same
+   * treatment rather than being left to chance.
+   */
+  useEffect(() => {
+    if (!video || !stream) return;
+
+    const reattach = () => {
+      // Assigning the same object is not a no-op for a <video>: it
+      // restarts source selection, which is the point.
+      video.srcObject = stream;
+      if (video.videoWidth > 0) setAspect(video.videoWidth / video.videoHeight);
+      if (playing.current) {
+        void video.play().catch(() => {
+          // Left for the useFrame loop to retry on its next check.
+          playing.current = false;
+        });
+      }
+    };
+
+    const watched = new Set<MediaStreamTrack>();
+    const watch = (track: MediaStreamTrack) => {
+      if (watched.has(track)) return;
+      watched.add(track);
+      track.addEventListener("unmute", reattach);
+    };
+    stream.getTracks().forEach(watch);
+
+    const onAddTrack = (event: MediaStreamTrackEvent) => {
+      watch(event.track);
+      reattach();
+    };
+    stream.addEventListener("addtrack", onAddTrack);
+
+    return () => {
+      stream.removeEventListener("addtrack", onAddTrack);
+      watched.forEach((track) => track.removeEventListener("unmute", reattach));
+    };
+  }, [video, stream]);
+
   useEffect(() => () => texture?.dispose(), [texture]);
 
   useFrame((state, delta) => {

@@ -1,6 +1,14 @@
 node_modules/
 dist/
-.env.local
-.dev.vars
 .wrangler/
 *.log
+
+# Secrets. .env.example is the committed template and is deliberately
+# re-included below; everything else matching these patterns stays local.
+# Production secrets should live in Worker secrets (`wrangler secret put`,
+# or the Cloudflare dashboard) rather than in any file here — see ADMIN.md.
+.env
+.env.*
+.dev.vars
+.dev.vars.*
+!.env.example

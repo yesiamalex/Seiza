@@ -1,7 +1,7 @@
 import { Billboard, Text } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import { useRef } from "react";
-import type { Mesh } from "three";
+import type { Group, Mesh } from "three";
 
 interface NameTagProps {
   name: string;
@@ -30,9 +30,58 @@ export function NameTag({ name, position, speaking }: NameTagProps) {
         >
           {name}
         </Text>
+        {/* A speaker glyph over the head, in addition to the ring at the
+            feet. The ring is easy to miss in a crowd or when someone is
+            standing behind furniture; the thing you actually look at to
+            find out who is talking is the name, so the indicator belongs
+            next to it. Drawn from two meshes rather than an icon texture
+            to avoid shipping an image and a loader for nine triangles. */}
+        <SpeakerGlyph active={speaking} />
       </Billboard>
       <SpeakingRing position={position} active={speaking} />
     </>
+  );
+}
+
+/** Small speaker cone + two arcs, sitting just above the name. */
+function SpeakerGlyph({ active }: { active: boolean }) {
+  const ref = useRef<Group>(null);
+
+  useFrame(({ clock }) => {
+    if (!ref.current) return;
+    const target = active ? 1 : 0;
+    const next = ref.current.scale.x + (target - ref.current.scale.x) * 0.2;
+    // Collapse rather than fade, so an inactive glyph occupies nothing
+    // and never shows as a speck at distance.
+    ref.current.scale.setScalar(Math.max(0.0001, next));
+    ref.current.visible = next > 0.02;
+    // The arcs breathe while active, which reads as sound without
+    // needing a second colour.
+    if (active) {
+      const pulse = 0.88 + Math.sin(clock.elapsedTime * 7) * 0.12;
+      ref.current.children.forEach((child, i) => {
+        if (i > 0) child.scale.setScalar(pulse);
+      });
+    }
+  });
+
+  return (
+    <group ref={ref} position={[0, 0.3, 0]} scale={0.0001}>
+      {/* Cone body */}
+      <mesh position={[-0.035, 0, 0]}>
+        <boxGeometry args={[0.05, 0.055, 0.001]} />
+        <meshBasicMaterial color="#7CFF9E" />
+      </mesh>
+      {/* Two sound arcs */}
+      <mesh position={[0.012, 0, 0]}>
+        <ringGeometry args={[0.035, 0.046, 16, 1, -Math.PI / 3, (Math.PI * 2) / 3]} />
+        <meshBasicMaterial color="#7CFF9E" transparent opacity={0.95} />
+      </mesh>
+      <mesh position={[0.012, 0, 0]}>
+        <ringGeometry args={[0.058, 0.069, 16, 1, -Math.PI / 3, (Math.PI * 2) / 3]} />
+        <meshBasicMaterial color="#7CFF9E" transparent opacity={0.6} />
+      </mesh>
+    </group>
   );
 }
 

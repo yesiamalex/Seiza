@@ -88,6 +88,11 @@ interface PlayerRigProps {
   rotationRef: MutableRefObject<number>;
   /** The camera's yaw, e.g. for placing new objects in front of the view. */
   lookYawRef?: MutableRefObject<number>;
+  /** Vertical look angle, in radians, for turning the avatar's head so
+   *  other people can see where this player is looking. Written only in
+   *  first person; third person parks it at 0 — see the note where it is
+   *  assigned. */
+  lookPitchRef?: MutableRefObject<number>;
   /** In edit mode the left mouse button (and a single finger) belongs to
    *  selecting and dragging objects, so looking moves to the right or
    *  middle mouse button and a two-finger drag. */
@@ -154,6 +159,7 @@ export function PlayerRig({
   positionRef,
   rotationRef,
   lookYawRef,
+  lookPitchRef,
   editMode = false,
   viewMode,
   moveTargetRef,
@@ -498,10 +504,23 @@ export function PlayerRig({
     // render camera, and the group the local avatar is rendered in.
     const applyTransforms = (feetY: number, grounded = true) => {
       const bob = updateHeadBob(grounded);
-      const lookYaw = new THREE.Euler().setFromQuaternion(vcam.quaternion, "YXZ").y;
+      const lookEuler = new THREE.Euler().setFromQuaternion(vcam.quaternion, "YXZ");
+      const lookYaw = lookEuler.y;
       positionRef.current = [vcam.position.x, feetY, vcam.position.z];
       rotationRef.current = avatarYawRef.current;
       if (lookYawRef) lookYawRef.current = lookYaw;
+      if (lookPitchRef) {
+        // First person only, deliberately. In third person the camera
+        // orbits the avatar rather than sitting behind its eyes (see
+        // just below), so the camera's pitch is "how far above the
+        // character am I looking down at them from" — nothing to do with
+        // where the character is looking. Feeding that to the neck made
+        // an avatar stare at the floor whenever its owner angled the
+        // orbit camera down. Parking it at 0 puts the head level, which
+        // is the correct neutral, and the remote side eases into it
+        // rather than snapping.
+        lookPitchRef.current = viewMode === "first" ? lookEuler.x : 0;
+      }
 
       if (viewMode === "third") {
         // Orbit around the avatar rather than sitting behind the eye and

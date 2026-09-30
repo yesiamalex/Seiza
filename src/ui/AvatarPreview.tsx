@@ -10,6 +10,10 @@ interface AvatarPreviewProps {
   url: string;
   /** CSS height; fluid by default. */
   height?: string;
+  /** Hold this expression instead of a neutral face — the designer uses
+   *  it so a face can be judged directly rather than by triggering a
+   *  gesture that happens to carry one. */
+  expression?: string | null;
 }
 
 /**
@@ -23,7 +27,7 @@ interface AvatarPreviewProps {
  * The camera sits on the -Z side because every avatar is normalized to
  * face -Z (see VrmAvatar.tsx) — this is looking at its front.
  */
-export function AvatarPreview({ url, height = "clamp(260px, 46vh, 460px)" }: AvatarPreviewProps) {
+export function AvatarPreview({ url, height = "clamp(260px, 46vh, 460px)", expression = null }: AvatarPreviewProps) {
   const [vrm, setVrm] = useState<VRM | null>(null);
   const [holdTPose, setHoldTPose] = useState(false);
 
@@ -36,7 +40,7 @@ export function AvatarPreview({ url, height = "clamp(260px, 46vh, 460px)" }: Ava
         <Suspense fallback={null}>
           <VrmAvatar url={url} onLoaded={setVrm} />
         </Suspense>
-        <AvatarAnimator vrm={vrm} holdTPose={holdTPose} />
+        <AvatarAnimator vrm={vrm} holdTPose={holdTPose} expression={expression} />
         <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
           <circleGeometry args={[0.7, 40]} />
           <meshStandardMaterial color="#20232e" roughness={1} />

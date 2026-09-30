@@ -12,60 +12,82 @@ Japanese XR conference, April 2027).
 
 ## TL;DR (the non-technical version)
 
-**What is this?** A little 3D world you and other people can walk around
-in together, right from a web browser — no app to install, no headset
-required (though it works with one if you have it). You pick a name and
-a look for yourself (called an "avatar"), then you're standing in a
-room with everyone else who joined the same link. You can walk around,
-wave and do a few other gestures, talk over voice chat, share your
-screen, and — if it's turned on — place and move things around the room
-together, like a shared 3D whiteboard.
+**What is this?** A small 3D world you and other people can walk around in
+together, straight from a web browser. No app to install, no headset needed
+(though it works with one). You pick a name and a character — an "avatar" —
+and then you're standing in a room with everyone else who opened the same
+link.
 
-**How is it different from Zoom or a game?** Two things, mainly:
+Once you're in, you can:
 
-- **It runs on *your* infrastructure, not a company's.** Most similar
-  tools (FrameVR, and formerly Mozilla Hubs before it shut down — see
-  below) are hosted by a company, on their servers, under their pricing
-  and their decision to keep the lights on. Seiza is something you (or
-  your school, club, or team) deploy yourselves, for free or close to
-  it, on Cloudflare's infrastructure. If you deploy it, you own it —
-  nobody can shut it down, change the price, or lose your data except
-  you.
-- **It's meant as a supplement, not a replacement.** This isn't trying
-  to out-feature a polished commercial product like FrameVR — it's a
-  smaller, self-hosted option for the times that matters more than
-  polish: a class, a small event, something on a tight budget, or
-  something where you'd rather your data stayed on infrastructure you
-  control.
+- **Walk around**, indoors and out into a garden, and sit on the chairs and
+  benches.
+- **Talk**, using your microphone. Voices get quieter the further away
+  someone is, the way they would in a real room, so two small conversations
+  can happen in one space.
+- **Turn your camera on**, or **share your screen** onto one of the screens
+  on the wall — handy for showing slides.
+- **Write on the notice boards** and leave notes. Everyone can do this, not
+  just whoever set the room up.
+- **Wave, bow, clap, raise your hand** and a few other gestures — your
+  avatar's face changes to match.
+- **Chat by text** if you'd rather not talk.
 
-**Why would a company or platform ever just... disappear?** It's
-happened. Mozilla Hubs — a very similar, popular tool — was shut down by
-Mozilla in 2024 with a few months' notice, for reasons that had nothing
-to do with whether people still wanted to use it. That's the whole
-reason a self-hosted option like this exists: if you're the one running
-it, that decision is never made for you.
+**How is it different from Zoom, or from a game?** Two things, mainly:
 
-**What can an admin do?** If a deployment has an admin key turned on (a
-password the person who set up the space chooses), whoever knows it can
-open a member list, and from there mute someone, remove someone from the
-room, teleport to someone, or bring everyone to where they're standing —
-useful for a teacher running a class, or an event host keeping things
-orderly. See [ADMIN.md](ADMIN.md) for the full rundown if you're the one
-running a deployment.
+- **It runs on *your* account, not a company's.** Tools like FrameVR — and
+  Mozilla Hubs, before it closed — are hosted by a company, on their servers,
+  at their prices, for as long as they choose to keep going. Seiza is
+  something you, your school, or your club sets up yourselves on your own
+  Cloudflare account. If you deploy it, you own it: nobody else can shut it
+  down, change what it costs, or lose your data.
+- **It's a supplement, not a replacement.** This isn't trying to out-feature a
+  polished commercial product. It's a smaller, self-hosted option for when
+  that matters more than polish — a class, a small event, a tight budget, or
+  anything where you'd rather your data stayed somewhere you control.
 
-**Do I need to know how to code to use this?** To just *join* a room
-someone else set up — no, just open the link. To *run your own*
-deployment, you'll want to be at least a little comfortable following
-a setup guide (see "Deploy your own instance" below) — it's a handful of
-commands, not a from-scratch coding project, but it's not entirely
-click-and-go either.
+**Why would a platform just... disappear?** Because it keeps happening.
+Mozilla Hubs, a very similar and popular tool, was shut down in 2024 with a
+few months' notice for reasons that had nothing to do with whether people
+still wanted it. Ready Player Me closed in January 2026, and Spatial.io
+retired its free 3D worlds in July 2026. That is the entire reason a
+self-hosted option exists: if you're the one running it, that decision is
+never made for you.
 
-**Is my data safe?** Whatever's placed in a room, and whoever's in it,
-lives entirely on the Cloudflare account of whoever deployed that
-specific room — not on a server the Seiza project runs (there isn't
-one). Voice and video never touch that server at all; they travel
-directly between participants' browsers. See the "Status" section below
-for the honest list of what this project does and doesn't guarantee yet.
+**What does it cost to run?** For a class-sized room, realistically nothing.
+Everything sits inside Cloudflare's free tiers, and the most expensive part of
+a video call — the actual audio and video — never touches your server at all,
+because it travels directly between participants' browsers. The one thing that
+*can* cost money is described under "Voice/video across different networks"
+below, and it comes with 1,000 GB a month included before any charge applies.
+
+**Who's in charge of a room?** Anyone can join, walk around, talk, present,
+and write on boards. Rearranging the room itself — adding furniture, moving
+things, changing the environment — can be locked behind a password. And if the
+person who set it up turns on an **admin key**, whoever holds it gets a
+member list with the ability to mute someone, remove someone from the room,
+teleport to them, or gather everyone to one spot. That's aimed at a teacher
+running a class or a host keeping an event orderly. See [ADMIN.md](ADMIN.md).
+
+Two honest limits on that: because voice travels directly between browsers,
+"mute" is a request the other person's browser honours rather than something
+the server can force; and removing someone ends their session but can't stop
+them rejoining, because there are no user accounts to ban.
+
+**Do I need to know how to code?** To *join* a room someone else set up: no,
+just open the link. To *run your own*: you'll want to be comfortable following
+a setup guide and pasting a handful of commands — it's not a from-scratch
+coding project, but it isn't one-click either. See "Deploy your own instance".
+
+**Is my data safe?** Whatever is placed in a room, and whoever is in it, lives
+entirely on the Cloudflare account of whoever deployed that room — not on any
+server the Seiza project runs, because there isn't one. Voice and video never
+touch that server either. The "Status" section at the bottom has the honest
+list of what this project does and doesn't guarantee yet.
+
+**What's rough right now?** Screen sharing sometimes shows up black for other
+people until they reload the page. There's no drawing whiteboard yet. And
+none of it has been tested with a large group at once. See "Status".
 
 ## What's in a deployment
 
@@ -211,6 +233,18 @@ setup is required.
 > classroom scale; worth knowing if you're evaluating it for something
 > more real-time-critical.
 
+### Running it somewhere other than Cloudflare
+
+If your institution can't use Cloudflare at all — an on-premises or
+data-residency requirement, or an air-gapped network — see
+[SELF-HOSTING.md](SELF-HOSTING.md). It covers what each Cloudflare primitive
+maps to, a Node port of the room server, self-hosted TURN with coturn, and the
+one scaling trap that will otherwise cost you an afternoon.
+
+Note that self-hosting is **not** needed for data ownership: the standard
+deployment already puts every room, asset, and avatar in your own Cloudflare
+account, with nothing routed through infrastructure the Seiza project runs.
+
 ## Local development
 
 ```bash
@@ -321,6 +355,105 @@ hosts it serve it. Image and video URLs go through the same scheme
 validation as models and avatars (`sanitizeAssetUrl` in `worker/room.ts`) —
 placing one makes every other browser in the room fetch it, so `javascript:`,
 `data:` and protocol-relative URLs are rejected.
+
+### Voice/video across different networks
+
+By default Seiza uses only a STUN server (`stun.cloudflare.com`). STUN tells
+each browser what its own public address is, which is enough for two peers
+whose networks allow a direct path. It is **not** enough for symmetric NAT or
+CGNAT, which is what most mobile carriers and many campus and corporate
+networks use. That is the whole explanation for the familiar symptom:
+
+> voice and camera work when we're on the same Wi-Fi, and fail when we're not.
+
+Fixing it needs a TURN server, which relays the media when no direct route
+exists. Seiza can mint short-lived Cloudflare Realtime TURN credentials from
+your own account:
+
+1. In the Cloudflare dashboard, go to **Realtime → TURN** and create a TURN
+   key. You get a key ID and an API token.
+2. Set both as Worker secrets:
+
+   ```bash
+   wrangler secret put CLOUDFLARE_TURN_KEY_ID
+   wrangler secret put CLOUDFLARE_TURN_KEY_API_TOKEN
+   ```
+
+3. Redeploy. That's it — the client fetches credentials from your Worker's
+   `/api/turn-credentials` on load and uses them automatically.
+
+The API token is **never** sent to the browser. It stays in the Worker, which
+is the entire reason that endpoint exists instead of the client calling
+Cloudflare's API directly. Credentials handed to a browser expire after two
+hours and are marked `no-store`.
+
+Leaving this unset is fully supported: the endpoint returns an empty list, the
+client falls back to STUN-only, and everyone whose network allows a direct
+path is unaffected.
+
+A connection that still fails gets one automatic ICE restart (by which point
+the fetched credentials have certainly arrived) before the peer is dropped.
+
+#### What TURN costs, and the guardrails around it
+
+Relayed traffic is the one part of Seiza that can produce a bill. At the time
+of writing Cloudflare Realtime TURN includes **1,000 GB per month**, then
+charges **$0.05 per additional GB**. Metering is on relayed bytes — traffic
+that finds a direct path is free, and so is everything else Seiza does.
+**Verify the current terms yourself before relying on these numbers**; they
+change, and this README will not notice when they do.
+
+Rough arithmetic, so the allowance means something. One relayed stream to one
+receiving peer, for one hour:
+
+| Stream | Cap when relayed | ≈ per hour, per receiving peer |
+| --- | --- | --- |
+| Voice | ~40 kbps | ~18 MB |
+| Camera | 120 kbps | ~54 MB |
+| Screen share | 600 kbps | ~270 MB |
+
+So 1,000 GB is on the order of **3,700 hours** of relayed camera, or **740
+hours** of relayed screen share, to a single peer. In a mesh those multiply by
+the number of receivers, so a relayed screen share to five people costs five
+times the row above. The figures are ceilings, not averages — encoders send
+less than the cap on a static slide.
+
+Four guardrails keep that in hand, and they are worth understanding because
+they change what participants see:
+
+1. **TURN is a fallback, never the default.** STUN is always first in the
+   candidate list, so a pair of browsers that can reach each other directly
+   always will. Most pairs can. Only the pairs that genuinely cannot — the
+   symmetric-NAT and CGNAT cases this feature exists for — ever relay.
+2. **Relayed streams are throttled.** A connection that turns out to be going
+   through a relay drops from 250 kbps to 120 kbps on camera, and from 1.2
+   Mbps to 600 kbps on screen share (`src/media/useRealtimeMedia.ts`). Seiza
+   detects this by reading the selected ICE candidate pair from `getStats()`
+   after connecting. The picture is visibly softer on those connections; that
+   is the intended trade against an unexpected bill.
+3. **Credentials are short-lived and rate-limited.** Each one lasts two hours,
+   is marked `no-store`, and a single IP can mint at most 20 per hour. A
+   browser needs one per page load, so that ceiling only stops a script
+   looping on the endpoint to harvest relay credentials.
+4. **The API token never reaches the browser.** That is the whole reason
+   `/api/turn-credentials` exists rather than the client calling Cloudflare
+   directly.
+
+On top of those, do two things in the Cloudflare dashboard: check **Realtime →
+TURN** for actual usage after your first few real sessions, and set a
+**billing notification** so a surprise is a notification rather than an
+invoice. If you want a hard stop instead of a soft one, delete the two Worker
+secrets — the app falls straight back to STUN-only with no code change and no
+redeploy of anything else.
+
+The older build-time variables below are not covered by guardrail 2 or 3, since
+the client is handed those credentials directly with no server in the loop.
+
+There is also an older, build-time-only path — `VITE_SEIZA_TURN_URLS`,
+`VITE_SEIZA_TURN_USERNAME`, `VITE_SEIZA_TURN_CREDENTIAL` — kept for
+deployments already using it. Prefer the Worker endpoint above: Vite inlines
+those variables into the client bundle, so that credential is public to
+anyone who views source.
 
 ### Restricting who can edit, and moderating a room
 
@@ -721,10 +854,13 @@ deliberate limitations (paper Section 7 has the fuller discussion):
 
 - **Voice is a WebRTC mesh, not an SFU.** Cost is O(n²) in simultaneously
   connected peers; the client soft-caps auto-connect around 12 (see
-  `src/voice/useVoiceChat.ts`). Fine for classroom-sized rooms, not for
-  large open events. No TURN server is configured by default — only
-  Cloudflare's public STUN — so voice may not connect for peers behind
-  restrictive NATs unless a deployer sets `VITE_SEIZA_TURN_URLS`.
+  `src/media/useRealtimeMedia.ts`). Fine for classroom-sized rooms, not for
+  large open events. Because the server never carries media, it also cannot
+  enforce muting — an admin's "mute" is a request the target's browser
+  honours — and there is no recording or server-side moderation of audio.
+  TURN is supported but off until a deployer configures it; without it,
+  peers behind symmetric NAT or CGNAT may fail to connect to each other.
+  See "Voice/video across different networks".
 - **Permissions now go up to room-level moderation, not just one shared
   edit password.** See `ADMIN.md` for the full picture: an optional
   `SEIZA_ADMIN_KEY` supersedes `SEIZA_EDITOR_PASSWORD` and additionally
@@ -745,11 +881,23 @@ deliberate limitations (paper Section 7 has the fuller discussion):
 - **Multiplayer sync is untested at scale.** Works correctly in small
   local testing; no load testing has been done against `maxOccupants`-
   sized rooms.
+- **Known defect: screen share can appear black to viewers** until they
+  reload the page, while the presenter sees it correctly. A fresh join
+  shows it fine, so the fault is in the mid-call renegotiation/attach path
+  rather than in decoding. Not yet fixed; reload is the workaround.
+- **No facial expression is sent over the network directly.** Expressions
+  are derived on each client from the gesture that *is* synced, so they
+  stay consistent without extra traffic — but an avatar cannot be given an
+  expression independently of a gesture, and uploaded VRMs without
+  expression data simply show none.
 - **Physics is a clamp and a box list, not a simulation.** Players are kept
   inside the room rectangles and pushed out of the built-in furniture, which
-  covers walls, benches, desks and the like. Objects placed through the
-  editor are not in that list, so you can still walk through those, and
-  nothing stacks, falls or collides with anything else. Placed objects don't
+  covers walls, benches, desks and the like. A custom environment loaded
+  through `sceneUrl` also contributes collision boxes derived from its own
+  mesh bounds, unless `environmentCollision: false` turns that off. Objects
+  placed through the in-world editor are still not in that list, so you can
+  walk through those, and nothing stacks, falls or collides with anything
+  else. Placed objects don't
   fall, roll, or collide — there's no rigid-body simulation. VRM's own
   spring-bone physics (hair/skirt secondary motion) is real and does run
   via `vrm.update()`, so avatars aren't *entirely* without physics. A

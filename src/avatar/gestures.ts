@@ -33,6 +33,8 @@ export interface CustomGestureConfig {
   /** How the avatar should meet the ground while this clip holds.
    *  See GestureDefinition.ground — the same values apply. */
   ground?: GroundContact;
+  /** Face to wear while this gesture plays. See FACE_EXPRESSIONS. */
+  expression?: string;
 }
 
 /**
@@ -69,7 +71,49 @@ export interface GestureDefinition {
   source: "builtin" | "custom";
   /** True when this custom clip replaced a built-in of the same name. */
   overridesBuiltin: boolean;
+  /** Expression to wear while this gesture plays, or null for none. */
+  expression: string | null;
 }
+
+/**
+ * Expression names this app will drive.
+ *
+ * These are three-vrm's own preset names. An uploaded VRM 0.x file uses
+ * different labels internally ("joy", "sorrow", "fun"), but three-vrm
+ * normalizes those to the VRM 1.0 names at load time, so one set of names
+ * covers both — and designer avatars register exactly these too (see
+ * designerExpressions.ts). Anything not in this list is rejected rather
+ * than passed through, since a typo'd name would otherwise fail silently
+ * on every avatar in the room.
+ */
+export const FACE_EXPRESSIONS = ["neutral", "happy", "sad", "angry", "surprised", "relaxed"] as const;
+
+export function isValidExpression(name: unknown): name is string {
+  return typeof name === "string" && (FACE_EXPRESSIONS as readonly string[]).includes(name);
+}
+
+/**
+ * Which face goes with each built-in gesture.
+ *
+ * Kept here rather than in builtinMotions.generated.ts on purpose: that
+ * file is regenerated wholesale by `npm run generate:motions`, and a hand
+ * edit to it would be silently lost the next time anyone ran that script.
+ * The generator produces bone rotations; which face suits the result is an
+ * authored judgement, so it lives with the other authored gesture data.
+ */
+const BUILTIN_GESTURE_EXPRESSIONS: Record<string, string> = {
+  wave: "happy",
+  cheer: "happy",
+  clap: "happy",
+  nod: "relaxed",
+  bow: "relaxed",
+  gassho: "relaxed",
+  seiza: "relaxed",
+  sit: "relaxed",
+  shrug: "sad",
+  // `point` and `raisehand` stay neutral: both are about directing
+  // attention somewhere else, and a face on them reads as editorial.
+};
 
 const NAME = /^[a-z0-9][a-z0-9_-]{0,31}$/;
 const isAllowedUrl = (url: string) => (url.startsWith("/") && !url.startsWith("//")) || /^https:\/\//i.test(url);
@@ -91,6 +135,7 @@ export function buildGestureRegistry(options: {
     duration: g.duration,
     source: "builtin",
     overridesBuiltin: false,
+    expression: BUILTIN_GESTURE_EXPRESSIONS[g.name] ?? null,
   }));
 
   for (const custom of options.customGestures ?? []) {
@@ -119,6 +164,11 @@ export function buildGestureRegistry(options: {
       duration: null,
       source: "custom",
       overridesBuiltin: false,
+      // Same inheritance rule as `ground`: a clip replacing a built-in
+      // keeps that built-in's face unless it names its own.
+      expression: isValidExpression(custom.expression)
+        ? custom.expression
+        : (BUILTIN_GESTURE_EXPRESSIONS[custom.name] ?? null),
     };
     const existing = list.findIndex((g) => g.name === custom.name);
     if (existing >= 0) {

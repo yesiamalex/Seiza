@@ -65,7 +65,12 @@ export function ParticipantRoster({
   const roster = Object.values(players).sort((a, b) => a.displayName.localeCompare(b.displayName));
 
   return (
-    <div style={{ position: "relative" }}>
+    // pointerEvents: "auto" is load-bearing, not decoration. The HUD root is
+    // pointerEvents: "none" so the 3D canvas stays interactive through it
+    // (see HUD.tsx), which means every interactive child has to opt back in.
+    // Without this the world-name pill below cannot be clicked at all and the
+    // roster simply never opens — a regression that shipped once already.
+    <div style={{ position: "relative", pointerEvents: "auto" }}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -107,7 +112,12 @@ export function ParticipantRoster({
         <>
           <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 20 }} aria-hidden />
           <div
-            className="seiza-popover"
+            // Downward, not the default upward/bottom-docking `.seiza-popover`:
+            // this panel's trigger is the world-name pill in the *top-left*
+            // corner, and under 640px `.seiza-popover` pins itself to the
+            // bottom of the viewport — so tapping the top-left corner made a
+            // panel appear at the bottom of the screen, nowhere near it.
+            className="seiza-popover-down seiza-popover-down--left"
             style={{
               ...panelStyle,
               position: "absolute",

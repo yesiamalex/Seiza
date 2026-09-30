@@ -1,5 +1,61 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="16" fill="#0c0e16"/>
-  <path d="M32 8c7 10 17 16 23 20-6 16-15 25-23 28C24 53 15 44 9 28 15 24 25 18 32 8Z" fill="#e8c37a"/>
-  <path d="M32 18v27M20 29c7 3 17 3 24 0M23 39c6 2 12 2 18 0" fill="none" stroke="#0c0e16" stroke-width="3" stroke-linecap="round"/>
+<!--
+  Seiza's mark: a figure seated in seiza (正座), side profile, as a solid
+  silhouette against the same twilight-into-starfield the world's sky uses
+  (see src/scene/SunsetSky.tsx — the palette stops are deliberately the
+  same colours, so the icon and the room agree).
+
+  The pose is the logo, because the pose is the product name. The figure is
+  drawn from scratch as a generic seated person rather than traced from any
+  character model: a silhouette this small carries the head, the line of the
+  back, and the fold of the legs, and nothing else survives at 16px anyway.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Seiza">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#070c26"/>
+      <stop offset="42%" stop-color="#1b1546"/>
+      <stop offset="72%" stop-color="#4b2a66"/>
+      <stop offset="92%" stop-color="#a85570"/>
+      <stop offset="100%" stop-color="#e8823f"/>
+    </linearGradient>
+    <clipPath id="frame">
+      <rect width="64" height="64" rx="15"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#frame)">
+    <rect width="64" height="64" fill="url(#sky)"/>
+
+    <!-- Stars, thinning out toward the warm horizon the way they do in the
+         shader. Hand-placed rather than evenly spaced so the field reads as
+         a sky instead of a grid. -->
+    <g fill="#ffffff">
+      <circle cx="9"  cy="8"  r="0.9" opacity="0.95"/>
+      <circle cx="21" cy="5"  r="0.6" opacity="0.7"/>
+      <circle cx="33" cy="10" r="0.5" opacity="0.55"/>
+      <circle cx="44" cy="6"  r="0.85" opacity="0.9"/>
+      <circle cx="55" cy="11" r="0.7" opacity="0.8"/>
+      <circle cx="14" cy="17" r="0.55" opacity="0.6"/>
+      <circle cx="27" cy="20" r="0.75" opacity="0.75"/>
+      <circle cx="50" cy="21" r="0.5" opacity="0.5"/>
+      <circle cx="59" cy="27" r="0.65" opacity="0.6"/>
+      <circle cx="6"  cy="29" r="0.6" opacity="0.5"/>
+      <circle cx="18" cy="33" r="0.45" opacity="0.4"/>
+      <circle cx="46" cy="34" r="0.5" opacity="0.4"/>
+    </g>
+
+    <!-- The figure. One closed path for the body, one circle for the head;
+         both solid, so the silhouette stays unbroken when it scales down. -->
+    <g fill="#05070f">
+      <circle cx="34.6" cy="18.4" r="6.9"/>
+      <path d="M29.8 24.6
+               C27.3 30.2, 26.2 36.4, 26.3 42.8
+               C26.3 46.8, 27.4 49, 29.3 49.8
+               L45.8 49.8
+               C48.8 49.8, 49.4 46.1, 46.2 45.0
+               C41.2 43.5, 37.2 42.6, 34.6 40.9
+               C36.4 36.7, 37.0 31.1, 36.4 27.0
+               C36.0 24.9, 33.2 24.0, 29.8 24.6 Z"/>
+    </g>
+  </g>
 </svg>

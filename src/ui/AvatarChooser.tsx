@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { WorldConfig } from "../config/worldConfig";
 import { optimizeVrmAvatar } from "../avatar/optimizeVrm";
+import { validateVrmFile } from "../avatar/validateVrm";
 import { AvatarDesignerDialog } from "../avatar/designer/AvatarDesigner";
 import { AVATAR_DESIGN_PRESETS, DEFAULT_AVATAR_SPEC, encodeAvatarSpec } from "../avatar/designer/avatarSpec";
 import { saveUploadedAvatarFile, uploadAvatarFile, type StoredAvatarChoice } from "../profile/profileStore";
@@ -87,8 +88,31 @@ export function AvatarChooser({ world, value, onChange, rememberLocally, onStage
   const designerSpec = value.kind === "designer" ? value.spec : DEFAULT_AVATAR_SPEC;
   const selectDesign = (choice: StoredAvatarChoice) => onChange({ choice, url: avatarUrlForChoice(choice), localUrl: null });
 
+  // The join screen renders its own full-height preview of the staged
+  // avatar and passes onStagedPreview to drive it; the in-world menu has
+  // no such thing, and used to show nothing at all about what you were
+  // currently wearing — a filename, and only for uploads. Opening your
+  // own avatar panel and not being shown your own avatar is the gap this
+  // closes, so the preview appears exactly where that other one doesn't.
+  const showCurrent = !onStagedPreview;
+  const currentUrl = avatarUrlForChoice(value);
+  const currentLabel =
+    value.kind === "upload" ? value.fileName : value.kind === "preset" ? "A preset from this deployment" : "Designed in the browser";
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 0 }}>
+      {showCurrent && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+          {/* Keyed on the URL so switching avatars tears the old VRM down
+              rather than swapping a prop under a live scene. */}
+          <AvatarPreview key={currentUrl} url={currentUrl} height="clamp(150px, 26svh, 230px)" />
+          <small style={{ opacity: 0.7, display: "flex", gap: 5, minWidth: 0 }}>
+            <span style={{ opacity: 0.7, flexShrink: 0 }}>Wearing now:</span>
+            <strong style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 600 }}>{currentLabel}</strong>
+          </small>
+        </div>
+      )}
+
       {tabs.length > 1 && (
         <div role="tablist" aria-label="Avatar source" style={{ display: "flex", gap: 4, padding: 3, borderRadius: 10, background: "rgba(255,255,255,0.05)" }}>
           {tabs.map((t) => (
@@ -258,7 +282,19 @@ function UploadPanel({
       if (blob.size > HARD_MAX_AVATAR_BYTES) {
         throw new Error(`Still too large after optimization (max ${formatMB(HARD_MAX_AVATAR_BYTES)}, a Cloudflare KV limit).`);
       }
-      setStatus((previous) => (previous ? `${previous} Uploading…` : "Uploading…"));
+
+      // Parse it before anyone else has to. A file that fails here would
+      // otherwise upload cleanly and then break for every person in the
+      // room — see validateVrm.ts.
+      setStatus("Checking the model…");
+      const validation = await validateVrmFile(blob);
+      if (!validation.ok) {
+        setWarning(null);
+        throw new Error(validation.reason);
+      }
+      setWarning(validation.warnings.length > 0 ? validation.warnings.join(" ") : null);
+
+      setStatus("Uploading…");
       const url = await uploadAvatarFile(blob);
       if (rememberLocally) await saveUploadedAvatarFile(worldId, blob, file.name);
       onUploaded({
@@ -332,6 +368,32 @@ function UploadPanel({
       {status && <small style={{ opacity: 0.7 }}>{status}</small>}
       {error && <small style={{ color: "#ff8a80" }}>{error}</small>}
       <small style={{ opacity: 0.55 }}>VRM 0.x and 1.0 both work. Gestures retarget onto the VRM humanoid rig automatically.</small>
+
+      <div style={{ borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: 8, display: "flex", flexDirection: "column", gap: 5 }}>
+        <small style={{ opacity: 0.75 }}>
+          Don't have one?{" "}
+          <a href="https://vroid.com/en/studio" target="_blank" rel="noopener noreferrer" style={{ color: ACCENT_COLOR }}>
+            VRoid Studio
+          </a>{" "}
+          is a free VRM maker, and{" "}
+          <a href="https://hub.vroid.com/en" target="_blank" rel="noopener noreferrer" style={{ color: ACCENT_COLOR }}>
+            VRoid Hub
+          </a>{" "}
+          hosts models from other people.
+        </small>
+        {/* Deliberately a plain responsibility notice and not a "DMCA
+            policy": a real safe harbour has statutory prerequisites (a
+            designated agent, a published takedown process, a
+            repeat-infringer policy) that a paragraph in a React component
+            does not satisfy, and implying otherwise would mislead whoever
+            deploys this. Say what is true, and point at real advice. */}
+        <small style={{ opacity: 0.55 }}>
+          Check each model's licence before using it here — many VRoid Hub models restrict redistribution, modification, or
+          commercial use, and uploading one puts a copy on this deployment for everyone in the room to download. You are
+          responsible for what you upload; this deployment does not licence-check uploads, and its maintainers accept no
+          liability for infringing ones. Not legal advice — if this is going somewhere commercial, get some.
+        </small>
+      </div>
     </div>
   );
 }

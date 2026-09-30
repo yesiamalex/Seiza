@@ -413,8 +413,16 @@ function GardenDoor({ m }: { m: WorldMaterials }) {
 }
 
 /** Panel width/height shared between ClassroomDoor's two sliding leaves
- *  and its fixed transom above them. */
-const SHOJI_PANEL_WIDTH = DOOR_HALF_WIDTH - 0.05;
+ *  and its fixed transom above them. DOOR_INSET keeps every part of the
+ *  assembly — track, rail, and panels — safely inside the wall opening's
+ *  actual bounds rather than flush with (or, as the track/rail
+ *  previously were, wider than) it: with zero margin, the frame's own
+ *  thickness has nowhere to go but into the solid wall on either side of
+ *  the gap, which is what read as the door "overlapping weird" with the
+ *  locker wall next to it. */
+const DOOR_INSET = 0.18;
+const SHOJI_OPENING_HALF_WIDTH = DOOR_HALF_WIDTH - DOOR_INSET;
+const SHOJI_PANEL_WIDTH = SHOJI_OPENING_HALF_WIDTH - 0.05;
 const SHOJI_PANEL_HEIGHT = 2.4;
 
 /**
@@ -431,12 +439,17 @@ function ClassroomDoor({ m }: { m: WorldMaterials }) {
   const [open, setOpen] = useState(false);
   const leftRef = useRef<THREE.Group>(null);
   const rightRef = useRef<THREE.Group>(null);
-  const doorZ = CLASSROOM.maxZ;
+  // Pulled slightly onto the classroom's own side of the wall plane —
+  // the same reason GardenDoor sits at `HALL.maxZ - 0.18` rather than
+  // exactly on `HALL.maxZ`: a door with real thickness (frame, track,
+  // rail) sitting exactly *on* the wall plane it's cut into z-fights
+  // and visually pokes through that wall's own front face.
+  const doorZ = CLASSROOM.maxZ - DOOR_INSET;
   // Each panel's resting (closed) offset from center, and how far it
-  // slides outward — tucked just past the doorway's outer edge, as if
-  // into a wall pocket either side of the frame.
-  const closedOffset = SHOJI_PANEL_WIDTH / 2 - 0.05;
-  const openOffset = DOOR_HALF_WIDTH + SHOJI_PANEL_WIDTH / 2 + 0.04;
+  // slides outward — into the (now inset) wall pocket on its side,
+  // never past DOOR_HALF_WIDTH into the solid wall itself.
+  const closedOffset = SHOJI_PANEL_WIDTH / 2 + 0.05;
+  const openOffset = SHOJI_OPENING_HALF_WIDTH + SHOJI_PANEL_WIDTH / 2 + 0.04 - DOOR_INSET;
 
   // See the identical effect on GardenDoor above for why this exists: a
   // remounted door (e.g. after an editor environment swap) should never
@@ -467,18 +480,19 @@ function ClassroomDoor({ m }: { m: WorldMaterials }) {
 
   return (
     <group>
-      {/* Floor track and header rail — grounds the panels visually and
-          reads as "these slide" rather than "these are stuck on". */}
+      {/* Floor track and header rail — sized to the *inset* opening, not
+          the raw wall gap, so neither pokes into the solid wall either
+          side (see DOOR_INSET's doc comment above). */}
       <mesh position={[0, 0.02, doorZ]} material={m.trim} receiveShadow>
-        <boxGeometry args={[DOOR_HALF_WIDTH * 2 + 0.3, 0.04, 0.14]} />
+        <boxGeometry args={[SHOJI_OPENING_HALF_WIDTH * 2, 0.04, 0.14]} />
       </mesh>
       <mesh position={[0, SHOJI_PANEL_HEIGHT + 0.06, doorZ]} material={m.trim} castShadow>
-        <boxGeometry args={[DOOR_HALF_WIDTH * 2 + 0.3, 0.12, 0.16]} />
+        <boxGeometry args={[SHOJI_OPENING_HALF_WIDTH * 2, 0.12, 0.16]} />
       </mesh>
       {/* Fixed transom filling the rest of the wall opening above the
           panels, so the doorway isn't an empty hole up to the ceiling. */}
       <mesh position={[0, (SHOJI_PANEL_HEIGHT + 0.12 + CLASSROOM_WALL_HEIGHT) / 2, doorZ]} material={m.paper}>
-        <planeGeometry args={[DOOR_HALF_WIDTH * 2 - 0.1, Math.max(0.2, CLASSROOM_WALL_HEIGHT - SHOJI_PANEL_HEIGHT - 0.16)]} />
+        <planeGeometry args={[SHOJI_OPENING_HALF_WIDTH * 2 - 0.1, Math.max(0.2, CLASSROOM_WALL_HEIGHT - SHOJI_PANEL_HEIGHT - 0.16)]} />
       </mesh>
 
       {[

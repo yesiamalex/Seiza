@@ -255,3 +255,21 @@ export function LockIcon(props: IconProps) {
     </Svg>
   );
 }
+
+/** Opens the mobile control drawer (see HUD.tsx). */
+export function MenuIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M4 7h16M4 12h16M4 17h16" />
+    </Svg>
+  );
+}
+
+/** Closes the mobile control drawer — points toward the edge it tucks into. */
+export function ChevronRightIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M9 5l7 7-7 7" />
+    </Svg>
+  );
+}

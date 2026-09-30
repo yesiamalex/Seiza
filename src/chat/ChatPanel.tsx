@@ -18,11 +18,32 @@ export function ChatPanel({ open, onToggle, messages, selfId, onSend, connected 
   const [draft, setDraft] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
 
+  // How many messages had arrived the last time the panel was open. What
+  // the button showed before this was `messages.length` — the size of the
+  // whole conversation, which only ever grows and tells you nothing about
+  // whether there is something new to read. Unread is the difference
+  // since you last looked.
+  //
+  // Seeded with the current length rather than 0, so joining a room with
+  // existing backlog doesn't greet you with "47 unread" for a
+  // conversation you were never part of.
+  const seenCountRef = useRef(messages.length);
+  const [unread, setUnread] = useState(0);
+
   useEffect(() => {
-    if (open && listRef.current) {
-      listRef.current.scrollTop = listRef.current.scrollHeight;
+    if (open) {
+      // Opening the panel is the read receipt.
+      seenCountRef.current = messages.length;
+      setUnread(0);
+      if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
+      return;
     }
-  }, [open, messages]);
+    // Your own messages never count as unread: you sent them, and the
+    // panel closing behind you shouldn't badge you about yourself.
+    const fresh = messages.slice(seenCountRef.current).filter((m) => m.senderId !== selfId);
+    if (fresh.length > 0) setUnread((n) => n + fresh.length);
+    seenCountRef.current = messages.length;
+  }, [open, messages, selfId]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -37,16 +58,40 @@ export function ChatPanel({ open, onToggle, messages, selfId, onSend, connected 
       <button
         type="button"
         className="seiza-bar-btn"
-        style={open ? barButtonActiveStyle : barButtonStyle}
         onClick={onToggle}
         aria-expanded={open}
-        aria-label={`Chat${messages.length > 0 ? ` (${messages.length} messages)` : ""}`}
+        aria-label={`Chat${unread > 0 ? `, ${unread} unread message${unread === 1 ? "" : "s"}` : ""}`}
         title="Chat"
+        style={{ ...(open ? barButtonActiveStyle : barButtonStyle), position: "relative" }}
       >
         <ChatIcon />
         <span className={BAR_LABEL_CLASS}>Chat</span>
-        {!open && messages.length > 0 && (
-          <span style={{ fontSize: 11, opacity: 0.75 }}>{messages.length}</span>
+        {unread > 0 && (
+          <span
+            // aria-hidden: the count is already in the button's
+            // accessible name above, and announcing it twice is worse
+            // than not announcing it here.
+            aria-hidden
+            style={{
+              position: "absolute",
+              top: 2,
+              right: 2,
+              minWidth: 15,
+              height: 15,
+              padding: "0 4px",
+              borderRadius: 999,
+              background: "#ff5a52",
+              color: "white",
+              fontSize: 10,
+              fontWeight: 700,
+              lineHeight: "15px",
+              textAlign: "center",
+              boxShadow: "0 0 0 2px rgba(16,17,22,0.9)",
+              pointerEvents: "none",
+            }}
+          >
+            {unread > 9 ? "9+" : unread}
+          </span>
         )}
       </button>
       {open && (

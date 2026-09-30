@@ -7,6 +7,22 @@ export interface WorldConfig {
   /** Optional deployer-supplied glTF scene, layered over BaseEnvironment
    *  (see src/scene/Scene.tsx). Omit to use just the procedural base. */
   sceneUrl?: string;
+  /**
+   * Also derive collision boxes from `sceneUrl`'s own geometry, in
+   * addition to the built-in room's hand-written ones (see
+   * `deriveObstaclesFromObject` in src/scene/layout.ts). Defaults to true.
+   *
+   * A deployer scene is layered over BaseEnvironment rather than
+   * replacing it, so the built-in collision always stays active; this
+   * only controls whether the added geometry is solid too. The boxes are
+   * approximations from per-mesh bounding boxes, so set this to false
+   * when the model is meant to be walked through, or when the derived
+   * boxes come out wrong.
+   *
+   * Click-to-move is unaffected either way: the navmesh is rebuilt from
+   * whatever is actually in the scene (src/nav/useNavMesh.ts).
+   */
+  environmentCollision?: boolean;
   spawnPoint: { x: number; y: number; z: number };
   /** Avatar a first-time visitor starts with: a .vrm URL, or "" to start
    *  from the built-in avatar designer's default look. */

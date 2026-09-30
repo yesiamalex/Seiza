@@ -5,6 +5,7 @@ import type { VRM } from "@pixiv/three-vrm";
 import { VrmAvatar } from "../avatar/VrmAvatar";
 import { AvatarAnimator } from "../avatar/AvatarAnimator";
 import { findGesture, type GestureDefinition } from "../avatar/gestures";
+import { ChatBubble } from "../chat/ChatBubble";
 import { CameraBadge } from "../media/CameraBadge";
 import { NameTag } from "./NameTag";
 import type { PlayerState } from "./types";
@@ -13,6 +14,8 @@ interface RemotePlayersProps {
   players: Record<string, PlayerState>;
   selfId: string | null;
   speakingLevels: Record<string, number>;
+  /** Most recent chat message per player id, for the floating bubbles. */
+  lastMessages?: Record<string, { id: string; text: string }>;
   gestures: GestureDefinition[];
   /** A peer's live stream by id, for the camera panel beside them. */
   getStream?: (peerId: string, streamId: string | null | undefined) => MediaStream | null;
@@ -33,10 +36,15 @@ const SPEAKING_THRESHOLD = 0.05;
 // animator a believable ground speed, and stops spring-bone hair from
 // whipping every 200ms.
 const FOLLOW_RATE = 10;
+/** Inside this radius (metres, horizontal) a remote avatar is hidden so
+ *  the camera never ends up inside its mesh; it reappears a little
+ *  further out so the two thresholds can't oscillate. */
+const AVATAR_HIDE_DISTANCE = 0.55;
+const AVATAR_SHOW_DISTANCE = 0.7;
 const SNAP_DISTANCE = 6;
 
 /** Renders every connected player except the local one. */
-export function RemotePlayers({ players, selfId, speakingLevels, gestures, getStream, streamsVersion = 0 }: RemotePlayersProps) {
+export function RemotePlayers({ players, selfId, speakingLevels, lastMessages, gestures, getStream, streamsVersion = 0 }: RemotePlayersProps) {
   const [visibleCameras, setVisibleCameras] = useState<string[]>([]);
   const playersRef = useRef(players);
   playersRef.current = players;
@@ -74,7 +82,8 @@ export function RemotePlayers({ players, selfId, speakingLevels, gestures, getSt
             key={p.id}
             player={p}
             gestures={gestures}
-            speaking={(speakingLevels[p.id] ?? 0) > SPEAKING_THRESHOLD}
+            speakingLevel={speakingLevels[p.id] ?? 0}
+            lastMessage={lastMessages?.[p.id] ?? null}
             cameraStream={getStream?.(p.id, p.media?.camera) ?? null}
             cameraActive={visibleCameras.includes(p.id)}
             streamsVersion={streamsVersion}
@@ -91,13 +100,16 @@ function lerpAngle(from: number, to: number, t: number) {
 
 function RemotePlayerAvatar({
   player,
-  speaking,
+  speakingLevel,
+  lastMessage,
   gestures,
   cameraStream,
   cameraActive,
 }: {
   player: PlayerState;
-  speaking: boolean;
+  /** Raw mic RMS: the boolean indicator and lip sync both derive from it. */
+  speakingLevel: number;
+  lastMessage: { id: string; text: string } | null;
   gestures: GestureDefinition[];
   cameraStream: MediaStream | null;
   cameraActive: boolean;
@@ -111,7 +123,7 @@ function RemotePlayerAvatar({
   const smoothed = useRef<THREE.Vector3 | null>(null);
   const yaw = useRef(player.rotationY);
 
-  useFrame((_, delta) => {
+  useFrame((state, delta) => {
     const group = groupRef.current;
     if (!group) return;
     const target = targetRef.current;
@@ -125,6 +137,26 @@ function RemotePlayerAvatar({
     yaw.current = lerpAngle(yaw.current, target.rotationY, t);
     group.position.copy(smoothed.current);
     group.rotation.y = yaw.current;
+
+    // Hide an avatar that has walked into the camera.
+    //
+    // Two people standing on the same spot is normal here — there is no
+    // body collision between players — and in first person the result is
+    // the inside of someone's head filling the screen, with the camera's
+    // near plane slicing through it. Hiding at close range is the
+    // standard fix, and is better than clamping the near plane toward
+    // zero, which wrecks depth precision for the entire scene.
+    //
+    // Compared in the XZ plane only: a tall avatar standing right on top
+    // of you should disappear, and vertical distance to their hips
+    // shouldn't rescue them. Hysteresis stops an avatar hovering at the
+    // boundary from strobing.
+    const camera = state.camera.position;
+    const dx = camera.x - group.position.x;
+    const dz = camera.z - group.position.z;
+    const distance = Math.hypot(dx, dz);
+    const threshold = group.visible ? AVATAR_HIDE_DISTANCE : AVATAR_SHOW_DISTANCE;
+    group.visible = distance > threshold;
   });
 
   // AvatarAnimator only plays when the sequence number changes, so a
@@ -146,8 +178,15 @@ function RemotePlayerAvatar({
         gesture={gesture}
         gestureSeq={seq}
         posture={posture}
+        speakingLevel={speakingLevel}
+        headPitch={player.headPitch ?? 0}
       />
-      <NameTag name={player.displayName} position={[0, 0, 0]} speaking={speaking} />
+      <NameTag name={player.displayName} position={[0, 0, 0]} speaking={speakingLevel > SPEAKING_THRESHOLD} />
+      {/* Clear of both the name tag (1.9m) and the speaker glyph that
+          sits just above it (~2.2m) — at 2.22 the bubble and the glyph
+          drew straight through each other whenever somebody typed while
+          talking, which is a common pairing rather than an edge case. */}
+      <ChatBubble text={lastMessage?.text ?? null} messageId={lastMessage?.id ?? null} y={2.52} />
       <CameraBadge stream={cameraStream} active={cameraActive} />
     </group>
   );

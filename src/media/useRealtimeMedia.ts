@@ -42,9 +42,48 @@ const SCREEN_CONSTRAINTS = {
 } as MediaStreamConstraints;
 const CAMERA_MAX_BITRATE = 250_000;
 const SCREEN_MAX_BITRATE = 1_200_000;
+/**
+ * Tighter ceilings for a connection that turned out to need a TURN relay.
+ *
+ * A direct peer-to-peer stream costs the deployer nothing — the bytes go
+ * between the two browsers. A relayed one is billed: Cloudflare Realtime
+ * TURN includes 1,000 GB/month and charges $0.05/GB beyond it, and it is
+ * metered on relayed traffic in both directions. Screen share is by far
+ * the biggest lever there, at roughly half a gigabyte per hour per
+ * receiving peer at the direct cap.
+ *
+ * So relayed senders are throttled rather than cut off. The picture is
+ * worse, and a legible screen share at 600 kbps is a far better outcome
+ * than an unexpected bill or a policy of refusing to relay at all.
+ * Nothing changes for the direct connections, which are the majority.
+ */
+const RELAYED_CAMERA_MAX_BITRATE = 120_000;
+const RELAYED_SCREEN_MAX_BITRATE = 600_000;
 
-function buildIceServers(): RTCIceServer[] {
-  const servers: RTCIceServer[] = [{ urls: "stun:stun.cloudflare.com:3478" }];
+/**
+ * ICE servers, in order of preference.
+ *
+ * STUN alone only discovers your public address; it cannot get packets
+ * through a symmetric NAT or CGNAT, which is what most mobile networks
+ * and plenty of campus/corporate ones use. That is the whole explanation
+ * for the long-standing "video works when we're on the same Wi-Fi and
+ * fails when we're not" report: both peers behind permissive NATs
+ * connect directly, and one restrictive NAT on either side kills it.
+ * A TURN server relays the media in exactly that case.
+ *
+ * Three sources, tried in order:
+ *  1. /api/turn-credentials — short-lived credentials minted by this
+ *     deployment's own Worker (worker/index.ts). Preferred, because the
+ *     Cloudflare API token stays server-side and the credential expires.
+ *  2. VITE_SEIZA_TURN_* — a static TURN server baked in at build time.
+ *     Kept for deployments already using it, but note it is compiled
+ *     into the client bundle, so the credential is public.
+ *  3. STUN only — the default, and fine for most pairs.
+ */
+const STUN_ONLY: RTCIceServer[] = [{ urls: "stun:stun.cloudflare.com:3478" }];
+
+function buildStaticIceServers(): RTCIceServer[] {
+  const servers: RTCIceServer[] = [...STUN_ONLY];
   const turnUrls = import.meta.env.VITE_SEIZA_TURN_URLS as string | undefined;
   if (turnUrls) {
     servers.push({
@@ -54,6 +93,30 @@ function buildIceServers(): RTCIceServer[] {
     });
   }
   return servers;
+}
+
+/** Shape of the Worker's /api/turn-credentials response. */
+interface IceServerResponse {
+  iceServers?: RTCIceServer | RTCIceServer[];
+}
+
+async function fetchIceServers(signal: AbortSignal): Promise<RTCIceServer[] | null> {
+  try {
+    const response = await fetch("/api/turn-credentials", { signal });
+    // 404 is the documented "this deployment has no TURN key" answer,
+    // not a failure worth logging.
+    if (!response.ok) return null;
+    const body = (await response.json()) as IceServerResponse;
+    // Cloudflare returns a single object; the spec-shaped answer is an
+    // array. Accept either.
+    const list = Array.isArray(body.iceServers) ? body.iceServers : body.iceServers ? [body.iceServers] : [];
+    if (list.length === 0) return null;
+    // Keep STUN in the list: TURN relaying costs bandwidth, so a direct
+    // path should still win when one exists.
+    return [...STUN_ONLY, ...list];
+  } catch {
+    return null;
+  }
 }
 
 interface RemoteAudio {
@@ -68,6 +131,14 @@ interface Peer {
   polite: boolean;
   makingOffer: boolean;
   ignoreOffer: boolean;
+  /** True once this connection has already been given one ICE restart
+   *  after failing, so a permanently unreachable peer is torn down
+   *  instead of retried forever. */
+  restartedIce: boolean;
+  /** True once getStats() has shown this connection going through a TURN
+   *  relay, which is the case the deployer pays for — see the relayed
+   *  bitrate ceilings above. */
+  relayed: boolean;
   streams: Map<string, MediaStream>;
   audio: Map<string, RemoteAudio>;
   /** Candidates that arrived before the remote description did. Adding one
@@ -83,6 +154,8 @@ export interface RealtimeMediaState {
   devices: MediaDeviceInfo[];
   selectedDeviceId: string | null;
   speakingLevels: Record<string, number>;
+  /** This client's own mic RMS, for driving your own avatar's lip sync. */
+  localSpeakingLevel: number;
   localSpeaking: boolean;
   cameraOn: boolean;
   screenOn: boolean;
@@ -124,12 +197,30 @@ interface UseRealtimeMediaArgs {
 const hasAnyMedia = (media: PlayerMedia | undefined) => !!(media && (media.mic || media.camera || media.screen));
 
 export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMediaArgs): RealtimeMediaState {
+  // Read synchronously by createPeer, so it has to be a ref rather than
+  // state: a peer connection is built the instant someone joins, which
+  // can easily be before the credential fetch resolves. It starts as
+  // STUN-only (always usable) and is upgraded in place when the answer
+  // arrives; peers created before that keep working, and the ICE restart
+  // in onconnectionstatechange picks the new list up if one of them
+  // actually fails.
+  const iceServersRef = useRef<RTCIceServer[]>(buildStaticIceServers());
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetchIceServers(controller.signal).then((servers) => {
+      if (servers) iceServersRef.current = servers;
+    });
+    return () => controller.abort();
+  }, []);
+
   const [micEnabled, setMicEnabled] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [muted, setMuted] = useState(false);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   const [speakingLevels, setSpeakingLevels] = useState<Record<string, number>>({});
+  const [localSpeakingLevel, setLocalSpeakingLevel] = useState(0);
   const [localSpeaking, setLocalSpeaking] = useState(false);
   const [cameraOn, setCameraOn] = useState(false);
   const [screenOn, setScreenOn] = useState(false);
@@ -176,18 +267,60 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
 
   /** Bitrate caps, applied once a sender exists for each video track. */
   const applySendCaps = useCallback((peer: Peer) => {
+    const relayed = peer.relayed;
     for (const sender of peer.connection.getSenders()) {
       if (!sender.track || sender.track.kind !== "video") continue;
       const isScreen = screenStreamRef.current?.getTracks().includes(sender.track) ?? false;
       const parameters = sender.getParameters();
       if (!parameters.encodings || parameters.encodings.length === 0) parameters.encodings = [{}];
-      parameters.encodings[0].maxBitrate = isScreen ? SCREEN_MAX_BITRATE : CAMERA_MAX_BITRATE;
+      parameters.encodings[0].maxBitrate = isScreen
+        ? (relayed ? RELAYED_SCREEN_MAX_BITRATE : SCREEN_MAX_BITRATE)
+        : (relayed ? RELAYED_CAMERA_MAX_BITRATE : CAMERA_MAX_BITRATE);
       sender.setParameters(parameters).catch(() => {
         // Not fatal: some browsers refuse mid-negotiation, and the stream
         // still works, just without our ceiling.
       });
     }
   }, []);
+
+  /**
+   * Asks the connection whether it ended up going through a TURN relay,
+   * and re-applies the send caps if so.
+   *
+   * There is no event for this and no way to know in advance: ICE picks
+   * the candidate pair itself, and only the selected pair says whether
+   * the local side is a relay candidate. So it is read once from
+   * getStats() on connect. A failure to read it leaves the direct caps
+   * in place, which is the right way to be wrong — it degrades the bill,
+   * never the call.
+   */
+  const checkRelayed = useCallback(
+    async (peer: Peer) => {
+      try {
+        const stats = await peer.connection.getStats();
+        let selectedPairId: string | undefined;
+        stats.forEach((report) => {
+          if (report.type === "transport" && report.selectedCandidatePairId) {
+            selectedPairId = report.selectedCandidatePairId as string;
+          }
+          // Firefox reports no transport.selectedCandidatePairId; it
+          // flags the pair itself instead.
+          if (report.type === "candidate-pair" && report.selected) selectedPairId = report.id;
+        });
+        if (!selectedPairId) return;
+        const pair = stats.get(selectedPairId) as { localCandidateId?: string } | undefined;
+        if (!pair?.localCandidateId) return;
+        const local = stats.get(pair.localCandidateId) as { candidateType?: string } | undefined;
+        const relayed = local?.candidateType === "relay";
+        if (relayed === peer.relayed) return;
+        peer.relayed = relayed;
+        applySendCaps(peer);
+      } catch {
+        // Stats are best-effort; keeping the direct caps is the safe miss.
+      }
+    },
+    [applySendCaps]
+  );
 
   const detachAudio = useCallback((peer: Peer, streamId: string) => {
     const audio = peer.audio.get(streamId);
@@ -246,7 +379,7 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
   const createPeer = useCallback(
     (peerId: string) => {
       if (peersRef.current.has(peerId)) return peersRef.current.get(peerId)!;
-      const connection = new RTCPeerConnection({ iceServers: buildIceServers() });
+      const connection = new RTCPeerConnection({ iceServers: iceServersRef.current });
       const peer: Peer = {
         connection,
         // Deterministic and opposite on the two sides, which is all the
@@ -254,6 +387,8 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
         polite: (selfIdRef.current ?? "") > peerId,
         makingOffer: false,
         ignoreOffer: false,
+        restartedIce: false,
+        relayed: false,
         streams: new Map(),
         audio: new Map(),
         pendingCandidates: [],
@@ -281,8 +416,30 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
       };
 
       connection.onconnectionstatechange = () => {
-        if (connection.connectionState === "connected") applySendCaps(peer);
-        if (connection.connectionState === "failed") closePeer(peerId);
+        if (connection.connectionState === "connected") {
+          applySendCaps(peer);
+          void checkRelayed(peer);
+          peer.restartedIce = false;
+          return;
+        }
+        if (connection.connectionState !== "failed") return;
+        // One ICE restart before giving up. By the time a connection
+        // fails the TURN credentials fetched on mount have almost
+        // certainly arrived, so the retry gathers candidates from a
+        // better list than the original attempt had — which is exactly
+        // the cross-network case. Only once: a restart loop against a
+        // genuinely unreachable peer just burns battery.
+        if (!peer.restartedIce) {
+          peer.restartedIce = true;
+          try {
+            connection.setConfiguration({ iceServers: iceServersRef.current });
+            connection.restartIce();
+            return;
+          } catch (err) {
+            console.warn("ICE restart failed:", err);
+          }
+        }
+        closePeer(peerId);
       };
 
       connection.ontrack = (event) => {
@@ -298,6 +455,11 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
         };
         event.track.addEventListener("ended", forget);
         stream.addEventListener("removetrack", forget);
+        // A received track arrives `muted` and only unmutes when its first
+        // frame does. Anything that resolved this stream in between saw a
+        // track carrying no picture yet, so nudge the consumers again —
+        // the other half of the black-screen fix in VideoPanel.tsx.
+        event.track.addEventListener("unmute", bumpStreams);
         bumpStreams();
       };
 
@@ -584,7 +746,16 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
   const updateSpatial = useCallback(
     (localPosition: [number, number, number]) => {
       if (peersRef.current.size === 0 && !localAnalyserRef.current) return;
-      if (localAnalyserRef.current) setLocalSpeaking(rmsLevel(localAnalyserRef.current) > 0.05);
+      if (localAnalyserRef.current) {
+        // Kept as a raw level as well as a boolean: the boolean drives
+        // the "you are talking" chrome, the level drives your own
+        // avatar's lip sync, and rounding it here rather than in the
+        // consumer keeps React from re-rendering on every imperceptible
+        // flicker of room tone.
+        const level = rmsLevel(localAnalyserRef.current);
+        setLocalSpeaking(level > 0.05);
+        setLocalSpeakingLevel((previous) => (Math.abs(previous - level) > 0.01 ? level : previous));
+      }
 
       const levels: Record<string, number> = {};
       for (const [peerId, peer] of peersRef.current.entries()) {
@@ -618,6 +789,7 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
     selectedDeviceId,
     speakingLevels,
     localSpeaking,
+    localSpeakingLevel,
     cameraOn,
     screenOn,
     error,

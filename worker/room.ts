@@ -66,6 +66,8 @@ const MAX_URL_LENGTH = 2000;
 // odd out of every other client's state.
 const GESTURE_NAME = /^[a-z0-9][a-z0-9_-]{0,31}$/;
 const GESTURE_MIN_INTERVAL_MS = 250;
+// Roughly 70 degrees each way — past this a neck stops being a neck.
+const MAX_HEAD_PITCH = 1.22;
 // Every avatar change makes everyone in the room download and build a
 // model, so rapid switching is throttled per connection.
 const AVATAR_CHANGE_MIN_INTERVAL_MS = 1500;
@@ -202,6 +204,7 @@ export class SeizaRoom extends DurableObject<Env> {
           avatarUrl,
           position: [0, 0, 0],
           rotationY: 0,
+          headPitch: 0,
           activeGesture: null,
           gestureSeq: 0,
           posture: null,
@@ -234,11 +237,20 @@ export class SeizaRoom extends DurableObject<Env> {
         if (!Array.isArray(message.position) || message.position.length !== 3) return;
         if (!message.position.every(isFiniteInBounds)) return;
         if (typeof message.rotationY !== "number" || !Number.isFinite(message.rotationY)) return;
+        // Optional and clamped rather than merely validated: this drives
+        // a neck rotation on every other client, and a value outside a
+        // neck's range would fold an avatar's head through its own body
+        // rather than just look wrong.
+        const headPitch =
+          typeof message.headPitch === "number" && Number.isFinite(message.headPitch)
+            ? Math.max(-MAX_HEAD_PITCH, Math.min(MAX_HEAD_PITCH, message.headPitch))
+            : 0;
         attachment.player.position = message.position;
         attachment.player.rotationY = message.rotationY;
+        attachment.player.headPitch = headPitch;
         ws.serializeAttachment(attachment);
         this.broadcast(
-          { type: "playerUpdated", id: attachment.connId, position: message.position, rotationY: message.rotationY },
+          { type: "playerUpdated", id: attachment.connId, position: message.position, rotationY: message.rotationY, headPitch },
           attachment.connId
         );
         break;
@@ -386,9 +398,18 @@ export class SeizaRoom extends DurableObject<Env> {
         break;
       }
       case "objectSetText": {
-        // Writing on a board is an edit, so it follows the same permission
-        // rule as placing one.
-        if (this.editingRequiresAuth() && !attachment.isEditor) return;
+        // Deliberately NOT editor-gated, on the same principle as
+        // objectPresent below: writing on a board that already exists is
+        // using the room, not restructuring it. Placing, moving, or
+        // deleting the board stays an edit; what gets written on it does
+        // not. A class where only the person holding the editor password
+        // can write on the notice board is a class with one participant.
+        //
+        // Everything below this line still applies to everyone, because
+        // none of it is a permission question: you must be a joined
+        // player, there's a per-connection rate limit, and the text is
+        // sanitized. An editor/admin can still delete a board outright,
+        // which is the moderation escape hatch for anything written on it.
         if (!attachment.player) return;
         const object = this.objects.get(message.id);
         if (!object || object.kind !== "text") return;
@@ -489,7 +510,7 @@ export class SeizaRoom extends DurableObject<Env> {
         break;
       }
       case "voiceSignal": {
-        // Pure relay for WebRTC mesh signaling — see src/voice/useVoiceChat.ts.
+        // Pure relay for WebRTC mesh signaling — see src/media/useRealtimeMedia.ts.
         // This server never looks at `data`, just forwards it to the named peer.
         const target = this.findConnection(message.to);
         target?.send(JSON.stringify({ type: "voiceSignal", from: attachment.connId, data: message.data } satisfies ServerMessage));

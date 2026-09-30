@@ -41,6 +41,14 @@ export interface AvatarSpec {
   height: number;
   /** Width of shoulders and limbs, 0.85–1.2. */
   build: number;
+  /** Shoulder width relative to build, 0.82–1.25. Separate from `build`
+   *  because a broad-shouldered slim figure and a narrow-shouldered
+   *  heavy one are different shapes, and one "thickness" slider can
+   *  only ever produce a tube. */
+  shoulders: number;
+  /** Waist width relative to build, 0.75–1.3. Below 1 this is what turns
+   *  the torso from a cylinder into a figure with a middle. */
+  waist: number;
 }
 
 export const SKIN_TONES = ["#f6d7c3", "#eec1a0", "#d9a07a", "#b87a55", "#8d5a3b", "#5e3b26"];
@@ -65,6 +73,8 @@ export const DEFAULT_AVATAR_SPEC: AvatarSpec = {
   accessoryColor: "#1f1f1f",
   height: 1,
   build: 1,
+  shoulders: 1,
+  waist: 0.9,
 };
 
 export interface AvatarDesignPreset {
@@ -202,6 +212,11 @@ export function sanitizeAvatarSpec(input: unknown): AvatarSpec {
     accessoryColor: color(raw.accessoryColor, d.accessoryColor),
     height: clamp(raw.height, 0.88, 1.12, d.height),
     build: clamp(raw.build, 0.85, 1.2, d.build),
+    // Both default to the spec default rather than to 1, so avatars
+    // encoded before these fields existed decode to the new, shaped
+    // proportions instead of to the old tube.
+    shoulders: clamp(raw.shoulders, 0.82, 1.25, d.shoulders),
+    waist: clamp(raw.waist, 0.75, 1.3, d.waist),
   };
 }
 
@@ -222,7 +237,14 @@ function fromBase64Url(text: string): string {
 export function encodeAvatarSpec(spec: AvatarSpec): string {
   const clean = sanitizeAvatarSpec(spec);
   // Two decimals is plenty for sliders and keeps the payload short.
-  const compact = { ...clean, height: Math.round(clean.height * 100) / 100, build: Math.round(clean.build * 100) / 100 };
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const compact = {
+    ...clean,
+    height: round2(clean.height),
+    build: round2(clean.build),
+    shoulders: round2(clean.shoulders),
+    waist: round2(clean.waist),
+  };
   return DESIGNER_AVATAR_PREFIX + toBase64Url(JSON.stringify(compact));
 }
 
@@ -257,5 +279,7 @@ export function randomAvatarSpec(): AvatarSpec {
     accessoryColor: any(CLOTHING_COLORS),
     height: 0.92 + Math.random() * 0.16,
     build: 0.88 + Math.random() * 0.24,
+    shoulders: 0.86 + Math.random() * 0.34,
+    waist: 0.78 + Math.random() * 0.4,
   });
 }

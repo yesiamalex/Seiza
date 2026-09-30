@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
+import { useFacialExpressions } from "./useFacialExpressions";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import {
@@ -177,6 +178,8 @@ interface AnimatorState {
   groundWeight: number;
   /** Metres the avatar is currently sunk (negative) or lifted to meet it. */
   groundOffset: number;
+  /** Smoothed gaze angle, eased toward the networked headPitch. */
+  headPitch: number;
   /** Rest hips height, so contact clearances scale with the body. */
   scale: number;
 }
@@ -246,6 +249,18 @@ export interface AvatarAnimatorProps {
   posture?: GestureDefinition | null;
   /** Inspection mode for the avatar preview: hold the T-pose. */
   holdTPose?: boolean;
+  /** Overrides the face that would otherwise come from the active
+   *  gesture or posture. Used by the designer, where the point is to look
+   *  at an expression directly rather than wait for a gesture to use it. */
+  expression?: string | null;
+  /** Current mic RMS for whoever owns this avatar (see
+   *  useRealtimeMedia's speakingLevels). Drives lip sync; 0 or omitted
+   *  leaves the mouth closed. */
+  speakingLevel?: number;
+  /** Where this player is looking vertically, in radians (see headPitch
+   *  in multiplayer/types.ts). Applied to the neck and head so other
+   *  people can tell what someone is looking at. 0 is level. */
+  headPitch?: number;
 }
 
 function splitClip(clip: THREE.AnimationClip, vrm: VRM) {
@@ -269,6 +284,11 @@ function splitClip(clip: THREE.AnimationClip, vrm: VRM) {
 const approach = (current: number, target: number, rate: number, delta: number) =>
   current + (target - current) * (1 - Math.exp(-rate * delta));
 
+/** How fast the head eases toward a newly received gaze angle. */
+const HEAD_PITCH_RATE = 9;
+/** Fraction of the total bend taken by the neck; the head takes the rest. */
+const NECK_PITCH_SHARE = 0.45;
+
 export function AvatarAnimator({
   vrm,
   getPosition,
@@ -277,12 +297,21 @@ export function AvatarAnimator({
   onGestureEnd,
   posture = null,
   holdTPose = false,
+  expression,
+  speakingLevel = 0,
+  headPitch = 0,
 }: AvatarAnimatorProps) {
+  // A played gesture's face outranks a held posture's, so waving while
+  // seated shows the wave. An explicit `expression` prop outranks both.
+  const activeExpression = expression !== undefined ? expression : (gesture?.expression ?? posture?.expression ?? null);
+  useFacialExpressions(vrm, activeExpression, speakingLevel);
   const stateRef = useRef<AnimatorState | null>(null);
   const getPositionRef = useRef(getPosition);
   getPositionRef.current = getPosition;
   const onGestureEndRef = useRef(onGestureEnd);
   onGestureEndRef.current = onGestureEnd;
+  const headPitchRef = useRef(headPitch);
+  headPitchRef.current = headPitch;
 
   // Per-avatar setup: mixer now, locomotion clips as soon as they load.
   useEffect(() => {
@@ -306,6 +335,7 @@ export function AvatarAnimator({
       groundMode: "none",
       groundWeight: 0,
       groundOffset: 0,
+      headPitch: 0,
       scale: measureRestScale(vrm),
     };
     stateRef.current = state;
@@ -717,6 +747,26 @@ export function AvatarAnimator({
     // The renderer refreshes world matrices from here on its own; writing the
     // local position is enough.
     vrm.scene.position.y = state.groundOffset;
+
+    // --- head gaze -----------------------------------------------------
+    // Applied last, on top of whatever the clips just wrote, so looking
+    // around composes with an animation instead of fighting it. Added to
+    // the bone's current rotation rather than assigned, for the same
+    // reason.
+    //
+    // Split across the neck and head so the bend is distributed the way
+    // a real one is; putting it all on the head snaps the chin to the
+    // chest. Smoothed because the source is a 5Hz network tick, and
+    // stepping straight to each new value visibly ratchets.
+    state.headPitch = approach(state.headPitch, headPitchRef.current, HEAD_PITCH_RATE, delta);
+    if (Math.abs(state.headPitch) > 1e-4) {
+      const neck = vrm.humanoid.getNormalizedBoneNode("neck");
+      const head = vrm.humanoid.getNormalizedBoneNode("head");
+      // Negated: a VRM faces +Z in its own space, so a positive camera
+      // pitch (looking up) is a negative rotation about X here.
+      if (neck) neck.rotation.x -= state.headPitch * NECK_PITCH_SHARE;
+      if (head) head.rotation.x -= state.headPitch * (1 - NECK_PITCH_SHARE);
+    }
   }, -1);
 
   return null;

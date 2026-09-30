@@ -15,6 +15,7 @@ import {
   type HairStyle,
   type TopStyle,
 } from "./avatarSpec";
+import { FACE_EXPRESSIONS } from "../gestures";
 import { AvatarPreview } from "../../ui/AvatarPreview";
 import { ACCENT_COLOR, panelStyle, pillButtonStyle, primaryButtonStyle } from "../../ui/styles";
 
@@ -74,6 +75,13 @@ export function AvatarDesignerControls({ value, onChange }: { value: AvatarSpec;
       <Section title="Body">
         <Slider label="Height" min={0.88} max={1.12} value={value.height} onChange={(v) => set("height", v)} />
         <Slider label="Build" min={0.85} max={1.2} value={value.build} onChange={(v) => set("build", v)} />
+        {/* Shoulders and waist are separate from Build on purpose: one
+            "thickness" control can only scale the whole torso at once,
+            which is what made these figures read as tubes. These two are
+            also what let a body be shaped without picking from a short
+            list of gendered presets. */}
+        <Slider label="Shoulders" min={0.82} max={1.25} value={value.shoulders} onChange={(v) => set("shoulders", v)} />
+        <Slider label="Waist" min={0.75} max={1.3} value={value.waist} onChange={(v) => set("waist", v)} />
       </Section>
 
       <Section title="Hair">
@@ -141,6 +149,7 @@ export function AvatarDesignerDialog({
   // responsive and catch the preview up a beat later.
   const deferred = useDeferredValue(spec);
   const previewUrl = useMemo(() => encodeAvatarSpec(deferred), [deferred]);
+  const [tryExpression, setTryExpression] = useState<string | null>(null);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -157,8 +166,30 @@ export function AvatarDesignerDialog({
     <div className="seiza-designer-backdrop" role="dialog" aria-modal="true" aria-label="Avatar designer">
       <style>{DESIGNER_CSS}</style>
       <div className="seiza-designer-dialog" style={panelStyle}>
-        <div className="seiza-designer-preview">
-          <AvatarPreview url={previewUrl} height="100%" />
+        <div className="seiza-designer-preview" style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 0 }}>
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <AvatarPreview url={previewUrl} height="100%" expression={tryExpression} />
+          </div>
+          {/* Expressions are worth showing here rather than only in the
+              world: they are the main reason the face has structure at
+              all, and there is no other place to see one on demand. */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 5, alignItems: "center" }}>
+            <small style={{ opacity: 0.6, marginRight: 2 }}>Try a face:</small>
+            {FACE_EXPRESSIONS.map((name) => {
+              const active = tryExpression === name || (name === "neutral" && tryExpression === null);
+              return (
+                <button
+                  key={name}
+                  type="button"
+                  aria-pressed={active}
+                  style={chipStyle(active)}
+                  onClick={() => setTryExpression(name === "neutral" ? null : name)}
+                >
+                  {name}
+                </button>
+              );
+            })}
+          </div>
         </div>
         <div className="seiza-designer-side">
           <div className="seiza-designer-header">
