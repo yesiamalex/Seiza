@@ -412,18 +412,31 @@ function GardenDoor({ m }: { m: WorldMaterials }) {
   );
 }
 
-/** Panel width/height shared between ClassroomDoor's two sliding leaves
- *  and its fixed transom above them. DOOR_INSET keeps every part of the
- *  assembly — track, rail, and panels — safely inside the wall opening's
- *  actual bounds rather than flush with (or, as the track/rail
- *  previously were, wider than) it: with zero margin, the frame's own
- *  thickness has nowhere to go but into the solid wall on either side of
- *  the gap, which is what read as the door "overlapping weird" with the
- *  locker wall next to it. */
-const DOOR_INSET = 0.18;
-const SHOJI_OPENING_HALF_WIDTH = DOOR_HALF_WIDTH - DOOR_INSET;
-const SHOJI_PANEL_WIDTH = SHOJI_OPENING_HALF_WIDTH - 0.05;
+/**
+ * Geometry for ClassroomDoor's two sliding leaves.
+ *
+ * The leaves ride on the classroom-side face of the wall instead of inside
+ * an inset opening. The inset version left a strip of open doorway on
+ * each side of the closed door, and leaves sitting just in front of the
+ * wall can slide fully clear of the opening when open, the way a real
+ * shoji runs along the wall beside it.
+ *
+ * Each leaf is a little wider than half the opening: the two overlap at
+ * the centre on separate tracks, as real shoji do, and each tucks a few
+ * centimetres past the wall edge on its own side, so a closed door leaves
+ * no light gaps anywhere.
+ */
+const SHOJI_HALF_OPENING = DOOR_HALF_WIDTH;
+const SHOJI_EDGE_TUCK = 0.05;
+const SHOJI_CENTER_OVERLAP = 0.04;
+const SHOJI_PANEL_WIDTH = SHOJI_HALF_OPENING + SHOJI_EDGE_TUCK + SHOJI_CENTER_OVERLAP;
 const SHOJI_PANEL_HEIGHT = 2.4;
+const SHOJI_PANEL_DEPTH = 0.05;
+/** Distance between the two tracks, so the overlapping leaves never z-fight. */
+const SHOJI_TRACK_SPACING = 0.065;
+/** Plane of the door: just off the classroom face of the wall, with room
+ *  for the back track's leaf (and the wall's own trim) behind it. */
+const SHOJI_DOOR_Z = CLASSROOM.maxZ - WALL_THICKNESS / 2 - 0.1;
 
 /**
  * A two-panel shoji-style sliding door at the corridor→classroom
@@ -439,17 +452,11 @@ function ClassroomDoor({ m }: { m: WorldMaterials }) {
   const [open, setOpen] = useState(false);
   const leftRef = useRef<THREE.Group>(null);
   const rightRef = useRef<THREE.Group>(null);
-  // Pulled slightly onto the classroom's own side of the wall plane —
-  // the same reason GardenDoor sits at `HALL.maxZ - 0.18` rather than
-  // exactly on `HALL.maxZ`: a door with real thickness (frame, track,
-  // rail) sitting exactly *on* the wall plane it's cut into z-fights
-  // and visually pokes through that wall's own front face.
-  const doorZ = CLASSROOM.maxZ - DOOR_INSET;
-  // Each panel's resting (closed) offset from center, and how far it
-  // slides outward — into the (now inset) wall pocket on its side,
-  // never past DOOR_HALF_WIDTH into the solid wall itself.
-  const closedOffset = SHOJI_PANEL_WIDTH / 2 + 0.05;
-  const openOffset = SHOJI_OPENING_HALF_WIDTH + SHOJI_PANEL_WIDTH / 2 + 0.04 - DOOR_INSET;
+  // Each leaf's centre (absolute x, mirrored for the left leaf). Closed:
+  // outer edge tucked past the wall edge, inner edge past the centre line.
+  // Open: inner edge just behind the wall edge, so the doorway is clear.
+  const closedX = SHOJI_HALF_OPENING + SHOJI_EDGE_TUCK - SHOJI_PANEL_WIDTH / 2;
+  const openX = SHOJI_HALF_OPENING - SHOJI_CENTER_OVERLAP + SHOJI_PANEL_WIDTH / 2;
 
   // See the identical effect on GardenDoor above for why this exists: a
   // remounted door (e.g. after an editor environment swap) should never
@@ -461,7 +468,11 @@ function ClassroomDoor({ m }: { m: WorldMaterials }) {
 
   useFrame((_, delta) => {
     const amount = 1 - Math.exp(-7 * Math.min(delta, 0.05));
-    const target = open ? openOffset - closedOffset : 0;
+    // Absolute targets. This used to lerp toward an *offset* (0 when
+    // closed) as if it were relative to each leaf's starting x, which
+    // slid both closed leaves onto x = 0: overlapping in the middle with
+    // the sides of the doorway left open.
+    const target = open ? openX : closedX;
     if (leftRef.current) leftRef.current.position.x += (-target - leftRef.current.position.x) * amount;
     if (rightRef.current) rightRef.current.position.x += (target - rightRef.current.position.x) * amount;
   });
@@ -478,46 +489,54 @@ function ClassroomDoor({ m }: { m: WorldMaterials }) {
     });
   };
 
+  // Track and rail span the leaves' whole travel, along the wall face.
+  const travelHalf = openX + SHOJI_PANEL_WIDTH / 2;
+
   return (
     <group>
-      {/* Floor track and header rail — sized to the *inset* opening, not
-          the raw wall gap, so neither pokes into the solid wall either
-          side (see DOOR_INSET's doc comment above). */}
-      <mesh position={[0, 0.02, doorZ]} material={m.trim} receiveShadow>
-        <boxGeometry args={[SHOJI_OPENING_HALF_WIDTH * 2, 0.04, 0.14]} />
+      <mesh position={[0, 0.02, SHOJI_DOOR_Z]} material={m.trim} receiveShadow>
+        <boxGeometry args={[travelHalf * 2, 0.04, SHOJI_TRACK_SPACING + SHOJI_PANEL_DEPTH + 0.04]} />
       </mesh>
-      <mesh position={[0, SHOJI_PANEL_HEIGHT + 0.06, doorZ]} material={m.trim} castShadow>
-        <boxGeometry args={[SHOJI_OPENING_HALF_WIDTH * 2, 0.12, 0.16]} />
+      <mesh position={[0, SHOJI_PANEL_HEIGHT + 0.06, SHOJI_DOOR_Z]} material={m.trim} castShadow>
+        <boxGeometry args={[travelHalf * 2, 0.12, SHOJI_TRACK_SPACING + SHOJI_PANEL_DEPTH + 0.06]} />
       </mesh>
       {/* Fixed transom filling the rest of the wall opening above the
-          panels, so the doorway isn't an empty hole up to the ceiling. */}
-      <mesh position={[0, (SHOJI_PANEL_HEIGHT + 0.12 + CLASSROOM_WALL_HEIGHT) / 2, doorZ]} material={m.paper}>
-        <planeGeometry args={[SHOJI_OPENING_HALF_WIDTH * 2 - 0.1, Math.max(0.2, CLASSROOM_WALL_HEIGHT - SHOJI_PANEL_HEIGHT - 0.16)]} />
+          rail, so the doorway isn't an empty hole up to the ceiling. */}
+      <mesh position={[0, (SHOJI_PANEL_HEIGHT + 0.12 + CLASSROOM_WALL_HEIGHT) / 2, SHOJI_DOOR_Z + 0.02]} material={m.paper}>
+        <boxGeometry args={[SHOJI_HALF_OPENING * 2 + 0.1, Math.max(0.2, CLASSROOM_WALL_HEIGHT - SHOJI_PANEL_HEIGHT - 0.12), 0.04]} />
       </mesh>
 
       {[
-        { groupRef: leftRef, baseX: -closedOffset },
-        { groupRef: rightRef, baseX: closedOffset },
-      ].map(({ groupRef, baseX }, i) => (
-        <group key={i} ref={groupRef} position={[baseX, 0, doorZ]}>
+        { groupRef: leftRef, x: -closedX, z: SHOJI_DOOR_Z + SHOJI_TRACK_SPACING / 2 },
+        { groupRef: rightRef, x: closedX, z: SHOJI_DOOR_Z - SHOJI_TRACK_SPACING / 2 },
+      ].map(({ groupRef, x, z }, i) => (
+        <group key={i} ref={groupRef} position={[x, 0, z]}>
           {/* Outer frame (kamachi) — also the click target, same as GardenDoor's leaves. */}
           <mesh position={[0, SHOJI_PANEL_HEIGHT / 2, 0]} material={m.trim} castShadow onClick={toggle}>
-            <boxGeometry args={[SHOJI_PANEL_WIDTH, SHOJI_PANEL_HEIGHT, 0.06]} />
+            <boxGeometry args={[SHOJI_PANEL_WIDTH, SHOJI_PANEL_HEIGHT, SHOJI_PANEL_DEPTH]} />
           </mesh>
-          {/* Washi paper inset. */}
-          <mesh position={[0, SHOJI_PANEL_HEIGHT / 2, 0.032]} material={m.paper} onClick={toggle}>
-            <planeGeometry args={[SHOJI_PANEL_WIDTH - 0.1, SHOJI_PANEL_HEIGHT - 0.1]} />
-          </mesh>
+          {/* Washi paper inset, on both faces so it reads from either room. */}
+          {[1, -1].map((face) => (
+            <mesh
+              key={`paper-${face}`}
+              position={[0, SHOJI_PANEL_HEIGHT / 2, face * (SHOJI_PANEL_DEPTH / 2 + 0.002)]}
+              rotation={[0, face > 0 ? 0 : Math.PI, 0]}
+              material={m.paper}
+              onClick={toggle}
+            >
+              <planeGeometry args={[SHOJI_PANEL_WIDTH - 0.1, SHOJI_PANEL_HEIGHT - 0.1]} />
+            </mesh>
+          ))}
           {/* Kumiko lattice: a few thin wood strips over the paper — enough
               to read as shoji at a glance without modeling every muntin. */}
           {[0.32, 0.56, 0.8].map((t) => (
-            <mesh key={`h-${t}`} position={[0, SHOJI_PANEL_HEIGHT * t, 0.045]} material={m.trim}>
-              <boxGeometry args={[SHOJI_PANEL_WIDTH - 0.1, 0.025, 0.014]} />
+            <mesh key={`h-${t}`} position={[0, SHOJI_PANEL_HEIGHT * t, 0]} material={m.trim}>
+              <boxGeometry args={[SHOJI_PANEL_WIDTH - 0.1, 0.025, SHOJI_PANEL_DEPTH + 0.03]} />
             </mesh>
           ))}
-          {[-0.26, 0, 0.26].map((x) => (
-            <mesh key={`v-${x}`} position={[x, SHOJI_PANEL_HEIGHT / 2, 0.045]} material={m.trim}>
-              <boxGeometry args={[0.025, SHOJI_PANEL_HEIGHT - 0.1, 0.014]} />
+          {[-1 / 3, 0, 1 / 3].map((t) => (
+            <mesh key={`v-${t}`} position={[t * (SHOJI_PANEL_WIDTH - 0.1) * 0.75, SHOJI_PANEL_HEIGHT / 2, 0]} material={m.trim}>
+              <boxGeometry args={[0.025, SHOJI_PANEL_HEIGHT - 0.1, SHOJI_PANEL_DEPTH + 0.03]} />
             </mesh>
           ))}
         </group>

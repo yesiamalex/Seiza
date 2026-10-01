@@ -1,8 +1,9 @@
 import * as THREE from "three";
-import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { VRM, VRMHumanoid, type VRM1Meta, type VRMHumanBoneName, type VRMHumanBones } from "@pixiv/three-vrm";
 import type { AvatarSpec } from "./avatarSpec";
 import { buildDesignerExpressions, type DesignerFaceParts } from "./designerExpressions";
+import { chainWeights, sampleProfile, sweepGeometry, type ProfileKey } from "./designerBody";
+import { decalMaterial, faceDecalGeometry, paintBlush, paintBrow, paintEye, paintMouth, raycastFaceSurface, sculptedHeadGeometry } from "./designerFace";
 
 /**
  * Builds a real three-vrm `VRM` object from an AvatarSpec, entirely in code.
@@ -16,10 +17,12 @@ import { buildDesignerExpressions, type DesignerFaceParts } from "./designerExpr
  * - Authored in VRM 1.0 space (faces +Z, character's left is +X) and marked
  *   `metaVersion: "1"`, so VrmAvatar.tsx orients it exactly like an uploaded
  *   VRM 1.0 file.
- * - Rigid skinning: each body part is an ordinary mesh parented to its bone
- *   instead of a weighted SkinnedMesh. Joint spheres cover the seams. This is
- *   the stylized-figure look (think wooden mannequin / Mii), and it removes
- *   every weight-painting failure mode.
+ * - The torso, arms and legs are smoothly skinned surfaces swept along the
+ *   bones (designerBody.ts), so knees, elbows, hips and shoulders bend as
+ *   one surface instead of as separate parts meeting at a bead. Head, hands,
+ *   feet, hair and accessories are rigid on their bone, which is what those
+ *   parts are on a real skinned avatar too.
+ * - The face is painted (designerFace.ts), not assembled from beads.
  * - No spring bones, so nothing on a designed avatar can flail.
  */
 
@@ -79,6 +82,9 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
   };
   const skin = mat(spec.skin, 0.55);
   const hair = mat(spec.hairColor, 0.7);
+  // Hair is built from open shells (caps cut off above the face), whose
+  // inside faces would otherwise vanish and leave hairline slivers.
+  hair.side = THREE.DoubleSide;
   const top = mat(spec.topColor);
   const bottom = mat(spec.bottomColor);
   const shoe = mat(spec.shoeColor, 0.5);
@@ -88,9 +94,13 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
 
   // ---- bones --------------------------------------------------------------
   const defs = skeleton(b);
-  const bones = new Map<VRMHumanBoneName, THREE.Object3D>();
+  const bones = new Map<VRMHumanBoneName, THREE.Bone>();
+  const boneList: THREE.Bone[] = [];
+  const boneIndex = {} as Record<VRMHumanBoneName, number>;
   for (const def of defs) {
-    const bone = new THREE.Object3D();
+    const bone = new THREE.Bone();
+    boneIndex[def.name] = boneList.length;
+    boneList.push(bone);
     bone.name = `SeizaDesigner_${def.name}`;
     const parentDef = def.parent ? defs.find((d) => d.name === def.parent)! : null;
     const origin = parentDef ? parentDef.at : ([0, 0, 0] as Vec3);
@@ -121,84 +131,114 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
   const cap = (r: number, thetaLength: number) => new THREE.SphereGeometry(r, 24, 12, 0, Math.PI * 2, 0, thetaLength);
   const HALF_PI = Math.PI / 2;
 
-  /**
-   * A limb segment that is thicker at one end than the other.
-   *
-   * This exists because uniform capsules are what made these avatars look
-   * like sausages: a real upper arm is noticeably wider at the shoulder
-   * than at the elbow, a thigh more so at the hip than at the knee, and
-   * with a constant radius the eye reads the whole limb as one extruded
-   * tube. The cylinder carries the taper and a sphere at each end caps it
-   * at the matching radius, so the joint spheres this rig already relies
-   * on still cover the seams.
-   *
-   * Built pointing down -Y (a limb hanging from its joint); callers
-   * rotate it into place exactly as they did the capsules.
-   */
-  const taperedLimb = (rTop: number, rBottom: number, length: number): THREE.BufferGeometry => {
-    const parts: THREE.BufferGeometry[] = [];
-    const shaft = new THREE.CylinderGeometry(rTop, rBottom, length, 14, 1, true);
-    parts.push(shaft);
-    const topCap = new THREE.SphereGeometry(rTop, 14, 8, 0, Math.PI * 2, 0, HALF_PI);
-    topCap.translate(0, length / 2, 0);
-    parts.push(topCap);
-    const bottomCap = new THREE.SphereGeometry(rBottom, 14, 8, 0, Math.PI * 2, HALF_PI, HALF_PI);
-    bottomCap.translate(0, -length / 2, 0);
-    parts.push(bottomCap);
-    return mergeGeometries(parts);
+  // ---- skinned body helpers ------------------------------------------------
+  const skinnedParts: THREE.SkinnedMesh[] = [];
+  const body = (geometry: THREE.BufferGeometry, material: THREE.Material) => {
+    const mesh = new THREE.SkinnedMesh(geometry, material);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    // Skinned meshes keep their rest-pose bounds; never cull a moving body.
+    mesh.frustumCulled = false;
+    scene.add(mesh);
+    skinnedParts.push(mesh);
   };
 
   // ---- torso ----------------------------------------------------------------
-  // The torso is where "chorizo" was decided. Previously hips, spine and
-  // chest were all within a few percent of the same width, which is the
-  // definition of a tube. Now the spine is explicitly the narrow point
-  // (spec.waist) and the shoulders explicitly the wide one
-  // (spec.shoulders), so the silhouette has a middle.
+  // One surface from the crotch to the top of the neck, weighted up the
+  // spine. Its cross-section is wide and shallow, slightly squared off
+  // (see `exponent`), and changes along its length: hips, a waist, the
+  // ribcage, sloping shoulders, then the neck. That silhouette is the
+  // difference between a figure and a stack of tubes.
   const waist = spec.waist;
   const shoulderSpread = spec.shoulders;
   const dress = spec.top === "dress";
+  const W = (x: number) => x * b; // widths follow build
+  const torsoKeys: ProfileKey[] = [
+    // The pelvis closes just below the hip joints, narrow enough that the
+    // thighs (which start inside it) form the crotch. A wide, low pelvis
+    // bulged down between the legs as a separate seat shape.
+    { s: 0.82, a: W(0.02), b: 0.02, c: -0.01 },
+    { s: 0.845, a: W(0.1), b: 0.078, c: -0.01 },
+    { s: 0.875, a: W(0.156), b: 0.102, c: -0.012 },
+    { s: 0.93, a: W(0.158), b: 0.104, c: -0.01 },
+    { s: 1.0, a: W(0.145 * (0.55 + 0.5 * waist)), b: 0.094, c: -0.004 },
+    { s: 1.06, a: W(0.14 * (0.5 + 0.55 * waist)), b: 0.092, c: 0.0 },
+    { s: 1.13, a: W(0.148), b: 0.1, c: 0.006 },
+    { s: 1.21, a: W(0.158 * (0.6 + 0.4 * shoulderSpread)), b: 0.106, c: 0.008 },
+    { s: 1.29, a: W(0.168 * shoulderSpread), b: 0.1, c: 0.002 },
+    { s: 1.345, a: W(0.158 * shoulderSpread), b: 0.084, c: -0.006 },
+    { s: 1.385, a: W(0.1 * shoulderSpread), b: 0.064, c: -0.01 },
+    { s: 1.415, a: 0.05, b: 0.05, c: -0.006 },
+    { s: 1.49, a: 0.043, b: 0.045, c: 0.0 },
+    { s: 1.57, a: 0.038, b: 0.04, c: 0.004 },
+  ];
+  const torsoWeights = chainWeights(
+    [boneIndex.hips, boneIndex.spine, boneIndex.chest, boneIndex.upperChest, boneIndex.neck, boneIndex.head],
+    [
+      [0.975, 0.045],
+      [1.09, 0.045],
+      [1.215, 0.045],
+      [1.405, 0.025],
+      [1.51, 0.02],
+    ]
+  );
+  const torso = (from: number, to: number, material: THREE.Material, inflate = 1, pad = 0, capFrom = true, capTo = true) =>
+    body(
+      sweepGeometry({
+        keys: torsoKeys,
+        from,
+        to,
+        step: 0.012,
+        segments: 22,
+        exponent: 2.35,
+        inflate,
+        pad,
+        place: (y, u, v) => [u * h, y * h, v * h],
+        weights: torsoWeights,
+        capFrom,
+        capTo,
+      }),
+      material
+    );
+  /** Front surface of the torso at height y (pre-height), for things worn on it. */
+  const torsoFront = (y: number) => {
+    const { b: depth, c } = sampleProfile(torsoKeys, y);
+    return c + depth;
+  };
+
   const pelvisMat = dress ? top : bottom;
-  //
-  // The three segments are sized and placed to actually meet: the spine
-  // ends at exactly the radius the chest begins at, and their spans
-  // overlap by a centimetre. They also share one horizontal scale, so a
-  // radius written here means the same width in both. Getting any of
-  // that wrong leaves a visible ridge around the middle of every avatar,
-  // which is what a first pass at this produced.
-  const WAIST_RADIUS = 0.105 * waist;
-  const TORSO_SCALE: Vec3 = [1.1 * b, 1, 0.8];
-  add("hips", sphere(0.13), pelvisMat, [0, -0.01, 0], [0, 0, 0], [1.16 * b, 0.74, 0.84]);
-  // spine bone sits at y=1.02: this spans roughly 0.99 → 1.13.
-  add("spine", taperedLimb(WAIST_RADIUS, 0.125, 0.14), top, [0, 0.04, 0], [0, 0, 0], TORSO_SCALE);
-  // chest bone sits at y=1.15: this spans roughly 1.12 → 1.27.
-  add("chest", taperedLimb(0.142, WAIST_RADIUS, 0.15), top, [0, 0.045, 0], [0, 0, 0], TORSO_SCALE);
-  add("upperChest", sphere(0.12), top, [0, 0.055, 0], [0, 0, 0], [1.52 * b * shoulderSpread, 0.64, 0.82]);
-  // Deltoid caps, so the arms grow out of the shoulders instead of being
-  // stuck onto the side of a box.
-  for (const side of [1, -1]) {
-    add("upperChest", sphere(0.056 * b), dress ? skin : top, [0.15 * side * b * shoulderSpread, 0.03, 0], [0, 0, 0], [1, 0.95, 1]);
-  }
-  add("neck", new THREE.CylinderGeometry(0.04, 0.05, 0.11, 14), skin, [0, 0.03, 0]);
+  const necklineY = spec.top === "tshirt" || dress ? 1.375 : 1.4;
+  // Skin for the neck and collar. Clothing is the same sweep inflated a
+  // few millimetres, with the same weights, so it follows every bend
+  // exactly instead of being a separate shell that drifts.
+  torso(necklineY - 0.03, 1.57, skin, 1, 0, true, true);
+  torso(0.82, necklineY, top, 1.0, 0.004, true, false);
+  // Waistband and seat, slightly outside the top's hem so the hem tucks
+  // under it instead of flickering against it.
+  if (!dress) torso(0.82, 0.985, pelvisMat, 1.0, 0.007, true, false);
 
   if (spec.top === "blazer") {
     // Shirt placket and optional tie over the jacket front.
-    add("chest", new THREE.BoxGeometry(0.07, 0.2, 0.01), white, [0, 0.1, 0.108]);
-    add("upperChest", new THREE.CylinderGeometry(0.05, 0.001, 0.09, 3), white, [0, 0.07, 0.092], [0, 0, Math.PI], [1, 1, 0.25]);
+    // Shirt front: a tapering V down from the collar, not a flat panel.
+    add("chest", new THREE.CylinderGeometry(0.045, 0.004, 0.17, 3), white, [0, 0.1, torsoFront(1.25) - 0.004], [-0.08, 0, 0], [1, 1, 0.25]);
+    add("upperChest", new THREE.CylinderGeometry(0.05, 0.001, 0.09, 3), white, [0, 0.07, torsoFront(1.34) + 0.004], [0, 0, Math.PI], [1, 1, 0.25]);
   }
   if (spec.accessories.includes("tie")) {
-    add("chest", new THREE.BoxGeometry(0.032, 0.17, 0.012), accessory, [0, 0.09, 0.118]);
-    add("upperChest", new THREE.BoxGeometry(0.04, 0.03, 0.014), accessory, [0, 0.085, 0.1]);
+    add("chest", new THREE.BoxGeometry(0.032, 0.17, 0.012), accessory, [0, 0.09, torsoFront(1.24) + 0.01], [-0.08, 0, 0]);
+    add("upperChest", new THREE.BoxGeometry(0.04, 0.03, 0.014), accessory, [0, 0.085, torsoFront(1.355) + 0.008]);
   }
   if (spec.top === "hoodie") {
-    add("upperChest", new THREE.TorusGeometry(0.1, 0.035, 10, 20, Math.PI), top, [0, 0.07, -0.07], [HALF_PI * 0.4, 0, 0], [1.1 * b, 1, 1]);
-    add("spine", new THREE.BoxGeometry(0.16, 0.06, 0.02), top, [0, 0.03, 0.098]);
+    add("upperChest", new THREE.TorusGeometry(0.1, 0.035, 10, 20, Math.PI), top, [0, 0.085, -0.075], [HALF_PI * 0.4, 0, 0], [1.1 * b, 1, 1]);
+    add("spine", new THREE.BoxGeometry(0.17, 0.07, 0.016), top, [0, 0.035, torsoFront(1.055) + 0.008]);
   }
 
   // Skirt / dress hem — rigid on the hips.
   if (spec.bottom === "skirt" || dress) {
     const length = dress ? 0.36 : 0.26;
-    add("hips", new THREE.CylinderGeometry(0.14 * b, 0.23 * b, length, 24, 1, true), dress ? top : bottom, [0, -length / 2 + 0.02, 0], [0, 0, 0], [1, 1, 0.82]);
-    add("hips", new THREE.CircleGeometry(0.14 * b, 20), dress ? top : bottom, [0, 0.02, 0], [-HALF_PI, 0, 0], [1, 1, 0.82]);
+    // Starts just above the hip line at the hips' own width, so it hangs
+    // from the waist instead of looking like a cone pushed onto it.
+    const skirt = new THREE.CylinderGeometry(0.165 * b, 0.25 * b, length, 28, 3, true);
+    add("hips", skirt, dress ? top : bottom, [0, -length / 2 + 0.035, -0.01], [0, 0, 0], [1, 1, 0.7]);
   }
 
   // ---- head and face --------------------------------------------------------
@@ -245,32 +285,21 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
     return group;
   };
 
-  // Cranium, then a jaw that is narrower and set slightly forward. Two
-  // overlapping masses instead of one sphere is what gives the profile a
-  // chin and the front view a taper.
-  face(sphere(0.125, 28, 20), skin, [0, 0, 0], [0, 0, 0], [0.98, 1.06, 1]);
-  face(sphere(0.098, 22, 16), skin, [0, -0.05, 0.012], [0, 0, 0], [0.92, 0.95, 1.0]);
-  face(sphere(0.07, 18, 14), skin, [0, -0.086, 0.028], [0, 0, 0], [0.8, 0.72, 0.95]);
+  // One sculpted head mesh (see sculptedHeadGeometry). Its surface, in
+  // the same pre-height units as everything placed with `face()`, is
+  // what the painted features are wrapped onto.
+  const headGeometry = sculptedHeadGeometry();
+  face(headGeometry, skin);
+  const headSurface = raycastFaceSurface(headGeometry);
+  // Nose: just a tip that catches a highlight and a short shadow. At this
+  // level of stylisation anything more reads as a caricature.
+  face(sphere(0.0055), skin, [0, -0.03, headSurface(0, -0.03) - 0.0015], [0, 0, 0], [1, 0.75, 1]);
 
-  // Brow ridge: a shallow swell across the top of the eye sockets, there
-  // to catch a shadow rather than to be seen. Kept just inside the skull
-  // surface at the brows' own X offset — pushed any further forward it
-  // becomes a shelf that visibly protrudes AND occludes the brows drawn
-  // on top of it, which is what a first pass did.
-  face(sphere(0.088), skin, [0, 0.043, 0.066], [0, 0, 0], [1.06, 0.3, 0.52]);
-
-  // Nose — a bridge running down from between the brows, then a small
-  // tip. Kept deliberately understated: at this level of stylisation a
-  // nose only has to catch a highlight and cast a short shadow, and
-  // anything larger immediately reads as a caricature.
-  face(taperedLimb(0.006, 0.0105, 0.046), skin, [0, 0.004, 0.111], [0.2, 0, 0], [1, 1, 0.7]);
-  face(sphere(0.0108), skin, [0, -0.026, 0.12], [0, 0, 0], [1, 0.82, 0.95]);
-  for (const side of [1, -1]) {
-    face(sphere(0.0052), skin, [0.0108 * side, -0.028, 0.1155], [0, 0, 0], [1, 0.82, 0.9]);
-  }
-
-  const eyeWhite = mat("#f7f5f2", 0.25);
-  const iris = mat(spec.eyeColor, 0.28);
+  // Painted features (designerFace.ts), each in the group the expression
+  // system animates. Eye and brow are painted once and mirrored.
+  const eyeMat = decalMaterial(paintEye(spec.eyeColor), 0.18);
+  const browMat = decalMaterial(paintBrow(spec.hairColor));
+  const blushMat = decalMaterial(paintBlush());
   const eyeGroups: Record<string, THREE.Group> = {};
   const browGroups: Record<string, THREE.Group> = {};
   for (const [side, key] of [
@@ -280,39 +309,32 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
     // Ear.
     face(sphere(0.028), skin, [0.122 * side, -0.005, -0.005], [0, 0, 0], [0.6, 1, 0.8]);
 
-    // Socket: a slightly darker recess the eyeball sits inside, so the
-    // eye has a rim around it instead of floating on the cheek.
-    face(sphere(0.032), mat(spec.skin, 0.8), [0.045 * side, 0.004, 0.096], [0, 0, 0], [1.05, 0.9, 0.35]);
-
-    const eye = facePart([0.045 * side, 0.004, 0.1]);
+    const eyeDecal = faceDecalGeometry(headSurface, 0.044 * side, -0.006, 0.058, 0.064, 0.0015, side < 0);
+    const eye = facePart(eyeDecal.origin);
     eye.name = key;
     eyeGroups[key] = eye;
-    face(sphere(0.025), eyeWhite, [0, 0, 0], [0, 0, 0], [1, 1.18, 0.5], eye);
-    face(sphere(0.0122), iris, [0, -0.001, 0.0125], [0, 0, 0], [1, 1.1, 0.5], eye);
-    face(sphere(0.0056), mat("#17151a", 0.2), [0, -0.001, 0.0175], [0, 0, 0], [1, 1.05, 0.4], eye);
-    face(sphere(0.0042), white, [0.005, 0.0075, 0.0205], [0, 0, 0], [1, 1, 0.5], eye);
-    // Upper lid, in skin tone: scaling the eye group down for a blink
-    // tucks the eyeball behind this rather than just shrinking it. It
-    // sits high and shallow — far enough down to define the top of the
-    // eye, not so far that the avatar looks half asleep.
-    face(sphere(0.0245), skin, [0, 0.0265, 0.002], [0, 0, 0], [1.04, 0.42, 0.5], eye);
+    face(eyeDecal.geometry, eyeMat, [0, 0, 0], [0, 0, 0], [1, 1, 1], eye);
 
+    // Kept below the bangs on every hair style, so the brows (which carry
+    // most of an expression) are never buried.
     const browKey = side > 0 ? "leftBrow" : "rightBrow";
-    // Low enough to clear the bangs on every hair style, which is where
-    // the first pass put them — invisible, on the avatars that had hair.
-    // z sits a hair proud of the skull surface at this x/y (~0.109), so
-    // the brow reads as drawn on the face instead of embedded in it.
-    const brow = facePart([0.046 * side, 0.0425, 0.1125]);
+    const browDecal = faceDecalGeometry(headSurface, 0.046 * side, 0.043, 0.056, 0.016, 0.002, side < 0);
+    const brow = facePart(browDecal.origin);
     brow.name = browKey;
     browGroups[browKey] = brow;
-    face(capsule(0.0055, 0.034), hair, [0, 0, 0], [0, 0, HALF_PI], [1, 1, 0.65], brow);
+    face(browDecal.geometry, browMat, [0, 0, 0], [0, 0, 0], [1, 1, 1], brow);
+
+    const blush = faceDecalGeometry(headSurface, 0.064 * side, -0.034, 0.05, 0.025, 0.001);
+    face(blush.geometry, blushMat, blush.origin);
   }
 
-  // Mouth: a shallow curve, grouped so expressions and visemes can
-  // stretch it. The rest pose is a near-neutral line.
-  const mouth = facePart([0, -0.054, 0.1105]);
+  // Mouth: painted open, then squashed to a soft closed line at rest.
+  // Visemes and expressions scale this group, which parts the lips.
+  const mouthDecal = faceDecalGeometry(headSurface, 0, -0.057, 0.036, 0.02, 0.0015);
+  const mouth = facePart(mouthDecal.origin);
   mouth.name = "mouth";
-  face(new THREE.TorusGeometry(0.0142, 0.0034, 8, 16, Math.PI), mat("#9b4a4a", 0.5), [0, 0, 0], [0, 0, Math.PI], [1, 1, 1], mouth);
+  mouth.scale.y = 0.42;
+  face(mouthDecal.geometry, decalMaterial(paintMouth()), [0, 0, 0], [0, 0, 0], [1, 1, 1], mouth);
 
   // ---- hair -----------------------------------------------------------------
   // thetaLength is how far down the skull the cap reaches, measured from
@@ -325,10 +347,32 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
   const hairTop = (radius: number, thetaLength: number) => add("head", cap(radius, thetaLength), hair, [0, headY + 0.008, -0.004], [0, 0, 0], [1, 1.07, 1.02]);
   const hairBack = (radius: number, thetaLength: number) =>
     add("head", cap(radius, thetaLength), hair, [0, headY + 0.008, -0.01], [-HALF_PI, 0, 0], [1, 1.02, 1.07]);
-  // Raised and shortened from the original: the old bangs reached down
-  // to exactly the brow line and hid the brows on every hair style that
-  // used them, which cost those avatars most of their expression range.
-  const bangs = () => add("head", sphere(0.1), hair, [0, headY + 0.097, 0.068], [0.35, 0, 0], [1.08, 0.3, 0.55]);
+  // A fringe of tapered locks across the forehead, the way anime-styled
+  // hair is shaped, instead of one flattened sphere (which read as a
+  // helmet brim). Each lock follows the curve of the forehead and leans
+  // slightly outward, and all of them stop above the brow line so the
+  // brows, which carry most of an expression, stay visible.
+  const bangs = () => {
+    const LOCKS = 9;
+    for (let i = 0; i < LOCKS; i++) {
+      const t = (i - (LOCKS - 1) / 2) / ((LOCKS - 1) / 2); // -1 … 1
+      const angle = t * 1.05;
+      // Alternating lengths, shorter toward the temples.
+      const length = 0.043 - Math.abs(t) * 0.008 + (i % 2) * 0.007;
+      const lock = new THREE.ConeGeometry(0.037, length, 10, 1);
+      lock.scale(1, 1, 0.45);
+      lock.rotateZ(Math.PI - t * 0.2);
+      lock.rotateX(-0.38);
+      lock.rotateY(angle);
+      // Rooted on the hairline edge of the cap (head-local y ≈ 0.075, where
+      // the cap is ~0.13 out from the centre) and hanging down over the
+      // forehead, ending above the brows.
+      const centerY = 0.095 - length / 2;
+      const radius = 0.122 + (0.075 - centerY) * 0.12;
+      add("head", lock, hair, [Math.sin(angle) * radius, headY + centerY, Math.cos(angle) * radius]);
+    }
+  };
+
 
   switch (spec.hairStyle) {
     case "buzz":
@@ -385,43 +429,133 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
   }
 
   // ---- arms -------------------------------------------------------------------
+  // Shoulder to wrist as one skinned surface, starting inside the torso so
+  // the shoulder is a continuous curve (a deltoid, not a ball joint).
+  // Sleeves are the same sweep, slightly inflated, over the part they cover.
   const longSleeves = spec.top === "longsleeve" || spec.top === "hoodie" || spec.top === "blazer";
-  const upperArmMat = spec.top === "dress" ? skin : top;
-  const lowerArmMat = longSleeves ? top : skin;
+  const sleeveLength = longSleeves ? 0.478 : spec.top === "tshirt" ? 0.13 : 0;
+  const shoulderX = 0.165 * b;
+  const armKeys: ProfileKey[] = [
+    { s: shoulderX - 0.07, a: W(0.05), b: W(0.05) },
+    { s: shoulderX, a: W(0.053), b: W(0.056) },
+    { s: shoulderX + 0.05, a: W(0.047), b: W(0.047) },
+    { s: shoulderX + 0.14, a: W(0.04), b: W(0.039) },
+    { s: shoulderX + 0.235, a: W(0.032), b: W(0.034) },
+    { s: shoulderX + 0.275, a: W(0.034), b: W(0.037) },
+    { s: shoulderX + 0.34, a: W(0.03), b: W(0.032) },
+    { s: shoulderX + 0.44, a: W(0.02), b: W(0.027) },
+    { s: shoulderX + 0.49, a: W(0.019), b: W(0.026) },
+  ];
   for (const [side, prefix] of [[1, "left"], [-1, "right"]] as const) {
+    const shoulder = `${prefix}Shoulder` as VRMHumanBoneName;
     const upper = `${prefix}UpperArm` as VRMHumanBoneName;
     const lower = `${prefix}LowerArm` as VRMHumanBoneName;
     const hand = `${prefix}Hand` as VRMHumanBoneName;
-    // Shoulder → elbow → wrist, each segment narrowing. Rotated so the
-    // limb's -Y axis points down the arm, away from the body.
-    add(upper, sphere(0.05 * b), upperArmMat);
-    add(upper, taperedLimb(0.048 * b, 0.037 * b, 0.2), upperArmMat, [0.125 * side, 0, 0], [0, 0, HALF_PI * side]);
-    add(lower, sphere(0.037 * b), lowerArmMat);
-    add(lower, taperedLimb(0.037 * b, 0.028 * b, 0.19), lowerArmMat, [0.11 * side, 0, 0], [0, 0, HALF_PI * side]);
-    add(hand, sphere(0.042), skin, [0.045 * side, -0.004, 0.004], [0, 0, 0], [1.15, 0.6, 0.92]);
-    add(hand, capsule(0.011, 0.03), skin, [0.02 * side, 0.0, 0.034], [HALF_PI, 0, 0]);
+    const weights = chainWeights(
+      [boneIndex[shoulder], boneIndex[upper], boneIndex[lower], boneIndex[hand]],
+      [
+        [shoulderX - 0.005, 0.05],
+        [shoulderX + 0.25, 0.035],
+        [shoulderX + 0.47, 0.012],
+      ]
+    );
+    const arm = (from: number, to: number, material: THREE.Material, inflate = 1, pad = 0) =>
+      body(
+        sweepGeometry({
+          keys: armKeys,
+          from: shoulderX + from,
+          to: shoulderX + to,
+          step: 0.012,
+          segments: 16,
+          exponent: 2.1,
+          inflate,
+          pad,
+          // Along the arm is X (mirrored per side); the cross-section is
+          // the vertical (a) and front/back (b) thickness.
+          place: (x, u, v) => [side * x * h, (1.35 + u) * h, v * h],
+          weights,
+        }),
+        material
+      );
+    if (sleeveLength > 0) {
+      const short = sleeveLength < 0.3;
+      arm(-0.07, sleeveLength, top, short ? 1.12 : 1.0, short ? 0.004 : 0.005);
+      if (short) arm(sleeveLength - 0.03, 0.49, skin);
+    } else {
+      arm(-0.07, 0.49, skin);
+    }
+
+    // Hand: palm, a finger mass and a thumb, rigid on the hand bone.
+    add(hand, sphere(0.04), skin, [0.042 * side, -0.003, 0.002], [0, 0, 0], [1.05, 0.52, 0.95]);
+    add(hand, sphere(0.034), skin, [0.083 * side, -0.007, 0.002], [0, 0, 0], [1.05, 0.42, 0.95]);
+    add(hand, capsule(0.0115, 0.028), skin, [0.03 * side, -0.004, 0.036], [HALF_PI, 0, -0.5 * side]);
   }
 
   // ---- legs -------------------------------------------------------------------
+  // Hip to ankle as one skinned surface. The top starts inside the pelvis
+  // and is weighted to the hips, so the thigh flows out of the torso and
+  // the crotch is a continuous shape under the trousers, rather than two
+  // tubes plugged into a ball.
   const bareLegs = spec.bottom === "skirt" || dress;
-  const upperLegMat = bareLegs ? skin : bottom;
-  const lowerLegMat = bareLegs || spec.bottom === "shorts" ? skin : bottom;
+  const legKeys: ProfileKey[] = [
+    { s: 0.06, a: W(0.029), b: W(0.03) },
+    { s: 0.1, a: W(0.031), b: W(0.033) },
+    { s: 0.17, a: W(0.035), b: W(0.038), c: -0.002 },
+    { s: 0.29, a: W(0.044), b: W(0.05), c: -0.007 },
+    { s: 0.37, a: W(0.048), b: W(0.053), c: -0.008 },
+    { s: 0.44, a: W(0.046), b: W(0.048), c: -0.003 },
+    { s: 0.49, a: W(0.045), b: W(0.047), c: 0.004 },
+    { s: 0.55, a: W(0.05), b: W(0.052), c: 0.004 },
+    { s: 0.66, a: W(0.06), b: W(0.062), c: 0.006 },
+    { s: 0.78, a: W(0.069), b: W(0.07), c: 0.004 },
+    { s: 0.87, a: W(0.073), b: W(0.072), c: 0 },
+    { s: 0.95, a: W(0.07), b: W(0.07), c: -0.004 },
+  ];
   for (const [side, prefix] of [[1, "left"], [-1, "right"]] as const) {
     const upper = `${prefix}UpperLeg` as VRMHumanBoneName;
     const lower = `${prefix}LowerLeg` as VRMHumanBoneName;
     const foot = `${prefix}Foot` as VRMHumanBoneName;
-    // Thigh and calf both taper toward the knee and ankle — the single
-    // biggest contributor to the legs reading as legs.
-    add(upper, sphere(0.068 * b), upperLegMat);
-    add(upper, taperedLimb(0.066 * b, 0.05 * b, 0.3), upperLegMat, [0.002 * side, -0.19, 0]);
-    add(lower, sphere(0.05 * b), lowerLegMat);
-    // Calf bulge: widest just below the knee, narrowest at the ankle.
-    add(lower, taperedLimb(0.054 * b, 0.031 * b, 0.34), lowerLegMat, [0, -0.2, 0]);
+    const weights = chainWeights(
+      [boneIndex[foot], boneIndex[lower], boneIndex[upper], boneIndex.hips],
+      [
+        [0.095, 0.02],
+        [0.49, 0.04],
+        [0.865, 0.055],
+      ]
+    );
+    const x0 = 0.09 * side;
+    const leg = (from: number, to: number, material: THREE.Material, inflate = 1, pad = 0) =>
+      body(
+        sweepGeometry({
+          keys: legKeys,
+          from,
+          to,
+          step: 0.012,
+          segments: 18,
+          exponent: 2.1,
+          inflate,
+          pad,
+          place: (y, u, v) => [(x0 + u) * h, y * h, v * h],
+          weights,
+        }),
+        material
+      );
+    if (bareLegs) {
+      leg(0.06, 0.95, skin);
+    } else if (spec.bottom === "shorts") {
+      leg(0.6, 0.95, bottom, 1.08, 0.004);
+      leg(0.06, 0.63, skin);
+    } else {
+      leg(0.075, 0.95, bottom, 1.0, 0.006);
+    }
     add(foot, sphere(0.05), shoe, [0, -0.045, 0.035], [0, 0, 0], [1.05, 0.75, 2]);
   }
 
   // ---- VRM ----------------------------------------------------------------
   scene.updateMatrixWorld(true);
+  // Bind every skinned part to one skeleton, in the rest pose built above.
+  const rig = new THREE.Skeleton(boneList);
+  for (const part of skinnedParts) part.bind(rig);
   const humanBones = Object.fromEntries([...bones].map(([name, node]) => [name, { node }])) as unknown as VRMHumanBones;
   const humanoid = new VRMHumanoid(humanBones);
   scene.add(humanoid.normalizedHumanBonesRoot);

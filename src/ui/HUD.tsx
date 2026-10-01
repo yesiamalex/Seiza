@@ -1,8 +1,8 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { panelStyle } from "./styles";
 import { ChevronRightIcon, MenuIcon, SignalIcon, SignalOffIcon } from "./icons";
 import type { ConnectionState } from "../multiplayer/useRoomSocket";
-import { TOUCH_CONTROLS_CLEARANCE_CSS } from "../player/touchControlsMetrics";
+import { TOUCH_CONTROLS_CLEARANCE_CSS, TOUCH_CONTROLS_SIDE_CLEARANCE_CSS } from "../player/touchControlsMetrics";
 import { useMediaQuery } from "./useMediaQuery";
 
 interface HUDProps {
@@ -28,39 +28,22 @@ const STATUS_LABEL: Record<ConnectionState, string> = {
   reconnecting: "reconnecting…",
 };
 
-/** Width of the mobile drawer's closed launcher tab, and the gap the
- *  popovers leave for the open drawer. Shared with the CSS below. */
-const DRAWER_CLEARANCE_PX = 76;
+/** Gap between the open drawer and anything that steps aside for it
+ *  (its own launcher tab, docked popovers). */
+const DRAWER_GAP_PX = 8;
+/** The drawer's distance from the right edge of the screen. */
+const DRAWER_EDGE_PX = 10;
 
 export function HUD({ connectionState, worldName, topRight, topLeft, touchControlsVisible, children }: HUDProps) {
   const connected = connectionState === "connected";
-  // A CSS calc()/clamp() expression (see touchControlsMetrics.ts), not a
-  // fixed pixel number: the D-pad itself now shrinks on a short/landscape
-  // viewport, and this has to shrink by exactly the same amount or the
-  // two drift apart again — which is the bug this replaced. A flat "186px
-  // of clearance" was a small, unnoticeable reservation on a tall
-  // portrait phone and nearly half the screen on a 400px-tall landscape
-  // one, which is what pushed the whole control bar up into the visual
-  // middle of the screen.
-  const bottomInset = touchControlsVisible ? TOUCH_CONTROLS_CLEARANCE_CSS : "0px";
 
-  // Below this width the horizontal bottom bar is replaced by a drawer.
-  //
-  // The bar kept being reported as "floating in the middle of the screen"
-  // on phones, and the reason is structural rather than a stray number:
-  // it is the last child of a `justify-content: space-between` column
-  // that also has to reserve room for the D-pad. Its resting position is
-  // therefore whatever is left over after the reservation, which on a
-  // short or busy viewport is somewhere around the middle. Shrinking the
-  // reservation (touchControlsMetrics.ts) fixed the worst landscape case
-  // but never changed that; the bar was still positioned by subtraction.
-  //
-  // A drawer is pulled out of the column flow entirely (position: fixed,
-  // anchored to the right edge), so it has an actual anchor instead of a
-  // leftover one, and it collapses to a single tab so a phone screen is
-  // mostly world rather than mostly chrome.
+  // Portrait phones get a drawer instead of the horizontal bar. A
+  // landscape phone is too short for a vertical drawer (~300px of world
+  // under the browser chrome), so it keeps the bar, but see below for
+  // where that bar goes.
   const isCompact = useMediaQuery("(max-width: 640px)");
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerWidth, setDrawerWidth] = useState(0);
 
   // Rotating a phone to landscape (or docking a keyboard) takes the
   // layout back to the horizontal bar, where a stuck-open drawer flag
@@ -68,6 +51,23 @@ export function HUD({ connectionState, worldName, topRight, topLeft, touchContro
   useEffect(() => {
     if (!isCompact) setDrawerOpen(false);
   }, [isCompact]);
+
+  // Where the bar sits relative to the D-pad.
+  //
+  // It used to be stacked *above* the pad, with the pad's full height
+  // reserved under it. On a landscape phone that reservation is most of
+  // the screen, which is what kept the bar "floating in the middle" no
+  // matter how the reservation was tuned. Now it sits on the bottom row
+  // *between* the pad and the jump button, and the room it gives up is
+  // horizontal (where a landscape screen has plenty) instead of vertical.
+  // In drawer mode there is no bottom bar at all, so nothing is reserved.
+  const besidePad = Boolean(touchControlsVisible) && !isCompact;
+  const sideClearance = besidePad ? TOUCH_CONTROLS_SIDE_CLEARANCE_CSS : "12px";
+  // Docked popovers on a portrait phone open above the D-pad.
+  const popoverBottom = touchControlsVisible
+    ? `calc(16px + env(safe-area-inset-bottom, 0px) + ${TOUCH_CONTROLS_CLEARANCE_CSS})`
+    : "calc(16px + env(safe-area-inset-bottom, 0px))";
+  const drawerClearance = DRAWER_EDGE_PX + drawerWidth + DRAWER_GAP_PX;
 
   return (
     <div
@@ -77,19 +77,18 @@ export function HUD({ connectionState, worldName, topRight, topLeft, touchContro
         pointerEvents: "none",
         padding: 16,
         paddingTop: "calc(12px + env(safe-area-inset-top, 0px))",
-        paddingBottom: `calc(16px + env(safe-area-inset-bottom, 0px) + ${bottomInset})`,
+        paddingBottom: "calc(16px + env(safe-area-inset-bottom, 0px))",
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
         alignItems: "center",
         fontFamily: "system-ui, sans-serif",
         color: "white",
-        // Consumed by the narrow-viewport popover rules below so panels
-        // dock above the control bar (and above the D-pad when it's up).
-        ["--seiza-popover-bottom" as string]: `calc(88px + ${bottomInset})`,
-        // ...and so they step aside for the drawer while it's open,
-        // instead of opening underneath it.
-        ["--seiza-popover-right" as string]: isCompact && drawerOpen ? `${DRAWER_CLEARANCE_PX}px` : "12px",
+        // Consumed by the docked-popover rules below: on a portrait phone
+        // panels open above the D-pad, and step aside for the drawer while
+        // it's open instead of opening underneath it.
+        ["--seiza-popover-bottom" as string]: popoverBottom,
+        ["--seiza-popover-right" as string]: isCompact && drawerOpen ? `${drawerClearance}px` : "12px",
       }}
     >
       <style>{`
@@ -138,6 +137,23 @@ export function HUD({ connectionState, worldName, topRight, topLeft, touchContro
             overflow-y: auto !important;
           }
         }
+        /* A landscape phone is wide enough for the bar but far too short
+           for a panel anchored to its trigger: centred above a button it
+           runs off the top. Dock it centred above the bar instead, using
+           whatever height there is. */
+        @media (min-width: 641px) and (max-height: 520px) {
+          .seiza-popover {
+            position: fixed !important;
+            left: 50% !important;
+            right: auto !important;
+            top: auto !important;
+            bottom: calc(76px + env(safe-area-inset-bottom, 0px)) !important;
+            max-width: calc(100vw - 24px) !important;
+            max-height: calc(100svh - 76px - env(safe-area-inset-bottom, 0px) - 64px - env(safe-area-inset-top, 0px)) !important;
+            overflow-y: auto !important;
+            transform-origin: bottom center;
+          }
+        }
         /* Desktop/tablet horizontal bar. Two things here used to be wrong
            together and produced the "bottom bar isn't centred / looks
            squeezed" report on mid-width screens:
@@ -154,23 +170,48 @@ export function HUD({ connectionState, worldName, topRight, topLeft, touchContro
            falls back to start alignment only when centring would push the
            overflowing edge out of reach. The plain flex-start declaration
            before it is the fallback for engines without "safe", where
-           start alignment is the safer of the two. */
+           start alignment is the safer of the two.
+
+           The bar must NOT be a scroll container (no overflow), and must
+           not carry transform/filter/backdrop-filter itself. Its panels
+           are its descendants: overflow-x:auto silently turns overflow-y
+           into auto too and clips every panel to the bar's own height,
+           and a transform or backdrop-filter makes the bar the containing
+           block for their position:fixed docking. Both made panels "open"
+           invisibly. The frosted glass lives on .seiza-dock-glass, a
+           sibling layer behind the buttons. */
         .seiza-control-bar {
+          position: relative;
           justify-content: flex-start;
           justify-content: safe center;
-          overflow-x: auto;
-          overflow-y: visible;
-          scrollbar-width: none;
         }
-        .seiza-control-bar::-webkit-scrollbar { display: none; }
-        /* The same element in drawer mode: a vertical column, scrolled
-           top-to-bottom, with its dividers laid flat. */
+        .seiza-dock-glass {
+          position: absolute;
+          inset: 0;
+          z-index: -1;
+          border-radius: inherit;
+          background: rgba(16,17,22,0.78);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          pointer-events: none;
+        }
+        /* The same element in drawer mode: a single vertical column with
+           its dividers laid flat. Groups that lay their buttons out in a
+           row (voice + video) are turned into columns too, otherwise they
+           made the drawer two buttons wide. */
         .seiza-control-bar--drawer {
           flex-direction: column;
-          overflow-x: visible;
-          overflow-y: auto;
           align-items: stretch;
           justify-content: flex-start;
+        }
+        .seiza-control-bar--drawer > div:not(.seiza-bar-divider):not(.seiza-dock-glass) {
+          flex-direction: column !important;
+          align-items: stretch !important;
+          gap: 2px !important;
+        }
+        .seiza-control-bar--drawer .seiza-bar-btn {
+          justify-content: center;
+          padding: 11px 12px !important;
         }
         .seiza-control-bar--drawer .seiza-bar-divider {
           width: 100% !important;
@@ -198,8 +239,13 @@ export function HUD({ connectionState, worldName, topRight, topLeft, touchContro
         @media (max-width: 960px) {
           .seiza-bar-label { display: none; }
         }
+        /* Animates right/opacity rather than transform: a transform on
+           the drawer would capture its fixed-position panels again. */
         .seiza-drawer {
-          transition: transform 240ms var(--seiza-ease, ease-out), opacity 240ms var(--seiza-ease, ease-out);
+          transition: right 240ms var(--seiza-ease, ease-out), opacity 240ms var(--seiza-ease, ease-out), visibility 0s linear 240ms;
+        }
+        .seiza-drawer[data-open="true"] {
+          transition: right 240ms var(--seiza-ease, ease-out), opacity 240ms var(--seiza-ease, ease-out), visibility 0s;
         }
         @media (prefers-reduced-motion: reduce) {
           .seiza-bar-btn, .seiza-drawer { transition: none; }
@@ -219,7 +265,7 @@ export function HUD({ connectionState, worldName, topRight, topLeft, touchContro
       </div>
 
       {isCompact ? (
-        <ControlDrawer open={drawerOpen} onOpenChange={setDrawerOpen}>
+        <ControlDrawer open={drawerOpen} onOpenChange={setDrawerOpen} onWidthChange={setDrawerWidth} launcherRight={drawerClearance}>
           {children}
         </ControlDrawer>
       ) : (
@@ -234,10 +280,12 @@ export function HUD({ connectionState, worldName, topRight, topLeft, touchContro
             flexWrap: "nowrap",
             gap: 2,
             alignItems: "center",
-            maxWidth: "calc(100vw - 24px)",
-            background: "rgba(16,17,22,0.74)",
-            backdropFilter: "blur(10px)",
-            WebkitBackdropFilter: "blur(10px)",
+            // Beside the D-pad on touch screens, so it stays clear of the
+            // pad on the left and the jump button on the right.
+            maxWidth: `calc(100vw - 2 * ${sideClearance})`,
+            // Keeps the glass layer's z-index:-1 inside the bar without
+            // making the bar a containing block for its fixed panels.
+            isolation: "isolate",
             border: "1px solid rgba(255,255,255,0.09)",
             borderRadius: 16,
             padding: 5,
@@ -245,6 +293,7 @@ export function HUD({ connectionState, worldName, topRight, topLeft, touchContro
             boxSizing: "border-box",
           }}
         >
+          <div className="seiza-dock-glass" aria-hidden />
           {children}
         </div>
       )}
@@ -260,16 +309,30 @@ export function HUD({ connectionState, worldName, topRight, topLeft, touchContro
  * right-edge strip a previous attempt used. A strip is still permanent
  * chrome eating a column of a small screen; the point of the drawer is
  * that a phone showing a 3D world should mostly be showing the world.
+ *
+ * The panel holds the same buttons as the bar, and their panels (chat,
+ * gestures, edit…) render inside it, so it must not clip or capture
+ * them: no overflow, no transform, no backdrop-filter on the panel
+ * itself (see the .seiza-control-bar note in HUD's stylesheet). It is
+ * centred with top/bottom/margin and slides with `right` instead.
  */
 function ControlDrawer({
   open,
   onOpenChange,
+  onWidthChange,
+  launcherRight,
   children,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onWidthChange: (width: number) => void;
+  /** Where the launcher sits while open: just left of the panel. */
+  launcherRight: number;
   children?: ReactNode;
 }) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+
   // Escape closes it, matching every other dismissible surface here.
   useEffect(() => {
     if (!open) return;
@@ -279,6 +342,22 @@ function ControlDrawer({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onOpenChange]);
+
+  // The panel's width depends on which controls are showing (stand up,
+  // voice vs. mute…), so the launcher and docked panels measure it rather
+  // than guessing a constant. Guessing is what left the launcher sitting
+  // on top of the drawer's buttons.
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      const next = Math.ceil(panel.offsetWidth);
+      setWidth(next);
+      onWidthChange(next);
+    });
+    observer.observe(panel);
+    return () => observer.disconnect();
+  }, [onWidthChange]);
 
   return (
     <>
@@ -301,11 +380,13 @@ function ControlDrawer({
         aria-expanded={open}
         aria-label={open ? "Close controls" : "Open controls"}
         className="seiza-drawer"
+        data-open="true"
         style={{
           position: "fixed",
-          right: open ? `${DRAWER_CLEARANCE_PX}px` : "calc(env(safe-area-inset-right, 0px) + 10px)",
-          top: "50%",
-          transform: "translateY(-50%)",
+          right: open ? `calc(env(safe-area-inset-right, 0px) + ${launcherRight}px)` : `calc(env(safe-area-inset-right, 0px) + ${DRAWER_EDGE_PX}px)`,
+          top: 0,
+          bottom: 0,
+          margin: "auto 0",
           zIndex: 20,
           pointerEvents: "auto",
           width: 44,
@@ -327,17 +408,23 @@ function ControlDrawer({
       </button>
 
       <div
+        ref={panelRef}
         className="seiza-control-bar seiza-control-bar--drawer seiza-drawer"
+        data-open={open}
         role="group"
         aria-label="World controls"
         aria-hidden={!open}
         style={{
           position: "fixed",
-          right: "calc(env(safe-area-inset-right, 0px) + 10px)",
-          top: "50%",
-          // Tucked fully off the right edge when closed rather than
+          // Parked just past the right edge when closed rather than
           // unmounted, so opening and closing animate symmetrically.
-          transform: `translateY(-50%) translateX(${open ? "0" : "calc(100% + 24px)"})`,
+          right: open
+            ? `calc(env(safe-area-inset-right, 0px) + ${DRAWER_EDGE_PX}px)`
+            : `${-(width + 24)}px`,
+          top: 0,
+          bottom: 0,
+          margin: "auto 0",
+          height: "fit-content",
           opacity: open ? 1 : 0,
           // Nothing behind an invisible drawer should be catching taps.
           pointerEvents: open ? "auto" : "none",
@@ -345,10 +432,6 @@ function ControlDrawer({
           zIndex: 19,
           display: "flex",
           gap: 2,
-          maxHeight: "calc(100svh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 96px)",
-          background: "rgba(16,17,22,0.86)",
-          backdropFilter: "blur(10px)",
-          WebkitBackdropFilter: "blur(10px)",
           border: "1px solid rgba(255,255,255,0.09)",
           borderRadius: 16,
           padding: 5,
@@ -356,6 +439,7 @@ function ControlDrawer({
           boxSizing: "border-box",
         }}
       >
+        <div className="seiza-dock-glass" aria-hidden />
         {children}
       </div>
     </>

@@ -6,9 +6,9 @@ import { VRMExpression, VRMExpressionManager, type VRMExpressionBind } from "@pi
  *
  * An uploaded VRM expresses itself through morph targets: the artist
  * sculpted a "happy" version of the face mesh and three-vrm blends toward
- * it. A designer avatar has no sculpted anything — its face is a handful
- * of separate primitive meshes (buildDesignerVrm.ts), so there is nothing
- * to morph between.
+ * it. A designer avatar has no sculpted anything — its eyes, brows and
+ * mouth are painted patches on the head (designerFace.ts), each in its own
+ * group, so there is nothing to morph between.
  *
  * Rather than give up on expressions for exactly the avatars most people
  * will use, this expresses the same presets by *moving the parts*: brows

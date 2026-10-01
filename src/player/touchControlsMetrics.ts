@@ -50,3 +50,14 @@ export const TOUCH_WRAPPER_BOTTOM_OFFSET_PX = 12;
 export const TOUCH_CONTROLS_CLEARANCE_CSS =
   `calc(${TOUCH_WRAPPER_BOTTOM_OFFSET_PX}px + ` +
   `(${PAD_ROWS} * ${PAD_BUTTON_SIZE}) + ${(PAD_ROWS - 1) * PAD_GAP_PX}px + 16px)`;
+
+/**
+ * Horizontal footprint of the D-pad from the left edge (and, because the
+ * control bar is centred, the room it needs on *both* sides) when the bar
+ * sits on the bottom row beside the pad instead of stacked above it —
+ * TouchControls' 16px side padding, the three-column pad, and a gap.
+ * The jump button on the right is narrower than the pad, so the pad's
+ * side is the one that decides it.
+ */
+export const TOUCH_CONTROLS_SIDE_CLEARANCE_CSS =
+  `calc(16px + (3 * ${PAD_BUTTON_SIZE}) + ${2 * PAD_GAP_PX}px + 12px)`;

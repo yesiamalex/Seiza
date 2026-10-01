@@ -45,17 +45,26 @@
     </g>
 
     <!-- The figure. One closed path for the body, one circle for the head;
-         both solid, so the silhouette stays unbroken when it scales down. -->
-    <g fill="#05070f">
-      <circle cx="34.6" cy="18.4" r="6.9"/>
-      <path d="M29.8 24.6
-               C27.3 30.2, 26.2 36.4, 26.3 42.8
-               C26.3 46.8, 27.4 49, 29.3 49.8
-               L45.8 49.8
-               C48.8 49.8, 49.4 46.1, 46.2 45.0
-               C41.2 43.5, 37.2 42.6, 34.6 40.9
-               C36.4 36.7, 37.0 31.1, 36.4 27.0
-               C36.0 24.9, 33.2 24.0, 29.8 24.6 Z"/>
+         both solid, so the silhouette stays unbroken when it scales down.
+         Shifted down and left of centre so the folded legs have room in
+         front of it, and the knees aren't crowding the right edge. -->
+    <g transform="translate(-5 5)">
+      <g fill="#05070f">
+        <circle cx="34.6" cy="18.4" r="6.9"/>
+        <path d="M29.8 24.6
+                 C27.3 30.2, 26.2 36.4, 26.3 42.8
+                 C26.3 46.8, 27.4 49, 29.3 49.8
+                 L45.8 49.8
+                 C48.8 49.8, 49.4 46.1, 46.2 45.0
+                 C41.2 43.5, 37.2 42.6, 34.6 40.9
+                 C36.4 36.7, 37.0 31.1, 36.4 27.0
+                 C36.0 24.9, 33.2 24.0, 29.8 24.6 Z"/>
+      </g>
+      <!-- The arm: upper arm hanging close to the body, forearm laid along
+           the thigh, hands resting on the lap. Same solid as the body, so it
+           reads by its shape: the elbow and the forearm on the lap. -->
+      <path d="M32.8 27.6 C34.6 31.0, 36.4 34.5, 36.6 38.2 C36.8 40.4, 39.5 41.3, 43.4 42.5"
+            fill="none" stroke="#05070f" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
     </g>
   </g>
 </svg>

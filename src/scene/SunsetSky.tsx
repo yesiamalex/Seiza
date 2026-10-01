@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useLoader } from "@react-three/fiber";
+import { useFrame, useLoader } from "@react-three/fiber";
 import { TextureLoader } from "three";
 import * as THREE from "three";
 
@@ -75,11 +75,12 @@ const fragmentShader = /* glsl */ `
   uniform vec3 uStarWarm;
   uniform vec3 uStarCool;
   uniform vec3 uSunDirection;
+  uniform float uTime;
   varying vec3 vDirection;
 
-  // Cheap deterministic hash. No texture, no time uniform: the same star
-  // is in the same place on every client and on every frame, which is
-  // what a shared world needs — people point at constellations.
+  // Cheap deterministic hash. No texture: the same star is in the same
+  // place on every client and on every frame, which is what a shared world
+  // needs — people point at constellations. Time only modulates brightness.
   float hash31(vec3 p) {
     p = fract(p * 0.3183099 + vec3(0.71, 0.113, 0.419));
     p *= 17.0;
@@ -96,6 +97,13 @@ const fragmentShader = /* glsl */ `
    * star close enough to a cell wall to be clipped is already fainter than
    * the dither in the gradient behind it. This runs on a phone GPU behind
    * every other pixel in the scene, so that trade is the right way round.
+   *
+   * Pixel-aware size: at these scales a star is only a fraction of a
+   * pixel across, so whether a pixel's single sample happened to land on
+   * it flipped with the smallest camera movement, which made the whole
+   * field sparkle on every step. Each star is now drawn at least about a
+   * pixel wide (fwidth gives the pixel's size in cell units), and dimmed
+   * by the area it grew by, so it stays put and keeps its brightness.
    */
   float starLayer(vec3 d, float scale, float density, float radius) {
     vec3 p = d * scale;
@@ -107,11 +115,22 @@ const fragmentShader = /* glsl */ `
     vec3 offset = vec3(hash31(cell + 11.3), hash31(cell + 23.7), hash31(cell + 41.1));
     float dist = length(f - offset);
 
+    float pixel = length(fwidth(p)) * 0.75;
+    float r = max(radius, pixel);
+    float energy = (radius * radius) / (r * r);
+
     // A soft point, then a magnitude: most stars are faint and a few are
     // bright, which is what stops a uniform grid reading as noise.
-    float point = smoothstep(radius, 0.0, dist);
+    float point = smoothstep(r, 0.0, dist) * energy;
     float magnitude = hash31(cell + 67.9);
-    return point * (0.22 + magnitude * magnitude * 1.7);
+
+    // A gentle, slow twinkle: each star on its own phase and rate, never
+    // dipping below ~75%, so it reads as air shimmer rather than blinking.
+    float phase = hash31(cell + 91.7) * 6.2831;
+    float rate = 0.6 + hash31(cell + 13.9) * 1.4;
+    float twinkle = 0.88 + 0.12 * sin(uTime * rate + phase);
+
+    return point * (0.22 + magnitude * magnitude * 1.7) * twinkle;
   }
 
   void main() {
@@ -201,6 +220,7 @@ export function SunsetSky({ sunPosition, radius = 200 }: SunsetSkyProps) {
           uStarWarm: { value: new THREE.Color(STAR_WARM) },
           uStarCool: { value: new THREE.Color(STAR_COOL) },
           uSunDirection: { value: new THREE.Vector3(...sunPosition).normalize() },
+          uTime: { value: 0 },
         },
         side: THREE.BackSide,
         // Drawn first and never occludes anything: it's the backdrop.
@@ -211,6 +231,12 @@ export function SunsetSky({ sunPosition, radius = 200 }: SunsetSkyProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [sunPosition[0], sunPosition[1], sunPosition[2]]
   );
+
+  // Drives the twinkle. One uniform write per frame; wrapped so float
+  // precision on mobile GPUs never degrades over a long session.
+  useFrame((_, delta) => {
+    material.uniforms.uTime.value = (material.uniforms.uTime.value + delta) % 3600;
+  });
 
   return (
     <mesh material={material} renderOrder={-1000} frustumCulled={false} userData={{ navIgnore: true }}>

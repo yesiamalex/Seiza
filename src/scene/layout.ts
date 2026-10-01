@@ -318,7 +318,9 @@ export const GARDEN_DOOR_OBSTACLE: Obstacle = obstacle(0, HALL.maxZ - 0.18, DOOR
 // BaseEnvironment.tsx (0.18) rather than importing it, to avoid a
 // layout.ts → BaseEnvironment.tsx → layout.ts import cycle; if you
 // change one, change the other.
-export const CLASSROOM_DOOR_OBSTACLE: Obstacle = obstacle(0, CLASSROOM.maxZ - 0.18, DOOR_HALF_WIDTH - 0.18 - 0.05, 0.16);
+// Matches ClassroomDoor (BaseEnvironment.tsx): leaves ride just off the
+// classroom face of the wall and cover the full opening when closed.
+export const CLASSROOM_DOOR_OBSTACLE: Obstacle = obstacle(0, CLASSROOM.maxZ - WALL_THICKNESS / 2 - 0.1, DOOR_HALF_WIDTH, 0.16);
 
 /**
  * Furniture players bump into instead of walking through. Deliberately a

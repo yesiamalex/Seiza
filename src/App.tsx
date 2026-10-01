@@ -27,6 +27,7 @@ import { TextEditorDialog } from "./edit/TextEditorDialog";
 import { GesturePanel } from "./interactions/GesturePanel";
 import { ChatPanel } from "./chat/ChatPanel";
 import { HUD } from "./ui/HUD";
+import { FpsCounter } from "./ui/FpsCounter";
 import { Toast } from "./ui/Toast";
 import { JoinScreen, type JoinedIdentity } from "./ui/JoinScreen";
 import { CameraViewToggle } from "./ui/CameraViewToggle";
@@ -938,6 +939,7 @@ export default function App() {
         />
       </HUD>
       {showTouchControls && !webglLost && <TouchControls inputRef={touchInputRef} />}
+      {!webglLost && <FpsCounter aboveTouchControls={showTouchControls} />}
       {editingText && (
         <TextEditorDialog
           initialText={editingText.text ?? ""}
