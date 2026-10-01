@@ -72,6 +72,9 @@ export interface WorldObject {
   text?: string;
   /** Who is presenting on a "screen" object, or null when it's free. */
   presenterId?: string | null;
+  /** Which of the presenter's streams this screen is showing. Absent on
+   *  objects from older servers, and treated as "screen". */
+  presenterSource?: PresentSource;
 }
 
 /**
@@ -87,6 +90,12 @@ export interface PlayerMedia {
   camera?: string | null;
   screen?: string | null;
 }
+
+/** What a world screen is showing: the presenter's shared screen, or
+ *  their webcam. A screen is just a surface — which stream feeds it is
+ *  the presenter's choice. */
+export type PresentSource = "screen" | "camera";
+export const PRESENT_SOURCES: readonly PresentSource[] = ["screen", "camera"];
 
 export interface ChatMessage {
   id: string;
@@ -114,7 +123,10 @@ export type ClientMessage =
   | { type: "objectSetText"; id: string; text: string }
   // Claims a screen to present on, or gives it back up. Only the presenter
   // can release their own screen; leaving the room releases it too.
-  | { type: "objectPresent"; id: string; active: boolean }
+  // `source` picks which of the presenter's own streams feeds the
+  // screen. Omitted means "screen", which is what every client sent
+  // before this existed.
+  | { type: "objectPresent"; id: string; active: boolean; source?: PresentSource }
   // Publishes which live stream is which (see PlayerMedia).
   | { type: "setMedia"; media: PlayerMedia }
   | { type: "chat"; text: string }

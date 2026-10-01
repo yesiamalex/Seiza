@@ -9,6 +9,8 @@ import {
   type PlayerState,
   type Posture,
   type ServerMessage,
+  PRESENT_SOURCES,
+  type PresentSource,
   type WorldObject,
   type WorldObjectKind,
 } from "../src/multiplayer/types";
@@ -449,9 +451,16 @@ export class SeizaRoom extends DurableObject<Env> {
         if (message.active === true) {
           if (object.presenterId && object.presenterId !== attachment.connId) return; // taken
           object.presenterId = attachment.connId;
+          // Which of the presenter's streams this screen shows. Validated
+          // against the known set rather than relayed as given, since it
+          // is echoed to every other client.
+          object.presenterSource = PRESENT_SOURCES.includes(message.source as PresentSource)
+            ? (message.source as PresentSource)
+            : "screen";
         } else {
           if (object.presenterId !== attachment.connId) return;
           object.presenterId = null;
+          object.presenterSource = undefined;
         }
         // Not persisted deliberately: who is presenting is about who is
         // currently connected, and persisting it would restore a presenter

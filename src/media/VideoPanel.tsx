@@ -70,6 +70,17 @@ export function VideoPanel({ stream, width, height, maxDistance = 30, active = t
 
   useEffect(() => {
     if (!video) return;
+    // `playing` tracks whether *this* element has been started, but it
+    // is a component-level ref while the element itself is rebuilt
+    // whenever the stream changes. Without resetting it, stopping a
+    // share and starting another left it stuck at true: the frame loop
+    // below only calls play() when it is false, so the second share got
+    // a brand-new element that was never started and stayed black — for
+    // the presenter as well as everyone else, and for a re-enabled
+    // camera just as much as a re-shared screen.
+    playing.current = false;
+    setAspect(null);
+
     const onMetadata = () => {
       if (video.videoWidth > 0) setAspect(video.videoWidth / video.videoHeight);
     };

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useExclusiveMenu } from "../ui/exclusiveMenu";
 import type { RealtimeMediaState } from "./useRealtimeMedia";
+import type { PresentSource } from "../multiplayer/types";
 import { VOICE_ENABLED } from "./useRealtimeMedia";
 import { BAR_LABEL_CLASS, barButtonActiveStyle, barButtonStyle, panelStyle, pillButtonActiveStyle, pillButtonStyle, popoverStyle } from "../ui/styles";
 import { CameraIcon, MicIcon, MicOffIcon, ScreenShareIcon } from "../ui/icons";
@@ -10,7 +11,9 @@ interface MediaControlsProps {
   /** Whether voice is switched on for this world (world.json voiceEnabled). */
   voiceEnabled: boolean;
   /** Starts a share on the nearest free screen; returns why not, if not. */
-  onShareScreen: () => string | null;
+  /** Puts one of this player's streams on the nearest free screen.
+   *  Returns a reason when it can't, or null on success. */
+  onShareScreen: (source?: PresentSource) => string | null;
   onStopScreen: () => void;
 }
 
@@ -111,6 +114,21 @@ export function MediaControls({ media, voiceEnabled, onShareScreen, onStopScreen
             <ScreenShareIcon /> {media.screenOn ? "Stop sharing" : "Share your screen"}
           </button>
           <small style={{ opacity: 0.6 }}>Shares onto the nearest screen. You can also click a screen in the world.</small>
+          {/* A screen is just a surface, so it can carry a webcam as
+              easily as a desktop — useful for putting a presenter's face
+              up at the front of the room rather than on the small panel
+              beside their avatar. */}
+          <button
+            type="button"
+            style={pillButtonStyle}
+            onClick={() => {
+              setShareProblem(null);
+              setShareProblem(onShareScreen("camera"));
+            }}
+          >
+            <CameraIcon /> Put my camera on a screen
+          </button>
+          <small style={{ opacity: 0.6 }}>Turns your camera on if it isn't already.</small>
           {shareProblem && <small style={{ color: "#ffb347" }}>{shareProblem}</small>}
           {media.error && <small style={{ color: "#ff8a80" }}>{media.error}</small>}
 

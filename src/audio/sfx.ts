@@ -210,7 +210,30 @@ export function playFootstep(surface: StepSurface, distance?: number) {
       noiseBurst(a.ctx, a.out, { duration: 0.07, gain: 0.24 * level, frequency: 1700 * vary, q: 1.1, sweepTo: 700 });
       break;
     case "water":
-      noiseBurst(a.ctx, a.out, { duration: 0.28, gain: 0.34 * level, frequency: 1500 * vary, q: 0.5, sweepTo: 260, attack: 0.04 });
+      // A splash is three things at once, and the previous version had
+      // only the first: one bright noise burst with a near-instant
+      // attack, which is the standard recipe for a snare drum. What
+      // makes it read as water instead is the low displacement thump
+      // underneath, and a wash that decays slowly and darkly rather
+      // than snapping shut.
+      //
+      // 1. The surface breaking: brief, bright, quiet.
+      noiseBurst(a.ctx, a.out, { duration: 0.05, gain: 0.12 * level, type: "highpass", frequency: 2600 * vary, q: 0.5 });
+      // 2. The body of water moving: the loudest part, low and slow in
+      //    and out, sweeping downward as the cavity collapses.
+      noiseBurst(a.ctx, a.out, {
+        duration: 0.34,
+        gain: 0.3 * level,
+        type: "lowpass",
+        frequency: 850 * vary,
+        q: 0.6,
+        sweepTo: 170,
+        attack: 0.22,
+      });
+      // 3. The pitched "bloop" of the cavity itself. Rising, not
+      //    falling: a bubble of air closing over raises in pitch, and
+      //    that detail is most of what separates water from a thud.
+      tone(a.ctx, a.out, { frequency: 180 * vary, duration: 0.17, gain: 0.1 * level, type: "sine", sweepTo: 340 * vary });
       break;
   }
 }
@@ -249,7 +272,7 @@ export function playSwitch(on: boolean, distance?: number) {
  * sound here that is a sustained noise rather than an impact: it has to
  * stop when the leaf does or it keeps sliding after the door has settled.
  */
-export function playDoorSlide(durationSeconds = 0.5, distance?: number) {
+export function playDoorSlide(durationSeconds = 0.75, distance?: number) {
   const a = audio();
   if (!a) return;
   const level = gainForDistance(distance);
@@ -277,11 +300,12 @@ export function playDoorSwing(distance?: number) {
   if (!a) return;
   const level = gainForDistance(distance);
   if (level <= 0.01) return;
-  noiseBurst(a.ctx, a.out, { duration: 0.34, gain: 0.17 * level, type: "bandpass", frequency: 480, q: 1.4, sweepTo: 220, attack: 0.25 });
+  noiseBurst(a.ctx, a.out, { duration: 0.62, gain: 0.17 * level, type: "bandpass", frequency: 480, q: 1.4, sweepTo: 220, attack: 0.3 });
+  // The latch, as the leaf reaches the end of its swing.
   window.setTimeout(() => {
     const b = audio();
     if (b) noiseBurst(b.ctx, b.out, { duration: 0.08, gain: 0.22 * level, frequency: 300, q: 1.5, sweepTo: 130 });
-  }, 300);
+  }, 580);
 }
 
 /** A ripple on the pond — a click or something wading in. */

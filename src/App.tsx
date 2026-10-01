@@ -37,7 +37,7 @@ import { useMediaQuery, useWantsTouchControls } from "./ui/useMediaQuery";
 import { saveProfile } from "./profile/profileStore";
 import { BAR_LABEL_CLASS, barButtonActiveStyle, barButtonStyle, inputStyle, panelStyle, pillButtonStyle, primaryButtonStyle } from "./ui/styles";
 import { CloseIcon, LockIcon, PersonIcon, VrHeadsetIcon } from "./ui/icons";
-import type { WorldObject, WorldObjectKind } from "./multiplayer/types";
+import type { PresentSource, WorldObject, WorldObjectKind } from "./multiplayer/types";
 
 // Keep baseline immersive VR compatible with headsets that do not implement
 // optional scene-understanding or DOM-overlay features. These are not needed
@@ -540,10 +540,13 @@ export default function App() {
   );
 
   const presentOn = useCallback(
-    async (object: WorldObject) => {
+    async (object: WorldObject, source: PresentSource = "screen") => {
       if (object.presenterId === selfId) {
         presentOnObject(object.id, false);
-        media.stopScreen();
+        // Only stop the capture that was feeding this screen. Stopping
+        // the screen share when the surface was showing a camera would
+        // kill an unrelated share.
+        if ((object.presenterSource ?? "screen") === "screen") media.stopScreen();
         return;
       }
       if (object.presenterId) {
@@ -555,15 +558,19 @@ export default function App() {
       }
       // Capture first, claim second: claiming and then having the picker
       // dismissed would lock a screen to a presenter with nothing to show.
-      const started = media.screenOn || (await media.startScreen());
+      const started =
+        source === "camera"
+          ? media.cameraOn || (await media.startCamera())
+          : media.screenOn || (await media.startScreen());
       if (!started) return;
-      presentOnObject(object.id, true);
+      presentOnObject(object.id, true, source);
     },
     [media, presentOnObject, selfId]
   );
 
-  /** "Share your screen" from the toolbar picks the nearest free display. */
-  const shareOnNearestScreen = useCallback((): string | null => {
+  /** "Share your screen" (or camera) from the toolbar picks the nearest
+   *  free display. */
+  const shareOnNearestScreen = useCallback((source: PresentSource = "screen"): string | null => {
     const free = screens.filter((screen) => !screen.presenterId || screen.presenterId === selfId);
     if (free.length === 0) return "There's no screen in this world yet. Place one from Edit world, then click it.";
     const [px, py, pz] = positionRef.current;
@@ -574,7 +581,7 @@ export default function App() {
       }))
       .sort((a, b) => a.distance - b.distance)[0];
     if (nearest.distance > SHARE_REACH) return "Walk closer to a screen, then click it to present.";
-    void presentOn(nearest.screen);
+    void presentOn(nearest.screen, source);
     return null;
   }, [presentOn, screens, selfId]);
 
@@ -610,12 +617,18 @@ export default function App() {
   const resolveScreenStream = useCallback(
     (object: WorldObject) => {
       if (!object.presenterId) return null;
-      if (object.presenterId === selfId) return media.localScreenStream;
-      return media.getStream(object.presenterId, players[object.presenterId]?.media?.screen);
+      // A screen is just a surface; the presenter chooses whether it
+      // carries their shared screen or their webcam.
+      const source = object.presenterSource ?? "screen";
+      if (object.presenterId === selfId) {
+        return source === "camera" ? media.localCameraStream : media.localScreenStream;
+      }
+      const streamId = players[object.presenterId]?.media?.[source];
+      return media.getStream(object.presenterId, streamId);
     },
     // streamsVersion is the signal that a remote stream has arrived.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [media.getStream, media.localScreenStream, media.streamsVersion, players, selfId]
+    [media.getStream, media.localScreenStream, media.localCameraStream, media.streamsVersion, players, selfId]
   );
 
   // The zoom overlay closes itself if the presentation ends underneath

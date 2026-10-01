@@ -597,8 +597,12 @@ function ClassroomDoor({ m }: { m: WorldMaterials }) {
       // a doorway's footprint the instant you've told it to open, so
       // collision doesn't need to wait for the ~0.3s slide to finish.
       CLASSROOM_DOOR_OBSTACLE.disabled = next;
-      // Matches the ~0.35s slide the useFrame lerp above produces.
-      playDoorSlide(0.35);
+      // Matched to the motion rather than guessed. The lerp above eases
+      // at rate 7, so the leaf is within 1% of its target at ln(100)/7,
+      // about 0.66s, and is still visibly moving for most of that. The
+      // old 0.35s stopped less than halfway and left the door sliding in
+      // silence.
+      playDoorSlide(0.8);
       return next;
     });
   };

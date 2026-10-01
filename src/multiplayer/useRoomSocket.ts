@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ChatMessage, ClientMessage, LightZone, PlayerMedia, PlayerState, Posture, ServerMessage, WorldObject } from "./types";
+import type {
+  ChatMessage,
+  ClientMessage,
+  LightZone,
+  PlayerMedia,
+  PlayerState,
+  Posture,
+  PresentSource,
+  ServerMessage,
+  WorldObject,
+} from "./types";
 import { rememberAdminKey, rememberEditorPassword } from "../edit/editAuth";
 
 // The production Worker serves both the app and the Durable Object route, so
@@ -36,7 +46,7 @@ export interface MultiplayerState {
   /** Write on a board or a note. */
   setObjectText: (id: string, text: string) => void;
   /** Claim a screen to present on, or hand it back. */
-  presentOnObject: (id: string, active: boolean) => void;
+  presentOnObject: (id: string, active: boolean, source?: PresentSource) => void;
   /** Publish which of our live streams is which (see PlayerMedia). */
   setMedia: (media: PlayerMedia) => void;
   connected: boolean;
@@ -198,7 +208,10 @@ export function useRoomSocket(
   const sendChat = useCallback((text: string) => send({ type: "chat", text }), [send]);
   const setPosture = useCallback((posture: Posture) => send({ type: "setPosture", posture }), [send]);
   const setObjectText = useCallback((id: string, text: string) => send({ type: "objectSetText", id, text }), [send]);
-  const presentOnObject = useCallback((id: string, active: boolean) => send({ type: "objectPresent", id, active }), [send]);
+  const presentOnObject = useCallback(
+    (id: string, active: boolean, source?: PresentSource) => send({ type: "objectPresent", id, active, source }),
+    [send]
+  );
   const setMedia = useCallback((media: PlayerMedia) => send({ type: "setMedia", media }), [send]);
   const setEnvironment = useCallback((url: string | null) => send({ type: "setEnvironment", url }), [send]);
   const setSkybox = useCallback((url: string | null) => send({ type: "setSkybox", url }), [send]);
