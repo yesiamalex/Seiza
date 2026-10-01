@@ -1,11 +1,12 @@
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
-import { POND_CENTER, POND_RADIUS } from "./layout";
+import { POND_CENTER, POND_RADIUS, POND_WATER_RADIUS, POND_WATER_Y, pondDepthAtRadius } from "./layout";
+import { pondWaders, takePondRipples } from "./pondActivity";
 
 /**
- * The garden pond: rocks round the rim, a dark bed, koi, lily pads, and a
- * water surface that moves.
+ * The garden pond: a sunken basin you can wade into, rocks round the rim,
+ * koi, lily pads, and a water surface that moves.
  *
  * Everything that makes the water look like water is in one small
  * fragment shader on one flat disc: a few travelling sine waves perturb
@@ -14,16 +15,26 @@ import { POND_CENTER, POND_RADIUS } from "./layout";
  * sun glint. No render targets, no reflection pass, no extra geometry, so
  * it costs about what a textured floor does.
  *
- * Interaction is the same trick: clicking the water starts a ripple ring
- * at that point (up to four at once, as shader uniforms), and the koi
- * occasionally nose the surface and leave one of their own.
+ * Interaction is the same trick. Ripple rings are shader uniforms (up to
+ * eight at once), started by clicking the water, by anyone wading through
+ * it (pondActivity.ts, fed by every avatar, remote ones included), and now
+ * and then by a koi nosing the surface. The koi also drift away from
+ * whoever is standing near them.
+ *
+ * The basin's depth follows pondDepthAtRadius (layout.ts), the same
+ * profile floorHeightAt uses, so feet land on the bed you see and the
+ * water comes up to about the calf. The garden floor has a matching hole
+ * cut in it (OutdoorFloor in BaseEnvironment.tsx).
  */
 
-const WATER_RADIUS = POND_RADIUS - 0.32;
-const WATER_Y = 0.1;
-const MAX_RIPPLES = 4;
+const WATER_RADIUS = POND_WATER_RADIUS;
+const WATER_Y = POND_WATER_Y;
+const BASIN_RADIUS = POND_WATER_RADIUS + 0.04;
+const MAX_RIPPLES = 8;
 /** Same direction as the scene's sun (Scene.tsx), so glints line up with it. */
 const SUN_DIRECTION = new THREE.Vector3(-34, 4.6, 14).normalize();
+/** How close a wader has to be before the koi move away. */
+const KOI_SHY_DISTANCE = 1.1;
 
 const vertexShader = /* glsl */ `
   varying vec3 vWorld;
@@ -60,7 +71,7 @@ const fragmentShader = /* glsl */ `
               + wave(p, vec2(-0.9, 2.3), 0.012, 1.7)
               + wave(p, vec2(3.1, -2.2), 0.006, 2.6);
 
-    // Click and koi ripples: an expanding ring that fades as it spreads.
+    // Ripples: an expanding ring that fades as it spreads.
     for (int i = 0; i < ${MAX_RIPPLES}; i++) {
       vec4 r = uRipples[i];
       float age = uTime - r.z;
@@ -90,8 +101,9 @@ const fragmentShader = /* glsl */ `
     float glint = pow(max(dot(r, uSunDir), 0.0), 120.0);
     color += uSun * glint * 1.6;
 
-    // Soft edge where the water meets the bank.
-    float alpha = mix(0.86, 0.96, fresnel) * (1.0 - smoothstep(0.96, 1.0, length(vLocal) / uRadius));
+    // A little more see-through looking straight down, so legs and koi
+    // under the surface read as underwater rather than hidden.
+    float alpha = mix(0.74, 0.95, fresnel) * (1.0 - smoothstep(0.96, 1.0, length(vLocal) / uRadius));
     gl_FragColor = vec4(color, alpha);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
@@ -112,11 +124,29 @@ const LILY_PADS: Array<[number, number, number, number]> = [
   [-1.5, 0.9, 0.24, 5.3],
 ];
 
+/** Rocks left out of the ring, so there are obvious places to step in. */
+const ROCK_GAPS = new Set([3, 4, 11, 12]);
+
+/** The basin: a lathe following the depth profile, from the rim to the middle. */
+function basinGeometry() {
+  const points: THREE.Vector2[] = [];
+  const steps = 14;
+  for (let i = 0; i <= steps; i++) {
+    const r = (BASIN_RADIUS * (steps - i)) / steps;
+    points.push(new THREE.Vector2(r, pondDepthAtRadius(r)));
+  }
+  // Drawn double-sided (see the bed material), so which way the lathe
+  // winds its faces doesn't matter.
+  return new THREE.LatheGeometry(points.reverse(), 48);
+}
+
 export function Pond() {
   const rippleIndex = useRef(0);
   const nextKoiRipple = useRef(4);
   const koiRefs = useRef<Array<THREE.Group | null>>([]);
   const padRefs = useRef<Array<THREE.Mesh | null>>([]);
+  /** Each koi's current sideways dodge, eased so they glide aside. */
+  const koiDodge = useRef(KOI.map(() => new THREE.Vector2()));
 
   const water = useMemo(
     () =>
@@ -142,18 +172,26 @@ export function Pond() {
 
   const materials = useMemo(
     () => ({
-      bed: new THREE.MeshStandardMaterial({ color: "#1b2622", roughness: 1 }),
+      bed: new THREE.MeshStandardMaterial({ color: "#2a332b", roughness: 1, side: THREE.DoubleSide }),
       bank: new THREE.MeshStandardMaterial({ color: "#3f4a2c", roughness: 1 }),
       rocks: ["#6f6a63", "#837d73", "#5c5852"].map((color) => new THREE.MeshStandardMaterial({ color, roughness: 0.95, flatShading: true })),
       pad: new THREE.MeshStandardMaterial({ color: "#3f7a3a", roughness: 0.7, side: THREE.DoubleSide }),
       lotus: new THREE.MeshStandardMaterial({ color: "#f3a6c0", roughness: 0.6 }),
       koi: KOI.map((k) => new THREE.MeshStandardMaterial({ color: k.color, roughness: 0.5 })),
       koiAccent: KOI.map((k) => new THREE.MeshStandardMaterial({ color: k.accent, roughness: 0.5 })),
-      // Invisible, but solid to the navmesh bake, so tap-to-walk routes
-      // round the pond instead of across it.
-      navBlocker: new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false }),
     }),
     []
+  );
+  const basin = useMemo(basinGeometry, []);
+  useEffect(
+    () => () => {
+      water.dispose();
+      basin.dispose();
+      for (const value of Object.values(materials)) {
+        for (const material of Array.isArray(value) ? value : [value]) material.dispose();
+      }
+    },
+    [water, basin, materials]
   );
 
   const rocks = useMemo(
@@ -161,8 +199,8 @@ export function Pond() {
       Array.from({ length: 16 }, (_, i) => {
         const angle = (i / 16) * Math.PI * 2 + Math.sin(i * 7.3) * 0.08;
         const size = 0.3 + ((i * 37) % 10) / 70;
-        return { angle, size, squash: 0.5 + ((i * 13) % 5) / 25, turn: i * 1.7, material: i % 3 };
-      }),
+        return { i, angle, size, squash: 0.5 + ((i * 13) % 5) / 25, turn: i * 1.7, material: i % 3 };
+      }).filter((rock) => !ROCK_GAPS.has(rock.i)),
     []
   );
 
@@ -173,13 +211,48 @@ export function Pond() {
   };
 
   useFrame((_, delta) => {
-    const time = (water.uniforms.uTime.value += Math.min(delta, 0.1));
+    const step = Math.min(delta, 0.1);
+    const time = (water.uniforms.uTime.value += step);
+
+    for (const [x, z, strength] of takePondRipples()) addRipple(x, z, strength);
+    const waders = pondWaders();
+
     KOI.forEach((k, i) => {
       const fish = koiRefs.current[i];
       if (!fish) return;
       const a = k.phase + time * k.speed;
       const r = k.radius + Math.sin(time * 0.5 + k.phase) * k.wobble;
-      fish.position.set(Math.cos(a) * r, 0.055, Math.sin(a) * r);
+      let x = Math.cos(a) * r;
+      let z = Math.sin(a) * r;
+
+      // Shy of people: steer away from the nearest wader within reach.
+      const dodge = koiDodge.current[i];
+      let targetX = 0;
+      let targetZ = 0;
+      for (const wader of waders) {
+        const dx = x - (wader.x - POND_CENTER[0]);
+        const dz = z - (wader.z - POND_CENTER[1]);
+        const distance = Math.hypot(dx, dz);
+        if (distance < KOI_SHY_DISTANCE && distance > 1e-3) {
+          const push = (1 - distance / KOI_SHY_DISTANCE) * 0.9;
+          targetX += (dx / distance) * push;
+          targetZ += (dz / distance) * push;
+        }
+      }
+      const ease = 1 - Math.exp(-3 * step);
+      dodge.x += (targetX - dodge.x) * ease;
+      dodge.y += (targetZ - dodge.y) * ease;
+      x += dodge.x;
+      z += dodge.y;
+      // Never out through the bank.
+      const fromCentre = Math.hypot(x, z);
+      if (fromCentre > WATER_RADIUS - 0.35) {
+        x *= (WATER_RADIUS - 0.35) / fromCentre;
+        z *= (WATER_RADIUS - 0.35) / fromCentre;
+      }
+      // Halfway between the bed and the surface wherever they are.
+      const bed = pondDepthAtRadius(Math.hypot(x, z));
+      fish.position.set(x, Math.min(WATER_Y - 0.05, (bed + WATER_Y) / 2), z);
       // Face along the direction of travel, with a lazy tail sway.
       fish.rotation.y = -a + (k.speed > 0 ? Math.PI : 0) + Math.sin(time * 6 + i) * 0.12;
     });
@@ -195,24 +268,24 @@ export function Pond() {
   });
 
   const onWaterClick = (event: ThreeEvent<MouseEvent>) => {
-    // A tap on the water ripples it; it isn't a walk-to target.
+    // A tap on the water ripples it; it isn't a walk-to target. Walk in
+    // with the movement controls instead.
     event.stopPropagation();
     addRipple(event.point.x, event.point.z);
   };
 
   return (
     <group position={[POND_CENTER[0], 0, POND_CENTER[1]]}>
-      {/* Mossy bank and the dark pond bed beneath the water. */}
+      {/* Mossy bank, covering the edge of the hole cut in the floor. */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]} material={materials.bank} receiveShadow userData={{ navIgnore: true }}>
-        <ringGeometry args={[WATER_RADIUS - 0.05, POND_RADIUS + 0.12, 48]} />
+        <ringGeometry args={[BASIN_RADIUS - 0.02, POND_RADIUS + 0.12, 48]} />
       </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]} material={materials.bed} userData={{ navIgnore: true }}>
-        <circleGeometry args={[WATER_RADIUS, 48]} />
-      </mesh>
+      {/* The basin. Left in the navmesh bake, so tap-to-walk can wade. */}
+      <mesh geometry={basin} material={materials.bed} receiveShadow />
 
-      {rocks.map((rock, i) => (
+      {rocks.map((rock) => (
         <mesh
-          key={i}
+          key={rock.i}
           position={[Math.cos(rock.angle) * (POND_RADIUS - 0.12), rock.size * rock.squash * 0.55, Math.sin(rock.angle) * (POND_RADIUS - 0.12)]}
           rotation={[0, rock.turn, 0]}
           scale={[1, rock.squash, 0.85]}
@@ -258,11 +331,6 @@ export function Pond() {
       ))}
       <mesh position={[-0.95, WATER_Y + 0.06, -0.55]} material={materials.lotus} userData={{ navIgnore: true }}>
         <coneGeometry args={[0.08, 0.12, 6]} />
-      </mesh>
-
-      {/* Navmesh blocker: tall enough that recast treats it as a wall. */}
-      <mesh position={[0, 0.5, 0]} material={materials.navBlocker} raycast={() => {}}>
-        <cylinderGeometry args={[POND_RADIUS, POND_RADIUS, 1, 16]} />
       </mesh>
     </group>
   );

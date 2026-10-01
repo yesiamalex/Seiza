@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { useVrmLoader } from "./useVrmLoader";
+import { stirPond } from "../scene/pondActivity";
 import type { VRM } from "@pixiv/three-vrm";
 
 export interface VrmAvatarProps {
@@ -84,6 +85,9 @@ export function VrmAvatar({ url, position = [0, 0, 0], rotationY = 0, onLoaded }
     }
     lastWorld.current = (lastWorld.current ?? new THREE.Vector3()).copy(world);
     vrm.update(Math.min(delta, MAX_SPRING_DELTA));
+    // Wading ripples (pondActivity.ts): a distance check, and only does
+    // anything for an avatar actually standing in the pond.
+    stirPond(vrm.scene.uuid, world.x, world.z);
   });
 
   if (!vrm) {

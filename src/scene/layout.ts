@@ -34,6 +34,32 @@ export const OUTDOOR: Rect = { minX: -10, maxX: 10, minZ: 16, maxZ: 38 };
 /** The garden pond: centre (x, z) and outer rim radius. */
 export const POND_CENTER: [number, number] = [0, 27];
 export const POND_RADIUS = 2.9;
+/** Radius of the open water, inside the ring of rocks and moss. */
+export const POND_WATER_RADIUS = POND_RADIUS - 0.32;
+/** How deep the pond is in the middle: about calf height on an avatar. */
+export const POND_DEPTH = 0.38;
+/** Height of the water's surface, a little below the surrounding ground. */
+export const POND_WATER_Y = -0.04;
+
+/**
+ * Ground height inside the pond: level ground at the water's edge,
+ * shelving smoothly down to the full depth across the outer part of the
+ * pond, flat in the middle. The same profile shapes the visible basin
+ * (Pond.tsx) and the height the player stands at (floorHeightAt), so
+ * feet land on the bed you see.
+ */
+export function pondDepthAt(x: number, z: number): number {
+  const r = Math.hypot(x - POND_CENTER[0], z - POND_CENTER[1]);
+  return pondDepthAtRadius(r);
+}
+
+export function pondDepthAtRadius(r: number): number {
+  const edge = POND_WATER_RADIUS + 0.04;
+  const bed = POND_WATER_RADIUS * 0.55;
+  if (r >= edge) return 0;
+  const t = Math.min(1, (edge - r) / (edge - bed));
+  return -POND_DEPTH * t * t * (3 - 2 * t);
+}
 export const CORRIDOR: Rect = { minX: -2.6, maxX: 2.6, minZ: -10, maxZ: -4 };
 export const CLASSROOM: Rect = { minX: -9, maxX: 9, minZ: -24, maxZ: -10 };
 export const ROOMS: Rect[] = [HALL, OUTDOOR, CORRIDOR, CLASSROOM];
@@ -345,11 +371,8 @@ export const OBSTACLES: Obstacle[] = [
   ...DESKS.map((desk) => obstacle(desk.position[0], desk.position[2] + CHAIR_OFFSET / 2, 0.58, 0.62)),
   obstacle(TEACHER_DESK[0], TEACHER_DESK[2] - CHAIR_OFFSET / 2, 0.95, 0.62),
   obstacle(-7, 13.4, 1.8, 0.45), // reception desk
-  // Garden pond (see Pond.tsx). Two squares, one turned 45 degrees, make an
-  // octagon close enough to the round rim that you stop at the stones
-  // instead of walking across the water.
-  obstacle(POND_CENTER[0], POND_CENTER[1], POND_RADIUS * 0.93, POND_RADIUS * 0.93),
-  obstacle(POND_CENTER[0], POND_CENTER[1], POND_RADIUS * 0.93, POND_RADIUS * 0.93, Math.PI / 4),
+  // The garden pond has no collision on purpose: you can wade in. Its
+  // depth comes from floorHeightAt (pondDepthAt) instead.
   // Shoe lockers down one side of the corridor.
   obstacle(CORRIDOR.minX + 0.36, (CORRIDOR.minZ + CORRIDOR.maxZ) / 2 + 0.3, 0.22, 2.4),
   // Lantern posts and planters in the hall.
@@ -524,7 +547,8 @@ export const TATAMI = {
 };
 
 export function floorHeightAt(x: number, z: number): number {
-  return contains(TATAMI, x, z) ? TATAMI.height : 0;
+  if (contains(TATAMI, x, z)) return TATAMI.height;
+  return pondDepthAt(x, z);
 }
 
 /**

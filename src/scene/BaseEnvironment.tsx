@@ -1,5 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type * as THREE from "three";
+import * as THREE_RUNTIME from "three";
 import type { ThreeEvent } from "@react-three/fiber";
 import { useFrame } from "@react-three/fiber";
 import { getWorldMaterials, type WorldMaterials } from "./materials";
@@ -23,6 +24,8 @@ import {
   HALL_CENTRE,
   OUTDOOR,
   OUTDOOR_BENCHES,
+  POND_CENTER,
+  POND_WATER_RADIUS,
   SEATS,
   SEAT_HEIGHT,
   TEACHER_DESK,
@@ -108,7 +111,13 @@ function Floors({ m, onFloorDoubleClick }: { m: WorldMaterials; onFloorDoubleCli
   return (
     <group>
       <FloorPlane rect={HALL} material={m.hallFloor} onDoubleClick={handleDoubleClick} />
-      <FloorPlane rect={OUTDOOR} material={m.classroomFloor} onDoubleClick={handleDoubleClick} />
+      {/* With a hole where the pond's basin sinks below ground (Pond.tsx). */}
+      <FloorPlane
+        rect={OUTDOOR}
+        material={m.classroomFloor}
+        onDoubleClick={handleDoubleClick}
+        hole={{ x: POND_CENTER[0], z: POND_CENTER[1], radius: POND_WATER_RADIUS + 0.04 }}
+      />
       <FloorPlane rect={CORRIDOR} material={m.corridorFloor} onDoubleClick={handleDoubleClick} />
       <FloorPlane rect={CLASSROOM} material={m.classroomFloor} onDoubleClick={handleDoubleClick} />
     </group>
@@ -119,20 +128,45 @@ function FloorPlane({
   rect,
   material,
   onDoubleClick,
+  hole,
 }: {
   rect: Rect;
   material: THREE.Material;
   onDoubleClick?: (event: ThreeEvent<MouseEvent>) => void;
+  /** A round opening in the floor (world x/z), e.g. for the pond. */
+  hole?: { x: number; z: number; radius: number };
 }) {
+  const width = rect.maxX - rect.minX;
+  const depth = rect.maxZ - rect.minZ;
+  const cx = (rect.minX + rect.maxX) / 2;
+  const cz = (rect.minZ + rect.maxZ) / 2;
+  const holed = useMemo(() => {
+    if (!hole) return null;
+    // Built in the plane's own space (x right, y = -z once laid flat).
+    const shape = new THREE_RUNTIME.Shape();
+    shape.moveTo(-width / 2, -depth / 2);
+    shape.lineTo(width / 2, -depth / 2);
+    shape.lineTo(width / 2, depth / 2);
+    shape.lineTo(-width / 2, depth / 2);
+    shape.closePath();
+    const opening = new THREE_RUNTIME.Path();
+    opening.absarc(hole.x - cx, -(hole.z - cz), hole.radius, 0, Math.PI * 2, true);
+    shape.holes.push(opening);
+    const geometry = new THREE_RUNTIME.ShapeGeometry(shape, 48);
+    // ShapeGeometry's UVs are in metres; the floor materials expect 0-1
+    // across the plane, like the PlaneGeometry they replace here.
+    const position = geometry.getAttribute("position");
+    const uv = geometry.getAttribute("uv");
+    for (let i = 0; i < uv.count; i++) {
+      uv.setXY(i, position.getX(i) / width + 0.5, position.getY(i) / depth + 0.5);
+    }
+    return geometry;
+  }, [hole?.x, hole?.z, hole?.radius, width, depth, cx, cz]);
+  useEffect(() => () => holed?.dispose(), [holed]);
+
   return (
-    <mesh
-      rotation={[-Math.PI / 2, 0, 0]}
-      position={[(rect.minX + rect.maxX) / 2, 0, (rect.minZ + rect.maxZ) / 2]}
-      receiveShadow
-      material={material}
-      onDoubleClick={onDoubleClick}
-    >
-      <planeGeometry args={[rect.maxX - rect.minX, rect.maxZ - rect.minZ]} />
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[cx, 0, cz]} receiveShadow material={material} onDoubleClick={onDoubleClick}>
+      {holed ? <primitive object={holed} attach="geometry" /> : <planeGeometry args={[width, depth]} />}
     </mesh>
   );
 }
@@ -547,6 +581,21 @@ function ClassroomDoor({ m }: { m: WorldMaterials }) {
       <mesh position={[0, SHOJI_HEAD_TOP - 0.07, SHOJI_DOOR_Z]} material={m.trim} castShadow>
         <boxGeometry args={[openingWidth, 0.14, WALL_THICKNESS + 0.06]} />
       </mesh>
+      {/* Thin edge liners where the wall is cut for the doorway: wainscot
+          material up to the wainscot's height (it stands 4cm proud of the
+          wall, and its raw cut end read as clipping beside the closed
+          leaves), plain wall above. Only 1.2cm wide, so the leaves still
+          visibly slide away into the wall. */}
+      {[-1, 1].map((side) => (
+        <group key={side} position={[side * (SHOJI_HALF_OPENING - 0.006), 0, SHOJI_DOOR_Z]}>
+          <mesh position={[0, 0.475, 0]} material={m.wainscot}>
+            <boxGeometry args={[0.012, 0.95, WALL_THICKNESS + 0.08]} />
+          </mesh>
+          <mesh position={[0, (0.95 + SHOJI_HEAD_TOP) / 2, 0]} material={m.wall}>
+            <boxGeometry args={[0.012, SHOJI_HEAD_TOP - 0.95, WALL_THICKNESS]} />
+          </mesh>
+        </group>
+      ))}
       <mesh position={[0, (SHOJI_HEAD_TOP + CLASSROOM_WALL_HEIGHT) / 2, SHOJI_DOOR_Z]} material={m.wall} receiveShadow>
         <boxGeometry args={[openingWidth, CLASSROOM_WALL_HEIGHT - SHOJI_HEAD_TOP, WALL_THICKNESS]} />
       </mesh>
@@ -645,7 +694,7 @@ function HallFurniture({ m, lit, onToggleLight }: { m: WorldMaterials; lit: bool
 
       {/* Light switch for the lanterns, on the wall beside the corridor
           doorway. */}
-      <group position={[DOOR_HALF_WIDTH + 0.5, 1.25, HALL.minZ + WALL_THICKNESS / 2 + 0.008]}>
+      <group position={[DOOR_HALF_WIDTH + 0.95, 1.2, HALL.minZ + WALL_THICKNESS / 2 + 0.008]}>
         <LightSwitch on={lit} onToggle={onToggleLight && ((on) => onToggleLight("hall", on))} />
       </group>
 
@@ -789,8 +838,9 @@ function ClassroomShell({ m, lit, onToggleLight }: { m: WorldMaterials; lit: boo
         m={m}
       />
       <ClassroomDoor m={m} />
-      {/* Light switch just inside the door, on the classroom side. */}
-      <group position={[-(DOOR_HALF_WIDTH + 0.5), 1.25, CLASSROOM.maxZ - WALL_THICKNESS / 2 - 0.008]} rotation={[0, Math.PI, 0]}>
+      {/* Light switch on the classroom side, a step clear of the doorway
+          so it doesn't crowd the door's edge. */}
+      <group position={[-(DOOR_HALF_WIDTH + 0.95), 1.2, CLASSROOM.maxZ - WALL_THICKNESS / 2 - 0.008]} rotation={[0, Math.PI, 0]}>
         <LightSwitch on={lit} onToggle={onToggleLight && ((on) => onToggleLight("classroom", on))} />
       </group>
       <DressedWall axis="x" at={CLASSROOM.minZ} from={CLASSROOM.minX} to={CLASSROOM.maxX} height={CLASSROOM_WALL_HEIGHT} m={m} />
@@ -943,10 +993,15 @@ function ClassroomFurniture({ m }: { m: WorldMaterials }) {
       {/* Wall clock, off to the side of the doorway so it has wall behind it. */}
       {/* Faces into the classroom (-Z), with a tear-off date calendar
           beside it. Both show the viewer's own local time. */}
-      <group position={[4.6, 2.7, CLASSROOM.maxZ - WALL_THICKNESS / 2 - 0.035]} rotation={[0, Math.PI, 0]}>
-        <WallClock m={m} />
+      {/* Two time-zone clocks, hotel-lobby style. Facing into the room,
+          the Philippines clock is on the left. */}
+      <group position={[4.85, 2.78, CLASSROOM.maxZ - WALL_THICKNESS / 2 - 0.035]} rotation={[0, Math.PI, 0]}>
+        <WallClock m={m} timeZone="Asia/Manila" label="PHILIPPINES" />
       </group>
-      <group position={[5.45, 2.66, CLASSROOM.maxZ - WALL_THICKNESS / 2 - 0.012]} rotation={[0, Math.PI, 0]}>
+      <group position={[4.05, 2.78, CLASSROOM.maxZ - WALL_THICKNESS / 2 - 0.035]} rotation={[0, Math.PI, 0]}>
+        <WallClock m={m} timeZone="Asia/Tokyo" label="JAPAN" />
+      </group>
+      <group position={[5.75, 2.66, CLASSROOM.maxZ - WALL_THICKNESS / 2 - 0.012]} rotation={[0, Math.PI, 0]}>
         <DateCalendar m={m} />
       </group>
     </group>
