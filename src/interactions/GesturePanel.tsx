@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { GestureDefinition } from "../avatar/gestures";
+import { useExclusiveMenu } from "../ui/exclusiveMenu";
 import { BAR_LABEL_CLASS, barButtonActiveStyle, barButtonStyle, panelStyle, pillButtonActiveStyle, pillButtonStyle, popoverStyle } from "../ui/styles";
 import { WaveIcon } from "../ui/icons";
 
@@ -34,6 +35,7 @@ export function GesturePanel({
   showShortcuts,
 }: GesturePanelProps) {
   const [open, setOpen] = useState(false);
+  useExclusiveMenu("gestures", open, () => setOpen(false));
   const [practice, setPractice] = useState(false);
   const [target, setTarget] = useState<string | null>(null);
   const [score, setScore] = useState(0);

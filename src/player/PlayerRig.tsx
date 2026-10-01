@@ -423,6 +423,14 @@ export function PlayerRig({
       groundEyeYRef.current = target.y + EYE_HEIGHT;
       virtualCameraRef.current!.position.set(target.x, target.y + EYE_HEIGHT, target.z);
       xrOriginRef.current?.position.set(target.x, target.y, target.z);
+      // Leave any seat behind *here*, before the seated branch below sees
+      // it: otherwise it eases the camera back onto the chair, and the
+      // "just left a seat" step then puts the player beside that chair,
+      // undoing the warp. onWarped (App's standUp) clears the seat and any
+      // held posture for good on the next render.
+      sitAnchorRef.current = null;
+      previousSitAnchorRef.current = null;
+      seatedExitRef.current = false;
       onWarpedRef.current?.();
     }
 

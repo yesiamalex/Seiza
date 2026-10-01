@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useExclusiveMenu } from "../ui/exclusiveMenu";
 import type { PlayerState } from "../multiplayer/types";
 import type { ConnectionState } from "../multiplayer/useRoomSocket";
 import { panelStyle, pillButtonStyle } from "../ui/styles";
@@ -60,6 +61,7 @@ export function ParticipantRoster({
   onGatherAll,
 }: ParticipantRosterProps) {
   const [open, setOpen] = useState(false);
+  useExclusiveMenu("roster", open, () => setOpen(false));
   const statusColor = connectionState === "connected" ? "#7CFF9E" : connectionState === "connecting" ? "#8ab4ff" : "#ffb347";
   const statusLabel = connectionState === "connected" ? "connected" : connectionState === "connecting" ? "connecting…" : "reconnecting…";
   const roster = Object.values(players).sort((a, b) => a.displayName.localeCompare(b.displayName));

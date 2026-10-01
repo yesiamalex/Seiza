@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { closeAllMenus } from "./exclusiveMenu";
 import { panelStyle } from "./styles";
-import { ChevronRightIcon, MenuIcon, SignalIcon, SignalOffIcon } from "./icons";
+import { ChevronRightIcon, CloseIcon, MenuIcon, SignalIcon, SignalOffIcon } from "./icons";
 import type { ConnectionState } from "../multiplayer/useRoomSocket";
 import { TOUCH_CONTROLS_CLEARANCE_CSS, TOUCH_CONTROLS_SIDE_CLEARANCE_CSS } from "../player/touchControlsMetrics";
 import { useMediaQuery } from "./useMediaQuery";
@@ -28,6 +29,41 @@ const STATUS_LABEL: Record<ConnectionState, string> = {
   reconnecting: "reconnecting…",
 };
 
+/** The dock's own look, shared by the bar and the landscape bottom drawer. */
+const BAR_STYLE: React.CSSProperties = {
+  pointerEvents: "auto",
+  flexWrap: "nowrap",
+  gap: 2,
+  alignItems: "center",
+  // Keeps the glass layer's z-index:-1 inside the bar without making the
+  // bar a containing block for its fixed panels.
+  isolation: "isolate",
+  border: "1px solid rgba(255,255,255,0.09)",
+  borderRadius: 16,
+  padding: 5,
+  boxShadow: "0 10px 30px rgba(0,0,0,0.38)",
+  boxSizing: "border-box",
+};
+
+/** The round button that opens and closes either drawer. */
+const LAUNCHER_STYLE: React.CSSProperties = {
+  pointerEvents: "auto",
+  width: 44,
+  height: 44,
+  flexShrink: 0,
+  display: "grid",
+  placeItems: "center",
+  borderRadius: 14,
+  background: "rgba(16,17,22,0.84)",
+  backdropFilter: "blur(10px)",
+  WebkitBackdropFilter: "blur(10px)",
+  border: "1px solid rgba(255,255,255,0.12)",
+  color: "white",
+  boxShadow: "0 10px 30px rgba(0,0,0,0.38)",
+  cursor: "pointer",
+  padding: 0,
+};
+
 /** Gap between the open drawer and anything that steps aside for it
  *  (its own launcher tab, docked popovers). */
 const DRAWER_GAP_PX = 8;
@@ -37,20 +73,27 @@ const DRAWER_EDGE_PX = 10;
 export function HUD({ connectionState, worldName, topRight, topLeft, touchControlsVisible, children }: HUDProps) {
   const connected = connectionState === "connected";
 
-  // Portrait phones get a drawer instead of the horizontal bar. A
-  // landscape phone is too short for a vertical drawer (~300px of world
-  // under the browser chrome), so it keeps the bar, but see below for
-  // where that bar goes.
+  // Portrait phones get a drawer on the right edge. A landscape phone is
+  // too short for a vertical drawer (~300px of world under the browser
+  // chrome), so it gets a collapsible bar along the bottom instead (see
+  // `bottomDrawer`). Both start closed, so the world is what you see.
   const isCompact = useMediaQuery("(max-width: 640px)");
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const isShort = useMediaQuery("(max-height: 520px)");
+  const bottomDrawer = Boolean(touchControlsVisible) && !isCompact && isShort;
+  const [drawerOpen, setDrawerOpenState] = useState(false);
   const [drawerWidth, setDrawerWidth] = useState(0);
+  // Collapsing a drawer takes its panels with it, rather than leaving a
+  // chat or gesture panel floating with nothing it belongs to.
+  const setDrawerOpen = useCallback((open: boolean) => {
+    if (!open) closeAllMenus();
+    setDrawerOpenState(open);
+  }, []);
 
-  // Rotating a phone to landscape (or docking a keyboard) takes the
-  // layout back to the horizontal bar, where a stuck-open drawer flag
-  // would otherwise reappear the next time the viewport narrowed.
+  // Switching layouts (rotating the phone, docking a keyboard) starts the
+  // new layout closed, instead of carrying the other one's open flag over.
   useEffect(() => {
-    if (!isCompact) setDrawerOpen(false);
-  }, [isCompact]);
+    setDrawerOpenState(false);
+  }, [isCompact, bottomDrawer]);
 
   // Where the bar sits relative to the D-pad.
   //
@@ -268,6 +311,35 @@ export function HUD({ connectionState, worldName, topRight, topLeft, touchContro
         <ControlDrawer open={drawerOpen} onOpenChange={setDrawerOpen} onWidthChange={setDrawerWidth} launcherRight={drawerClearance}>
           {children}
         </ControlDrawer>
+      ) : bottomDrawer ? (
+        // Landscape phone: the bar along the bottom, between the D-pad and
+        // the jump button, collapsed to a single button until it's wanted.
+        <div style={{ display: "flex", alignItems: "center", gap: 8, maxWidth: `calc(100vw - 2 * ${sideClearance})` }}>
+          <div
+            className="seiza-control-bar seiza-fade-in"
+            role="group"
+            aria-label="World controls"
+            style={{
+              ...BAR_STYLE,
+              // display:none rather than unmounting, so each control keeps
+              // its own state (an unread count, a half-typed message).
+              display: drawerOpen ? "flex" : "none",
+              minWidth: 0,
+            }}
+          >
+            <div className="seiza-dock-glass" aria-hidden />
+            {children}
+          </div>
+          <button
+            type="button"
+            onClick={() => setDrawerOpen(!drawerOpen)}
+            aria-expanded={drawerOpen}
+            aria-label={drawerOpen ? "Hide controls" : "Show controls"}
+            style={{ ...LAUNCHER_STYLE, position: "relative" }}
+          >
+            {drawerOpen ? <CloseIcon size={18} /> : <MenuIcon size={20} />}
+          </button>
+        </div>
       ) : (
         <div
           className="seiza-control-bar"

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useExclusiveMenu } from "../ui/exclusiveMenu";
 import { panelStyle, pillButtonActiveStyle, pillButtonStyle, primaryButtonStyle, inputStyle } from "../ui/styles";
 import { ShieldIcon, CloseIcon, LockIcon } from "../ui/icons";
 
@@ -25,6 +26,7 @@ interface AdminButtonProps {
  */
 export function AdminButton({ isAdmin, authPending, authFailed, onSubmit, roomPasswordSet, onSetRoomPassword }: AdminButtonProps) {
   const [open, setOpen] = useState(false);
+  useExclusiveMenu("admin", open, () => setOpen(false));
   const [draft, setDraft] = useState("");
   const [roomPasswordDraft, setRoomPasswordDraft] = useState("");
 

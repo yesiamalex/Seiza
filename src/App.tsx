@@ -27,6 +27,7 @@ import { TextEditorDialog } from "./edit/TextEditorDialog";
 import { GesturePanel } from "./interactions/GesturePanel";
 import { ChatPanel } from "./chat/ChatPanel";
 import { HUD } from "./ui/HUD";
+import { useExclusiveMenu } from "./ui/exclusiveMenu";
 import { FpsCounter } from "./ui/FpsCounter";
 import { Toast } from "./ui/Toast";
 import { JoinScreen, type JoinedIdentity } from "./ui/JoinScreen";
@@ -48,6 +49,8 @@ const ACCENT_OBJECT_COLOR = "#e8c37a";
 // How far a "share my screen" from the toolbar will reach for a display.
 const SHARE_REACH = 30;
 const NETWORK_TICK_MS = 200;
+/** How far from the target a teleport or gather lands (metres). */
+const GATHER_RADIUS = 1.1;
 // Custom clips don't declare a duration up front. AvatarAnimator reports
 // the real end; this only bounds how long a stuck gesture can stay "active".
 const GESTURE_FALLBACK_SECONDS = 10;
@@ -93,6 +96,14 @@ export default function App() {
   const [xrError, setXrError] = useState<string | null>(null);
   const [webglLost, setWebglLost] = useState(false);
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
+  // One panel open at a time across the whole HUD (see exclusiveMenu.ts).
+  useExclusiveMenu("chat", chatOpen, () => setChatOpen(false));
+  useExclusiveMenu("avatar", avatarMenuOpen, () => setAvatarMenuOpen(false));
+  // Edit mode's panel counts too: opening another panel leaves edit mode.
+  useExclusiveMenu("edit", editMode, () => {
+    setEditMode(false);
+    setSelectedObjectId(null);
+  });
   const [avatarMessage, setAvatarMessage] = useState<string | null>(null);
   /** Id of the screen object currently blown up to fill the viewport. */
   const [zoomedScreenId, setZoomedScreenId] = useState<string | null>(null);
@@ -142,6 +153,8 @@ export default function App() {
   // Set by an admin's "teleport to this person" / "gather everyone
   // here" — see PlayerRig's warpTargetRef doc comment.
   const warpTargetRef = useRef<THREE.Vector3 | null>(null);
+  // Read by the gather handler, which is created before selfId exists.
+  const selfIdRef = useRef<string | null>(null);
   const roomId = world && joined ? world.id : "";
   const {
     selfId,
@@ -191,12 +204,24 @@ export default function App() {
       () => ({
         onForceMute: (muted: boolean) => forceMuteHandlerRef.current(muted),
         onGatherRequest: (position: [number, number, number]) => {
-          warpTargetRef.current = new THREE.Vector3(position[0], position[1], position[2]);
+          // Everyone lands on their own spot in a ring around the admin
+          // (picked from their connection id, so it's stable and spread
+          // out) instead of all on one point inside the admin's avatar.
+          const id = selfIdRef.current ?? "";
+          let hash = 0;
+          for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+          const angle = ((hash % 360) / 360) * Math.PI * 2;
+          warpTargetRef.current = new THREE.Vector3(
+            position[0] + Math.sin(angle) * GATHER_RADIUS,
+            position[1],
+            position[2] + Math.cos(angle) * GATHER_RADIUS
+          );
         },
       }),
       []
     )
   );
+  selfIdRef.current = selfId;
 
   // Rebuild the walkable surface whenever the environment changes — on
   // first load, and on every editor environment swap. Debounced inside
@@ -466,7 +491,14 @@ export default function App() {
     (targetId: string) => {
       const target = players[targetId];
       if (!target) return;
-      warpTargetRef.current = new THREE.Vector3(target.position[0], target.position[1], target.position[2]);
+      // Arrive a step in front of them, facing distance rather than inside
+      // their avatar. Avatars face -Z at yaw 0 (see PlayerRig).
+      const yaw = target.rotationY ?? 0;
+      warpTargetRef.current = new THREE.Vector3(
+        target.position[0] - Math.sin(yaw) * GATHER_RADIUS,
+        target.position[1],
+        target.position[2] - Math.cos(yaw) * GATHER_RADIUS
+      );
     },
     [players]
   );
@@ -732,6 +764,10 @@ export default function App() {
             postureHeld={!!posture}
             postureEyeHeight={posture?.name === "seiza" ? 0.82 : null}
             onStandUp={standUp}
+            // Without these two, admin "teleport to" and "gather everyone"
+            // set a warp target nothing ever read, so both did nothing.
+            warpTargetRef={warpTargetRef}
+            onWarped={standUp}
           >
             <VrmAvatar url={joined.localUrl ?? joined.url} onLoaded={setLocalVrm} />
             {/* Your own camera, so you can see what everyone else sees. */}

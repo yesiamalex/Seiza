@@ -102,8 +102,10 @@ const fragmentShader = /* glsl */ `
    * pixel across, so whether a pixel's single sample happened to land on
    * it flipped with the smallest camera movement, which made the whole
    * field sparkle on every step. Each star is now drawn at least about a
-   * pixel wide (fwidth gives the pixel's size in cell units), and dimmed
-   * by the area it grew by, so it stays put and keeps its brightness.
+   * pixel wide (fwidth gives the pixel's size in cell units). Dimming it
+   * by the full area it grew by is physically right but made the field
+   * all but vanish, so it gives back only part of that: steady, and still
+   * clearly visible.
    */
   float starLayer(vec3 d, float scale, float density, float radius) {
     vec3 p = d * scale;
@@ -115,20 +117,22 @@ const fragmentShader = /* glsl */ `
     vec3 offset = vec3(hash31(cell + 11.3), hash31(cell + 23.7), hash31(cell + 41.1));
     float dist = length(f - offset);
 
-    float pixel = length(fwidth(p)) * 0.75;
+    float pixel = length(fwidth(p)) * 0.6;
     float r = max(radius, pixel);
-    float energy = (radius * radius) / (r * r);
+    float energy = pow(radius / r, 0.45);
 
     // A soft point, then a magnitude: most stars are faint and a few are
     // bright, which is what stops a uniform grid reading as noise.
     float point = smoothstep(r, 0.0, dist) * energy;
     float magnitude = hash31(cell + 67.9);
 
-    // A gentle, slow twinkle: each star on its own phase and rate, never
-    // dipping below ~75%, so it reads as air shimmer rather than blinking.
+    // A gentle, slow twinkle: each star on its own phase and rate. Two
+    // sines at unrelated rates so it never looks like a metronome; it
+    // dips to about half brightness at most, so it shimmers, not blinks.
     float phase = hash31(cell + 91.7) * 6.2831;
-    float rate = 0.6 + hash31(cell + 13.9) * 1.4;
-    float twinkle = 0.88 + 0.12 * sin(uTime * rate + phase);
+    float rate = 0.7 + hash31(cell + 13.9) * 1.6;
+    float wave = sin(uTime * rate + phase) * 0.6 + sin(uTime * rate * 2.37 + phase * 1.7) * 0.4;
+    float twinkle = 0.75 + 0.25 * wave;
 
     return point * (0.22 + magnitude * magnitude * 1.7) * twinkle;
   }

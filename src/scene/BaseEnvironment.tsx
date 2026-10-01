@@ -335,6 +335,13 @@ function HallShell({ m }: { m: WorldMaterials }) {
         <Window key={`e-${z}`} position={[HALL.maxX - 0.2, HALL_WINDOW_CENTER_Y, z]} rotationY={-Math.PI / 2} width={HALL_WINDOW_WIDTH} m={m} />
       ))}
 
+      {/* The hall's two doorway gaps are cut the full height of the wall,
+          so above each door header there was a hole straight through to
+          the sky, and the corridor's wall caps stuck out into it. These
+          fill the wall back in above the doors. */}
+      <DoorLintel z={HALL.minZ} bottom={2.6} m={m} />
+      <DoorLintel z={HALL.maxZ} bottom={2.64} m={m} />
+
       {/* Open entrance into the bounded garden beyond the hall. */}
       <mesh position={[0, 2.5, HALL.maxZ]} material={m.trim} castShadow>
         <boxGeometry args={[DOOR_HALF_WIDTH * 2, 0.28, 0.35]} />
@@ -354,6 +361,22 @@ function HallShell({ m }: { m: WorldMaterials }) {
       ))}
       <mesh position={[0, WALL_HEIGHT - 0.52, (HALL.minZ + HALL.maxZ) / 2]} material={m.beam} castShadow>
         <boxGeometry args={[0.32, 0.32, HALL.maxZ - HALL.minZ]} />
+      </mesh>
+    </group>
+  );
+}
+
+/** Wall above a hall doorway, from the door header to the top of the wall,
+ *  with the wall's top trim carried across it. */
+function DoorLintel({ z, bottom, m }: { z: number; bottom: number; m: WorldMaterials }) {
+  const width = DOOR_HALF_WIDTH * 2;
+  return (
+    <group>
+      <mesh position={[0, (bottom + WALL_HEIGHT) / 2, z]} material={m.wall} castShadow receiveShadow>
+        <boxGeometry args={[width, WALL_HEIGHT - bottom, WALL_THICKNESS]} />
+      </mesh>
+      <mesh position={[0, WALL_HEIGHT - 0.12, z]} material={m.trim}>
+        <boxGeometry args={[width, 0.16, WALL_THICKNESS + 0.2]} />
       </mesh>
     </group>
   );

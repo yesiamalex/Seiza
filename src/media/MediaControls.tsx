@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useExclusiveMenu } from "../ui/exclusiveMenu";
 import type { RealtimeMediaState } from "./useRealtimeMedia";
 import { VOICE_ENABLED } from "./useRealtimeMedia";
 import { BAR_LABEL_CLASS, barButtonActiveStyle, barButtonStyle, panelStyle, pillButtonActiveStyle, pillButtonStyle, popoverStyle } from "../ui/styles";
@@ -22,6 +23,7 @@ interface MediaControlsProps {
  */
 export function MediaControls({ media, voiceEnabled, onShareScreen, onStopScreen }: MediaControlsProps) {
   const [open, setOpen] = useState(false);
+  useExclusiveMenu("media", open, () => setOpen(false));
   const [shareProblem, setShareProblem] = useState<string | null>(null);
   const voiceAvailable = VOICE_ENABLED && voiceEnabled;
 

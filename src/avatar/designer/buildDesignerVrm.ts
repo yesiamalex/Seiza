@@ -63,6 +63,25 @@ function skeleton(build: number): BoneDef[] {
   ];
 }
 
+/**
+ * Three-tone light ramps for the cel shading (shadow, mid, lit), shared by
+ * every designer avatar. The face has its own, much flatter one.
+ */
+const toonRamps = new Map<string, THREE.DataTexture>();
+function toonRamp(kind: "body" | "face" = "body"): THREE.DataTexture {
+  let ramp = toonRamps.get(kind);
+  if (!ramp) {
+    const tones = kind === "face" ? [212, 236, 255] : [128, 200, 255];
+    ramp = new THREE.DataTexture(new Uint8Array(tones), 3, 1, THREE.RedFormat);
+    ramp.minFilter = THREE.NearestFilter;
+    ramp.magFilter = THREE.NearestFilter;
+    ramp.generateMipmaps = false;
+    ramp.needsUpdate = true;
+    toonRamps.set(kind, ramp);
+  }
+  return ramp;
+}
+
 export function buildDesignerVrm(spec: AvatarSpec): VRM {
   const h = spec.height;
   const b = spec.build;
@@ -70,17 +89,28 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
   scene.name = "SeizaDesignerAvatar";
 
   // ---- materials (one per color, shared across parts) --------------------
-  const materials = new Map<string, THREE.MeshStandardMaterial>();
-  const mat = (hex: string, roughness = 0.62) => {
-    const key = `${hex}:${roughness}`;
-    let m = materials.get(key);
+  //
+  // Cel-shaded rather than physically shaded. Smooth glossy shading on
+  // simple rounded forms is exactly what made these read as inflatable
+  // toys: every surface got the same soft highlight and gradient as a
+  // balloon. A few flat tones, like the MToon shading VRoid avatars use,
+  // reads as drawn instead, and matches the uploaded avatars in the room.
+  // `roughness` is kept in the signature only so call sites stay the same.
+  const materials = new Map<string, THREE.MeshToonMaterial>();
+  const mat = (hex: string, _roughness = 0.62) => {
+    let m = materials.get(hex);
     if (!m) {
-      m = new THREE.MeshStandardMaterial({ color: hex, roughness, metalness: 0 });
-      materials.set(key, m);
+      m = new THREE.MeshToonMaterial({ color: hex, gradientMap: toonRamp() });
+      materials.set(hex, m);
     }
     return m;
   };
   const skin = mat(spec.skin, 0.55);
+  // The face gets an almost flat ramp: a hard shadow band across a face
+  // is the one place cel shading looks wrong, and anime faces are lit
+  // nearly evenly for exactly that reason.
+  const faceSkin = new THREE.MeshToonMaterial({ color: spec.skin, gradientMap: toonRamp("face") });
+  materials.set(`${spec.skin}:face`, faceSkin);
   const hair = mat(spec.hairColor, 0.7);
   // Hair is built from open shells (caps cut off above the face), whose
   // inside faces would otherwise vanish and leave hairline slivers.
@@ -158,19 +188,19 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
     // thighs (which start inside it) form the crotch. A wide, low pelvis
     // bulged down between the legs as a separate seat shape.
     { s: 0.82, a: W(0.02), b: 0.02, c: -0.01 },
-    { s: 0.845, a: W(0.1), b: 0.078, c: -0.01 },
-    { s: 0.875, a: W(0.156), b: 0.102, c: -0.012 },
-    { s: 0.93, a: W(0.158), b: 0.104, c: -0.01 },
-    { s: 1.0, a: W(0.145 * (0.55 + 0.5 * waist)), b: 0.094, c: -0.004 },
-    { s: 1.06, a: W(0.14 * (0.5 + 0.55 * waist)), b: 0.092, c: 0.0 },
-    { s: 1.13, a: W(0.148), b: 0.1, c: 0.006 },
-    { s: 1.21, a: W(0.158 * (0.6 + 0.4 * shoulderSpread)), b: 0.106, c: 0.008 },
-    { s: 1.29, a: W(0.168 * shoulderSpread), b: 0.1, c: 0.002 },
-    { s: 1.345, a: W(0.158 * shoulderSpread), b: 0.084, c: -0.006 },
-    { s: 1.385, a: W(0.1 * shoulderSpread), b: 0.064, c: -0.01 },
-    { s: 1.415, a: 0.05, b: 0.05, c: -0.006 },
-    { s: 1.49, a: 0.043, b: 0.045, c: 0.0 },
-    { s: 1.57, a: 0.038, b: 0.04, c: 0.004 },
+    { s: 0.845, a: W(0.075), b: 0.07, c: -0.012 },
+    { s: 0.875, a: W(0.146), b: 0.094, c: -0.014 },
+    { s: 0.93, a: W(0.146), b: 0.094, c: -0.01 },
+    { s: 1.0, a: W(0.134 * (0.55 + 0.5 * waist)), b: 0.084, c: -0.004 },
+    { s: 1.06, a: W(0.128 * (0.5 + 0.55 * waist)), b: 0.082, c: 0.0 },
+    { s: 1.13, a: W(0.136), b: 0.09, c: 0.006 },
+    { s: 1.21, a: W(0.146 * (0.6 + 0.4 * shoulderSpread)), b: 0.096, c: 0.008 },
+    { s: 1.29, a: W(0.156 * shoulderSpread), b: 0.09, c: 0.002 },
+    { s: 1.345, a: W(0.158 * shoulderSpread), b: 0.076, c: -0.006 },
+    { s: 1.378, a: W(0.122 * shoulderSpread), b: 0.062, c: -0.01 },
+    { s: 1.405, a: 0.05, b: 0.05, c: -0.006 },
+    { s: 1.49, a: 0.045, b: 0.047, c: 0.0 },
+    { s: 1.57, a: 0.04, b: 0.042, c: 0.004 },
   ];
   const torsoWeights = chainWeights(
     [boneIndex.hips, boneIndex.spine, boneIndex.chest, boneIndex.upperChest, boneIndex.neck, boneIndex.head],
@@ -190,7 +220,7 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
         to,
         step: 0.012,
         segments: 22,
-        exponent: 2.35,
+        exponent: 2.7,
         inflate,
         pad,
         place: (y, u, v) => [u * h, y * h, v * h],
@@ -224,7 +254,7 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
     add("upperChest", new THREE.CylinderGeometry(0.05, 0.001, 0.09, 3), white, [0, 0.07, torsoFront(1.34) + 0.004], [0, 0, Math.PI], [1, 1, 0.25]);
   }
   if (spec.accessories.includes("tie")) {
-    add("chest", new THREE.BoxGeometry(0.032, 0.17, 0.012), accessory, [0, 0.09, torsoFront(1.24) + 0.01], [-0.08, 0, 0]);
+    add("chest", new THREE.CylinderGeometry(0.02, 0.026, 0.2, 4, 1), accessory, [0, 0.1, torsoFront(1.25) + 0.008], [-0.08, Math.PI / 4, 0], [1, 1, 0.35]);
     add("upperChest", new THREE.BoxGeometry(0.04, 0.03, 0.014), accessory, [0, 0.085, torsoFront(1.355) + 0.008]);
   }
   if (spec.top === "hoodie") {
@@ -289,11 +319,11 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
   // the same pre-height units as everything placed with `face()`, is
   // what the painted features are wrapped onto.
   const headGeometry = sculptedHeadGeometry();
-  face(headGeometry, skin);
+  face(headGeometry, faceSkin);
   const headSurface = raycastFaceSurface(headGeometry);
   // Nose: just a tip that catches a highlight and a short shadow. At this
   // level of stylisation anything more reads as a caricature.
-  face(sphere(0.0055), skin, [0, -0.03, headSurface(0, -0.03) - 0.0015], [0, 0, 0], [1, 0.75, 1]);
+  face(sphere(0.0055), faceSkin, [0, -0.03, headSurface(0, -0.03) - 0.0015], [0, 0, 0], [1, 0.75, 1]);
 
   // Painted features (designerFace.ts), each in the group the expression
   // system animates. Eye and brow are painted once and mirrored.
@@ -307,7 +337,7 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
     [-1, "rightEye"],
   ] as const) {
     // Ear.
-    face(sphere(0.028), skin, [0.122 * side, -0.005, -0.005], [0, 0, 0], [0.6, 1, 0.8]);
+    face(sphere(0.024), faceSkin, [0.116 * side, -0.01, -0.004], [0, 0, 0], [0.5, 1, 0.75]);
 
     const eyeDecal = faceDecalGeometry(headSurface, 0.044 * side, -0.006, 0.058, 0.064, 0.0015, side < 0);
     const eye = facePart(eyeDecal.origin);
@@ -436,15 +466,15 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
   const sleeveLength = longSleeves ? 0.478 : spec.top === "tshirt" ? 0.13 : 0;
   const shoulderX = 0.165 * b;
   const armKeys: ProfileKey[] = [
-    { s: shoulderX - 0.07, a: W(0.05), b: W(0.05) },
-    { s: shoulderX, a: W(0.053), b: W(0.056) },
-    { s: shoulderX + 0.05, a: W(0.047), b: W(0.047) },
-    { s: shoulderX + 0.14, a: W(0.04), b: W(0.039) },
-    { s: shoulderX + 0.235, a: W(0.032), b: W(0.034) },
-    { s: shoulderX + 0.275, a: W(0.034), b: W(0.037) },
-    { s: shoulderX + 0.34, a: W(0.03), b: W(0.032) },
-    { s: shoulderX + 0.44, a: W(0.02), b: W(0.027) },
-    { s: shoulderX + 0.49, a: W(0.019), b: W(0.026) },
+    { s: shoulderX - 0.07, a: W(0.034), b: W(0.04) },
+    { s: shoulderX, a: W(0.04), b: W(0.046) },
+    { s: shoulderX + 0.05, a: W(0.041), b: W(0.042) },
+    { s: shoulderX + 0.14, a: W(0.035), b: W(0.035) },
+    { s: shoulderX + 0.235, a: W(0.028), b: W(0.03) },
+    { s: shoulderX + 0.275, a: W(0.03), b: W(0.033) },
+    { s: shoulderX + 0.34, a: W(0.027), b: W(0.029) },
+    { s: shoulderX + 0.44, a: W(0.018), b: W(0.025) },
+    { s: shoulderX + 0.49, a: W(0.017), b: W(0.024) },
   ];
   for (const [side, prefix] of [[1, "left"], [-1, "right"]] as const) {
     const shoulder = `${prefix}Shoulder` as VRMHumanBoneName;
@@ -472,7 +502,9 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
           pad,
           // Along the arm is X (mirrored per side); the cross-section is
           // the vertical (a) and front/back (b) thickness.
-          place: (x, u, v) => [side * x * h, (1.35 + u) * h, v * h],
+          // A touch below the joint, so the top of the arm runs into the
+          // shoulder's slope instead of standing above it like an epaulette.
+          place: (x, u, v) => [side * x * h, (1.336 + u) * h, v * h],
           weights,
         }),
         material
@@ -485,10 +517,14 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
       arm(-0.07, 0.49, skin);
     }
 
-    // Hand: palm, a finger mass and a thumb, rigid on the hand bone.
-    add(hand, sphere(0.04), skin, [0.042 * side, -0.003, 0.002], [0, 0, 0], [1.05, 0.52, 0.95]);
-    add(hand, sphere(0.034), skin, [0.083 * side, -0.007, 0.002], [0, 0, 0], [1.05, 0.42, 0.95]);
-    add(hand, capsule(0.0115, 0.028), skin, [0.03 * side, -0.004, 0.036], [HALF_PI, 0, -0.5 * side]);
+    // Hand: a flattened palm, four slightly curled fingers and a thumb,
+    // rigid on the hand bone. A single blob here was the "mitten" look.
+    add(hand, sphere(0.034), skin, [0.04 * side, -0.002, 0.0], [0, 0, 0], [1.2, 0.48, 1.0]);
+    for (const [i, z] of [0.018, 0.006, -0.006, -0.017].entries()) {
+      const length = [0.034, 0.038, 0.036, 0.028][i];
+      add(hand, capsule(0.0072, length), skin, [(0.083 + length / 2 - 0.006) * side, -0.006 - length * 0.16, z], [0, 0, (HALF_PI - 0.35) * side]);
+    }
+    add(hand, capsule(0.0085, 0.026), skin, [0.03 * side, -0.006, 0.032], [HALF_PI, 0, -0.55 * side]);
   }
 
   // ---- legs -------------------------------------------------------------------

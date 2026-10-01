@@ -262,28 +262,55 @@ const LOCOMOTION = [
   {
     name: "walk",
     duration: 1.0,
+    // Shaped after real gait curves, kept gentle. Each leg runs its own
+    // phase (0 = heel strike): the knee gives a little as the heel lands,
+    // then bends properly while the leg swings through; the ankle lifts
+    // the toes at heel strike and pushes off at toe-off. The pelvis tips
+    // and shifts over the standing leg, and the arms swing opposite the
+    // legs a beat behind them, with the elbow bending more as the arm
+    // comes forward. The earlier version swung everything on one sine,
+    // which reads as a wind-up toy.
     sample: (t) => {
       const p = 2 * Math.PI * t;
       const s = Math.sin(p);
       const c = Math.cos(p);
-      const lKnee = 8 + 45 * Math.pow(pos(c), 1.4);
-      const rKnee = 8 + 45 * Math.pow(pos(-c), 1.4);
+      // Wrapped distance between two phases on the 0-1 cycle.
+      const gap = (a, b) => {
+        const d = Math.abs(((a - b) % 1) + 1) % 1;
+        return Math.min(d, 1 - d);
+      };
+      const bump = (phase, at, width) => Math.exp(-((gap(phase, at) / width) ** 2));
+      const leg = (phase) => {
+        const flex = 6 + 20 * Math.cos(2 * Math.PI * phase); // hip: +26 forward … -14 back
+        const knee = 5 + 13 * bump(phase, 0.1, 0.08) + 52 * bump(phase, 0.7, 0.15);
+        const ankle = -0.35 * (-flex + knee) + 16 * bump(phase, 0.58, 0.07) - 7 * bump(phase, 0.0, 0.06);
+        return { thigh: -flex, knee, ankle };
+      };
+      // Left heel strikes at the left leg's most-forward point (s = 1).
+      const left = leg((t - 0.25 + 1) % 1);
+      const right = leg((t + 0.25) % 1);
+      // Arms trail the legs slightly, which is what makes them look carried
+      // by the body's motion rather than driven in lockstep with it.
+      const arm = Math.sin(p - 0.35);
       return withBase({
-        hips: { y: 5 * s },
-        spine: { x: 3, y: -3 * s },
-        chest: { y: -2 * s },
-        head: { y: 2 * s },
-        leftUpperLeg: { x: -28 * s },
-        rightUpperLeg: { x: 28 * s },
-        leftLowerLeg: { x: lKnee },
-        rightLowerLeg: { x: rKnee },
-        leftFoot: { x: -0.35 * (-28 * s + lKnee) },
-        rightFoot: { x: -0.35 * (28 * s + rKnee) },
-        leftUpperArm: { z: -74, x: 22 * s },
-        rightUpperArm: { z: 74, x: -22 * s },
-        leftLowerArm: { y: -(14 + 14 * pos(-s)) },
-        rightLowerArm: { y: 14 + 14 * pos(s) },
-        _hips: [0, -0.03 * Math.abs(s), 0],
+        hips: { y: 5 * s, z: 2 * c },
+        spine: { x: 3, y: -3 * s, z: -1 * c },
+        chest: { y: -2.5 * s },
+        neck: { y: -1 * s },
+        head: { x: 1 * Math.sin(2 * p), y: 1.5 * s },
+        leftUpperLeg: { x: left.thigh },
+        rightUpperLeg: { x: right.thigh },
+        leftLowerLeg: { x: left.knee },
+        rightLowerLeg: { x: right.knee },
+        leftFoot: { x: left.ankle },
+        rightFoot: { x: right.ankle },
+        leftUpperArm: { z: -74 + 1.5 * Math.abs(arm), x: 20 * arm - 2 },
+        rightUpperArm: { z: 74 - 1.5 * Math.abs(arm), x: -20 * arm - 2 },
+        leftLowerArm: { y: -(14 + 11 * (1 - arm)) },
+        rightLowerArm: { y: 14 + 11 * (1 + arm) },
+        leftHand: { z: -4 - 3 * (1 - arm) },
+        rightHand: { z: 4 + 3 * (1 + arm) },
+        _hips: [0.012 * c, -0.022 * Math.abs(s), 0],
       });
     },
   },
@@ -323,10 +350,12 @@ const LOCOMOTION = [
     // vertical velocity — so it only needs to be a periodic function of
     // time that loops cleanly on its own, the same way idle does, in case
     // a big jump keeps it airborne for longer than one cycle.
-    duration: 0.5,
+    // One second, so the legs can move at a relaxed pace; the arm flap
+    // runs at twice that rate, the same pace it always had.
+    duration: 1.0,
     sample: (t) => {
-      const p = (2 * Math.PI * t) / 0.5;
-      const wobble = Math.sin(p);
+      const p = 2 * Math.PI * t;
+      const wobble = Math.sin(2 * p);
       const arms = mirror({
         // Reaching up and slightly forward, same family of angles as
         // cheer's proven "arms in a V" (up() helper above) rather than
@@ -334,19 +363,27 @@ const LOCOMOTION = [
         leftUpperArm: { z: 68 + 3 * wobble, x: 6 },
         leftLowerArm: { y: -11, x: -78 },
       });
-      const thigh = -52 - 4 * wobble;
-      const knee = 78 + 5 * wobble;
+      // The legs don't hold one rigid tuck: one knee leads while the other
+      // trails, swapping gently, and each foot points and dangles a beat
+      // behind its shin, which is what loose legs do in the air.
+      const flutter = Math.sin(p);
+      const lag = Math.sin(p - 0.9);
+      const leftThigh = -50 - 7 * flutter;
+      const rightThigh = -50 + 7 * flutter;
+      const leftKnee = 74 + 9 * Math.sin(p + 0.5);
+      const rightKnee = 74 - 9 * Math.sin(p + 0.5);
       return withBase({
         spine: { x: 6 + 1.5 * wobble },
         chest: { x: 2 },
         head: { x: -8 },
-        hips: { x: -4 },
-        leftUpperLeg: { x: thigh },
-        rightUpperLeg: { x: thigh },
-        leftLowerLeg: { x: knee },
-        rightLowerLeg: { x: knee },
-        leftFoot: { x: -0.3 * (thigh + knee) },
-        rightFoot: { x: -0.3 * (thigh + knee) },
+        hips: { x: -4, y: 2 * flutter },
+        leftUpperLeg: { x: leftThigh, z: 2 },
+        rightUpperLeg: { x: rightThigh, z: -2 },
+        leftLowerLeg: { x: leftKnee },
+        rightLowerLeg: { x: rightKnee },
+        // Toes pointed (+X), plus a small trailing dangle.
+        leftFoot: { x: -0.3 * (leftThigh + leftKnee) + 14 + 7 * lag },
+        rightFoot: { x: -0.3 * (rightThigh + rightKnee) + 14 - 7 * lag },
         ...arms,
         _hips: [0, 0.05 + 0.01 * wobble, 0],
       });
