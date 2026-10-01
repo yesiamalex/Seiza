@@ -75,7 +75,16 @@ interface FaceState {
  *   avatar, 0 when silent or unknown. Drives lip sync; pass 0 (the
  *   default) to leave the mouth alone entirely.
  */
-export function useFacialExpressions(vrm: VRM | null, expression: string | null, speakingLevel = 0) {
+export function useFacialExpressions(
+  vrm: VRM | null,
+  expression: string | null,
+  speakingLevel = 0,
+  /** How airborne the avatar is, 0..1. A jump is a locomotion state
+   *  rather than a gesture, so it carries no expression of its own; this
+   *  lets the face react to it anyway. A ref, not a value, because it
+   *  changes every frame and must not re-render anything. */
+  airborneRef?: { current: number }
+) {
   const stateRef = useRef<FaceState>({
     weights: new Map(),
     // Stagger the first blink too, so avatars that spawn together don't
@@ -120,7 +129,13 @@ export function useFacialExpressions(vrm: VRM | null, expression: string | null,
     // --- expression ----------------------------------------------------
     // "neutral" is the absence of the others rather than a preset to
     // apply, so it drives every weight to zero.
-    const wanted = expression && expression !== "neutral" ? expression : null;
+    // Being in the air outranks whatever face a gesture asked for, but
+    // only while actually off the ground: it is brief, and it is the most
+    // expressive thing happening at that moment. Surprise reads as the
+    // lurch of a jump far better than the alternatives do.
+    const airborne = airborneRef?.current ?? 0;
+    const wanted =
+      airborne > 0.35 ? "surprised" : expression && expression !== "neutral" ? expression : null;
     const smoothing = 1 - Math.exp(-EXPRESSION_RATE * delta);
 
     for (const name of FACE_EXPRESSIONS) {

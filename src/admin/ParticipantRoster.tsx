@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useExclusiveMenu } from "../ui/exclusiveMenu";
+import { useDismissOnOutside } from "../ui/useDismissOnOutside";
 import type { PlayerState } from "../multiplayer/types";
 import type { ConnectionState } from "../multiplayer/useRoomSocket";
 import { panelStyle, pillButtonStyle } from "../ui/styles";
@@ -62,6 +63,10 @@ export function ParticipantRoster({
 }: ParticipantRosterProps) {
   const [open, setOpen] = useState(false);
   useExclusiveMenu("roster", open, () => setOpen(false));
+  // Dismiss on an outside press without a backdrop in front of the
+  // page — see useDismissOnOutside for the bug that caused.
+  const rootRef = useRef<HTMLDivElement>(null);
+  useDismissOnOutside(rootRef, open, () => setOpen(false));
   const statusColor = connectionState === "connected" ? "#7CFF9E" : connectionState === "connecting" ? "#8ab4ff" : "#ffb347";
   const statusLabel = connectionState === "connected" ? "connected" : connectionState === "connecting" ? "connecting…" : "reconnecting…";
   const roster = Object.values(players).sort((a, b) => a.displayName.localeCompare(b.displayName));
@@ -72,7 +77,7 @@ export function ParticipantRoster({
     // (see HUD.tsx), which means every interactive child has to opt back in.
     // Without this the world-name pill below cannot be clicked at all and the
     // roster simply never opens — a regression that shipped once already.
-    <div style={{ position: "relative", pointerEvents: "auto" }}>
+    <div ref={rootRef} style={{ position: "relative", pointerEvents: "auto" }}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -112,7 +117,6 @@ export function ParticipantRoster({
 
       {open && (
         <>
-          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 20 }} aria-hidden />
           <div
             // Downward, not the default upward/bottom-docking `.seiza-popover`:
             // this panel's trigger is the world-name pill in the *top-left*

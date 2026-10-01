@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useExclusiveMenu } from "../ui/exclusiveMenu";
+import { useDismissOnOutside } from "../ui/useDismissOnOutside";
 import { panelStyle, pillButtonActiveStyle, pillButtonStyle, primaryButtonStyle, inputStyle } from "../ui/styles";
 import { ShieldIcon, CloseIcon, LockIcon } from "../ui/icons";
 
@@ -27,6 +28,10 @@ interface AdminButtonProps {
 export function AdminButton({ isAdmin, authPending, authFailed, onSubmit, roomPasswordSet, onSetRoomPassword }: AdminButtonProps) {
   const [open, setOpen] = useState(false);
   useExclusiveMenu("admin", open, () => setOpen(false));
+  // Dismiss on an outside press without a backdrop in front of the
+  // page — see useDismissOnOutside for the bug that caused.
+  const rootRef = useRef<HTMLDivElement>(null);
+  useDismissOnOutside(rootRef, open, () => setOpen(false));
   const [draft, setDraft] = useState("");
   const [roomPasswordDraft, setRoomPasswordDraft] = useState("");
 
@@ -43,7 +48,7 @@ export function AdminButton({ isAdmin, authPending, authFailed, onSubmit, roomPa
   };
 
   return (
-    <div style={{ position: "relative", pointerEvents: "auto" }}>
+    <div ref={rootRef} style={{ position: "relative", pointerEvents: "auto" }}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -57,7 +62,6 @@ export function AdminButton({ isAdmin, authPending, authFailed, onSubmit, roomPa
 
       {open && (
         <>
-          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 20 }} aria-hidden />
           <div
             className="seiza-popover"
             style={{

@@ -103,7 +103,12 @@ const fragmentShader = /* glsl */ `
 
     // A little more see-through looking straight down, so legs and koi
     // under the surface read as underwater rather than hidden.
-    float alpha = mix(0.74, 0.95, fresnel) * (1.0 - smoothstep(0.96, 1.0, length(vLocal) / uRadius));
+    // Transparent looking down, near-opaque at a glancing angle. That is
+    // how water actually behaves — straight down you see the bottom, along
+    // the surface you see sky — and it is also the only way the koi are
+    // visible at all. A flat 0.74 made the pond a coloured disc with fish
+    // hidden somewhere underneath it.
+    float alpha = mix(0.30, 0.93, fresnel) * (1.0 - smoothstep(0.96, 1.0, length(vLocal) / uRadius));
     gl_FragColor = vec4(color, alpha);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>

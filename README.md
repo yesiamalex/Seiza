@@ -1010,10 +1010,16 @@ deliberate limitations (paper Section 7 has the fuller discussion):
 - **Multiplayer sync is untested at scale.** Works correctly in small
   local testing; no load testing has been done against `maxOccupants`-
   sized rooms.
-- **Known defect: screen share can appear black to viewers** until they
-  reload the page, while the presenter sees it correctly. A fresh join
-  shows it fine, so the fault is in the mid-call renegotiation/attach path
-  rather than in decoding. Not yet fixed; reload is the workaround.
+- **Screen share appearing black until viewers reloaded** was traced to the
+  attach path and fixed: `ontrack` fires once per track, so a panel built
+  from a stream that arrived audio-first kept an `srcObject` it had already
+  decided had no video. It now re-attaches on `addtrack` and `unmute`. Not
+  yet confirmed across two machines on different networks.
+- **Sound effects are synthesised, not sampled.** Footsteps (which differ
+  by surface), the clap gesture, light switches, doors and water are built
+  from noise and oscillators at runtime (`src/audio/sfx.ts`), so there are
+  no audio files to download or license. They are deliberately modest: the
+  point is that tatami sounds different from floorboards, not realism.
 - **No facial expression is sent over the network directly.** Expressions
   are derived on each client from the gesture that *is* synced, so they
   stay consistent without extra traffic — but an avatar cannot be given an

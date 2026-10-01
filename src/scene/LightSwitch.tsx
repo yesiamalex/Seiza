@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from "react";
 import * as THREE from "three";
+import { playSwitch } from "../audio/sfx";
 import type { ThreeEvent } from "@react-three/fiber";
 
 /**
@@ -28,6 +29,7 @@ export function LightSwitch({ on, onToggle }: { on: boolean; onToggle?: (on: boo
 
   const toggle = (event: ThreeEvent<MouseEvent>) => {
     event.stopPropagation();
+    playSwitch(!on);
     onToggle?.(!on);
   };
   const pointer = (cursor: string) => () => {

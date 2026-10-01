@@ -10,6 +10,7 @@ import { Pond } from "./Pond";
 import { DateCalendar, WallClock } from "./ClassroomClock";
 import { LightSwitch } from "./LightSwitch";
 import type { LightZone } from "../multiplayer/types";
+import { playDoorSlide, playDoorSwing } from "../audio/sfx";
 import {
   BENCHES,
   BENCH_LENGTH,
@@ -468,6 +469,7 @@ function GardenDoor({ m }: { m: WorldMaterials }) {
       // there's nothing to wait for. See resolveObstacles in layout.ts,
       // which skips any obstacle with `disabled: true`.
       GARDEN_DOOR_OBSTACLE.disabled = next;
+      playDoorSwing();
       return next;
     });
   };
@@ -565,6 +567,8 @@ function ClassroomDoor({ m }: { m: WorldMaterials }) {
       // a doorway's footprint the instant you've told it to open, so
       // collision doesn't need to wait for the ~0.3s slide to finish.
       CLASSROOM_DOOR_OBSTACLE.disabled = next;
+      // Matches the ~0.35s slide the useFrame lerp above produces.
+      playDoorSlide(0.35);
       return next;
     });
   };
@@ -602,6 +606,28 @@ function ClassroomDoor({ m }: { m: WorldMaterials }) {
       {/* The wall's top trim, carried across the doorway like the rest. */}
       <mesh position={[0, CLASSROOM_WALL_HEIGHT - 0.12, SHOJI_DOOR_Z]} material={m.trim}>
         <boxGeometry args={[openingWidth, 0.16, WALL_THICKNESS + 0.2]} />
+      </mesh>
+
+      {/* Sill (shikii) and head jamb (kamoi): the grooved timbers the
+          leaves actually run in. A previous version dropped them because
+          the rail it used ran metres along the wall face and read as a
+          beam clipping through it. These don't: each spans the opening
+          and nothing more, and sits only a little proud of the wall on
+          both faces, which is what a real tracked door looks like. Both
+          are comfortably inside |x| < DOOR_HALF_WIDTH, so neither can
+          reach the clocks or the light switch further along this wall. */}
+      <mesh position={[0, 0.025, SHOJI_DOOR_Z]} material={m.trim} receiveShadow>
+        <boxGeometry args={[openingWidth, 0.05, WALL_THICKNESS + 0.05]} />
+      </mesh>
+      {/* Two shallow grooves, one per track, so the sill reads as carrying
+          two leaves rather than being a plain plinth. */}
+      {[SHOJI_TRACK_SPACING / 2, -SHOJI_TRACK_SPACING / 2].map((offset) => (
+        <mesh key={offset} position={[0, 0.052, SHOJI_DOOR_Z + offset]} material={m.wall}>
+          <boxGeometry args={[openingWidth - 0.04, 0.008, 0.022]} />
+        </mesh>
+      ))}
+      <mesh position={[0, SHOJI_HEAD_TOP - 0.05, SHOJI_DOOR_Z]} material={m.trim} castShadow receiveShadow>
+        <boxGeometry args={[openingWidth, 0.1, WALL_THICKNESS + 0.05]} />
       </mesh>
 
       {[

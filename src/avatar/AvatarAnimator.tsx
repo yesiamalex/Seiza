@@ -13,6 +13,8 @@ import { VRMHumanBoneList, type VRM, type VRMHumanBoneName } from "@pixiv/three-
 import { LOCOMOTION_CLIPS } from "./builtinMotions.generated";
 import type { GestureDefinition, GroundContact } from "./gestures";
 import { SEAT_HEIGHT } from "../scene/layout";
+import { playClap, playFootstep, playWaterRipple } from "../audio/sfx";
+import { surfaceAt } from "../scene/layout";
 
 /**
  * Drives every avatar's body animation from VRM Animation clips, in three
@@ -284,6 +286,9 @@ function splitClip(clip: THREE.AnimationClip, vrm: VRM) {
 const approach = (current: number, target: number, rate: number, delta: number) =>
   current + (target - current) * (1 - Math.exp(-rate * delta));
 
+/** A footstep every this many metres walked. Roughly one human stride. */
+const STEP_DISTANCE = 0.72;
+
 /** How fast the head eases toward a newly received gaze angle. */
 const HEAD_PITCH_RATE = 9;
 /** Fraction of the total bend taken by the neck; the head takes the rest. */
@@ -303,8 +308,16 @@ export function AvatarAnimator({
 }: AvatarAnimatorProps) {
   // A played gesture's face outranks a held posture's, so waving while
   // seated shows the wave. An explicit `expression` prop outranks both.
+  /** How airborne this avatar currently is, 0..1 (see the jump weight). */
+  const airborneRef = useRef(0);
+  /** Distance from the camera, so sounds this avatar makes fade with
+   *  range the way its voice does. Updated in the frame loop. */
+  const distanceToCameraRef = useRef(0);
+  /** Metres walked since the last footstep, and where that was. */
+  const stepAccumulatorRef = useRef(0);
+  const lastStepPositionRef = useRef<THREE.Vector3 | null>(null);
   const activeExpression = expression !== undefined ? expression : (gesture?.expression ?? posture?.expression ?? null);
-  useFacialExpressions(vrm, activeExpression, speakingLevel);
+  useFacialExpressions(vrm, activeExpression, speakingLevel, airborneRef);
   const stateRef = useRef<AnimatorState | null>(null);
   const getPositionRef = useRef(getPosition);
   getPositionRef.current = getPosition;
@@ -404,12 +417,21 @@ export function AvatarAnimator({
   // swapped) after a gesture started, doesn't replay a stale one.
   const gestureUrl = gesture?.url ?? null;
   const gestureFullBody = gesture?.fullBody ?? false;
+  const gestureName = gesture?.name ?? null;
   const gestureHold = gesture?.hold ?? false;
   const gestureGround: GroundContact = gesture?.ground ?? "none";
   const playedSeqRef = useRef(gestureSeq);
   useEffect(() => {
     if (playedSeqRef.current === gestureSeq) return;
     if (!vrm || !gestureUrl) return;
+    // Sound for gestures that make one. Keyed on the gesture's name
+    // rather than its menu position, so reordering the menu or disabling
+    // a gesture in world.json can't silently point this at the wrong
+    // clip. Fired here, where a gesture actually begins, so it covers
+    // remote players too — you hear someone else clap.
+    if (gestureName === "clap" || gestureName === "cheer") {
+      playClap(distanceToCameraRef.current);
+    }
     let cancelled = false;
     loadVrmAnimation(gestureUrl)
       .then((animation) => {
@@ -521,7 +543,7 @@ export function AvatarAnimator({
 
   // Negative priority: runs before VrmAvatar's vrm.update(), so the pose
   // written here reaches the rendered skeleton in the same frame.
-  useFrame((_, rawDelta) => {
+  useFrame((frameState, rawDelta) => {
     const state = stateRef.current;
     if (!state) return;
     const delta = Math.min(rawDelta, MAX_DELTA);
@@ -536,6 +558,36 @@ export function AvatarAnimator({
     const raw = getPositionRef.current?.();
     if (raw) {
       const position = raw instanceof THREE.Vector3 ? raw : new THREE.Vector3(raw[0], raw[1], raw[2]);
+
+      // ---- footsteps -------------------------------------------------
+      // Emitted per metre walked rather than per animation cycle: the
+      // walk clip is phase-locked to ground speed, so distance already
+      // *is* the step rhythm, and it stays correct whether someone is
+      // strolling or running. It also works unchanged for remote
+      // avatars, since this only needs their position.
+      distanceToCameraRef.current = frameState.camera.position.distanceTo(position);
+      const previousStep = lastStepPositionRef.current;
+      if (previousStep) {
+        stepAccumulatorRef.current += Math.hypot(position.x - previousStep.x, position.z - previousStep.z);
+        previousStep.copy(position);
+      } else {
+        lastStepPositionRef.current = position.clone();
+      }
+      // Only while actually walking and on the ground: airborne, seated
+      // and teleported avatars must not click along.
+      const moving = state.speed > 0.4 && state.speed < 25;
+      const grounded = !state.jump || state.jump.weight < 0.2;
+      if (stepAccumulatorRef.current >= STEP_DISTANCE) {
+        stepAccumulatorRef.current = 0;
+        if (moving && grounded) {
+          const surface = surfaceAt(position.x, position.z);
+          playFootstep(surface, distanceToCameraRef.current);
+          // Wading also disturbs the water itself, audibly as well as
+          // visually (Pond.tsx already handles the ripple).
+          if (surface === "water") playWaterRipple(0.6, distanceToCameraRef.current);
+        }
+      }
+
       if (state.lastPosition && delta > 0) {
         const instant = Math.hypot(position.x - state.lastPosition.x, position.z - state.lastPosition.z) / delta;
         // A jump of more than ~25 m/s is a teleport (spawn, respawn,
@@ -583,6 +635,12 @@ export function AvatarAnimator({
       if (loco) loco.weight = approach(loco.weight, targets[key], 8, delta);
     }
     if (state.jump) state.jump.weight = approach(state.jump.weight, jumpTarget, 8, delta);
+    // Mirrored into a ref the face reads. Jumping is a locomotion state
+    // inferred from vertical velocity, not a gesture, so it has no entry
+    // in the gesture→expression map; without this the one moment an
+    // avatar is most obviously *doing* something is the one moment its
+    // face stays blank.
+    airborneRef.current = state.jump ? state.jump.weight : 0;
 
     if (moving > 0.001) {
       const stride = THREE.MathUtils.lerp(WALK_STRIDE, RUN_STRIDE, running);

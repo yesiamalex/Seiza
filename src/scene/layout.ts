@@ -551,6 +551,19 @@ export function floorHeightAt(x: number, z: number): number {
   return pondDepthAt(x, z);
 }
 
+/** What a footstep at this point should sound like (see audio/sfx.ts). */
+export type FloorSurface = "wood" | "tatami" | "water" | "stone";
+
+export function surfaceAt(x: number, z: number): FloorSurface {
+  // Water first: the pond sits inside the garden, so its own test has to
+  // win over the outdoor default underneath it.
+  if (Math.hypot(x - POND_CENTER[0], z - POND_CENTER[1]) <= POND_WATER_RADIUS) return "water";
+  if (contains(TATAMI, x, z)) return "tatami";
+  // The garden is gravel and stepping stones rather than floorboards.
+  if (contains(OUTDOOR, x, z)) return "stone";
+  return "wood";
+}
+
 /**
  * How high the third-person camera may rise before it would be looking at
  * the room from above. The hall has an open beam ceiling rather than a solid
