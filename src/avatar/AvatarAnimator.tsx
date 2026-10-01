@@ -15,6 +15,7 @@ import type { GestureDefinition, GroundContact } from "./gestures";
 import { SEAT_HEIGHT } from "../scene/layout";
 import { playClap, playFootstep, playWaterRipple } from "../audio/sfx";
 import { surfaceAt } from "../scene/layout";
+import { GESTURE_SOUND_TIMES } from "./gestures";
 
 /**
  * Drives every avatar's body animation from VRM Animation clips, in three
@@ -418,13 +419,20 @@ export function AvatarAnimator({
   useEffect(() => {
     if (playedSeqRef.current === gestureSeq) return;
     if (!vrm || !gestureUrl) return;
-    // Sound for gestures that make one. Keyed on the gesture's name
-    // rather than its menu position, so reordering the menu or disabling
-    // a gesture in world.json can't silently point this at the wrong
-    // clip. Fired here, where a gesture actually begins, so it covers
-    // remote players too — you hear someone else clap.
-    if (gestureName === "clap" || gestureName === "cheer") {
-      playClap(distanceToCameraRef.current);
+    // Sound for gestures that make one, scheduled against the clip's own
+    // impact times (GESTURE_SOUND_TIMES) rather than fired once at the
+    // start — a clap animation claps three times, and one sound at the
+    // top of it reads as broken audio. Keyed on the gesture's name, not
+    // its menu position, so reordering the menu cannot point this at the
+    // wrong clip. Runs for remote players too, so you hear others clap.
+    const soundTimes = gestureName ? GESTURE_SOUND_TIMES[gestureName] : undefined;
+    const soundTimers: number[] = [];
+    if (soundTimes) {
+      for (const at of soundTimes) {
+        soundTimers.push(
+          window.setTimeout(() => playClap(distanceToCameraRef.current), at * 1000)
+        );
+      }
     }
     let cancelled = false;
     loadVrmAnimation(gestureUrl)
@@ -472,8 +480,11 @@ export function AvatarAnimator({
       });
     return () => {
       cancelled = true;
+      // Interrupting a gesture has to silence the rest of its sounds, or
+      // a clap cut short half a second in keeps clapping on its own.
+      for (const timer of soundTimers) window.clearTimeout(timer);
     };
-  }, [vrm, gestureUrl, gestureFullBody, gestureHold, gestureGround, gestureSeq]);
+  }, [vrm, gestureUrl, gestureFullBody, gestureHold, gestureGround, gestureSeq, gestureName]);
 
   // Releasing a hold gesture: the key came up, or the player stood up.
   useEffect(() => {

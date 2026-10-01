@@ -528,7 +528,15 @@ const SHOJI_TRACK_SPACING = 0.04;
  * than gone. The sill and head jamb below are deepened to match, so the
  * leaves still read as running in a track rather than floating.
  */
-const SHOJI_FACE_OFFSET = WALL_THICKNESS / 2 + 0.015;
+/** How far the wainscot band stands out from the wall on each face
+ *  (its runs use thickness = WALL_THICKNESS + 0.08). */
+const WAINSCOT_PROUD = 0.04;
+// Clear of the wainscot, not just of the wall. The wainscot band stands
+// 4cm proud of the wall face, so leaves placed only a few millimetres off
+// the wall ran straight through it and the lattice showed inside the
+// dado — which is the clipping down the left-hand leaf. Half the panel
+// depth plus a millimetre of air keeps the whole leaf in front of it.
+const SHOJI_FACE_OFFSET = WALL_THICKNESS / 2 + WAINSCOT_PROUD + SHOJI_PANEL_DEPTH / 2 + 0.012;
 /**
  * Depth of the sill and head jamb, derived rather than guessed: exactly
  * enough to reach from the wall's far face to just behind the outer

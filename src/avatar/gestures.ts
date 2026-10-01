@@ -115,6 +115,23 @@ const BUILTIN_GESTURE_EXPRESSIONS: Record<string, string> = {
   // attention somewhere else, and a face on them reads as editorial.
 };
 
+/**
+ * When a gesture makes a sound, in seconds from the start of its clip.
+ *
+ * Taken from the clip's own keyframes rather than guessed: clap brings
+ * the palms together at 0.55s, 0.9s and 1.25s (see the `clap` entry in
+ * scripts/generate-motions.mjs), so the sound fires three times, on the
+ * contacts. A single sound at the start of a three-clap animation is
+ * what it replaced, and it read as the audio being broken rather than
+ * merely sparse.
+ *
+ * Only clap is listed. `cheer` raises both arms and has no impact in it
+ * at all, so borrowing the clap sound for it was simply wrong.
+ */
+export const GESTURE_SOUND_TIMES: Record<string, readonly number[]> = {
+  clap: [0.55, 0.9, 1.25],
+};
+
 const NAME = /^[a-z0-9][a-z0-9_-]{0,31}$/;
 const isAllowedUrl = (url: string) => (url.startsWith("/") && !url.startsWith("//")) || /^https:\/\//i.test(url);
 
