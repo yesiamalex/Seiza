@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ChatMessage, ClientMessage, PlayerMedia, PlayerState, Posture, ServerMessage, WorldObject } from "./types";
+import type { ChatMessage, ClientMessage, LightZone, PlayerMedia, PlayerState, Posture, ServerMessage, WorldObject } from "./types";
+import { rememberAdminKey, rememberEditorPassword } from "../edit/editAuth";
 
 // The production Worker serves both the app and the Durable Object route, so
 // same-origin is the reliable default. Set VITE_SEIZA_ROOM_HOST only when the
@@ -88,6 +89,9 @@ export interface MultiplayerState {
   /** Room-level sky image, or null for the built-in sunset. */
   skyboxUrl: string | null;
   setSkybox: (url: string | null) => void;
+  /** Light-switch state per zone, shared by everyone in the room. */
+  lights: Record<LightZone, boolean>;
+  setLight: (zone: LightZone, on: boolean) => void;
 }
 
 /**
@@ -150,6 +154,7 @@ export function useRoomSocket(
   const [roomFull, setRoomFull] = useState<number | null>(null);
   const [environmentUrl, setEnvironmentUrl] = useState<string | null>(null);
   const [skyboxUrl, setSkyboxUrl] = useState<string | null>(null);
+  const [lights, setLights] = useState<Record<LightZone, boolean>>({ hall: true, classroom: true });
   const onVoiceSignalRef = useRef(onVoiceSignal);
   onVoiceSignalRef.current = onVoiceSignal;
   const callbacksRef = useRef(callbacks);
@@ -197,10 +202,20 @@ export function useRoomSocket(
   const setMedia = useCallback((media: PlayerMedia) => send({ type: "setMedia", media }), [send]);
   const setEnvironment = useCallback((url: string | null) => send({ type: "setEnvironment", url }), [send]);
   const setSkybox = useCallback((url: string | null) => send({ type: "setSkybox", url }), [send]);
+  // Flipped locally straight away so the switch feels instant; the
+  // server's lightChanged broadcast (or the next welcome) settles it.
+  const setLight = useCallback(
+    (zone: LightZone, on: boolean) => {
+      setLights((previous) => ({ ...previous, [zone]: on }));
+      send({ type: "setLight", zone, on });
+    },
+    [send]
+  );
   const authEditor = useCallback(
     (password: string) => {
       setEditorAuthPending(true);
       setEditorAuthFailed(false);
+      rememberEditorPassword(password);
       send({ type: "authEditor", password });
     },
     [send]
@@ -209,6 +224,7 @@ export function useRoomSocket(
     (key: string) => {
       setAdminAuthPending(true);
       setAdminAuthFailed(false);
+      rememberAdminKey(key);
       send({ type: "authAdmin", key });
     },
     [send]
@@ -308,6 +324,7 @@ export function useRoomSocket(
             setEnvironmentUrl(msg.environmentUrl);
             // Older room servers predate skyboxes and omit the field.
             setSkyboxUrl(msg.skyboxUrl ?? null);
+            setLights({ hall: true, classroom: true, ...(msg.lights ?? {}) });
             break;
           }
           case "passwordRequired":
@@ -315,6 +332,9 @@ export function useRoomSocket(
             break;
           case "skyboxChanged":
             setSkyboxUrl(msg.url);
+            break;
+          case "lightChanged":
+            setLights((previous) => ({ ...previous, [msg.zone]: msg.on }));
             break;
           case "environmentChanged":
             setEnvironmentUrl(msg.url);
@@ -487,5 +507,7 @@ export function useRoomSocket(
     setEnvironment,
     skyboxUrl,
     setSkybox,
+    lights,
+    setLight,
   };
 }

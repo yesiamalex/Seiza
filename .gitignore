@@ -12,3 +12,7 @@ dist/
 .dev.vars
 .dev.vars.*
 !.env.example
+
+# Third-party models fetched at build time by scripts/fetch-assets.mjs
+# (see THIRD_PARTY_ASSETS.md); not committed.
+public/avatars/vroid/

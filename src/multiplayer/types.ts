@@ -127,6 +127,9 @@ export type ClientMessage =
   // cube-map cross (4:3 / 3:4). `null` restores the built-in sunset.
   // Editor-gated and URL-checked exactly like setEnvironment.
   | { type: "setSkybox"; url: string | null }
+  // Flips a room's lights for everyone. Not editor-gated: like writing on
+  // a board, using a light switch is taking part, not restructuring.
+  | { type: "setLight"; zone: LightZone; on: boolean }
   // Unlocks editing for this connection if the deployer has configured
   // SEIZA_EDITOR_PASSWORD (see worker/room.ts) — a shared password, not
   // per-user accounts. If the deployer hasn't set one, editing stays
@@ -204,9 +207,12 @@ export type ServerMessage =
       /** Room-level sky image set via the editor, or null for the
        *  built-in sunset. */
       skyboxUrl: string | null;
+      /** Light-switch state per zone. Older room servers omit it (all on). */
+      lights?: Record<LightZone, boolean>;
     }
   | { type: "environmentChanged"; url: string | null }
   | { type: "skyboxChanged"; url: string | null }
+  | { type: "lightChanged"; zone: LightZone; on: boolean }
   | { type: "roomFull"; maxOccupants: number }
   // Sent instead of welcome when this room has an entry password (see
   // adminSetRoomPassword) and the join message either omitted one or got
@@ -249,3 +255,7 @@ export type ServerMessage =
   // authority over their own position.
   | { type: "gatherRequest"; position: [number, number, number] }
   | { type: "voiceSignal"; from: string; data: unknown };
+
+/** Rooms with a light switch in the built-in world. */
+export type LightZone = "hall" | "classroom";
+export const LIGHT_ZONES: readonly LightZone[] = ["hall", "classroom"];

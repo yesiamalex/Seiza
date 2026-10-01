@@ -153,6 +153,19 @@ export default function App() {
   // Set by an admin's "teleport to this person" / "gather everyone
   // here" — see PlayerRig's warpTargetRef doc comment.
   const warpTargetRef = useRef<THREE.Vector3 | null>(null);
+  const positionRef = useRef<[number, number, number]>([0, 0, 0]);
+  const rotationRef = useRef(0);
+  /**
+   * Teleport/gather: hand the point to PlayerRig, and also move the
+   * networked position right away. PlayerRig applies the warp inside the
+   * render loop, which browsers pause in background tabs and minimised
+   * windows; without this, a gathered player in such a tab didn't move for
+   * anyone else until they switched back to it, so gathering looked broken.
+   */
+  const requestWarp = (target: THREE.Vector3) => {
+    warpTargetRef.current = target;
+    positionRef.current = [target.x, target.y, target.z];
+  };
   // Read by the gather handler, which is created before selfId exists.
   const selfIdRef = useRef<string | null>(null);
   const roomId = world && joined ? world.id : "";
@@ -195,6 +208,8 @@ export default function App() {
     setEnvironment,
     skyboxUrl,
     setSkybox,
+    lights,
+    setLight,
   } = useRoomSocket(
     roomId,
     joined?.displayName ?? "",
@@ -211,11 +226,11 @@ export default function App() {
           let hash = 0;
           for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
           const angle = ((hash % 360) / 360) * Math.PI * 2;
-          warpTargetRef.current = new THREE.Vector3(
+          requestWarp(new THREE.Vector3(
             position[0] + Math.sin(angle) * GATHER_RADIUS,
             position[1],
             position[2] + Math.cos(angle) * GATHER_RADIUS
-          );
+          ));
         },
       }),
       []
@@ -243,8 +258,6 @@ export default function App() {
     setMedia(media.localMedia);
   }, [connected, media.localMedia, setMedia]);
 
-  const positionRef = useRef<[number, number, number]>([0, 0, 0]);
-  const rotationRef = useRef(0);
   const lookYawRef = useRef(0);
   const lookPitchRef = useRef(0);
 
@@ -267,6 +280,10 @@ export default function App() {
   const endGesture = useCallback(() => {
     if (gestureTimerRef.current !== null) window.clearTimeout(gestureTimerRef.current);
     gestureTimerRef.current = null;
+    // Clear it locally too. Only the server was told before, so your own
+    // avatar kept the finished gesture as "current", and with it that
+    // gesture's facial expression, until the next gesture replaced it.
+    setLocalGesture(null);
     send({ type: "gesture", gesture: null });
   }, [send]);
 
@@ -494,11 +511,11 @@ export default function App() {
       // Arrive a step in front of them, facing distance rather than inside
       // their avatar. Avatars face -Z at yaw 0 (see PlayerRig).
       const yaw = target.rotationY ?? 0;
-      warpTargetRef.current = new THREE.Vector3(
+      requestWarp(new THREE.Vector3(
         target.position[0] - Math.sin(yaw) * GATHER_RADIUS,
         target.position[1],
         target.position[2] - Math.cos(yaw) * GATHER_RADIUS
-      );
+      ));
     },
     [players]
   );
@@ -744,6 +761,8 @@ export default function App() {
               // seats stop accepting clicks entirely.
               onSit={editMode ? undefined : sitDown}
               occupiedSeatId={seat?.id ?? null}
+              lights={lights}
+              onToggleLight={setLight}
               // Placed objects cast shadows and can be dragged, so the
               // otherwise-frozen shadow map refreshes when they change.
               shadowRefreshKey={objects}

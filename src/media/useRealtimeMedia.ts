@@ -677,7 +677,25 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
     if (screenStreamRef.current) return true;
     setError(null);
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia(SCREEN_CONSTRAINTS);
+      // Keep Seiza in front after the picker closes. By default Chrome
+      // switches to the tab or window you chose to share, which hid the
+      // world and paused its rendering, so the presenter couldn't see their
+      // own share in it while everyone else could. Where the browser
+      // supports Conditional Focus, ask it not to switch; elsewhere this
+      // is skipped and sharing works as before.
+      type FocusController = { setFocusBehavior?: (behavior: string) => void };
+      const Controller = (window as unknown as { CaptureController?: new () => FocusController }).CaptureController;
+      const controller = Controller ? new Controller() : undefined;
+      const stream = await navigator.mediaDevices.getDisplayMedia(
+        controller ? ({ ...SCREEN_CONSTRAINTS, controller } as DisplayMediaStreamOptions) : SCREEN_CONSTRAINTS
+      );
+      try {
+        // Must be called straight after getDisplayMedia resolves; it
+        // throws for a whole-screen share, where there is nothing to focus.
+        controller?.setFocusBehavior?.("no-focus-change");
+      } catch {
+        // Fine: focus behaviour is a nicety, not a requirement.
+      }
       screenStreamRef.current = stream;
       for (const track of stream.getVideoTracks()) {
         // Tells the encoder to favour sharpness over frame rate, which is

@@ -48,8 +48,10 @@ export interface WorldConfig {
    * avatar menu (e.g. a businessman / businesswoman / casual set), so a
    * visitor doesn't have to supply their own file to look like anything.
    *
-   * Empty by default: this repo can't ship VRM binaries it hasn't
-   * license-verified (THIRD_PARTY_ASSETS.md). Genuinely CC0 avatars do
+   * The default world lists four CC0 VRoid Studio samples, which
+   * scripts/fetch-assets.mjs downloads (and shrinks) at build time rather
+   * than the repo committing them. Only license-verified models belong
+   * here (THIRD_PARTY_ASSETS.md); `author`/`license` show as a credit line. Genuinely CC0 avatars do
    * exist though — VRoid Studio's own sample models and the Open Source
    * Avatars collection are both CC0 — so a deployer can populate this in
    * one config edit. See THIRD_PARTY_ASSETS.md for sources and
@@ -82,6 +84,12 @@ export interface AvatarPreset {
   label: string;
   /** Same-origin path (e.g. /avatars/businessman.vrm) or absolute URL. */
   url: string;
+  /** Who made the model, shown under the preset list (e.g. "pixiv Inc. (VRoid Studio sample)"). */
+  author?: string;
+  /** The license it's used under, e.g. "CC0 1.0". */
+  license?: string;
+  /** Where the license terms can be checked. */
+  licenseUrl?: string;
 }
 
 const WORLD_ID = import.meta.env.VITE_SEIZA_WORLD_ID ?? "default";

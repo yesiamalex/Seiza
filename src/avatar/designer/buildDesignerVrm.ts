@@ -198,8 +198,8 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
     { s: 1.29, a: W(0.156 * shoulderSpread), b: 0.09, c: 0.002 },
     { s: 1.345, a: W(0.158 * shoulderSpread), b: 0.076, c: -0.006 },
     { s: 1.378, a: W(0.122 * shoulderSpread), b: 0.062, c: -0.01 },
-    { s: 1.405, a: 0.05, b: 0.05, c: -0.006 },
-    { s: 1.49, a: 0.045, b: 0.047, c: 0.0 },
+    { s: 1.405, a: 0.054, b: 0.052, c: -0.006 },
+    { s: 1.49, a: 0.049, b: 0.05, c: 0.0 },
     { s: 1.57, a: 0.04, b: 0.042, c: 0.004 },
   ];
   const torsoWeights = chainWeights(
@@ -284,7 +284,7 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
   // added straight to the head bone, because the expression system moves
   // those groups (see designerExpressions.ts). A part added directly to
   // the bone could not be animated without disturbing its siblings.
-  const headY = 0.14;
+  const headY = 0.128;
   const headGroup = new THREE.Group();
   headGroup.position.set(0, headY * h, 0);
   bones.get("head")!.add(headGroup);
@@ -323,7 +323,7 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
   const headSurface = raycastFaceSurface(headGeometry);
   // Nose: just a tip that catches a highlight and a short shadow. At this
   // level of stylisation anything more reads as a caricature.
-  face(sphere(0.0055), faceSkin, [0, -0.03, headSurface(0, -0.03) - 0.0015], [0, 0, 0], [1, 0.75, 1]);
+  face(sphere(0.0055), faceSkin, [0, -0.04, headSurface(0, -0.04) - 0.0015], [0, 0, 0], [1, 0.75, 1]);
 
   // Painted features (designerFace.ts), each in the group the expression
   // system animates. Eye and brow are painted once and mirrored.
@@ -339,7 +339,7 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
     // Ear.
     face(sphere(0.024), faceSkin, [0.116 * side, -0.01, -0.004], [0, 0, 0], [0.5, 1, 0.75]);
 
-    const eyeDecal = faceDecalGeometry(headSurface, 0.044 * side, -0.006, 0.058, 0.064, 0.0015, side < 0);
+    const eyeDecal = faceDecalGeometry(headSurface, 0.042 * side, -0.016, 0.064, 0.072, 0.0015, side < 0);
     const eye = facePart(eyeDecal.origin);
     eye.name = key;
     eyeGroups[key] = eye;
@@ -348,19 +348,19 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
     // Kept below the bangs on every hair style, so the brows (which carry
     // most of an expression) are never buried.
     const browKey = side > 0 ? "leftBrow" : "rightBrow";
-    const browDecal = faceDecalGeometry(headSurface, 0.046 * side, 0.043, 0.056, 0.016, 0.002, side < 0);
+    const browDecal = faceDecalGeometry(headSurface, 0.045 * side, 0.031, 0.054, 0.0135, 0.002, side < 0);
     const brow = facePart(browDecal.origin);
     brow.name = browKey;
     browGroups[browKey] = brow;
     face(browDecal.geometry, browMat, [0, 0, 0], [0, 0, 0], [1, 1, 1], brow);
 
-    const blush = faceDecalGeometry(headSurface, 0.064 * side, -0.034, 0.05, 0.025, 0.001);
+    const blush = faceDecalGeometry(headSurface, 0.06 * side, -0.046, 0.05, 0.024, 0.001);
     face(blush.geometry, blushMat, blush.origin);
   }
 
   // Mouth: painted open, then squashed to a soft closed line at rest.
   // Visemes and expressions scale this group, which parts the lips.
-  const mouthDecal = faceDecalGeometry(headSurface, 0, -0.057, 0.036, 0.02, 0.0015);
+  const mouthDecal = faceDecalGeometry(headSurface, 0, -0.07, 0.034, 0.02, 0.0015);
   const mouth = facePart(mouthDecal.origin);
   mouth.name = "mouth";
   mouth.scale.y = 0.42;
@@ -404,6 +404,18 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
   };
 
 
+  // Two locks hanging in front of the ears, framing the face. Without them
+  // every style read as a helmet sitting on a ball.
+  const sideLocks = (length = 0.11) => {
+    for (const side of [1, -1]) {
+      const lock = new THREE.ConeGeometry(0.03, length, 10, 1);
+      lock.scale(0.5, 1, 1);
+      lock.rotateZ(Math.PI + 0.12 * side);
+      lock.rotateX(-0.12);
+      add("head", lock, hair, [0.118 * side, headY + 0.03 - length / 2, 0.05]);
+    }
+  };
+
   switch (spec.hairStyle) {
     case "buzz":
       hairTop(0.13, Math.PI * 0.37);
@@ -413,17 +425,20 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
       hairTop(0.136, Math.PI * 0.38);
       hairBack(0.136, Math.PI * 0.5);
       bangs();
+      sideLocks(0.085);
       break;
     case "bob":
       hairTop(0.14, Math.PI * 0.38);
       hairBack(0.142, Math.PI * 0.58);
       bangs();
+      sideLocks(0.12);
       for (const side of [1, -1]) add("head", capsule(0.048, 0.12), hair, [0.108 * side, headY - 0.03, -0.012], [0, 0, 0], [0.8, 1, 1.15]);
       break;
     case "long":
       hairTop(0.14, Math.PI * 0.38);
       hairBack(0.142, Math.PI * 0.58);
       bangs();
+      sideLocks(0.15);
       for (const side of [1, -1]) add("head", capsule(0.045, 0.2), hair, [0.105 * side, headY - 0.07, -0.02], [0, 0, 0], [0.7, 1, 1]);
       add("head", capsule(0.1, 0.24), hair, [0, headY - 0.2, -0.085], [0.12, 0, 0], [1.15, 1, 0.42]);
       break;
@@ -431,6 +446,7 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
       hairTop(0.137, Math.PI * 0.38);
       hairBack(0.139, Math.PI * 0.52);
       bangs();
+      sideLocks(0.11);
       add("head", sphere(0.03), accessory, [0, headY + 0.04, -0.13]);
       add("head", capsule(0.042, 0.2), hair, [0, headY - 0.08, -0.155], [0.25, 0, 0], [1, 1, 0.9]);
       break;
@@ -438,6 +454,7 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
       hairTop(0.137, Math.PI * 0.38);
       hairBack(0.139, Math.PI * 0.52);
       bangs();
+      sideLocks(0.11);
       add("head", sphere(0.065), hair, [0, headY + 0.13, -0.05]);
       break;
     case "none":
@@ -446,8 +463,9 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
 
   // ---- accessories ------------------------------------------------------------
   if (spec.accessories.includes("glasses")) {
-    for (const side of [1, -1]) add("head", new THREE.TorusGeometry(0.03, 0.0045, 8, 24), dark, [0.046 * side, headY + 0.004, 0.13]);
-    add("head", new THREE.BoxGeometry(0.03, 0.005, 0.005), dark, [0, headY + 0.01, 0.132]);
+    // Centred on the painted eyes (see the eye decals above).
+    for (const side of [1, -1]) add("head", new THREE.TorusGeometry(0.033, 0.0042, 8, 28), dark, [0.042 * side, headY - 0.016, 0.127]);
+    add("head", new THREE.BoxGeometry(0.018, 0.005, 0.005), dark, [0, headY - 0.008, 0.13]);
   }
   if (spec.accessories.includes("cap")) {
     add("head", cap(0.143, Math.PI * 0.46), accessory, [0, headY + 0.018, -0.005], [0, 0, 0], [1, 1, 1.03]);

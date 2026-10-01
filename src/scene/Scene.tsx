@@ -1,4 +1,5 @@
 import { Component, Suspense, memo, useEffect, type ReactNode } from "react";
+import type { LightZone } from "../multiplayer/types";
 import { useGLTF } from "@react-three/drei";
 import { useThree } from "@react-three/fiber";
 import type * as THREE from "three";
@@ -24,6 +25,9 @@ interface SceneProps {
   onFloorDoubleClick?: (point: THREE.Vector3) => void;
   onSit?: (seat: Seat) => void;
   occupiedSeatId?: string | null;
+  /** Light-switch state per zone (see BaseEnvironment's switches). */
+  lights?: Record<LightZone, boolean>;
+  onToggleLight?: (zone: LightZone, on: boolean) => void;
   /** Any value that changes when shadow-casting geometry changes. */
   shadowRefreshKey?: unknown;
 }
@@ -162,6 +166,8 @@ export const Scene = memo(function Scene({
   onFloorDoubleClick,
   onSit,
   occupiedSeatId,
+  lights,
+  onToggleLight,
   shadowRefreshKey,
 }: SceneProps) {
   return (
@@ -199,7 +205,13 @@ export const Scene = memo(function Scene({
         shadow-camera-near={1}
         shadow-camera-far={80}
       />
-      <BaseEnvironment onFloorDoubleClick={onFloorDoubleClick} onSit={onSit} occupiedSeatId={occupiedSeatId} />
+      <BaseEnvironment
+        onFloorDoubleClick={onFloorDoubleClick}
+        onSit={onSit}
+        occupiedSeatId={occupiedSeatId}
+        lights={lights}
+        onToggleLight={onToggleLight}
+      />
       {sceneUrl && (
         <SceneLoadBoundary>
           <Suspense fallback={null}>

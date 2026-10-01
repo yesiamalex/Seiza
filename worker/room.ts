@@ -1,8 +1,10 @@
 import { DurableObject } from "cloudflare:workers";
 import {
+  LIGHT_ZONES,
   MAX_OBJECT_TEXT_LENGTH,
   WORLD_OBJECT_KINDS,
   type ClientMessage,
+  type LightZone,
   type PlayerMedia,
   type PlayerState,
   type Posture,
@@ -15,6 +17,10 @@ import type { Env } from "./index";
 const OBJECTS_STORAGE_KEY = "objects";
 const ENVIRONMENT_STORAGE_KEY = "environmentUrl";
 const SKYBOX_STORAGE_KEY = "skyboxUrl";
+const LIGHTS_STORAGE_KEY = "lights";
+/** A switch can't be flicked faster than this per connection, so a held
+ *  click or a script can't strobe the room for everyone. */
+const LIGHT_MIN_INTERVAL_MS = 300;
 const ROOM_PASSWORD_STORAGE_KEY = "roomPassword";
 // No permission system yet (see class doc below) — these are the actual
 // abuse guards for an open room: a cap on total placed objects (storage
@@ -81,6 +87,7 @@ interface ConnectionAttachment {
   player: PlayerState | null; // null until this connection sends "join"
   lastChatAt?: number;
   lastGestureAt?: number;
+  lastLightAt?: number;
   lastAvatarChangeAt?: number;
   lastTextAt?: number;
   lastPresentAt?: number;
@@ -119,6 +126,7 @@ export class SeizaRoom extends DurableObject<Env> {
   objects = new Map<string, WorldObject>();
   environmentUrl: string | null = null;
   skyboxUrl: string | null = null;
+  lights: Record<LightZone, boolean> = { hall: true, classroom: true };
   /** Entry password for this room, or null when anyone can join. Unlike
    *  SEIZA_EDITOR_PASSWORD/SEIZA_ADMIN_KEY (Worker secrets, fixed at
    *  deploy time), this is mutable at runtime via adminSetRoomPassword
@@ -140,6 +148,7 @@ export class SeizaRoom extends DurableObject<Env> {
       if (stored) for (const obj of stored) this.objects.set(obj.id, obj);
       this.environmentUrl = (await ctx.storage.get<string | null>(ENVIRONMENT_STORAGE_KEY)) ?? null;
       this.skyboxUrl = (await ctx.storage.get<string | null>(SKYBOX_STORAGE_KEY)) ?? null;
+      this.lights = { ...this.lights, ...((await ctx.storage.get<Record<LightZone, boolean>>(LIGHTS_STORAGE_KEY)) ?? {}) };
       this.roomPassword = (await ctx.storage.get<string | null>(ROOM_PASSWORD_STORAGE_KEY)) ?? null;
     });
   }
@@ -222,6 +231,7 @@ export class SeizaRoom extends DurableObject<Env> {
           roomPasswordSet: !!this.roomPassword,
           environmentUrl: this.environmentUrl,
           skyboxUrl: this.skyboxUrl,
+          lights: this.lights,
         };
         ws.send(JSON.stringify(welcome));
         this.broadcast({ type: "playerJoined", player }, attachment.connId);
@@ -490,6 +500,19 @@ export class SeizaRoom extends DurableObject<Env> {
         this.skyboxUrl = next;
         void this.ctx.storage.put(SKYBOX_STORAGE_KEY, next);
         this.broadcast({ type: "skyboxChanged", url: next });
+        break;
+      }
+      case "setLight": {
+        if (!attachment.player) return;
+        if (!LIGHT_ZONES.includes(message.zone) || typeof message.on !== "boolean") return;
+        const now = Date.now();
+        if (attachment.lastLightAt && now - attachment.lastLightAt < LIGHT_MIN_INTERVAL_MS) return;
+        attachment.lastLightAt = now;
+        ws.serializeAttachment(attachment);
+        if (this.lights[message.zone] === message.on) return;
+        this.lights = { ...this.lights, [message.zone]: message.on };
+        void this.ctx.storage.put(LIGHTS_STORAGE_KEY, this.lights);
+        this.broadcast({ type: "lightChanged", zone: message.zone, on: message.on });
         break;
       }
       case "chat": {

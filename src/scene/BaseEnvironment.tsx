@@ -1,10 +1,14 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type * as THREE from "three";
 import type { ThreeEvent } from "@react-three/fiber";
 import { useFrame } from "@react-three/fiber";
 import { getWorldMaterials, type WorldMaterials } from "./materials";
 import { Chair } from "./Chair";
 import { SeatPad } from "./SeatPad";
+import { Pond } from "./Pond";
+import { DateCalendar, WallClock } from "./ClassroomClock";
+import { LightSwitch } from "./LightSwitch";
+import type { LightZone } from "../multiplayer/types";
 import {
   BENCHES,
   BENCH_LENGTH,
@@ -49,22 +53,42 @@ interface BaseEnvironmentProps {
   onSit?: (seat: Seat) => void;
   /** The seat the local player currently occupies. */
   occupiedSeatId?: string | null;
+  /** Light-switch state per zone; everything is lit when omitted. */
+  lights?: Record<LightZone, boolean>;
+  /** Flip a zone's lights. Omitted, the switches are shown but inert. */
+  onToggleLight?: (zone: LightZone, on: boolean) => void;
+}
+
+const ALL_LIGHTS_ON: Record<LightZone, boolean> = { hall: true, classroom: true };
+
+/**
+ * A lamp material for one zone: a clone of the shared lantern material, so
+ * switching one room off doesn't darken the other room's fittings. Off,
+ * the shade keeps a faint glow, as paper over a cooling bulb does.
+ */
+function useZoneLampMaterial(m: WorldMaterials, on: boolean) {
+  const material = useMemo(() => (m.lantern as THREE.MeshStandardMaterial).clone(), [m]);
+  useEffect(() => () => material.dispose(), [material]);
+  material.emissiveIntensity = on ? (m.lantern as THREE.MeshStandardMaterial).emissiveIntensity : 0.06;
+  return material;
 }
 
 export const BaseEnvironment = memo(function BaseEnvironment({
   onFloorDoubleClick,
   onSit,
   occupiedSeatId,
+  lights = ALL_LIGHTS_ON,
+  onToggleLight,
 }: BaseEnvironmentProps) {
   const m = getWorldMaterials();
   return (
     <group>
       <Floors m={m} onFloorDoubleClick={onFloorDoubleClick} />
       <HallShell m={m} />
-      <HallFurniture m={m} />
+      <HallFurniture m={m} lit={lights.hall} onToggleLight={onToggleLight} />
       <OutdoorGarden m={m} />
       <CorridorShell m={m} />
-      <ClassroomShell m={m} />
+      <ClassroomShell m={m} lit={lights.classroom} onToggleLight={onToggleLight} />
       <ClassroomFurniture m={m} />
       {onSit &&
         SEATS.map((seat) => <SeatPad key={seat.id} seat={seat} onSit={onSit} occupied={occupiedSeatId === seat.id} />)}
@@ -438,34 +462,35 @@ function GardenDoor({ m }: { m: WorldMaterials }) {
 /**
  * Geometry for ClassroomDoor's two sliding leaves.
  *
- * The leaves ride on the classroom-side face of the wall instead of inside
- * an inset opening. The inset version left a strip of open doorway on
- * each side of the closed door, and leaves sitting just in front of the
- * wall can slide fully clear of the opening when open, the way a real
- * shoji runs along the wall beside it.
+ * A pocket door: the leaves run on two tracks inside the wall's own
+ * thickness and slide *into* the wall to open, the way fusuma and many
+ * shoji do. Earlier versions hung them in front of the wall, which needed
+ * a header rail running metres along the wall face for them to travel
+ * on; that rail, and a transom panel standing proud of the wall, are what
+ * read as beams clipping through it.
  *
- * Each leaf is a little wider than half the opening: the two overlap at
- * the centre on separate tracks, as real shoji do, and each tucks a few
- * centimetres past the wall edge on its own side, so a closed door leaves
- * no light gaps anywhere.
+ * Each leaf is a little wider than half the opening: they overlap at the
+ * centre on separate tracks, and each tucks into the wall on its own side,
+ * so a closed door leaves no light gaps anywhere.
  */
 const SHOJI_HALF_OPENING = DOOR_HALF_WIDTH;
-const SHOJI_EDGE_TUCK = 0.05;
+const SHOJI_EDGE_TUCK = 0.06;
 const SHOJI_CENTER_OVERLAP = 0.04;
 const SHOJI_PANEL_WIDTH = SHOJI_HALF_OPENING + SHOJI_EDGE_TUCK + SHOJI_CENTER_OVERLAP;
 const SHOJI_PANEL_HEIGHT = 2.4;
-const SHOJI_PANEL_DEPTH = 0.05;
+const SHOJI_PANEL_DEPTH = 0.04;
 /** Distance between the two tracks, so the overlapping leaves never z-fight. */
-const SHOJI_TRACK_SPACING = 0.065;
-/** Plane of the door: just off the classroom face of the wall, with room
- *  for the back track's leaf (and the wall's own trim) behind it. */
-const SHOJI_DOOR_Z = CLASSROOM.maxZ - WALL_THICKNESS / 2 - 0.1;
+const SHOJI_TRACK_SPACING = 0.06;
+/** The door runs down the middle of the wall. */
+const SHOJI_DOOR_Z = CLASSROOM.maxZ;
+/** Top of the head jamb (kamoi) the leaves slide under. */
+const SHOJI_HEAD_TOP = SHOJI_PANEL_HEIGHT + 0.14;
 
 /**
- * A two-panel shoji-style sliding door at the corridor→classroom
+ * A two-panel shoji-style sliding door at the corridor->classroom
  * threshold (see the matching gap cut into ClassroomShell's south wall).
- * Structurally the same idea as GardenDoor — click to toggle, a lerped
- * transform each frame, and a shared Obstacle disabled while open — but
+ * Structurally the same idea as GardenDoor: click to toggle, a lerped
+ * transform each frame, and a shared Obstacle disabled while open, but
  * sliding along X instead of swinging on rotation.y, and with a lattice
  * ("kumiko") look built from a handful of thin boxes over a paper pane
  * rather than a loaded model, consistent with how the rest of this
@@ -476,10 +501,11 @@ function ClassroomDoor({ m }: { m: WorldMaterials }) {
   const leftRef = useRef<THREE.Group>(null);
   const rightRef = useRef<THREE.Group>(null);
   // Each leaf's centre (absolute x, mirrored for the left leaf). Closed:
-  // outer edge tucked past the wall edge, inner edge past the centre line.
-  // Open: inner edge just behind the wall edge, so the doorway is clear.
+  // outer edge tucked into the wall, inner edge past the centre line.
+  // Open: slid into the wall until its inner edge is just inside the
+  // jamb, so the doorway is clear and the leaf is hidden in the wall.
   const closedX = SHOJI_HALF_OPENING + SHOJI_EDGE_TUCK - SHOJI_PANEL_WIDTH / 2;
-  const openX = SHOJI_HALF_OPENING - SHOJI_CENTER_OVERLAP + SHOJI_PANEL_WIDTH / 2;
+  const openX = SHOJI_HALF_OPENING + 0.02 + SHOJI_PANEL_WIDTH / 2;
 
   // See the identical effect on GardenDoor above for why this exists: a
   // remounted door (e.g. after an editor environment swap) should never
@@ -491,10 +517,7 @@ function ClassroomDoor({ m }: { m: WorldMaterials }) {
 
   useFrame((_, delta) => {
     const amount = 1 - Math.exp(-7 * Math.min(delta, 0.05));
-    // Absolute targets. This used to lerp toward an *offset* (0 when
-    // closed) as if it were relative to each leaf's starting x, which
-    // slid both closed leaves onto x = 0: overlapping in the middle with
-    // the sides of the doorway left open.
+    // Absolute targets, mirrored for the left leaf.
     const target = open ? openX : closedX;
     if (leftRef.current) leftRef.current.position.x += (-target - leftRef.current.position.x) * amount;
     if (rightRef.current) rightRef.current.position.x += (target - rightRef.current.position.x) * amount;
@@ -512,29 +535,32 @@ function ClassroomDoor({ m }: { m: WorldMaterials }) {
     });
   };
 
-  // Track and rail span the leaves' whole travel, along the wall face.
-  const travelHalf = openX + SHOJI_PANEL_WIDTH / 2;
-
+  const openingWidth = SHOJI_HALF_OPENING * 2;
   return (
     <group>
-      <mesh position={[0, 0.02, SHOJI_DOOR_Z]} material={m.trim} receiveShadow>
-        <boxGeometry args={[travelHalf * 2, 0.04, SHOJI_TRACK_SPACING + SHOJI_PANEL_DEPTH + 0.04]} />
+      {/* Sill (shikii) and head jamb (kamoi), each exactly as wide as the
+          opening and as deep as the wall plus a lip, then plain wall above
+          the head jamb up to the top, flush with the wall either side. */}
+      <mesh position={[0, 0.015, SHOJI_DOOR_Z]} material={m.trim} receiveShadow>
+        <boxGeometry args={[openingWidth, 0.03, WALL_THICKNESS + 0.06]} />
       </mesh>
-      <mesh position={[0, SHOJI_PANEL_HEIGHT + 0.06, SHOJI_DOOR_Z]} material={m.trim} castShadow>
-        <boxGeometry args={[travelHalf * 2, 0.12, SHOJI_TRACK_SPACING + SHOJI_PANEL_DEPTH + 0.06]} />
+      <mesh position={[0, SHOJI_HEAD_TOP - 0.07, SHOJI_DOOR_Z]} material={m.trim} castShadow>
+        <boxGeometry args={[openingWidth, 0.14, WALL_THICKNESS + 0.06]} />
       </mesh>
-      {/* Fixed transom filling the rest of the wall opening above the
-          rail, so the doorway isn't an empty hole up to the ceiling. */}
-      <mesh position={[0, (SHOJI_PANEL_HEIGHT + 0.12 + CLASSROOM_WALL_HEIGHT) / 2, SHOJI_DOOR_Z + 0.02]} material={m.paper}>
-        <boxGeometry args={[SHOJI_HALF_OPENING * 2 + 0.1, Math.max(0.2, CLASSROOM_WALL_HEIGHT - SHOJI_PANEL_HEIGHT - 0.12), 0.04]} />
+      <mesh position={[0, (SHOJI_HEAD_TOP + CLASSROOM_WALL_HEIGHT) / 2, SHOJI_DOOR_Z]} material={m.wall} receiveShadow>
+        <boxGeometry args={[openingWidth, CLASSROOM_WALL_HEIGHT - SHOJI_HEAD_TOP, WALL_THICKNESS]} />
+      </mesh>
+      {/* The wall's top trim, carried across the doorway like the rest. */}
+      <mesh position={[0, CLASSROOM_WALL_HEIGHT - 0.12, SHOJI_DOOR_Z]} material={m.trim}>
+        <boxGeometry args={[openingWidth, 0.16, WALL_THICKNESS + 0.2]} />
       </mesh>
 
       {[
         { groupRef: leftRef, x: -closedX, z: SHOJI_DOOR_Z + SHOJI_TRACK_SPACING / 2 },
         { groupRef: rightRef, x: closedX, z: SHOJI_DOOR_Z - SHOJI_TRACK_SPACING / 2 },
       ].map(({ groupRef, x, z }, i) => (
-        <group key={i} ref={groupRef} position={[x, 0, z]}>
-          {/* Outer frame (kamachi) — also the click target, same as GardenDoor's leaves. */}
+        <group key={i} ref={groupRef} position={[x, 0.03, z]}>
+          {/* Outer frame (kamachi), also the click target, same as GardenDoor's leaves. */}
           <mesh position={[0, SHOJI_PANEL_HEIGHT / 2, 0]} material={m.trim} castShadow onClick={toggle}>
             <boxGeometry args={[SHOJI_PANEL_WIDTH, SHOJI_PANEL_HEIGHT, SHOJI_PANEL_DEPTH]} />
           </mesh>
@@ -550,16 +576,16 @@ function ClassroomDoor({ m }: { m: WorldMaterials }) {
               <planeGeometry args={[SHOJI_PANEL_WIDTH - 0.1, SHOJI_PANEL_HEIGHT - 0.1]} />
             </mesh>
           ))}
-          {/* Kumiko lattice: a few thin wood strips over the paper — enough
+          {/* Kumiko lattice: a few thin wood strips over the paper, enough
               to read as shoji at a glance without modeling every muntin. */}
           {[0.32, 0.56, 0.8].map((t) => (
             <mesh key={`h-${t}`} position={[0, SHOJI_PANEL_HEIGHT * t, 0]} material={m.trim}>
-              <boxGeometry args={[SHOJI_PANEL_WIDTH - 0.1, 0.025, SHOJI_PANEL_DEPTH + 0.03]} />
+              <boxGeometry args={[SHOJI_PANEL_WIDTH - 0.1, 0.025, SHOJI_PANEL_DEPTH + 0.012]} />
             </mesh>
           ))}
           {[-1 / 3, 0, 1 / 3].map((t) => (
             <mesh key={`v-${t}`} position={[t * (SHOJI_PANEL_WIDTH - 0.1) * 0.75, SHOJI_PANEL_HEIGHT / 2, 0]} material={m.trim}>
-              <boxGeometry args={[0.025, SHOJI_PANEL_HEIGHT - 0.1, SHOJI_PANEL_DEPTH + 0.03]} />
+              <boxGeometry args={[0.025, SHOJI_PANEL_HEIGHT - 0.1, SHOJI_PANEL_DEPTH + 0.012]} />
             </mesh>
           ))}
         </group>
@@ -573,30 +599,13 @@ function OutdoorGarden({ m }: { m: WorldMaterials }) {
   return (
     <group>
       {OUTDOOR_BENCHES.map((bench, i) => <Bench key={`outdoor-bench-${i}`} placement={bench} m={m} />)}
-      <mesh position={[0, 0.04, 27]} material={m.trim} receiveShadow>
-        <cylinderGeometry args={[2.85, 2.95, 0.12, 32]} />
-      </mesh>
-      <mesh position={[0, 0.12, 27]} material={m.glass} receiveShadow>
-        <cylinderGeometry args={[2.55, 2.55, 0.05, 32]} />
-      </mesh>
-      {Array.from({ length: 8 }, (_, i) => {
-        const angle = (i / 8) * Math.PI * 2;
-        return (
-          <mesh key={`pond-stone-${i}`} position={[Math.cos(angle) * 2.72, 0.16, 27 + Math.sin(angle) * 2.72]} material={m.tatamiBorder} castShadow>
-            <sphereGeometry args={[0.28, 10, 6]} />
-          </mesh>
-        );
-      })}
-      {[[-0.7, 26.7], [0.85, 27.5], [0.25, 26.3]].map(([x, z], i) => (
-        <mesh key={`lily-${i}`} position={[x, 0.17, z]} rotation={[-Math.PI / 2, 0, i * 0.7]} material={m.foliage}>
-          <circleGeometry args={[0.32, 8]} />
-        </mesh>
-      ))}
+      <Pond />
     </group>
   );
 }
 
-function HallFurniture({ m }: { m: WorldMaterials }) {
+function HallFurniture({ m, lit, onToggleLight }: { m: WorldMaterials; lit: boolean; onToggleLight?: (zone: LightZone, on: boolean) => void }) {
+  const lamp = useZoneLampMaterial(m, lit);
   return (
     <group>
       {/* Tatami platform the benches face — where seiza practice happens. */}
@@ -634,6 +643,12 @@ function HallFurniture({ m }: { m: WorldMaterials }) {
         </mesh>
       </group>
 
+      {/* Light switch for the lanterns, on the wall beside the corridor
+          doorway. */}
+      <group position={[DOOR_HALF_WIDTH + 0.5, 1.25, HALL.minZ + WALL_THICKNESS / 2 + 0.008]}>
+        <LightSwitch on={lit} onToggle={onToggleLight && ((on) => onToggleLight("hall", on))} />
+      </group>
+
       {/* Posts with paper lanterns. Only two of the four carry an actual
           light: every extra point light is paid for by every material in
           the scene, avatars included, and the lanterns read as lit from
@@ -648,10 +663,13 @@ function HallFurniture({ m }: { m: WorldMaterials }) {
           <mesh position={[0, WALL_HEIGHT / 2, 0]} material={m.trim} castShadow>
             <boxGeometry args={[0.34, WALL_HEIGHT, 0.34]} />
           </mesh>
-          <mesh position={[0, 2.75, 0]} material={m.lantern}>
+          <mesh position={[0, 2.75, 0]} material={lamp}>
             <sphereGeometry args={[0.26, 20, 14]} />
           </mesh>
-          {post.light && <pointLight position={[0, 2.75, 0]} intensity={13} distance={20} decay={2} color="#ffd2a0" />}
+          {/* Dimmed to zero rather than unmounted when switched off: removing
+              a light changes the light count, which recompiles every
+              material's shader; an intensity of 0 costs nothing. */}
+          {post.light && <pointLight position={[0, 2.75, 0]} intensity={lit ? 13 : 0} distance={20} decay={2} color="#ffd2a0" />}
         </group>
       ))}
 
@@ -757,7 +775,8 @@ const CLASSROOM_WINDOW_CENTER_Y = 2;
 const CLASSROOM_WINDOW_SILL = 1.08;
 const CLASSROOM_WINDOW_HEADER = 2.92;
 
-function ClassroomShell({ m }: { m: WorldMaterials }) {
+function ClassroomShell({ m, lit, onToggleLight }: { m: WorldMaterials; lit: boolean; onToggleLight?: (zone: LightZone, on: boolean) => void }) {
+  const lamp = useZoneLampMaterial(m, lit);
   return (
     <group>
       <DressedWall
@@ -770,6 +789,10 @@ function ClassroomShell({ m }: { m: WorldMaterials }) {
         m={m}
       />
       <ClassroomDoor m={m} />
+      {/* Light switch just inside the door, on the classroom side. */}
+      <group position={[-(DOOR_HALF_WIDTH + 0.5), 1.25, CLASSROOM.maxZ - WALL_THICKNESS / 2 - 0.008]} rotation={[0, Math.PI, 0]}>
+        <LightSwitch on={lit} onToggle={onToggleLight && ((on) => onToggleLight("classroom", on))} />
+      </group>
       <DressedWall axis="x" at={CLASSROOM.minZ} from={CLASSROOM.minX} to={CLASSROOM.maxX} height={CLASSROOM_WALL_HEIGHT} m={m} />
       <DressedWall
         axis="z"
@@ -814,10 +837,10 @@ function ClassroomShell({ m }: { m: WorldMaterials }) {
           exactly what "too bright" looked like from inside. */}
       {[-20, -14.5].map((z) => (
         <group key={z} position={[0, CLASSROOM_WALL_HEIGHT - 0.25, z]}>
-          <mesh material={m.lantern}>
+          <mesh material={lamp}>
             <cylinderGeometry args={[0.7, 0.7, 0.12, 20]} />
           </mesh>
-          <pointLight position={[0, -0.2, 0]} intensity={5.5} distance={17} decay={2} color="#ffeccd" />
+          <pointLight position={[0, -0.2, 0]} intensity={lit ? 5.5 : 0} distance={17} decay={2} color="#ffeccd" />
         </group>
       ))}
       {/* The glow of a low sun coming through the window wall. It used to
@@ -918,13 +941,13 @@ function ClassroomFurniture({ m }: { m: WorldMaterials }) {
       </group>
 
       {/* Wall clock, off to the side of the doorway so it has wall behind it. */}
-      <group position={[4.6, 2.7, CLASSROOM.maxZ - 0.22]} rotation={[0, Math.PI, 0]}>
-        <mesh material={m.trim}>
-          <cylinderGeometry args={[0.28, 0.28, 0.07, 24]} />
-        </mesh>
-        <mesh position={[0, 0, -0.05]} rotation={[Math.PI / 2, 0, 0]} material={m.paper}>
-          <circleGeometry args={[0.24, 24]} />
-        </mesh>
+      {/* Faces into the classroom (-Z), with a tear-off date calendar
+          beside it. Both show the viewer's own local time. */}
+      <group position={[4.6, 2.7, CLASSROOM.maxZ - WALL_THICKNESS / 2 - 0.035]} rotation={[0, Math.PI, 0]}>
+        <WallClock m={m} />
+      </group>
+      <group position={[5.45, 2.66, CLASSROOM.maxZ - WALL_THICKNESS / 2 - 0.012]} rotation={[0, Math.PI, 0]}>
+        <DateCalendar m={m} />
       </group>
     </group>
   );

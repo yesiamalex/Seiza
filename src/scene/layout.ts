@@ -30,6 +30,10 @@ export interface Rect {
 export const HALL: Rect = { minX: -12, maxX: 12, minZ: -4, maxZ: 16 };
 /** Bounded garden beyond the hall entrance. */
 export const OUTDOOR: Rect = { minX: -10, maxX: 10, minZ: 16, maxZ: 38 };
+
+/** The garden pond: centre (x, z) and outer rim radius. */
+export const POND_CENTER: [number, number] = [0, 27];
+export const POND_RADIUS = 2.9;
 export const CORRIDOR: Rect = { minX: -2.6, maxX: 2.6, minZ: -10, maxZ: -4 };
 export const CLASSROOM: Rect = { minX: -9, maxX: 9, minZ: -24, maxZ: -10 };
 export const ROOMS: Rect[] = [HALL, OUTDOOR, CORRIDOR, CLASSROOM];
@@ -318,9 +322,9 @@ export const GARDEN_DOOR_OBSTACLE: Obstacle = obstacle(0, HALL.maxZ - 0.18, DOOR
 // BaseEnvironment.tsx (0.18) rather than importing it, to avoid a
 // layout.ts → BaseEnvironment.tsx → layout.ts import cycle; if you
 // change one, change the other.
-// Matches ClassroomDoor (BaseEnvironment.tsx): leaves ride just off the
-// classroom face of the wall and cover the full opening when closed.
-export const CLASSROOM_DOOR_OBSTACLE: Obstacle = obstacle(0, CLASSROOM.maxZ - WALL_THICKNESS / 2 - 0.1, DOOR_HALF_WIDTH, 0.16);
+// Matches ClassroomDoor (BaseEnvironment.tsx): a pocket door running down
+// the middle of the wall, covering the full opening when closed.
+export const CLASSROOM_DOOR_OBSTACLE: Obstacle = obstacle(0, CLASSROOM.maxZ, DOOR_HALF_WIDTH, WALL_THICKNESS / 2);
 
 /**
  * Furniture players bump into instead of walking through. Deliberately a
@@ -341,6 +345,11 @@ export const OBSTACLES: Obstacle[] = [
   ...DESKS.map((desk) => obstacle(desk.position[0], desk.position[2] + CHAIR_OFFSET / 2, 0.58, 0.62)),
   obstacle(TEACHER_DESK[0], TEACHER_DESK[2] - CHAIR_OFFSET / 2, 0.95, 0.62),
   obstacle(-7, 13.4, 1.8, 0.45), // reception desk
+  // Garden pond (see Pond.tsx). Two squares, one turned 45 degrees, make an
+  // octagon close enough to the round rim that you stop at the stones
+  // instead of walking across the water.
+  obstacle(POND_CENTER[0], POND_CENTER[1], POND_RADIUS * 0.93, POND_RADIUS * 0.93),
+  obstacle(POND_CENTER[0], POND_CENTER[1], POND_RADIUS * 0.93, POND_RADIUS * 0.93, Math.PI / 4),
   // Shoe lockers down one side of the corridor.
   obstacle(CORRIDOR.minX + 0.36, (CORRIDOR.minZ + CORRIDOR.maxZ) / 2 + 0.3, 0.22, 2.4),
   // Lantern posts and planters in the hall.

@@ -33,9 +33,9 @@ export interface BuiltinGesture {
 // keeping the old motion.
 export const LOCOMOTION_CLIPS = {
   idle: "/animations/idle.vrma?v=cbf44553",
-  walk: "/animations/walk.vrma?v=956fbd69",
+  walk: "/animations/walk.vrma?v=bcb1622f",
   run: "/animations/run.vrma?v=9029a1cf",
-  jump: "/animations/jump.vrma?v=faaadf4b",
+  jump: "/animations/jump.vrma?v=25d25991",
 } as const;
 
 export const BUILTIN_GESTURES: BuiltinGesture[] = [

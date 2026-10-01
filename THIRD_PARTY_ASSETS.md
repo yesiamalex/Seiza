@@ -15,7 +15,21 @@ terms.
 
 | Asset | Source | License | Commercial use OK? | Redistributable in this repo? | Notes |
 |---|---|---|---|---|---|
-| _No third-party assets are bundled._ | | | | | See `public/worlds/default/README.md`. |
+| VRoid sample "Sakurada Fumiriya" | VRoid Studio (pixiv Inc.), via the [madjin/vrm-samples](https://github.com/madjin/vrm-samples) mirror | CC0 1.0 | Yes | Yes, but **fetched at build** rather than committed | `public/avatars/vroid/sakurada-fumiriya.vrm`. Textures downscaled to 1024px by `scripts/fetch-assets.mjs`; nothing else changed. |
+| VRoid sample "Sendagaya Shino" | Same | CC0 1.0 | Yes | Same | `public/avatars/vroid/sendagaya-shino.vrm`, same processing. |
+| VRoid "HairSample_Female" | Same | CC0 1.0 | Yes | Same | `public/avatars/vroid/sample-female.vrm`, same processing. |
+| VRoid "HairSample_Male" | Same | CC0 1.0 | Yes | Same | `public/avatars/vroid/sample-male.vrm`, same processing. |
+
+**About the VRoid samples.** pixiv released VRoid Studio's earlier sample
+models under CC0 ([VRoid help: conditions of use for sample models](https://vroid.pixiv.help/hc/en-us/articles/4402614652569-Do-VRoid-Studio-s-sample-models-come-with-conditions-of-use);
+the same list is mirrored on [OpenGameArt](https://opengameart.org/content/vroid-studio-cc0-models)).
+Only models on that CC0 list are used. **AvatarSample_A, B and C are not**:
+they carry their own conditions of use and are deliberately excluded, as
+are the other models in the mirror that aren't on the CC0 list. CC0 needs
+no attribution, but the in-app Presets tab credits pixiv and states the
+license anyway, and that Seiza isn't affiliated with or endorsed by them.
+To drop the presets, remove their entries from `world.json`'s
+`defaultAvatars` and from `scripts/fetch-assets.mjs`.
 
 ### First-party generated content (not third-party)
 
@@ -52,12 +66,13 @@ casual, student, and creative presets with no files at all. This section is
 for deployers who also want real `.vrm` models.
 
 `world.json`'s `defaultAvatars` array powers the "Presets" tab on the join
-screen and in the in-world avatar menu. It ships **empty**, because this
-repo doesn't bundle VRM binaries whose redistribution terms it hasn't
-verified — not because suitable avatars don't exist.
+screen and in the in-world avatar menu. The default world lists four CC0
+VRoid Studio samples (see the table at the top), downloaded and shrunk at
+build time by `scripts/fetch-assets.mjs` rather than committed. Each entry
+can carry `author`, `license` and `licenseUrl`, shown as a credit line
+under the presets.
 
-They do, and they're genuinely CC0 (public domain, no attribution
-required), so a deployer can fill this in without a licensing question:
+More CC0 avatars, if you want to add your own:
 
 | Source | Notes |
 |---|---|

@@ -41,13 +41,18 @@ export function sculptedHeadGeometry(): THREE.BufferGeometry {
     const z = position.getZ(i);
     // 0 at the equator, 1 at the bottom of the head.
     const down = Math.max(0, -y);
-    const taper = 1 - 0.33 * Math.pow(down, 1.5);
+    // A soft jaw rather than a point: the earlier, stronger taper gave
+    // the head a light-bulb outline. Full cheeks just below the equator,
+    // a short lower face, and a front that is a little flatter than the
+    // sides, which is the plane anime features are drawn on.
+    const taper = 1 - 0.2 * Math.pow(down, 1.6);
+    const cheeks = 1 + 0.05 * Math.sin(Math.min(1, down * 1.6) * Math.PI);
     const front = Math.max(0, z);
     position.setXYZ(
       i,
-      x * 0.122 * taper,
-      y * (y < 0 ? 0.142 : 0.132),
-      z * 0.125 * (1 - 0.12 * down * (1 - front)) + 0.016 * Math.pow(down, 2.2) * front
+      x * 0.122 * taper * cheeks,
+      y * (y < 0 ? 0.128 : 0.132),
+      z * (0.125 - 0.007 * front) * (1 - 0.1 * down * (1 - front)) + 0.012 * Math.pow(down, 2.2) * front
     );
   }
   geometry.computeVertexNormals();

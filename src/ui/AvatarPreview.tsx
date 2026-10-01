@@ -33,7 +33,12 @@ export function AvatarPreview({ url, height = "clamp(260px, 46vh, 460px)", expre
 
   return (
     <div style={{ position: "relative", width: "100%", height, borderRadius: 12, overflow: "hidden", background: "radial-gradient(90% 80% at 50% 30%, #1a1d28 0%, #0b0b0e 70%)" }}>
-      <Canvas camera={{ position: [0, 1.15, -2.9], fov: 36 }} shadows dpr={[1, 2]}>
+      {/* A second WebGL context alongside the world's, so it's kept light:
+          capped pixel ratio and low-power GPU preference, so a phone isn't
+          pushed into dropping a context. (When this preview closes, the
+          browser logs "Context Lost" for *this* canvas; that is just its
+          teardown, not the world's.) */}
+      <Canvas camera={{ position: [0, 1.15, -2.9], fov: 36 }} shadows dpr={[1, 1.5]} gl={{ powerPreference: "low-power" }}>
         <ambientLight intensity={0.75} />
         <directionalLight position={[-2, 4, -3]} intensity={1.35} castShadow />
         <directionalLight position={[2, 2, 3]} intensity={0.35} />

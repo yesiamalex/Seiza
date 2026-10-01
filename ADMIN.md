@@ -14,6 +14,12 @@ levels of risk if one leaks:
 If you only set one thing, set `SEIZA_ADMIN_KEY` and skip
 `SEIZA_EDITOR_PASSWORD` entirely — see "Do I need both?" below.
 
+> **Voice/video across networks (TURN) uses two more Worker secrets, and
+> needs both:** `CLOUDFLARE_TURN_KEY_ID` *and* `CLOUDFLARE_TURN_KEY_API_TOKEN`,
+> from **Realtime → TURN** in the Cloudflare dashboard. Setting only the API
+> token does nothing. See "Voice/video across different networks" in the README,
+> which also shows how to check it's working.
+
 ## `SEIZA_EDITOR_PASSWORD`: gates editing only
 
 Unchanged from before this document existed. One shared password; anyone

@@ -371,16 +371,29 @@ exists. Seiza can mint short-lived Cloudflare Realtime TURN credentials from
 your own account:
 
 1. In the Cloudflare dashboard, go to **Realtime → TURN** and create a TURN
-   key. You get a key ID and an API token.
-2. Set both as Worker secrets:
+   key. You get **two** values, and Seiza needs **both**:
+   - the **key ID**, which identifies the key. It stays listed with the key
+     on the TURN page, so you can copy it again later.
+   - the **API token**, which is shown only once, when the key is created.
+2. Set both as Worker secrets, either from the command line:
 
    ```bash
    wrangler secret put CLOUDFLARE_TURN_KEY_ID
    wrangler secret put CLOUDFLARE_TURN_KEY_API_TOKEN
    ```
 
-3. Redeploy. That's it — the client fetches credentials from your Worker's
-   `/api/turn-credentials` on load and uses them automatically.
+   or in the dashboard: **Workers & Pages → your Worker → Settings →
+   Variables and Secrets → Add**, type **Secret**, with exactly those two
+   names. They must be runtime secrets on the Worker itself, not build
+   variables.
+3. Redeploy if your change didn't already create a new version. That's it:
+   the client fetches credentials from your Worker's `/api/turn-credentials`
+   on load and uses them automatically.
+4. Check it worked: open `https://<your-worker>/api/turn-credentials`. A
+   list of `iceServers` with `turn:` URLs means TURN is on. `404` with
+   `{"iceServers":[]}` means the Worker can't see **one or both** secrets.
+   The endpoint answers 404 unless both are set, so a missing key ID looks
+   exactly the same as no TURN at all.
 
 The API token is **never** sent to the browser. It stays in the Worker, which
 is the entire reason that endpoint exists instead of the client calling
@@ -811,6 +824,122 @@ ruled out because they hold about 4 KB and are sent with every request.
 Every call fails soft, so blocked storage or private browsing just means
 nothing is remembered. Unticking "Remember" on the join screen deletes the
 stored profile.
+
+## Why it runs smoothly, even on phones
+
+Seiza is built to stay fluid on a mid-range phone with a dozen people in a
+room. None of that comes from one trick. It comes from a handful of habits,
+applied everywhere. If you're designing a world or extending the app,
+these are the ones worth keeping.
+
+### The world is code, not a model file
+
+The hall, corridor, classroom, garden, sky, water, wood, plaster and
+tatami are all generated in code when the page loads. There is no `.glb`
+of the building and no texture images to download.
+
+That buys four things:
+
+- **Almost nothing to download.** A comparable modelled environment, with
+  baked textures, is often tens of megabytes. Here the "world" is a few
+  kilobytes of JavaScript that's already in the app bundle.
+- **Shapes the GPU likes.** Walls, beams and furniture are simple boxes and
+  cylinders that share a small set of materials, so the GPU switches state
+  rarely. A downloaded model usually arrives as many separate meshes and
+  materials, each a separate draw.
+- **Exact knowledge of the space.** Because the code builds the rooms, it
+  also knows them: collision, floor heights, seats and the walkable area
+  come from the same numbers (`src/scene/layout.ts`), with no runtime
+  analysis of a mesh needed.
+- **Textures drawn at startup.** Wood grain, plaster and tatami are painted
+  onto small canvases in `src/scene/materials.ts`, so they cost no network
+  and can be tuned in code.
+
+**The tradeoff, honestly:** procedural worlds take more programming effort
+and suit stylised spaces best. A model-based world (an artist's `.glb`,
+a scanned space, a World Labs export) is far quicker to make look rich,
+but costs download size, GPU memory and draw calls in proportion. Seiza
+supports both: `sceneUrl` in `world.json`, or an editor-uploaded
+environment, replaces the built-in rooms. If you design worlds for Seiza
+and want them to run well on phones, the built-in one is the pattern to
+copy: simple shapes, few shared materials, textures drawn in code, and
+detail spent where people actually look.
+
+### Effects are math, not extra rendering
+
+- **Sky and stars** are one shader on one sphere. Stars are computed per
+  pixel from a hash, with no star texture, and are sized to at least one
+  screen pixel so they hold still instead of shimmering as you move.
+- **Pond water** is one shader on one flat disc. Waves, sky reflection, sun
+  glints and click ripples are a few lines of math each. There's no second
+  camera rendering a reflection, which is the usual (expensive) way.
+- **Shadows are drawn once and kept.** The sun's shadow map is refreshed
+  only on a slow timer or when something that casts shadows actually
+  changes, rather than every frame. Avatars use a soft contact shadow
+  instead of real ones for the same reason.
+- **Lights are switched by dimming, not removing.** Turning a light off
+  sets its intensity to zero. Adding or removing a light would make every
+  material recompile its shader.
+
+### Only update what changed
+
+- The wall clock moves its hands once a second; the calendar redraws once a
+  day; the FPS counter writes its text twice a second without React.
+- Menus and panels are ordinary page UI on top of the 3D canvas, so opening
+  chat or the gesture menu never re-renders the 3D scene.
+- Remote players are eased toward their latest network position, instead
+  of each network update triggering work of its own.
+
+### Render fewer pixels where it doesn't show
+
+The 3D canvas caps its pixel ratio at 1.5. Phones have 2–3 physical pixels
+per CSS pixel, and at a ratio of 3 the GPU shades nine times as many pixels
+as at 1. Every pixel runs the full lighting shader, so this one setting is
+often the biggest single saving on a phone, for sharpness that's very hard
+to see at arm's length. The avatar preview canvas is capped the same way
+and asks for the low-power GPU, so it doesn't compete with the world for
+the phone's graphics memory.
+
+### Avatars are small on the wire
+
+- **Designed avatars are settings, not files.** What travels to other
+  players is a short text spec (`seiza-avatar:v1:…`), and every viewer
+  builds the model locally in a few milliseconds. No download at all.
+- **Uploaded VRMs are optimised before upload** (`src/avatar/optimizeVrm.ts`)
+  when that can be done without damaging them. Textures are shrunk, and the
+  result is used only if every VRM extension survived intact; otherwise the
+  original is kept.
+- **Bundled preset avatars are shrunk at build time** by
+  `scripts/fetch-assets.mjs`, which downsizes their textures by editing the
+  file directly and leaves every byte of VRM data untouched. That roughly
+  halves each VRoid sample.
+
+### Movement without a physics engine
+
+Collision is a short list of boxes, and walking routes come from a navmesh
+baked once from the world. There's no physics engine running every frame.
+For people walking around rooms, that's all the physics needed, at a
+fraction of the cost.
+
+### One set of motions for every avatar
+
+Every avatar in Seiza, whether uploaded, preset or designed, is a VRM, and
+VRM defines a **standard humanoid skeleton**: the same named bones (`hips`,
+`spine`, `leftUpperArm`, `leftLowerLeg`, …) in the same arrangement, no
+matter how the model was made or how tall it is. VRM also defines a
+normalised version of that rig with a common rest pose.
+
+That's what lets one animation fit everyone. The walk, run, jump, idle,
+gestures and seiza are not motion-captured or downloaded: they're authored
+as numbers, bone by bone, in `scripts/generate-motions.mjs`. That script
+writes standard VRM Animation (`.vrma`) files targeting the normalised
+rig, and `@pixiv/three-vrm-animation` maps them onto each avatar's own
+skeleton at load time. Because they're plain code, motions are tiny,
+license-clean, reproducible, and easy to tune: a "more graceful walk" is
+an edit to a few angles and one command, `npm run generate:motions`. See
+[Animation pipeline](#animation-pipeline) and
+[Regenerating the built-in clips](#regenerating-the-built-in-clips) for
+the details.
 
 ## Project layout
 

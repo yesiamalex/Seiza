@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { WorldObject } from "../multiplayer/types";
 import { optimizeVrmAvatar } from "../avatar/optimizeVrm";
 import { compressImage } from "./compressImage";
+import { editAuthHeaders } from "./editAuth";
 import { BAR_LABEL_CLASS, barButtonActiveStyle, barButtonStyle, inputStyle, panelStyle, pillButtonActiveStyle, pillButtonStyle, popoverStyle } from "../ui/styles";
 import { ChairIcon, EditIcon, ScreenShareIcon, TextBoardIcon } from "../ui/icons";
 
@@ -89,7 +90,7 @@ export function EditToolbar({
   useEffect(() => {
     if (!enabled || !editMode || needsAuth || !connected) return;
     let cancelled = false;
-    fetch("/api/assets", { headers: passwordDraft ? { "x-seiza-editor-password": passwordDraft } : undefined })
+    fetch("/api/assets", { headers: editAuthHeaders() })
       .then(async (response) => {
         const result = (await response.json().catch(() => ({}))) as {
           assets?: Array<{ id: string; url: string; name: string; kind?: "model" | "image" | null }>;
@@ -132,7 +133,7 @@ export function EditToolbar({
       body,
       headers: {
         "x-seiza-asset-name": file.name,
-        ...(passwordDraft ? { "x-seiza-editor-password": passwordDraft } : {}),
+        ...editAuthHeaders(),
       },
     });
     const result = (await response.json().catch(() => ({}))) as { id?: string; url?: string; name?: string; error?: string };
@@ -170,7 +171,7 @@ export function EditToolbar({
         headers: {
           "x-seiza-asset-name": compressed.name,
           "x-seiza-asset-kind": "image",
-          ...(passwordDraft ? { "x-seiza-editor-password": passwordDraft } : {}),
+          ...editAuthHeaders(),
         },
       });
       const result = (await response.json().catch(() => ({}))) as {
@@ -218,7 +219,7 @@ export function EditToolbar({
         headers: {
           "x-seiza-asset-name": compressed.name,
           "x-seiza-asset-kind": "image",
-          ...(passwordDraft ? { "x-seiza-editor-password": passwordDraft } : {}),
+          ...editAuthHeaders(),
         },
       });
       const result = (await response.json().catch(() => ({}))) as {
@@ -242,7 +243,7 @@ export function EditToolbar({
   async function deleteAsset(asset: { id: string }) {
     const response = await fetch(`/api/assets/${asset.id}`, {
       method: "DELETE",
-      headers: passwordDraft ? { "x-seiza-editor-password": passwordDraft } : undefined,
+      headers: editAuthHeaders(),
     });
     if (!response.ok) {
       setAssetMessage("The asset could not be deleted.");

@@ -134,7 +134,9 @@ const fragmentShader = /* glsl */ `
     float wave = sin(uTime * rate + phase) * 0.6 + sin(uTime * rate * 2.37 + phase * 1.7) * 0.4;
     float twinkle = 0.75 + 0.25 * wave;
 
-    return point * (0.22 + magnitude * magnitude * 1.7) * twinkle;
+    // Steep magnitude curve: most stars faint, a handful clearly bright.
+    // A flat one gave every cell the same middling dot, which read as sand.
+    return point * (0.12 + magnitude * magnitude * magnitude * 2.2) * twinkle;
   }
 
   void main() {
@@ -171,9 +173,12 @@ const fragmentShader = /* glsl */ `
     // below the skyline, where the ground will cover them anyway).
     float starVisibility = nightAmount * nightAmount * smoothstep(-0.01, 0.22, h);
     if (starVisibility > 0.001) {
-      float far = starLayer(d, 260.0, 0.46, 0.055);
-      float near = starLayer(d, 120.0, 0.24, 0.050);
-      float star = far * 0.7 + near;
+      // Sparse on purpose: a sky with fewer stars, some of them bright,
+      // reads as a night sky; a dense even field reads as noise.
+      float far = starLayer(d, 240.0, 0.08, 0.055);
+      float near = starLayer(d, 110.0, 0.12, 0.055);
+      float bright = starLayer(d, 42.0, 0.2, 0.04);
+      float star = far * 0.55 + near + bright * 1.6;
       // Cool and warm stars in roughly the proportion the eye expects.
       vec3 tint = mix(uStarCool, uStarWarm, hash31(floor(d * 120.0) + 3.1));
       sky += tint * star * starVisibility;

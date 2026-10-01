@@ -142,6 +142,30 @@ export function VideoPanel({ stream, width, height, maxDistance = 30, active = t
 
   useEffect(() => () => texture?.dispose(), [texture]);
 
+  /**
+   * When the last real video frame arrived, for the fallback refresh below.
+   *
+   * three's VideoTexture only re-uploads when the browser reports a newly
+   * presented frame (requestVideoFrameCallback). Your *own* screen share
+   * is a local capture, which only produces a frame when what's on screen
+   * changes, and the browser may not report frames for this hidden 1px
+   * element at all. So a presenter could see their own share stuck on the
+   * placeholder (or a stale frame) while everyone else, receiving a steady
+   * WebRTC stream, saw it fine. The frame loop below refreshes the texture
+   * itself whenever no frame has been reported for a while.
+   */
+  const lastFrameAt = useRef(0);
+  useEffect(() => {
+    if (!video || !("requestVideoFrameCallback" in video)) return;
+    let handle = 0;
+    const onFrame = () => {
+      lastFrameAt.current = performance.now();
+      handle = video.requestVideoFrameCallback(onFrame);
+    };
+    handle = video.requestVideoFrameCallback(onFrame);
+    return () => video.cancelVideoFrameCallback(handle);
+  }, [video]);
+
   useFrame((state, delta) => {
     const mesh = meshRef.current;
     if (!mesh || !video) return;
@@ -160,6 +184,17 @@ export function VideoPanel({ stream, width, height, maxDistance = 30, active = t
     } else if (!shouldShow && playing.current) {
       playing.current = false;
       video.pause();
+    }
+    // Fallback refresh (see lastFrameAt): at most four uploads a second, and
+    // only while visible with no real frames arriving, so live video that
+    // is updating normally never pays for it.
+    if (
+      shouldShow &&
+      texture &&
+      video.readyState >= video.HAVE_CURRENT_DATA &&
+      performance.now() - lastFrameAt.current > 500
+    ) {
+      texture.needsUpdate = true;
     }
   });
 

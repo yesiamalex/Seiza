@@ -32,6 +32,12 @@ const THIRD_PERSON_DEFAULT_DISTANCE = 3;
 /** Height above the feet the third-person camera orbits around — roughly
  *  the chest, so the whole avatar sits in frame at any angle. */
 const ORBIT_PIVOT_HEIGHT = 1.15;
+/** The same pivot while seated on a chair, above the seat (which is what
+ *  `feetY` is while seated), and while kneeling in seiza, above the floor.
+ *  A fixed standing-height pivot left a seated or kneeling avatar at the
+ *  very bottom of the frame, looking over its head at the room. */
+const ORBIT_PIVOT_SEATED = 0.5;
+const ORBIT_PIVOT_KNEELING = 0.62;
 const FOV_MIN = 50;
 const FOV_MAX = 90;
 const FOV_DEFAULT = 75;
@@ -181,6 +187,9 @@ export function PlayerRig({
   const virtualCameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   if (!virtualCameraRef.current) virtualCameraRef.current = new THREE.PerspectiveCamera();
   const thirdPersonDistanceRef = useRef(THIRD_PERSON_DEFAULT_DISTANCE);
+  // Eased, so sitting down or standing up glides the framing rather than
+  // jumping it.
+  const orbitPivotHeightRef = useRef(ORBIT_PIVOT_HEIGHT);
   const verticalVelocityRef = useRef(0);
   const avatarYawRef = useRef(0);
   const viewModeRef = useRef(viewMode);
@@ -536,7 +545,13 @@ export function PlayerRig({
         // tilting down showed the top of the head and pushed the character
         // off to the edge; orbiting keeps them centred at any angle, and
         // zooming moves toward them instead of past them.
-        const pivot = new THREE.Vector3(vcam.position.x, feetY + ORBIT_PIVOT_HEIGHT, vcam.position.z);
+        const pivotTarget = sitAnchorRef.current
+          ? ORBIT_PIVOT_SEATED
+          : postureHeldRef.current
+            ? ORBIT_PIVOT_KNEELING
+            : ORBIT_PIVOT_HEIGHT;
+        orbitPivotHeightRef.current = THREE.MathUtils.damp(orbitPivotHeightRef.current, pivotTarget, 4, delta);
+        const pivot = new THREE.Vector3(vcam.position.x, feetY + orbitPivotHeightRef.current, vcam.position.z);
         const back = new THREE.Vector3(0, 0, 1).applyQuaternion(vcam.quaternion).multiplyScalar(thirdPersonDistanceRef.current);
         camera.position.copy(pivot).add(back);
         // Keep the camera inside the building: zooming out through a wall
