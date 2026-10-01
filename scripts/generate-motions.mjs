@@ -356,17 +356,23 @@ const LOCOMOTION = [
     // vertical velocity — so it only needs to be a periodic function of
     // time that loops cleanly on its own, the same way idle does, in case
     // a big jump keeps it airborne for longer than one cycle.
-    // One-second loop; the legs and the arm flap both cycle twice in it.
+    // One-second loop: the legs cycle twice in it, the arms flap three times.
     duration: 1.0,
     sample: (t) => {
       const p = 2 * Math.PI * t;
       const wobble = Math.sin(2 * p);
+      // The arm flap. It used to happen by accident: the jump pose blended
+      // out at the apex and back in, so the arms dipped and rose. Holding
+      // the pose through the apex (AvatarAnimator) removed that, so it's
+      // now deliberate: three quick beats a second through ~44 degrees,
+      // the forearm trailing the upper arm a little, like small wings.
+      const flap = Math.sin(3 * p);
+      const flapLag = Math.sin(3 * p - 0.8);
       const arms = mirror({
-        // Reaching up and slightly forward, same family of angles as
-        // cheer's proven "arms in a V" (up() helper above) rather than
-        // untested values.
-        leftUpperArm: { z: 68 + 3 * wobble, x: 6 },
-        leftLowerArm: { y: -11, x: -78 },
+        // Centred on the same raised "arms in a V" family as cheer's up()
+        // helper, swinging either side of it.
+        leftUpperArm: { z: 50 + 22 * flap, x: 6 },
+        leftLowerArm: { y: -12 - 10 * flapLag, x: -78 },
       });
       // The legs don't hold one rigid tuck: one knee leads while the other
       // trails, swapping gently, and each foot points and dangles a beat
@@ -713,7 +719,11 @@ const GESTURES = [
         neck: { x: 6 + bow * 0.2 },
         head: { x: 8 + bow * 0.25 },
         ...mirror({
-          leftUpperArm: { x: 5, y: -34, z: -56 },
+          // y -31 rather than the solved -34: the solve put palm centres
+          // 3cm apart, right for slim hands but deep inside each other on
+          // VRoid models, whose hands are much thicker. Three degrees per
+          // arm opens it by roughly 2.5-3cm.
+          leftUpperArm: { x: 5, y: -31, z: -56 },
           leftLowerArm: { x: 44, y: -106 },
           leftHand: { x: -10, y: -30, z: 61 },
           ...leftHand(PRESSED),
