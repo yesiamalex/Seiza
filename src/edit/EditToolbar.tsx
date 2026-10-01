@@ -299,10 +299,53 @@ export function EditToolbar({
           )}
           <small style={{ opacity: 0.8 }}>Click an object to select it, then use Move or Rotate.</small>
           <small style={{ opacity: 0.7 }}>Only upload models you have permission to use. Seiza does not review or take responsibility for user-provided assets.</small>
+          {/* Everything that acts on the selected object, in one place.
+              Move and Rotate used to sit here while Snap, Delete and
+              Deselect sat below the whole spawn list and asset library,
+              so adjusting one object meant scrolling down to delete and
+              back up to rotate. */}
           {selectedId && (
-            <div style={{ display: "flex", gap: 6 }}>
-              <button style={transformMode === "translate" ? pillButtonActiveStyle : pillButtonStyle} onClick={() => onTransformModeChange("translate")}>Move</button>
-              <button style={transformMode === "rotate" ? pillButtonActiveStyle : pillButtonStyle} onClick={() => onTransformModeChange("rotate")}>Rotate</button>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
+                padding: 8,
+                borderRadius: 10,
+                background: "rgba(232,195,122,0.1)",
+                border: "1px solid rgba(232,195,122,0.35)",
+              }}
+            >
+              <strong style={{ fontSize: 12 }}>Selected object</strong>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                <button
+                  style={transformMode === "translate" ? pillButtonActiveStyle : pillButtonStyle}
+                  onClick={() => onTransformModeChange("translate")}
+                >
+                  Move
+                </button>
+                <button
+                  style={transformMode === "rotate" ? pillButtonActiveStyle : pillButtonStyle}
+                  onClick={() => onTransformModeChange("rotate")}
+                >
+                  Rotate
+                </button>
+                <button style={pillButtonStyle} onClick={onSnapToFloor}>
+                  Snap to floor
+                </button>
+              </div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                <button style={pillButtonStyle} onClick={onDeselect}>
+                  Deselect
+                </button>
+                <button
+                  style={{ ...pillButtonStyle, borderColor: "rgba(255,138,128,0.5)", color: "#ff8a80" }}
+                  disabled={!connected}
+                  onClick={onDeleteSelected}
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           )}
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -520,18 +563,6 @@ export function EditToolbar({
               + Model
             </button>
           </div>
-          {selectedId && (
-            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-              <span>1 object selected</span>
-              <button style={pillButtonStyle} onClick={onSnapToFloor}>Snap to floor</button>
-              <button style={pillButtonStyle} disabled={!connected} onClick={onDeleteSelected}>
-                Delete
-              </button>
-              <button style={pillButtonStyle} onClick={onDeselect}>
-                Deselect
-              </button>
-            </div>
-          )}
         </div>
       )}
     </div>

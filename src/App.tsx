@@ -21,6 +21,7 @@ import { useRealtimeMedia } from "./media/useRealtimeMedia";
 import { MediaControls } from "./media/MediaControls";
 import { CameraBadge } from "./media/CameraBadge";
 import { ScreenZoomOverlay } from "./media/ScreenZoomOverlay";
+import { PresentSourceChooser } from "./media/PresentSourceChooser";
 import { WorldObjects } from "./edit/WorldObjects";
 import { EditToolbar } from "./edit/EditToolbar";
 import { TextEditorDialog } from "./edit/TextEditorDialog";
@@ -107,6 +108,9 @@ export default function App() {
   const [avatarMessage, setAvatarMessage] = useState<string | null>(null);
   /** Id of the screen object currently blown up to fill the viewport. */
   const [zoomedScreenId, setZoomedScreenId] = useState<string | null>(null);
+  /** A free screen that was clicked and is waiting for the player to
+   *  choose what to put on it. */
+  const [pendingPresentId, setPendingPresentId] = useState<string | null>(null);
   const moveTargetRef = useRef<THREE.Vector3 | null>(null);
   const movePathRef = useRef<THREE.Vector3[] | null>(null);
   // Environment geometry the navmesh is generated from — Scene's own
@@ -540,7 +544,8 @@ export default function App() {
   );
 
   const presentOn = useCallback(
-    async (object: WorldObject, source: PresentSource = "screen") => {
+    async (object: WorldObject, explicitSource?: PresentSource) => {
+      const source: PresentSource = explicitSource ?? "screen";
       if (object.presenterId === selfId) {
         presentOnObject(object.id, false);
         // Only stop the capture that was feeding this screen. Stopping
@@ -554,6 +559,14 @@ export default function App() {
         // showing them what's on it is the more useful answer, and it is
         // free — the stream is already arriving.
         setZoomedScreenId(object.id);
+        return;
+      }
+      // A free screen can carry either stream, and clicking it cannot
+      // know which was meant, so ask rather than assume. `source` is
+      // only passed explicitly from the chooser below and from the media
+      // panel's own two buttons; a bare click lands here and opens it.
+      if (!explicitSource) {
+        setPendingPresentId(object.id);
         return;
       }
       // Capture first, claim second: claiming and then having the picker
@@ -643,6 +656,15 @@ export default function App() {
   useEffect(() => {
     if (zoomedScreenId && !zoomedStream) setZoomedScreenId(null);
   }, [zoomedScreenId, zoomedStream]);
+
+  // The screen awaiting a choice. Closes itself if that screen is
+  // deleted, or claimed by somebody else while the prompt is open.
+  const pendingPresentScreen = pendingPresentId ? objects[pendingPresentId] : null;
+  useEffect(() => {
+    if (!pendingPresentId) return;
+    const target = objects[pendingPresentId];
+    if (!target || target.presenterId) setPendingPresentId(null);
+  }, [pendingPresentId, objects]);
 
 
   // The first person into an empty room places whatever the world config says
@@ -838,6 +860,18 @@ export default function App() {
           />
         </XR>
       </Canvas>
+
+      {pendingPresentScreen && (
+        <PresentSourceChooser
+          cameraOn={media.cameraOn}
+          onCancel={() => setPendingPresentId(null)}
+          onChoose={(source) => {
+            const target = pendingPresentScreen;
+            setPendingPresentId(null);
+            void presentOn(target, source);
+          }}
+        />
+      )}
 
       {zoomedScreen && zoomedStream && (
         <ScreenZoomOverlay

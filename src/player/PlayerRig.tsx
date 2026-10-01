@@ -3,6 +3,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useXR, useXRControllerLocomotion, XROrigin } from "@react-three/xr";
 import * as THREE from "three";
 import type { TouchMoveInput } from "./touchInput";
+import { isGizmoDragging } from "../edit/gizmoState";
 import {
   CAMERA_RADIUS,
   ceilingHeightAt,
@@ -49,6 +50,9 @@ const MOVE_TARGET_ARRIVE_DISTANCE = 0.25;
 const JUMP_SPEED = 5; // initial upward velocity, m/s
 const GRAVITY = 14; // m/s^2
 const GROUNDED_EPSILON = 0.01;
+/** How far a left-drag must travel in Edit Mode before it counts as
+ *  looking around rather than a click on an object. */
+const LOOK_DRAG_THRESHOLD_PX = 4;
 const MOUSE_LOOK_SENSITIVITY = 0.0025; // radians per pixel
 const TOUCH_LOOK_SENSITIVITY = 0.0042; // fingers cover fewer pixels than a mouse sweep
 const PITCH_LIMIT = Math.PI / 2 - 0.05;
@@ -320,6 +324,7 @@ export function PlayerRig({
     };
 
     const pointers = new Map<number, { x: number; y: number; type: string }>();
+    let pendingLook: number | null = null;
     let lookPointer: number | null = null;
     let pinch: { distance: number; midX: number; midY: number } | null = null;
 
@@ -331,19 +336,61 @@ export function PlayerRig({
     const onPointerDown = (e: PointerEvent) => {
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, type: e.pointerType });
       if (e.pointerType === "mouse") {
-        const isLookButton = editMode ? e.button === 1 || e.button === 2 : e.button === 0 || e.button === 1 || e.button === 2;
-        if (!isLookButton) return;
-        if (e.button === 1) e.preventDefault(); // middle-click autoscroll
-        lookPointer = e.pointerId;
-        el.setPointerCapture(e.pointerId);
-        el.style.cursor = "grabbing";
+        if (e.button === 1 || e.button === 2) {
+          if (e.button === 1) e.preventDefault(); // middle-click autoscroll
+          lookPointer = e.pointerId;
+          el.setPointerCapture(e.pointerId);
+          el.style.cursor = "grabbing";
+          return;
+        }
+        if (e.button !== 0) return;
+        if (!editMode) {
+          lookPointer = e.pointerId;
+          el.setPointerCapture(e.pointerId);
+          el.style.cursor = "grabbing";
+          return;
+        }
+        // Edit Mode: a left-drag might be grabbing a gizmo or might be
+        // looking around, and which one is not knowable yet. Hold it as
+        // a candidate and decide on the first movement (see
+        // promoteToLook), by which point the gizmo has claimed it if it
+        // was going to.
+        pendingLook = e.pointerId;
         return;
       }
       if (pointers.size === 2) {
         lookPointer = null;
+        pendingLook = null;
         pinch = measurePinch();
-      } else if (pointers.size === 1 && !editMode) {
-        lookPointer = e.pointerId;
+      } else if (pointers.size === 1) {
+        // Same deferral on touch. Previously a single finger could not
+        // look at all in Edit Mode, so on a phone you could place an
+        // object and then have no way to turn and see it.
+        if (editMode) pendingLook = e.pointerId;
+        else lookPointer = e.pointerId;
+      }
+    };
+
+    /**
+     * Turns a held left-drag into a look, unless a gizmo took it.
+     *
+     * The threshold keeps a click that happens to jitter by a pixel from
+     * spinning the camera, and the gizmo check runs here rather than at
+     * pointerdown because TransformControls sets its dragging flag from
+     * its own handler — at pointerdown time the answer isn't in yet.
+     */
+    const promoteToLook = (e: PointerEvent, dx: number, dy: number) => {
+      if (pendingLook !== e.pointerId) return;
+      if (isGizmoDragging()) {
+        pendingLook = null;
+        return;
+      }
+      if (Math.hypot(dx, dy) < LOOK_DRAG_THRESHOLD_PX) return;
+      pendingLook = null;
+      lookPointer = e.pointerId;
+      if (e.pointerType === "mouse") {
+        el.setPointerCapture(e.pointerId);
+        el.style.cursor = "grabbing";
       }
     };
 
@@ -365,6 +412,7 @@ export function PlayerRig({
         pinch = next;
         return;
       }
+      promoteToLook(e, dx, dy);
       if (lookPointer === e.pointerId) {
         look(dx, dy, tracked.type === "mouse" ? MOUSE_LOOK_SENSITIVITY : TOUCH_LOOK_SENSITIVITY);
       }
@@ -373,6 +421,8 @@ export function PlayerRig({
     const onPointerEnd = (e: PointerEvent) => {
       pointers.delete(e.pointerId);
       if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
+      // A candidate that never moved far enough was a click, not a look.
+      if (pendingLook === e.pointerId) pendingLook = null;
       if (lookPointer === e.pointerId) {
         lookPointer = null;
         el.style.cursor = "";

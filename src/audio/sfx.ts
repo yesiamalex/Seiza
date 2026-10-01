@@ -210,30 +210,36 @@ export function playFootstep(surface: StepSurface, distance?: number) {
       noiseBurst(a.ctx, a.out, { duration: 0.07, gain: 0.24 * level, frequency: 1700 * vary, q: 1.1, sweepTo: 700 });
       break;
     case "water":
-      // A splash is three things at once, and the previous version had
-      // only the first: one bright noise burst with a near-instant
-      // attack, which is the standard recipe for a snare drum. What
-      // makes it read as water instead is the low displacement thump
-      // underneath, and a wash that decays slowly and darkly rather
-      // than snapping shut.
+      // No bright transient at all. The previous two attempts both led
+      // with a short, high, instant-attack noise burst — first a
+      // bandpass, then a highpass — and that *is* a snare: broadband
+      // energy, fast attack, fast decay. Quietening it only produced a
+      // quieter snare. Water has no crack in it; what it has is a soft
+      // low wash and a pitched cavity, so those are the only two things
+      // here.
       //
-      // 1. The surface breaking: brief, bright, quiet.
-      noiseBurst(a.ctx, a.out, { duration: 0.05, gain: 0.12 * level, type: "highpass", frequency: 2600 * vary, q: 0.5 });
-      // 2. The body of water moving: the loudest part, low and slow in
-      //    and out, sweeping downward as the cavity collapses.
+      // The wash: hard low-passed and eased in over a third of its
+      // length, so there is no onset click anywhere.
       noiseBurst(a.ctx, a.out, {
-        duration: 0.34,
+        duration: 0.36,
         gain: 0.3 * level,
         type: "lowpass",
-        frequency: 850 * vary,
-        q: 0.6,
-        sweepTo: 170,
-        attack: 0.22,
+        frequency: 520 * vary,
+        q: 0.5,
+        sweepTo: 130,
+        attack: 0.32,
       });
-      // 3. The pitched "bloop" of the cavity itself. Rising, not
-      //    falling: a bubble of air closing over raises in pitch, and
-      //    that detail is most of what separates water from a thud.
-      tone(a.ctx, a.out, { frequency: 180 * vary, duration: 0.17, gain: 0.1 * level, type: "sine", sweepTo: 340 * vary });
+      // The cavity closing over, rising in pitch. This carries most of
+      // the "that was water" impression, so it is louder than before.
+      tone(a.ctx, a.out, { frequency: 150 * vary, duration: 0.2, gain: 0.19 * level, type: "sine", sweepTo: 430 * vary });
+      // Two small droplets just after, as pitched blips rather than
+      // noise. Noise up here is exactly what was making it snare.
+      for (const [delay, freq] of [[70, 760], [130, 1040]] as const) {
+        window.setTimeout(() => {
+          const b = audio();
+          if (b) tone(b.ctx, b.out, { frequency: freq * vary, duration: 0.05, gain: 0.05 * level, type: "sine", sweepTo: freq * 1.7 * vary });
+        }, delay);
+      }
       break;
   }
 }
@@ -300,11 +306,14 @@ export function playDoorSwing(distance?: number) {
   if (!a) return;
   const level = gainForDistance(distance);
   if (level <= 0.01) return;
-  noiseBurst(a.ctx, a.out, { duration: 0.62, gain: 0.17 * level, type: "bandpass", frequency: 480, q: 1.4, sweepTo: 220, attack: 0.3 });
+  // Q widened as well as the gain raised: at 1.4 the band was narrow
+  // enough that the swing read as quieter than the shoji slide even at a
+  // similar nominal gain, because far less of the noise got through.
+  noiseBurst(a.ctx, a.out, { duration: 0.62, gain: 0.26 * level, type: "bandpass", frequency: 480, q: 0.9, sweepTo: 220, attack: 0.3 });
   // The latch, as the leaf reaches the end of its swing.
   window.setTimeout(() => {
     const b = audio();
-    if (b) noiseBurst(b.ctx, b.out, { duration: 0.08, gain: 0.22 * level, frequency: 300, q: 1.5, sweepTo: 130 });
+    if (b) noiseBurst(b.ctx, b.out, { duration: 0.08, gain: 0.26 * level, frequency: 300, q: 1.1, sweepTo: 130 });
   }, 580);
 }
 
@@ -319,8 +328,11 @@ export function playWaterRipple(strength = 1, distance?: number) {
   // recipe for a hiss or a sizzle rather than a ripple — it was both too
   // loud and the wrong shape. The noise is now brief, dark, and sits
   // under the pitched part rather than over it.
-  tone(a.ctx, a.out, { frequency: 300, duration: 0.17, gain: 0.10 * level, type: "sine", sweepTo: 110 });
-  noiseBurst(a.ctx, a.out, { duration: 0.09, gain: 0.05 * level, type: "lowpass", frequency: 700, q: 0.7, sweepTo: 200, attack: 0.1 });
+  // Rising, like the footstep splash: an air cavity closing over goes
+  // up in pitch. This swept downward before, which is a drip landing on
+  // a hard surface rather than water opening and closing.
+  tone(a.ctx, a.out, { frequency: 160, duration: 0.18, gain: 0.11 * level, type: "sine", sweepTo: 400 });
+  noiseBurst(a.ctx, a.out, { duration: 0.13, gain: 0.05 * level, type: "lowpass", frequency: 480, q: 0.5, sweepTo: 160, attack: 0.3 });
 }
 
 /**

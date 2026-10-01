@@ -8,6 +8,7 @@ import { Chair } from "../scene/Chair";
 import { SeatPad } from "../scene/SeatPad";
 import { VideoPanel } from "../media/VideoPanel";
 import { createScreenPlaceholder, createTextTexture } from "./textTexture";
+import { setGizmoDragging } from "./gizmoState";
 
 interface WorldObjectsProps {
   objects: Record<string, WorldObject>;
@@ -176,7 +177,17 @@ function PlacedObject({
         />
       )}
       {editMode && selected && groupRef.current && (
-        <TransformControls object={groupRef.current} mode={transformMode} onMouseUp={handleChangeEnd} />
+        <TransformControls
+          object={groupRef.current}
+          mode={transformMode}
+          // Reported so PlayerRig can tell a gizmo drag from a
+          // look-around drag — see gizmoState.ts.
+          onMouseDown={() => setGizmoDragging(true)}
+          onMouseUp={() => {
+            setGizmoDragging(false);
+            handleChangeEnd();
+          }}
+        />
       )}
     </>
   );
