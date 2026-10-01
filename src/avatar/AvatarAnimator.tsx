@@ -171,11 +171,6 @@ interface AnimatorState {
    *  else's, uniformly, rather than needing one precise path for
    *  yourself and a second guessed one for remote players. */
   verticalVelocity: number;
-  /** Seconds the jump pose stays held after vertical speed drops below
-   *  the airborne threshold. At the top of a jump the vertical speed
-   *  passes through zero, and without this the pose blended back to
-   *  walking mid-air, so the legs were barely ever seen in it. */
-  airHold: number;
   lastPosition: THREE.Vector3 | null;
   /** What the pose currently showing is resting on, and how much of it is
    *  blended in. Written by the animation pass, read by the grounding pass. */
@@ -336,7 +331,6 @@ export function AvatarAnimator({
       phase: 0,
       speed: 0,
       verticalVelocity: 0,
-      airHold: 0,
       lastPosition: null,
       groundMode: "none",
       groundWeight: 0,
@@ -567,12 +561,7 @@ export function AvatarAnimator({
     // well under a second, gradually, while a jump's initial velocity
     // (PlayerRig's JUMP_SPEED = 5 m/s) clears this with room to spare even
     // after gravity has been eating into it for a few frames.
-    const airborne = state.jump ? THREE.MathUtils.smoothstep(Math.abs(state.verticalVelocity), 1.1, 2.2) : 0;
-    // Only refreshed on the way up, so it bridges the apex but never
-    // holds the pose after landing.
-    if (airborne > 0.5 && state.verticalVelocity > 0) state.airHold = 0.35;
-    else state.airHold = Math.max(0, state.airHold - delta);
-    const jumpTarget = state.airHold > 0 ? 1 : airborne;
+    const jumpTarget = state.jump ? THREE.MathUtils.smoothstep(Math.abs(state.verticalVelocity), 1.1, 2.2) : 0;
     const targets = { idle: 1 - moving, walk: moving * (1 - running), run: moving * running };
     // Missing clips hand their share back to idle so weights still sum to 1.
     if (!state.run) {
