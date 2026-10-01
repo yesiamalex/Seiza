@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from "react";
 import * as THREE from "three";
+import { POND_CENTER, POND_WATER_RADIUS } from "./layout";
 
 /**
  * What you see through the windows.
@@ -79,6 +80,45 @@ function makeGroundTexture(): THREE.Texture | null {
 
 export function Outdoors() {
   const ground = useMemo(makeGroundTexture, []);
+
+  /**
+   * The outer ground, with the pond cut out of it.
+   *
+   * This disc is unlit and sits at y = -0.06, just under the decking —
+   * which means it also ran straight across the top of the sunken pond
+   * basin. That was invisible while the water was opaque, and became the
+   * whole problem the moment the water was made see-through: looking
+   * into the pond showed this flat green circle rather than the bed and
+   * the koi below it. The pond reading as "green" was never the water's
+   * colour; it was the lawn, seen through it.
+   *
+   * A ShapeGeometry with a hole rather than moving or shrinking the
+   * ground, so the lawn still meets the decking everywhere else exactly
+   * as before.
+   */
+  const groundGeometry = useMemo(() => {
+    const shape = new THREE.Shape();
+    shape.absarc(0, 0, GROUND_RADIUS, 0, Math.PI * 2, false);
+    const hole = new THREE.Path();
+    // The mesh is rotated -90 degrees about X, which maps shape (x, y)
+    // onto world (x, 0, -y) — hence the negated pond Z. Slightly wider
+    // than the water so the cut edge hides under the basin rim.
+    hole.absarc(POND_CENTER[0], -POND_CENTER[1], POND_WATER_RADIUS + 0.1, 0, Math.PI * 2, true);
+    shape.holes.push(hole);
+    const geometry = new THREE.ShapeGeometry(shape, 64);
+    // ShapeGeometry uses raw shape coordinates as UVs; at this radius
+    // that would repeat the grass texture hundreds of times. Rewrite
+    // them to CircleGeometry's 0..1 convention so the texture looks the
+    // same as it did before the hole existed.
+    const position = geometry.attributes.position;
+    const uv = geometry.attributes.uv;
+    for (let i = 0; i < position.count; i++) {
+      uv.setXY(i, position.getX(i) / (GROUND_RADIUS * 2) + 0.5, position.getY(i) / (GROUND_RADIUS * 2) + 0.5);
+    }
+    uv.needsUpdate = true;
+    return geometry;
+  }, []);
+  useEffect(() => () => groundGeometry.dispose(), [groundGeometry]);
   useEffect(() => () => ground?.dispose(), [ground]);
 
   // One instanced draw call for every tree, and another for the hills.
@@ -148,8 +188,12 @@ export function Outdoors() {
       {/* Ground. Unlit on purpose: it sits far outside the shadow camera,
           so lighting it would only ever come out flat anyway, and this way
           it costs nothing. */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.06, 0]} userData={{ navIgnore: true }}>
-        <circleGeometry args={[GROUND_RADIUS, 64]} />
+      <mesh
+        geometry={groundGeometry}
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[0, -0.06, 0]}
+        userData={{ navIgnore: true }}
+      >
         <meshBasicMaterial map={ground ?? undefined} color={ground ? "#ffffff" : "#8d9a5c"} fog />
       </mesh>
 
