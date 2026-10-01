@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
 import type { WorldMaterials } from "./materials";
+import { playClockTick } from "../audio/sfx";
 
 /**
  * A working wall clock and a tear-off date calendar for the classroom.
@@ -17,6 +18,10 @@ import type { WorldMaterials } from "./materials";
  */
 
 const FACE_RADIUS = 0.24;
+
+/** Scratch vector for the tick's distance check, so the per-second path
+ *  allocates nothing. */
+const tickWorldPosition = new THREE.Vector3();
 
 /** Hours, minutes and seconds right now in an IANA time zone. */
 function timeIn(formatter: Intl.DateTimeFormat | null, now: Date) {
@@ -100,14 +105,23 @@ export function WallClock({
   const minuteRef = useRef<THREE.Group>(null);
   const secondRef = useRef<THREE.Group>(null);
   const lastSecond = useRef(-1);
+  const rootRef = useRef<THREE.Group>(null);
   const secondMaterial = useMemo(() => new THREE.MeshStandardMaterial({ color: "#c0392b", roughness: 0.5 }), []);
   useEffect(() => () => secondMaterial.dispose(), [secondMaterial]);
 
-  useFrame(() => {
+  useFrame((frameState) => {
     const now = new Date();
     // Cheap check first; the zone conversion runs once a second at most.
     if (now.getSeconds() === lastSecond.current) return;
+    const previousSecond = lastSecond.current;
     lastSecond.current = now.getSeconds();
+    // Audible only right next to the clock (see playClockTick). Skipped
+    // on the very first update, which is the component mounting rather
+    // than a second actually passing.
+    if (previousSecond >= 0 && rootRef.current) {
+      const here = rootRef.current.getWorldPosition(tickWorldPosition);
+      playClockTick(lastSecond.current % 2 === 0, frameState.camera.position.distanceTo(here));
+    }
     const t = timeIn(formatter, now);
     const seconds = t.s;
     const minutes = t.m + seconds / 60;
@@ -119,7 +133,7 @@ export function WallClock({
   });
 
   return (
-    <group>
+    <group ref={rootRef}>
       <mesh rotation={[Math.PI / 2, 0, 0]} material={m.trim}>
         <cylinderGeometry args={[0.28, 0.28, 0.07, 32]} />
       </mesh>

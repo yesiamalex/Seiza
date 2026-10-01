@@ -286,9 +286,6 @@ function splitClip(clip: THREE.AnimationClip, vrm: VRM) {
 const approach = (current: number, target: number, rate: number, delta: number) =>
   current + (target - current) * (1 - Math.exp(-rate * delta));
 
-/** A footstep every this many metres walked. Roughly one human stride. */
-const STEP_DISTANCE = 0.72;
-
 /** How fast the head eases toward a newly received gaze angle. */
 const HEAD_PITCH_RATE = 9;
 /** Fraction of the total bend taken by the neck; the head takes the rest. */
@@ -313,9 +310,6 @@ export function AvatarAnimator({
   /** Distance from the camera, so sounds this avatar makes fade with
    *  range the way its voice does. Updated in the frame loop. */
   const distanceToCameraRef = useRef(0);
-  /** Metres walked since the last footstep, and where that was. */
-  const stepAccumulatorRef = useRef(0);
-  const lastStepPositionRef = useRef<THREE.Vector3 | null>(null);
   const activeExpression = expression !== undefined ? expression : (gesture?.expression ?? posture?.expression ?? null);
   useFacialExpressions(vrm, activeExpression, speakingLevel, airborneRef);
   const stateRef = useRef<AnimatorState | null>(null);
@@ -559,34 +553,9 @@ export function AvatarAnimator({
     if (raw) {
       const position = raw instanceof THREE.Vector3 ? raw : new THREE.Vector3(raw[0], raw[1], raw[2]);
 
-      // ---- footsteps -------------------------------------------------
-      // Emitted per metre walked rather than per animation cycle: the
-      // walk clip is phase-locked to ground speed, so distance already
-      // *is* the step rhythm, and it stays correct whether someone is
-      // strolling or running. It also works unchanged for remote
-      // avatars, since this only needs their position.
+      // Distance from the camera, so sounds this avatar makes fade with
+      // range the way its voice does.
       distanceToCameraRef.current = frameState.camera.position.distanceTo(position);
-      const previousStep = lastStepPositionRef.current;
-      if (previousStep) {
-        stepAccumulatorRef.current += Math.hypot(position.x - previousStep.x, position.z - previousStep.z);
-        previousStep.copy(position);
-      } else {
-        lastStepPositionRef.current = position.clone();
-      }
-      // Only while actually walking and on the ground: airborne, seated
-      // and teleported avatars must not click along.
-      const moving = state.speed > 0.4 && state.speed < 25;
-      const grounded = !state.jump || state.jump.weight < 0.2;
-      if (stepAccumulatorRef.current >= STEP_DISTANCE) {
-        stepAccumulatorRef.current = 0;
-        if (moving && grounded) {
-          const surface = surfaceAt(position.x, position.z);
-          playFootstep(surface, distanceToCameraRef.current);
-          // Wading also disturbs the water itself, audibly as well as
-          // visually (Pond.tsx already handles the ripple).
-          if (surface === "water") playWaterRipple(0.6, distanceToCameraRef.current);
-        }
-      }
 
       if (state.lastPosition && delta > 0) {
         const instant = Math.hypot(position.x - state.lastPosition.x, position.z - state.lastPosition.z) / delta;
@@ -644,7 +613,31 @@ export function AvatarAnimator({
 
     if (moving > 0.001) {
       const stride = THREE.MathUtils.lerp(WALK_STRIDE, RUN_STRIDE, running);
+      const previousPhase = state.phase;
       state.phase = (state.phase + (Math.max(state.speed, 0.9) / stride) * delta) % 1;
+
+      // ---- footsteps ---------------------------------------------------
+      // Tied to the walk cycle, not to distance travelled. A fixed
+      // metres-per-step guess drifts against the clip — too frequent at
+      // some speeds, out of time at others, which reads as footsteps
+      // belonging to someone else. A cycle has two contacts, so a step is
+      // one crossing of phase 0 or 0.5, and that matches the animation at
+      // every speed by construction.
+      const crossed =
+        previousPhase < 0.5 !== state.phase < 0.5 || state.phase < previousPhase;
+      const grounded = !state.jump || state.jump.weight < 0.2;
+      if (crossed && grounded && state.speed > 0.4 && state.speed < 25) {
+        const here = getPositionRef.current?.();
+        if (here) {
+          const fx = here instanceof THREE.Vector3 ? here.x : here[0];
+          const fz = here instanceof THREE.Vector3 ? here.z : here[2];
+          const surface = surfaceAt(fx, fz);
+          playFootstep(surface, distanceToCameraRef.current);
+          // Wading disturbs the water audibly as well as visually, but
+          // quietly — it is a step in shallow water, not a dive.
+          if (surface === "water") playWaterRipple(0.25, distanceToCameraRef.current);
+        }
+      }
     }
     for (const loco of [state.walk, state.run]) {
       if (!loco) continue;

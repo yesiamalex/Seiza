@@ -26,9 +26,9 @@ let context: AudioContext | null = null;
 let master: GainNode | null = null;
 let muted = false;
 
-/** Global ceiling. These are background texture, not the main event —
- *  voice is. */
-const MASTER_VOLUME = 0.5;
+/** Global ceiling. These sit under voice chat, but the first pass set
+ *  this so low the world was effectively silent. */
+const MASTER_VOLUME = 0.95;
 
 function audio(): { ctx: AudioContext; out: GainNode } | null {
   if (muted) return null;
@@ -47,6 +47,36 @@ function audio(): { ctx: AudioContext; out: GainNode } | null {
     return master ? { ctx: context, out: master } : null;
   } catch {
     return null;
+  }
+}
+
+/**
+ * Starts the audio context on the first real user interaction.
+ *
+ * Browsers refuse to run an AudioContext until the page has been
+ * interacted with, and `resume()` is asynchronous. A sound scheduled at
+ * `currentTime` while the context is still suspended is scheduled into a
+ * clock that is not advancing, so it is silently dropped — which is why
+ * world sounds appeared to work only on the clicks that happened to
+ * unlock the context, and not on keyboard gestures or anything the app
+ * triggered by itself.
+ *
+ * Calling this once from app start registers one-shot listeners so the
+ * context is already running long before anything wants to play.
+ */
+export function unlockAudio() {
+  if (typeof window === "undefined") return;
+  const start = () => {
+    const a = audio();
+    if (a && a.ctx.state === "running") detach();
+  };
+  const detach = () => {
+    for (const type of ["pointerdown", "keydown", "touchstart"] as const) {
+      window.removeEventListener(type, start, true);
+    }
+  };
+  for (const type of ["pointerdown", "keydown", "touchstart"] as const) {
+    window.addEventListener(type, start, true);
   }
 }
 
@@ -166,17 +196,21 @@ export function playFootstep(surface: StepSurface, distance?: number) {
 
   switch (surface) {
     case "tatami":
-      noiseBurst(a.ctx, a.out, { duration: 0.09, gain: 0.055 * level, type: "lowpass", frequency: 420 * vary, q: 0.7 });
+      // Tatami is a soft, low thud by nature, so it needs the most help of
+      // the four to be audible at all; a second, lower layer gives it some
+      // body rather than just turning the hiss up.
+      noiseBurst(a.ctx, a.out, { duration: 0.11, gain: 0.30 * level, type: "lowpass", frequency: 460 * vary, q: 0.8 });
+      tone(a.ctx, a.out, { frequency: 96 * vary, duration: 0.09, gain: 0.16 * level, type: "sine", sweepTo: 62 });
       break;
     case "wood":
-      noiseBurst(a.ctx, a.out, { duration: 0.07, gain: 0.07 * level, frequency: 900 * vary, q: 1.6, sweepTo: 320 });
-      tone(a.ctx, a.out, { frequency: 150 * vary, duration: 0.05, gain: 0.03 * level, type: "sine" });
+      noiseBurst(a.ctx, a.out, { duration: 0.08, gain: 0.26 * level, frequency: 900 * vary, q: 1.6, sweepTo: 320 });
+      tone(a.ctx, a.out, { frequency: 150 * vary, duration: 0.06, gain: 0.14 * level, type: "sine", sweepTo: 92 });
       break;
     case "stone":
-      noiseBurst(a.ctx, a.out, { duration: 0.06, gain: 0.065 * level, frequency: 1700 * vary, q: 1.1, sweepTo: 700 });
+      noiseBurst(a.ctx, a.out, { duration: 0.07, gain: 0.24 * level, frequency: 1700 * vary, q: 1.1, sweepTo: 700 });
       break;
     case "water":
-      noiseBurst(a.ctx, a.out, { duration: 0.26, gain: 0.1 * level, frequency: 1500 * vary, q: 0.5, sweepTo: 260, attack: 0.04 });
+      noiseBurst(a.ctx, a.out, { duration: 0.28, gain: 0.34 * level, frequency: 1500 * vary, q: 0.5, sweepTo: 260, attack: 0.04 });
       break;
   }
 }
@@ -189,10 +223,10 @@ export function playClap(distance?: number) {
   if (level <= 0.01) return;
   // Two bursts a few milliseconds apart: a clap is the hands meeting and
   // the air escaping, and the pair is what stops it sounding like a hiss.
-  noiseBurst(a.ctx, a.out, { duration: 0.035, gain: 0.16 * level, frequency: 1800, q: 0.9, sweepTo: 900 });
+  noiseBurst(a.ctx, a.out, { duration: 0.035, gain: 0.34 * level, frequency: 1800, q: 0.9, sweepTo: 900 });
   window.setTimeout(() => {
     const b = audio();
-    if (b) noiseBurst(b.ctx, b.out, { duration: 0.09, gain: 0.07 * level, frequency: 1100, q: 0.6, sweepTo: 420 });
+    if (b) noiseBurst(b.ctx, b.out, { duration: 0.09, gain: 0.18 * level, frequency: 1100, q: 0.6, sweepTo: 420 });
   }, 12);
 }
 
@@ -204,8 +238,8 @@ export function playSwitch(on: boolean, distance?: number) {
   if (level <= 0.01) return;
   // Up and down are not the same sound on a real switch; the pitch drop
   // is small but it is what makes it feel like a mechanism.
-  tone(a.ctx, a.out, { frequency: on ? 2200 : 1750, duration: 0.028, gain: 0.08 * level, type: "square", sweepTo: on ? 900 : 700 });
-  noiseBurst(a.ctx, a.out, { duration: 0.02, gain: 0.05 * level, frequency: 3200, q: 0.8 });
+  tone(a.ctx, a.out, { frequency: on ? 2200 : 1750, duration: 0.028, gain: 0.20 * level, type: "square", sweepTo: on ? 900 : 700 });
+  noiseBurst(a.ctx, a.out, { duration: 0.02, gain: 0.14 * level, frequency: 3200, q: 0.8 });
 }
 
 /**
@@ -224,7 +258,7 @@ export function playDoorSlide(durationSeconds = 0.5, distance?: number) {
   // with a soft knock at the end as the leaf reaches the jamb.
   noiseBurst(a.ctx, a.out, {
     duration: durationSeconds,
-    gain: 0.045 * level,
+    gain: 0.20 * level,
     type: "bandpass",
     frequency: 620,
     q: 0.8,
@@ -233,7 +267,7 @@ export function playDoorSlide(durationSeconds = 0.5, distance?: number) {
   });
   window.setTimeout(() => {
     const b = audio();
-    if (b) noiseBurst(b.ctx, b.out, { duration: 0.05, gain: 0.05 * level, frequency: 420, q: 1.2, sweepTo: 180 });
+    if (b) noiseBurst(b.ctx, b.out, { duration: 0.06, gain: 0.20 * level, frequency: 420, q: 1.2, sweepTo: 180 });
   }, Math.max(0, durationSeconds * 1000 - 60));
 }
 
@@ -243,10 +277,10 @@ export function playDoorSwing(distance?: number) {
   if (!a) return;
   const level = gainForDistance(distance);
   if (level <= 0.01) return;
-  noiseBurst(a.ctx, a.out, { duration: 0.32, gain: 0.035 * level, type: "bandpass", frequency: 480, q: 1.4, sweepTo: 220, attack: 0.25 });
+  noiseBurst(a.ctx, a.out, { duration: 0.34, gain: 0.17 * level, type: "bandpass", frequency: 480, q: 1.4, sweepTo: 220, attack: 0.25 });
   window.setTimeout(() => {
     const b = audio();
-    if (b) noiseBurst(b.ctx, b.out, { duration: 0.07, gain: 0.055 * level, frequency: 300, q: 1.5, sweepTo: 130 });
+    if (b) noiseBurst(b.ctx, b.out, { duration: 0.08, gain: 0.22 * level, frequency: 300, q: 1.5, sweepTo: 130 });
   }, 300);
 }
 
@@ -254,10 +288,93 @@ export function playDoorSwing(distance?: number) {
 export function playWaterRipple(strength = 1, distance?: number) {
   const a = audio();
   if (!a) return;
-  const level = gainForDistance(distance) * Math.min(1, Math.max(0.2, strength));
+  const level = gainForDistance(distance) * Math.min(1, Math.max(0.15, strength));
   if (level <= 0.01) return;
-  noiseBurst(a.ctx, a.out, { duration: 0.22, gain: 0.07 * level, frequency: 1300, q: 0.6, sweepTo: 220, attack: 0.05 });
-  // A low "bloop" under the splash, pitched down, which is what reads as
-  // water having a volume rather than just a surface.
-  tone(a.ctx, a.out, { frequency: 420, duration: 0.14, gain: 0.03 * level, type: "sine", sweepTo: 150 });
+  // Water is mostly a low, rounded "bloop" with a short wet edge on it.
+  // An earlier version led with a long bright noise burst, which is the
+  // recipe for a hiss or a sizzle rather than a ripple — it was both too
+  // loud and the wrong shape. The noise is now brief, dark, and sits
+  // under the pitched part rather than over it.
+  tone(a.ctx, a.out, { frequency: 300, duration: 0.17, gain: 0.10 * level, type: "sine", sweepTo: 110 });
+  noiseBurst(a.ctx, a.out, { duration: 0.09, gain: 0.05 * level, type: "lowpass", frequency: 700, q: 0.7, sweepTo: 200, attack: 0.1 });
+}
+
+/**
+ * One second of a wall clock.
+ *
+ * Alternating pitch between tick and tock, because a real escapement
+ * does: the two halves of the beat are not the same sound, and making
+ * them identical is what turns a clock into a metronome. Very quiet, and
+ * attenuated hard by distance — a clock you can hear across the room is
+ * an irritation, not atmosphere.
+ */
+export function playClockTick(tock: boolean, distance?: number) {
+  const a = audio();
+  if (!a) return;
+  // Falls off far faster than anything else here: audible standing at
+  // the wall, gone a few metres away.
+  const level = Math.max(0, 1 - (distance ?? 0) / 6);
+  if (level <= 0.02) return;
+  noiseBurst(a.ctx, a.out, { duration: 0.016, gain: 0.05 * level, frequency: tock ? 2400 : 3100, q: 2.2 });
+  tone(a.ctx, a.out, { frequency: tock ? 900 : 1150, duration: 0.012, gain: 0.025 * level, type: "triangle" });
+}
+
+/**
+ * A continuous, looping trickle for standing near the pond.
+ *
+ * Built once and kept running with its gain driven by distance, rather
+ * than retriggered: water is the one sound here that is genuinely
+ * continuous, and firing repeated one-shots at it produces a stutter
+ * that reads as a fault. Two slow-swept filters over a noise loop give
+ * enough movement that the loop point is not audible.
+ */
+let ambientWater: { gain: GainNode; source: AudioBufferSourceNode } | null = null;
+
+export function setPondAmbience(distance: number) {
+  const a = audio();
+  if (!a) return;
+  // Quiet, and only within a few metres. A pond heard from the
+  // classroom would be wrong.
+  const target = Math.max(0, 1 - distance / 7) * 0.085;
+
+  if (!ambientWater) {
+    if (target <= 0.001) return; // don't build it until someone is close
+    const seconds = 3;
+    const frames = a.ctx.sampleRate * seconds;
+    const buffer = a.ctx.createBuffer(1, frames, a.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    // Brown-ish noise: integrating white noise tilts it toward the low
+    // end, which is much closer to moving water than raw hiss.
+    let last = 0;
+    for (let i = 0; i < frames; i++) {
+      last = (last + Math.random() * 2 - 1) * 0.5;
+      data[i] = last;
+    }
+    const source = a.ctx.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+
+    const band = a.ctx.createBiquadFilter();
+    band.type = "bandpass";
+    band.frequency.value = 620;
+    band.Q.value = 0.7;
+
+    // A slow wander on the filter so the three-second loop doesn't
+    // announce itself.
+    const lfo = a.ctx.createOscillator();
+    lfo.frequency.value = 0.07;
+    const lfoDepth = a.ctx.createGain();
+    lfoDepth.gain.value = 180;
+    lfo.connect(lfoDepth).connect(band.frequency);
+    lfo.start();
+
+    const gain = a.ctx.createGain();
+    gain.gain.value = 0;
+    source.connect(band).connect(gain).connect(a.out);
+    source.start();
+    ambientWater = { gain, source };
+  }
+
+  // Ramped, not assigned: stepping a gain per frame clicks.
+  ambientWater.gain.gain.setTargetAtTime(target, a.ctx.currentTime, 0.25);
 }

@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import { POND_CENTER, POND_RADIUS, POND_WATER_RADIUS, POND_WATER_Y, pondDepthAtRadius } from "./layout";
 import { pondWaders, takePondRipples } from "./pondActivity";
+import { setPondAmbience } from "../audio/sfx";
 
 /**
  * The garden pond: a sunken basin you can wade into, rocks round the rim,
@@ -108,7 +109,7 @@ const fragmentShader = /* glsl */ `
     // the surface you see sky — and it is also the only way the koi are
     // visible at all. A flat 0.74 made the pond a coloured disc with fish
     // hidden somewhere underneath it.
-    float alpha = mix(0.30, 0.93, fresnel) * (1.0 - smoothstep(0.96, 1.0, length(vLocal) / uRadius));
+    float alpha = mix(0.16, 0.92, fresnel) * (1.0 - smoothstep(0.96, 1.0, length(vLocal) / uRadius));
     gl_FragColor = vec4(color, alpha);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
@@ -163,8 +164,8 @@ export function Pond() {
         uniforms: {
           uTime: { value: 0 },
           uRadius: { value: WATER_RADIUS },
-          uDeep: { value: new THREE.Color("#0f2a33") },
-          uShallow: { value: new THREE.Color("#2f5a4a") },
+          uDeep: { value: new THREE.Color("#1b3d47") },
+          uShallow: { value: new THREE.Color("#4a7d68") },
           uSky: { value: new THREE.Color("#2a2456") },
           uSkyHorizon: { value: new THREE.Color("#e39a72") },
           uSun: { value: new THREE.Color("#ffd9a8") },
@@ -177,7 +178,7 @@ export function Pond() {
 
   const materials = useMemo(
     () => ({
-      bed: new THREE.MeshStandardMaterial({ color: "#2a332b", roughness: 1, side: THREE.DoubleSide }),
+      bed: new THREE.MeshStandardMaterial({ color: "#7d7259", roughness: 1, side: THREE.DoubleSide }),
       bank: new THREE.MeshStandardMaterial({ color: "#3f4a2c", roughness: 1 }),
       rocks: ["#6f6a63", "#837d73", "#5c5852"].map((color) => new THREE.MeshStandardMaterial({ color, roughness: 0.95, flatShading: true })),
       pad: new THREE.MeshStandardMaterial({ color: "#3f7a3a", roughness: 0.7, side: THREE.DoubleSide }),
@@ -215,9 +216,15 @@ export function Pond() {
     rippleIndex.current += 1;
   };
 
-  useFrame((_, delta) => {
+  useFrame((frameState, delta) => {
     const step = Math.min(delta, 0.1);
     const time = (water.uniforms.uTime.value += step);
+
+    // Continuous trickle, loudest at the water's edge. Driven every
+    // frame because it is a gain on a running loop, not a new sound.
+    setPondAmbience(
+      Math.hypot(frameState.camera.position.x - POND_CENTER[0], frameState.camera.position.z - POND_CENTER[1])
+    );
 
     for (const [x, z, strength] of takePondRipples()) addRipple(x, z, strength);
     const waders = pondWaders();

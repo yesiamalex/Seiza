@@ -1016,10 +1016,12 @@ deliberate limitations (paper Section 7 has the fuller discussion):
   decided had no video. It now re-attaches on `addtrack` and `unmute`. Not
   yet confirmed across two machines on different networks.
 - **Sound effects are synthesised, not sampled.** Footsteps (which differ
-  by surface), the clap gesture, light switches, doors and water are built
-  from noise and oscillators at runtime (`src/audio/sfx.ts`), so there are
-  no audio files to download or license. They are deliberately modest: the
-  point is that tatami sounds different from floorboards, not realism.
+  by surface and fire on the walk cycle's own foot contacts), the clap
+  gesture, light switches, doors, the classroom clock and the pond are all
+  built from noise and oscillators at runtime (`src/audio/sfx.ts`), so
+  there are no audio files to download or license. They are deliberately
+  modest: the point is that tatami sounds different from floorboards, not
+  realism.
 - **No facial expression is sent over the network directly.** Expressions
   are derived on each client from the gesture that *is* synced, so they
   stay consistent without extra traffic — but an avatar cannot be given an

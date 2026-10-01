@@ -516,7 +516,29 @@ const SHOJI_PANEL_WIDTH = SHOJI_HALF_OPENING + SHOJI_EDGE_TUCK + SHOJI_CENTER_OV
 const SHOJI_PANEL_HEIGHT = 2.4;
 const SHOJI_PANEL_DEPTH = 0.04;
 /** Distance between the two tracks, so the overlapping leaves never z-fight. */
-const SHOJI_TRACK_SPACING = 0.06;
+const SHOJI_TRACK_SPACING = 0.04;
+/**
+ * How far the near track sits in front of the wall's own face.
+ *
+ * The leaves used to run down the middle of a 30cm wall, which meant
+ * that opening the door slid them inside it and they vanished — there
+ * was a wall in front of the door. Running them across the face instead
+ * keeps them visible the whole way, which is both what a surface-mounted
+ * shoji actually does and what makes it obvious the door is open rather
+ * than gone. The sill and head jamb below are deepened to match, so the
+ * leaves still read as running in a track rather than floating.
+ */
+const SHOJI_FACE_OFFSET = WALL_THICKNESS / 2 + 0.015;
+/**
+ * Depth of the sill and head jamb, derived rather than guessed: exactly
+ * enough to reach from the wall's far face to just behind the outer
+ * leaf, so the ridge contains both tracks and protrudes no further than
+ * it has to. Picking this by hand is how the head jamb ended up looking
+ * like a structural beam.
+ */
+const SHOJI_TRACK_BACK = SHOJI_FACE_OFFSET + SHOJI_TRACK_SPACING + SHOJI_PANEL_DEPTH / 2 + 0.012;
+const SHOJI_TRACK_DEPTH = WALL_THICKNESS / 2 + SHOJI_TRACK_BACK;
+const SHOJI_TRACK_CENTER = (WALL_THICKNESS / 2 - SHOJI_TRACK_BACK) / 2;
 /** The door runs down the middle of the wall. */
 const SHOJI_DOOR_Z = CLASSROOM.maxZ;
 /** Top of the head jamb (kamoi) the leaves slide under. */
@@ -579,11 +601,11 @@ function ClassroomDoor({ m }: { m: WorldMaterials }) {
       {/* Sill (shikii) and head jamb (kamoi), each exactly as wide as the
           opening and as deep as the wall plus a lip, then plain wall above
           the head jamb up to the top, flush with the wall either side. */}
-      <mesh position={[0, 0.015, SHOJI_DOOR_Z]} material={m.trim} receiveShadow>
-        <boxGeometry args={[openingWidth, 0.03, WALL_THICKNESS + 0.06]} />
+      <mesh position={[0, 0.015, SHOJI_DOOR_Z + SHOJI_TRACK_CENTER]} material={m.trim} receiveShadow>
+        <boxGeometry args={[openingWidth, 0.03, SHOJI_TRACK_DEPTH]} />
       </mesh>
-      <mesh position={[0, SHOJI_HEAD_TOP - 0.07, SHOJI_DOOR_Z]} material={m.trim} castShadow>
-        <boxGeometry args={[openingWidth, 0.14, WALL_THICKNESS + 0.06]} />
+      <mesh position={[0, SHOJI_HEAD_TOP - 0.07, SHOJI_DOOR_Z + SHOJI_TRACK_CENTER]} material={m.trim} castShadow>
+        <boxGeometry args={[openingWidth, 0.14, SHOJI_TRACK_DEPTH]} />
       </mesh>
       {/* Thin edge liners where the wall is cut for the doorway: wainscot
           material up to the wainscot's height (it stands 4cm proud of the
@@ -608,31 +630,9 @@ function ClassroomDoor({ m }: { m: WorldMaterials }) {
         <boxGeometry args={[openingWidth, 0.16, WALL_THICKNESS + 0.2]} />
       </mesh>
 
-      {/* Sill (shikii) and head jamb (kamoi): the grooved timbers the
-          leaves actually run in. A previous version dropped them because
-          the rail it used ran metres along the wall face and read as a
-          beam clipping through it. These don't: each spans the opening
-          and nothing more, and sits only a little proud of the wall on
-          both faces, which is what a real tracked door looks like. Both
-          are comfortably inside |x| < DOOR_HALF_WIDTH, so neither can
-          reach the clocks or the light switch further along this wall. */}
-      <mesh position={[0, 0.025, SHOJI_DOOR_Z]} material={m.trim} receiveShadow>
-        <boxGeometry args={[openingWidth, 0.05, WALL_THICKNESS + 0.05]} />
-      </mesh>
-      {/* Two shallow grooves, one per track, so the sill reads as carrying
-          two leaves rather than being a plain plinth. */}
-      {[SHOJI_TRACK_SPACING / 2, -SHOJI_TRACK_SPACING / 2].map((offset) => (
-        <mesh key={offset} position={[0, 0.052, SHOJI_DOOR_Z + offset]} material={m.wall}>
-          <boxGeometry args={[openingWidth - 0.04, 0.008, 0.022]} />
-        </mesh>
-      ))}
-      <mesh position={[0, SHOJI_HEAD_TOP - 0.05, SHOJI_DOOR_Z]} material={m.trim} castShadow receiveShadow>
-        <boxGeometry args={[openingWidth, 0.1, WALL_THICKNESS + 0.05]} />
-      </mesh>
-
       {[
-        { groupRef: leftRef, x: -closedX, z: SHOJI_DOOR_Z + SHOJI_TRACK_SPACING / 2 },
-        { groupRef: rightRef, x: closedX, z: SHOJI_DOOR_Z - SHOJI_TRACK_SPACING / 2 },
+        { groupRef: leftRef, x: -closedX, z: SHOJI_DOOR_Z - SHOJI_FACE_OFFSET },
+        { groupRef: rightRef, x: closedX, z: SHOJI_DOOR_Z - SHOJI_FACE_OFFSET - SHOJI_TRACK_SPACING },
       ].map(({ groupRef, x, z }, i) => (
         <group key={i} ref={groupRef} position={[x, 0.03, z]}>
           {/* Outer frame (kamachi), also the click target, same as GardenDoor's leaves. */}
