@@ -348,8 +348,11 @@ function Window({
 const HALL_WINDOW_Z = [1.5, 5.5, 9.5, 13.5];
 const HALL_WINDOW_WIDTH = 2;
 const HALL_WINDOW_CENTER_Y = 2.3;
-const HALL_WINDOW_SILL = 1.5;
-const HALL_WINDOW_HEADER = 3.12;
+const HALL_WINDOW_HEIGHT = 1.5;
+// Cut to the frame's outer size, like the classroom's: the old hand-set
+// values left a slot through the wall above and below each window.
+const HALL_WINDOW_SILL = HALL_WINDOW_CENTER_Y - HALL_WINDOW_HEIGHT / 2;
+const HALL_WINDOW_HEADER = HALL_WINDOW_CENTER_Y + HALL_WINDOW_HEIGHT / 2;
 
 function HallShell({ m }: { m: WorldMaterials }) {
   return (
@@ -388,10 +391,10 @@ function HallShell({ m }: { m: WorldMaterials }) {
           mounted on solid plaster — the sunset sky and low sun show
           through, on both long walls. */}
       {HALL_WINDOW_Z.map((z) => (
-        <Window key={`w-${z}`} position={[HALL.minX + 0.2, HALL_WINDOW_CENTER_Y, z]} rotationY={Math.PI / 2} width={HALL_WINDOW_WIDTH} m={m} />
+        <Window key={`w-${z}`} position={[HALL.minX + 0.2, HALL_WINDOW_CENTER_Y, z]} rotationY={Math.PI / 2} width={HALL_WINDOW_WIDTH} height={HALL_WINDOW_HEIGHT} m={m} />
       ))}
       {HALL_WINDOW_Z.map((z) => (
-        <Window key={`e-${z}`} position={[HALL.maxX - 0.2, HALL_WINDOW_CENTER_Y, z]} rotationY={-Math.PI / 2} width={HALL_WINDOW_WIDTH} m={m} />
+        <Window key={`e-${z}`} position={[HALL.maxX - 0.2, HALL_WINDOW_CENTER_Y, z]} rotationY={-Math.PI / 2} width={HALL_WINDOW_WIDTH} height={HALL_WINDOW_HEIGHT} m={m} />
       ))}
 
       {/* The hall's two doorway gaps are cut the full height of the wall,
@@ -476,21 +479,56 @@ function GardenDoor({ m }: { m: WorldMaterials }) {
   return (
     <group>
       <group ref={leftRef} position={[-DOOR_HALF_WIDTH + 0.16, 0, HALL.maxZ - 0.18]}>
-        <mesh position={[1.22, 1.2, 0]} material={m.trim} castShadow onClick={toggle}>
-          <boxGeometry args={[2.44, 2.4, 0.08]} />
-        </mesh>
-        <mesh position={[0.82, 1.75, -0.05]} material={m.glass} onClick={toggle}>
-          <boxGeometry args={[1.45, 0.86, 0.04]} />
-        </mesh>
+        <GardenDoorLeaf direction={1} m={m} onClick={toggle} />
       </group>
       <group ref={rightRef} position={[DOOR_HALF_WIDTH - 0.16, 0, HALL.maxZ - 0.18]}>
-        <mesh position={[-1.22, 1.2, 0]} material={m.trim} castShadow onClick={toggle}>
-          <boxGeometry args={[2.44, 2.4, 0.08]} />
-        </mesh>
-        <mesh position={[-0.82, 1.75, -0.05]} material={m.glass} onClick={toggle}>
-          <boxGeometry args={[1.45, 0.86, 0.04]} />
-        </mesh>
+        <GardenDoorLeaf direction={-1} m={m} onClick={toggle} />
       </group>
+    </group>
+  );
+}
+
+const GARDEN_LEAF_WIDTH = 2.44;
+const GARDEN_LEAF_HEIGHT = 2.4;
+const GARDEN_LEAF_DEPTH = 0.08;
+const GARDEN_STILE = 0.14;
+/** Solid kick panel at the bottom; glass from here up. */
+const GARDEN_KICK = 0.5;
+
+/**
+ * One garden door leaf, hinged at its group's origin and extending along
+ * `direction` (±X). A frame of stiles and rails round a real glass pane,
+ * so the garden shows through a closed door. It used to be a solid slab
+ * with a small pane laid over its face, which looked like glass but was
+ * opaque wood behind it.
+ */
+function GardenDoorLeaf({ direction, m, onClick }: { direction: 1 | -1; m: WorldMaterials; onClick: (event: ThreeEvent<MouseEvent>) => void }) {
+  const cx = (direction * GARDEN_LEAF_WIDTH) / 2;
+  const glassWidth = GARDEN_LEAF_WIDTH - GARDEN_STILE * 2;
+  const glassHeight = GARDEN_LEAF_HEIGHT - GARDEN_STILE - GARDEN_KICK;
+  return (
+    <group>
+      {/* Kick panel and top rail. */}
+      <mesh position={[cx, GARDEN_KICK / 2, 0]} material={m.trim} castShadow onClick={onClick}>
+        <boxGeometry args={[GARDEN_LEAF_WIDTH, GARDEN_KICK, GARDEN_LEAF_DEPTH]} />
+      </mesh>
+      <mesh position={[cx, GARDEN_LEAF_HEIGHT - GARDEN_STILE / 2, 0]} material={m.trim} castShadow onClick={onClick}>
+        <boxGeometry args={[GARDEN_LEAF_WIDTH, GARDEN_STILE, GARDEN_LEAF_DEPTH]} />
+      </mesh>
+      {/* Stiles. */}
+      {[GARDEN_STILE / 2, GARDEN_LEAF_WIDTH - GARDEN_STILE / 2].map((x) => (
+        <mesh key={x} position={[direction * x, GARDEN_KICK + glassHeight / 2, 0]} material={m.trim} castShadow onClick={onClick}>
+          <boxGeometry args={[GARDEN_STILE, glassHeight, GARDEN_LEAF_DEPTH]} />
+        </mesh>
+      ))}
+      {/* A thin glazing bar across the middle, so the pane reads as a
+          door rather than a hole. */}
+      <mesh position={[cx, GARDEN_KICK + glassHeight * 0.62, 0]} material={m.trim} onClick={onClick}>
+        <boxGeometry args={[glassWidth, 0.04, GARDEN_LEAF_DEPTH * 0.6]} />
+      </mesh>
+      <mesh position={[cx, GARDEN_KICK + glassHeight / 2, 0]} material={m.glass} onClick={onClick}>
+        <planeGeometry args={[glassWidth, glassHeight]} />
+      </mesh>
     </group>
   );
 }
@@ -554,6 +592,10 @@ const SHOJI_DOOR_Z = CLASSROOM.maxZ;
 const SHOJI_SILL_RUN = 0.02 + SHOJI_PANEL_WIDTH + 0.04;
 /** The sill's back edge outside the opening, against the wainscot's face. */
 const SHOJI_SILL_BACK = WALL_THICKNESS / 2 + WAINSCOT_PROUD;
+/** How far the corridor's side wall, and its wainscot, reach into the
+ *  opening from each edge (the wall is centred on the edge). */
+const SHOJI_REVEAL_WALL = WALL_THICKNESS / 2;
+const SHOJI_REVEAL_WAINSCOT = WALL_THICKNESS / 2 + WAINSCOT_PROUD;
 /** Top of the head jamb (kamoi) the leaves slide under. */
 const SHOJI_HEAD_TOP = SHOJI_PANEL_HEIGHT + 0.14;
 
@@ -572,9 +614,10 @@ function ClassroomDoor({ m }: { m: WorldMaterials }) {
   const leftRef = useRef<THREE.Group>(null);
   const rightRef = useRef<THREE.Group>(null);
   // The sill and head rail are in the darker beam wood so they read
-  // against both the pale floor and the leaves' own frames; the grooves
-  // darker still, so the track is legible from across the room.
-  const grooveMaterial = useMemo(() => new THREE_RUNTIME.MeshStandardMaterial({ color: "#3b2a1c", roughness: 0.9 }), []);
+  // against both the pale floor and the leaves' own frames. The grooves
+  // are one shade deeper than that wood, as a worn, recessed channel
+  // would be, rather than near-black lines.
+  const grooveMaterial = useMemo(() => new THREE_RUNTIME.MeshStandardMaterial({ color: "#6e472a", roughness: 0.8 }), []);
   useEffect(() => () => grooveMaterial.dispose(), [grooveMaterial]);
   // Each leaf's centre (absolute x, mirrored for the left leaf). Closed:
   // outer edge tucked into the wall, inner edge past the centre line.
@@ -643,7 +686,7 @@ function ClassroomDoor({ m }: { m: WorldMaterials }) {
           the sill read as a track rather than a step. */}
       {[SHOJI_FACE_OFFSET, SHOJI_FACE_OFFSET + SHOJI_TRACK_SPACING].map((offset) => (
         <mesh key={`groove-${offset}`} position={[0, 0.0305, SHOJI_DOOR_Z - offset]} material={grooveMaterial}>
-          <boxGeometry args={[(SHOJI_HALF_OPENING + SHOJI_SILL_RUN) * 2, 0.002, SHOJI_PANEL_DEPTH + 0.008]} />
+          <boxGeometry args={[(SHOJI_HALF_OPENING + SHOJI_SILL_RUN) * 2, 0.002, SHOJI_PANEL_DEPTH + 0.004]} />
         </mesh>
       ))}
       <mesh position={[0, SHOJI_HEAD_TOP - 0.07, SHOJI_DOOR_Z + SHOJI_TRACK_CENTER]} material={m.beam} castShadow>
@@ -665,21 +708,30 @@ function ClassroomDoor({ m }: { m: WorldMaterials }) {
       {/* Grooves along its underside, one per leaf, matching the sill's. */}
       {[SHOJI_FACE_OFFSET, SHOJI_FACE_OFFSET + SHOJI_TRACK_SPACING].map((offset) => (
         <mesh key={`kamoi-groove-${offset}`} position={[0, SHOJI_HEAD_TOP - 0.1405, SHOJI_DOOR_Z - offset]} material={grooveMaterial}>
-          <boxGeometry args={[(SHOJI_HALF_OPENING + SHOJI_SILL_RUN) * 2, 0.002, SHOJI_PANEL_DEPTH + 0.008]} />
+          <boxGeometry args={[(SHOJI_HALF_OPENING + SHOJI_SILL_RUN) * 2, 0.002, SHOJI_PANEL_DEPTH + 0.004]} />
         </mesh>
       ))}
-      {/* Thin edge liners where the wall is cut for the doorway: wainscot
-          material up to the wainscot's height (it stands 4cm proud of the
-          wall, and its raw cut end read as clipping beside the closed
-          leaves), plain wall above. Only 1.2cm wide, so the leaves still
-          visibly slide away into the wall. */}
+      {/* Jamb reveals. The corridor's side walls are centred on the
+          opening's edges, so their inner halves (and wainscot, 4cm proud of
+          those) stand inside the doorway and stop halfway through this
+          wall's depth — a ragged brown end the old door posts used to hide.
+          These fill the classroom half of the reveal flush with the
+          corridor's own faces, so the jamb reads as one continuous return.
+          They stop at the corridor walls' end (z = SHOJI_DOOR_Z) rather than
+          overlapping them, so no two faces share a plane. */}
       {[-1, 1].map((side) => (
-        <group key={side} position={[side * (SHOJI_HALF_OPENING - 0.006), 0, SHOJI_DOOR_Z]}>
-          <mesh position={[0, 0.475, 0]} material={m.wainscot}>
-            <boxGeometry args={[0.012, 0.95, WALL_THICKNESS + 0.08]} />
+        <group key={side}>
+          <mesh
+            position={[side * (SHOJI_HALF_OPENING - SHOJI_REVEAL_WAINSCOT / 2), 0.475, SHOJI_DOOR_Z - SHOJI_SILL_BACK / 2]}
+            material={m.wainscot}
+          >
+            <boxGeometry args={[SHOJI_REVEAL_WAINSCOT, 0.95, SHOJI_SILL_BACK]} />
           </mesh>
-          <mesh position={[0, (0.95 + SHOJI_HEAD_TOP) / 2, 0]} material={m.wall}>
-            <boxGeometry args={[0.012, SHOJI_HEAD_TOP - 0.95, WALL_THICKNESS]} />
+          <mesh
+            position={[side * (SHOJI_HALF_OPENING - SHOJI_REVEAL_WALL / 2), (0.95 + SHOJI_HEAD_TOP - 0.14) / 2, SHOJI_DOOR_Z - WALL_THICKNESS / 4]}
+            material={m.wall}
+          >
+            <boxGeometry args={[SHOJI_REVEAL_WALL, SHOJI_HEAD_TOP - 0.14 - 0.95, WALL_THICKNESS / 2]} />
           </mesh>
         </group>
       ))}
@@ -911,8 +963,11 @@ const CLASSROOM_WINDOW_Z = [-20.5, -17.5, -14.5, -11.6];
 const CLASSROOM_WINDOW_WIDTH = 2.2;
 const CLASSROOM_WINDOW_HEIGHT = 1.7;
 const CLASSROOM_WINDOW_CENTER_Y = 2;
-const CLASSROOM_WINDOW_SILL = 1.08;
-const CLASSROOM_WINDOW_HEADER = 2.92;
+// The hole cut in the wall is exactly the frame's outer size. It used to
+// be set by hand 7cm taller than the frame at both top and bottom, which
+// left a slot straight through the wall above (and below) every window.
+const CLASSROOM_WINDOW_SILL = CLASSROOM_WINDOW_CENTER_Y - CLASSROOM_WINDOW_HEIGHT / 2;
+const CLASSROOM_WINDOW_HEADER = CLASSROOM_WINDOW_CENTER_Y + CLASSROOM_WINDOW_HEIGHT / 2;
 
 function ClassroomShell({ m, lit, onToggleLight }: { m: WorldMaterials; lit: boolean; onToggleLight?: (zone: LightZone, on: boolean) => void }) {
   const lamp = useZoneLampMaterial(m, lit);

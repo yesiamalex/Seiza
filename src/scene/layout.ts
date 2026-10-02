@@ -352,6 +352,21 @@ export const GARDEN_DOOR_OBSTACLE: Obstacle = obstacle(0, HALL.maxZ - 0.18, DOOR
 // the middle of the wall, covering the full opening when closed.
 export const CLASSROOM_DOOR_OBSTACLE: Obstacle = obstacle(0, CLASSROOM.maxZ, DOOR_HALF_WIDTH, WALL_THICKNESS / 2);
 
+/** Rocks left out of the pond's ring, so there are obvious places to step in. */
+const POND_ROCK_GAPS = new Set([3, 4, 11, 12]);
+
+/**
+ * The rocks round the pond's rim, relative to POND_CENTER. Shared by Pond.tsx
+ * (which draws them) and OBSTACLES (which keeps you from walking through
+ * them), so the two can't drift apart.
+ */
+export const POND_ROCKS = Array.from({ length: 16 }, (_, i) => {
+  const angle = (i / 16) * Math.PI * 2 + Math.sin(i * 7.3) * 0.08;
+  const size = 0.3 + ((i * 37) % 10) / 70;
+  const ring = POND_RADIUS - 0.12;
+  return { i, angle, size, x: Math.cos(angle) * ring, z: Math.sin(angle) * ring, squash: 0.5 + ((i * 13) % 5) / 25, turn: i * 1.7, material: i % 3 };
+}).filter((rock) => !POND_ROCK_GAPS.has(rock.i));
+
 /**
  * Furniture players bump into instead of walking through. Deliberately a
  * short list of boxes rather than real physics: it costs one loop per frame,
@@ -371,8 +386,11 @@ export const OBSTACLES: Obstacle[] = [
   ...DESKS.map((desk) => obstacle(desk.position[0], desk.position[2] + CHAIR_OFFSET / 2, 0.58, 0.62)),
   obstacle(TEACHER_DESK[0], TEACHER_DESK[2] - CHAIR_OFFSET / 2, 0.95, 0.62),
   obstacle(-7, 13.4, 1.8, 0.45), // reception desk
-  // The garden pond has no collision on purpose: you can wade in. Its
-  // depth comes from floorHeightAt (pondDepthAt) instead.
+  // The garden pond itself has no collision on purpose: you can wade in.
+  // Its depth comes from floorHeightAt (pondDepthAt) instead. The rocks
+  // round its rim do, as one small box each; the gaps between them are
+  // where you step in.
+  ...POND_ROCKS.map((rock) => obstacle(POND_CENTER[0] + rock.x, POND_CENTER[1] + rock.z, rock.size * 0.75, rock.size * 0.75)),
   // Shoe lockers down one side of the corridor.
   obstacle(CORRIDOR.minX + 0.36, (CORRIDOR.minZ + CORRIDOR.maxZ) / 2 + 0.3, 0.22, 2.4),
   // Lantern posts and planters in the hall.

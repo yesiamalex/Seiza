@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
-import { POND_CENTER, POND_RADIUS, POND_WATER_RADIUS, POND_WATER_Y, pondDepthAtRadius } from "./layout";
+import { POND_CENTER, POND_RADIUS, POND_ROCKS, POND_WATER_RADIUS, POND_WATER_Y, pondDepthAtRadius } from "./layout";
 import { pondWaders, takePondRipples } from "./pondActivity";
 import { setPondAmbience } from "../audio/sfx";
 
@@ -130,40 +130,101 @@ const LILY_PADS: Array<[number, number, number, number]> = [
   [-1.5, 0.9, 0.24, 5.3],
 ];
 
-/** Rocks left out of the ring, so there are obvious places to step in. */
-const ROCK_GAPS = new Set([3, 4, 11, 12]);
-
-const BANK_OUTER_RADIUS = POND_RADIUS + 0.12;
+const BANK_OUTER_RADIUS = POND_RADIUS + 0.04;
 const BANK_INNER_RADIUS = BASIN_RADIUS - 0.02;
 
-/**
- * The bank: damp earth at the waterline, feathering out to nothing over
- * the decking. It used to be a solid dark-moss ring, which against the
- * pale planks read as a black circle drawn round the pond. Its inner edge
- * now matches the basin bed, so the cut in the floor disappears, and its
- * outer edge has no line to see.
- *
- * RingGeometry's UVs are planar over the outer radius (centre 0.5, edge
- * at 0/1), so a radial gradient painted into a square canvas lines up.
- */
-function makeBankTexture(): THREE.Texture | null {
+/** Small seeded RNG, so the painted stone and pebbles are the same for
+ *  everyone and every visit. */
+function seeded(seed: number) {
+  return () => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function canvasTexture(size: number, paint: (ctx: CanvasRenderingContext2D) => void): THREE.Texture | null {
   if (typeof document === "undefined") return null;
-  const size = 256;
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
-  const inner = BANK_INNER_RADIUS / BANK_OUTER_RADIUS;
-  const gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-  gradient.addColorStop(0, "rgba(125,114,89,1)");
-  gradient.addColorStop(inner, "rgba(125,114,89,1)");
-  gradient.addColorStop(inner + (1 - inner) * 0.3, "rgba(150,132,100,0.85)");
-  gradient.addColorStop(inner + (1 - inner) * 0.7, "rgba(185,158,118,0.35)");
-  gradient.addColorStop(1, "rgba(205,174,130,0)");
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, size, size);
+  paint(ctx);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+/**
+ * The pond's edge: a band of pale cut-stone coping, the same family of
+ * greys as the rocks on it. It started as a dark-moss ring (a black circle
+ * on the pale decking) and then a feathered earth fade (mud); a crisp,
+ * light stone curb is what a garden pond set into a deck actually has.
+ * Its inner edge still covers the cut in the floor.
+ *
+ * RingGeometry's UVs are planar over the outer radius (centre 0.5, edge at
+ * 0/1), so the joints are painted as radial lines from the canvas centre.
+ */
+function makeCopingTexture(): THREE.Texture | null {
+  return canvasTexture(512, (ctx) => {
+    const size = 512;
+    const random = seeded(2707);
+    ctx.fillStyle = "#b5ad9e";
+    ctx.fillRect(0, 0, size, size);
+    for (let i = 0; i < 1400; i++) {
+      ctx.fillStyle = random() > 0.5 ? "rgba(255,250,240,0.10)" : "rgba(70,64,56,0.10)";
+      ctx.fillRect(random() * size, random() * size, 1 + random() * 2.5, 1 + random() * 2.5);
+    }
+    // Joints between the coping stones.
+    const c = size / 2;
+    const inner = (BANK_INNER_RADIUS / BANK_OUTER_RADIUS) * c;
+    ctx.strokeStyle = "rgba(88,82,74,0.55)";
+    ctx.lineWidth = 1.5;
+    const stones = 28;
+    for (let i = 0; i < stones; i++) {
+      const a = (i / stones) * Math.PI * 2 + (random() - 0.5) * 0.04;
+      ctx.beginPath();
+      ctx.moveTo(c + Math.cos(a) * inner, c + Math.sin(a) * inner);
+      ctx.lineTo(c + Math.cos(a) * c, c + Math.sin(a) * c);
+      ctx.stroke();
+    }
+  });
+}
+
+/**
+ * The pond bed: river pebbles on pale sand, rather than one flat brown that
+ * read as mud through the water. Tiled along the basin lathe (u runs round
+ * the pond, v from rim to centre).
+ */
+function makePebbleTexture(): THREE.Texture | null {
+  const texture = canvasTexture(256, (ctx) => {
+    const size = 256;
+    const random = seeded(4411);
+    ctx.fillStyle = "#a89f8a";
+    ctx.fillRect(0, 0, size, size);
+    const tones = ["#8f8a80", "#b8b0a0", "#7a756c", "#c4b9a2", "#9a8f7c", "#6d6a64"];
+    for (let i = 0; i < 260; i++) {
+      const x = random() * size;
+      const y = random() * size;
+      const rx = 3 + random() * 7;
+      const ry = rx * (0.6 + random() * 0.35);
+      const rotation = random() * Math.PI;
+      ctx.fillStyle = tones[Math.floor(random() * tones.length)];
+      // Drawn at each wrapped position too, so the tile has no seams.
+      for (const dx of [-size, 0, size]) {
+        for (const dy of [-size, 0, size]) {
+          ctx.beginPath();
+          ctx.ellipse(x + dx, y + dy, rx, ry, rotation, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+  });
+  if (texture) {
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(10, 3);
+  }
   return texture;
 }
 
@@ -212,14 +273,8 @@ export function Pond() {
 
   const materials = useMemo(
     () => ({
-      bed: new THREE.MeshStandardMaterial({ color: "#7d7259", roughness: 1, side: THREE.DoubleSide }),
-      bank: new THREE.MeshStandardMaterial({
-        map: makeBankTexture(),
-        color: "#ffffff",
-        roughness: 1,
-        transparent: true,
-        depthWrite: false,
-      }),
+      bed: new THREE.MeshStandardMaterial({ map: makePebbleTexture(), roughness: 0.9, side: THREE.DoubleSide }),
+      bank: new THREE.MeshStandardMaterial({ map: makeCopingTexture(), roughness: 0.85 }),
       rocks: ["#6f6a63", "#837d73", "#5c5852"].map((color) => new THREE.MeshStandardMaterial({ color, roughness: 0.95, flatShading: true })),
       pad: new THREE.MeshStandardMaterial({ color: "#3f7a3a", roughness: 0.7, side: THREE.DoubleSide }),
       lotus: new THREE.MeshStandardMaterial({ color: "#f3a6c0", roughness: 0.6 }),
@@ -234,21 +289,12 @@ export function Pond() {
       water.dispose();
       basin.dispose();
       materials.bank.map?.dispose();
+      materials.bed.map?.dispose();
       for (const value of Object.values(materials)) {
         for (const material of Array.isArray(value) ? value : [value]) material.dispose();
       }
     },
     [water, basin, materials]
-  );
-
-  const rocks = useMemo(
-    () =>
-      Array.from({ length: 16 }, (_, i) => {
-        const angle = (i / 16) * Math.PI * 2 + Math.sin(i * 7.3) * 0.08;
-        const size = 0.3 + ((i * 37) % 10) / 70;
-        return { i, angle, size, squash: 0.5 + ((i * 13) % 5) / 25, turn: i * 1.7, material: i % 3 };
-      }).filter((rock) => !ROCK_GAPS.has(rock.i)),
-    []
   );
 
   const addRipple = (x: number, z: number, strength = 1) => {
@@ -329,24 +375,26 @@ export function Pond() {
 
   return (
     <group position={[POND_CENTER[0], 0, POND_CENTER[1]]}>
-      {/* Damp earth bank, covering the edge of the hole cut in the floor. */}
+      {/* Stone coping, covering the edge of the hole cut in the floor. */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]} material={materials.bank} receiveShadow userData={{ navIgnore: true }}>
         <ringGeometry args={[BANK_INNER_RADIUS, BANK_OUTER_RADIUS, 64]} />
       </mesh>
       {/* The basin. Left in the navmesh bake, so tap-to-walk can wade. */}
       <mesh geometry={basin} material={materials.bed} receiveShadow />
 
-      {rocks.map((rock) => (
+      {POND_ROCKS.map((rock) => (
         <mesh
           key={rock.i}
-          position={[Math.cos(rock.angle) * (POND_RADIUS - 0.12), rock.size * rock.squash * 0.55, Math.sin(rock.angle) * (POND_RADIUS - 0.12)]}
+          position={[rock.x, rock.size * rock.squash * 0.55, rock.z]}
           rotation={[0, rock.turn, 0]}
           scale={[1, rock.squash, 0.85]}
           material={materials.rocks[rock.material]}
           castShadow
           receiveShadow
-          userData={{ navIgnore: true }}
         >
+          {/* Baked into the navmesh (unlike the bank), now that the rocks
+              collide: tap-to-walk routes through the gaps rather than
+              into a rock it can't pass. */}
           <dodecahedronGeometry args={[rock.size, 0]} />
         </mesh>
       ))}
