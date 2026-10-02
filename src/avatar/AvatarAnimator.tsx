@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type MutableRefObject } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useFacialExpressions } from "./useFacialExpressions";
 import * as THREE from "three";
@@ -267,6 +267,18 @@ export interface AvatarAnimatorProps {
    *  in multiplayer/types.ts). Applied to the neck and head so other
    *  people can tell what someone is looking at. 0 is level. */
   headPitch?: number;
+  /** Filled every frame with how much of this avatar the animation layers
+   *  currently own, so something layered on top — body tracking, in
+   *  src/xr/body — can step aside for a gesture instead of fighting it. */
+  layerWeightsRef?: MutableRefObject<AnimatorLayerWeights>;
+}
+
+/** See AvatarAnimatorProps.layerWeightsRef. Both 0 to 1. */
+export interface AnimatorLayerWeights {
+  /** A gesture clip is playing (wave, bow, crouch…). */
+  gesture: number;
+  /** A held posture is in (sitting, seiza). */
+  posture: number;
 }
 
 function splitClip(clip: THREE.AnimationClip, vrm: VRM) {
@@ -306,6 +318,7 @@ export function AvatarAnimator({
   expression,
   speakingLevel = 0,
   headPitch = 0,
+  layerWeightsRef,
 }: AvatarAnimatorProps) {
   // A played gesture's face outranks a held posture's, so waving while
   // seated shows the wave. An explicit `expression` prop outranks both.
@@ -697,6 +710,10 @@ export function AvatarAnimator({
     }
     upperTakeover = Math.min(1, upperTakeover);
     gestureLowerTakeover = Math.min(1, gestureLowerTakeover);
+    if (layerWeightsRef) {
+      layerWeightsRef.current.gesture = upperTakeover;
+      layerWeightsRef.current.posture = postureWeight;
+    }
 
     const finished = state.gestures.filter(
       (layer) => layer.weight <= 0 && (layer.fadingOut || (!layer.hold && layer.action.time >= layer.duration - 1e-3))

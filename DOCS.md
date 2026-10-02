@@ -844,6 +844,61 @@ Every call fails soft, so blocked storage or private browsing just means
 nothing is remembered. Unticking "Remember" on the join screen deletes the
 stored profile.
 
+## In a headset
+
+Entering VR keeps the same world and the same people. Thumbstick and
+roomscale movement both collide like walking on desktop, the floor steps up
+onto the tatami, chairs can be sat on with a controller ray (push the stick
+to stand), and an admin's gather lands your head on the spot. Two modules
+add what a flat screen doesn't need. Both live in `src/xr/`, mount from
+`App.tsx`, and do nothing at all outside an immersive session.
+
+**Body tracking** (`src/xr/body/`). Your head and hands drive your avatar,
+for you and for everyone else: arms reach where your hands are, fingers
+close with the trigger and grip (or follow your fingers, with hand
+tracking), your head turns and tilts on its own while your body follows
+only once you have turned well past your shoulders, and physically
+crouching drops the avatar's hips and bends its knees with the feet
+planted. You see your own body and hands, but not the inside of your own
+head.
+
+- *How it travels.* Ten times a second, as its own `tracking` message —
+  validated, clamped and relayed by the room server, never stored, and
+  throttled per connection (`src/xr/body/trackingWire.ts` is the whole
+  format, shared with `worker/room.ts`). Positions are sent relative to
+  your body and divided by your measured standing eye height, so a tall
+  player's reach lands correctly on a small avatar and the reverse.
+- *How it coexists with gestures.* A gesture clip — from the menu below,
+  say — takes the body back while it plays and hands it over again as it
+  fades, so a wave is the canned wave rather than two waves fighting. A
+  posture keeps the legs (you cannot crouch out of a chair), but your head
+  and arms stay tracked while seated. `AvatarAnimator` publishes how much
+  it is playing (`layerWeightsRef`); `TrackedBody` reads that and steps
+  aside. Neither imports the other's internals.
+- *Any avatar.* The IK works on three-vrm's normalized skeleton and reads
+  facing and limb directions off the rig's own rest pose, so VRM 0,
+  VRM 1 and designer avatars all work without per-model setup. Designer
+  avatars have no fingers, so they skip finger curl.
+
+**The wrist menu** (`src/xr/hud/`). The flat control bar is DOM, which an
+immersive session cannot show, so a headset gets its own: turn your left
+palm toward your face and it appears above your hand; point with the right
+hand and pull the trigger (or pinch). Controller players can press **X** to
+pin it in the air in front of them and press X again to put it back. It
+has voice (enable, mute and unmute), every menu gesture plus seiza and
+crouch (hold-type gestures are held), stand up when seated, the last three
+chat messages, and Exit VR. It is drawn on a canvas in the flat HUD's own
+style tokens, imported from `src/ui/styles.ts`, so restyling one restyles
+both. It deliberately leaves out the avatar picker, the participant
+roster, the edit panel and typing — those still mean stepping out of VR.
+
+**Not yet tested on a real headset.** Everything that can be checked
+without one has been: the IK on all three avatar kinds, the relay against
+a running room server, the menu's rendering. The two conventions most
+likely to differ between runtimes are isolated as constants: which side of
+a controller grip the palm is on (`GRIP_TO_HAND` in `xrPose.ts`), and the
+X button's index (`PIN_BUTTON` in `XrHud.tsx`).
+
 ## Why it runs smoothly, even on phones
 
 Seiza is built to stay fluid on a mid-range phone with a dozen people in a
@@ -977,6 +1032,7 @@ src/            frontend (React Three Fiber + WebXR + VRM)
                 shared furniture (Chair/SeatPad) + deployer scene.glb overlay
   ui/           join screen, avatar chooser and preview, HUD, shared motion
   interactions/ gesture menu and practice mode (pedagogical modules)
+  xr/           headset-only: body tracking (body/) and the wrist menu (hud/)
 worker/         Cloudflare Worker: static hosting, avatar upload API (KV),
                 and the realtime room server (room.ts, a Durable Object)
 public/worlds/  per-deployment world configs — the customization surface
@@ -1034,21 +1090,14 @@ deliberate limitations (paper Section 7 has the fuller discussion):
   from a stream that arrived audio-first kept an `srcObject` it had already
   decided had no video. It now re-attaches on `addtrack` and `unmute`. Not
   yet confirmed across two machines on different networks.
-- **In a headset you can move and be seen, but there is no menu.**
-  Immersive VR gets the same world and the same presence as the desktop:
-  thumbstick and roomscale movement both collide, the floor steps up onto
-  the tatami, your avatar faces where your head faces and tilts with it,
-  chairs can be sat on with a controller ray (push the stick to stand up
-  again), doors and light switches work, and an admin's gather or
-  teleport lands your head on the spot rather than your playspace origin.
-  What a headset does *not* get is the HUD. It is ordinary DOM, drawn
-  over the canvas, and an immersive session does not composite DOM over
-  the scene (`domOverlay` is off, and it is handheld-AR-only in any
-  case), so the mic toggle, gesture menu, chat, avatar picker, roster and
-  edit panel are all unreachable until you exit VR. An in-world panel is
-  the obvious fix and is not built yet. Phones are not a way around this:
-  Chrome for Android dropped Cardboard support, so a phone is the touch
-  build, not an immersive session.
+- **VR is new and has not been on a real headset yet.** Movement,
+  collision, seating, body tracking and the wrist menu are all built and
+  checked as far as a desktop machine can check them (see "In a headset"
+  above), but not in an actual headset. Body tracking covers head, hands
+  and fingers plus a physical crouch: there is no leg or hip tracking
+  beyond that, and leaning moves your whole avatar rather than bending it.
+  Phones are the touch build, not an immersive session: Chrome for
+  Android dropped Cardboard support.
 - **Sound effects are synthesised, not sampled.** Footsteps (which differ
   by surface and fire on the walk cycle's own foot contacts), the clap
   gesture, light switches, doors, the classroom clock and the pond are all

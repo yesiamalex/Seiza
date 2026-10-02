@@ -59,6 +59,16 @@ const KEYBOARD: { title: string; rows: Row[] }[] = [
       [["?"], "This guide"],
     ],
   },
+  // Read here, before the headset goes on: inside one, this guide is a
+  // flat page the headset cannot show (see src/xr/hud).
+  {
+    title: "In a headset",
+    rows: [
+      [["Left palm"], "Turn it toward you for the menu"],
+      [["X"], "Pin the menu in front of you"],
+      [["Stick"], "Move; push it to stand up from a seat"],
+    ],
+  },
 ];
 
 const TOUCH: { title: string; rows: Row[] }[] = [

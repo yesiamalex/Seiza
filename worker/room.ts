@@ -15,6 +15,7 @@ import {
   type WorldObject,
   type WorldObjectKind,
 } from "../src/multiplayer/types";
+import { sanitizeTrackedPose, TRACKING_MIN_INTERVAL_MS } from "../src/xr/body/trackingWire";
 import type { Env } from "./index";
 
 const OBJECTS_STORAGE_KEY = "objects";
@@ -46,7 +47,7 @@ const BOUNDS_LIMIT = 100; // generous outer bound — BaseEnvironment's own radi
 // anyone-can-self-deploy" constraint rules out standing up real auth
 // infrastructure for a small self-hosted room. Deployers set this via
 // `wrangler secret put SEIZA_EDITOR_PASSWORD` (a Worker secret, never
-// committed to the repo — see README). Undefined = editing stays open to
+// committed to the repo — see DOCS.md). Undefined = editing stays open to
 // everyone, the original/default behavior. A brute-force attempt on one
 // WebSocket connection gets cut off after MAX_AUTH_ATTEMPTS; this is a
 // deterrent, not a guarantee — nothing stops opening many connections —
@@ -107,7 +108,7 @@ interface ConnectionAttachment {
 /**
  * One Durable Object instance = one deployed world instance's shared
  * multiplayer session. This replaces the previous PartyKit-based
- * party/room.ts — see README's deploy section for why: PartyKit's last
+ * party/room.ts — see DOCS.md's deploy section for why: PartyKit's last
  * real release was over a year old (unmaintained), and its dev CLI has
  * an unfixed Windows path bug that made local testing impossible on some
  * machines. Same protocol (src/multiplayer/types.ts), same behavior,
@@ -137,6 +138,16 @@ export class SeizaRoom extends DurableObject<Env> {
    *  case's doc comment in types.ts for why this one secret is treated
    *  differently from the other two. */
   roomPassword: string | null = null;
+  /**
+   * When each connection last sent a body-tracking pose, for throttling.
+   *
+   * Deliberately in memory rather than on the socket attachment the other
+   * throttles use. Tracking arrives ten times a second per headset, and
+   * every attachment write re-serializes it; this way the hot path costs a
+   * map lookup. Losing it when the object hibernates is harmless — the
+   * worst case is one pose let through early.
+   */
+  private lastTrackingAt = new Map<string, number>();
   private ready: Promise<void>;
 
   constructor(ctx: DurableObjectState, env: Env) {
@@ -266,6 +277,23 @@ export class SeizaRoom extends DurableObject<Env> {
           { type: "playerUpdated", id: attachment.connId, position: message.position, rotationY: message.rotationY, headPitch },
           attachment.connId
         );
+        break;
+      }
+      case "tracking": {
+        if (!attachment.player) return;
+        // Relayed, never stored: a pose is stale a tenth of a second
+        // later, and late joiners get the next one soon enough. A null
+        // (the player left VR) always goes through, unthrottled, so no
+        // avatar is left frozen in its last tracked pose.
+        const pose = sanitizeTrackedPose(message.pose);
+        if (pose === undefined) return;
+        if (pose !== null) {
+          const now = Date.now();
+          const last = this.lastTrackingAt.get(attachment.connId) ?? 0;
+          if (now - last < TRACKING_MIN_INTERVAL_MS) return;
+          this.lastTrackingAt.set(attachment.connId, now);
+        }
+        this.broadcast({ type: "playerTracking", id: attachment.connId, pose }, attachment.connId);
         break;
       }
       case "gesture": {
@@ -602,6 +630,7 @@ export class SeizaRoom extends DurableObject<Env> {
       }
       this.broadcast({ type: "playerLeft", id: attachment.connId });
     }
+    if (attachment) this.lastTrackingAt.delete(attachment.connId);
   }
 
   async webSocketError(ws: WebSocket) {

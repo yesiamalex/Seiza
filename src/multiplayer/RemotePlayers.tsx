@@ -3,7 +3,8 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { VRM } from "@pixiv/three-vrm";
 import { VrmAvatar } from "../avatar/VrmAvatar";
-import { AvatarAnimator } from "../avatar/AvatarAnimator";
+import { AvatarAnimator, type AnimatorLayerWeights } from "../avatar/AvatarAnimator";
+import { TrackedBody } from "../xr/body/TrackedBody";
 import { findGesture, type GestureDefinition } from "../avatar/gestures";
 import { ChatBubble } from "../chat/ChatBubble";
 import { CameraBadge } from "../media/CameraBadge";
@@ -122,6 +123,7 @@ function RemotePlayerAvatar({
   targetRef.current = player;
   const smoothed = useRef<THREE.Vector3 | null>(null);
   const yaw = useRef(player.rotationY);
+  const layerWeightsRef = useRef<AnimatorLayerWeights>({ gesture: 0, posture: 0 });
 
   useFrame((state, delta) => {
     const group = groupRef.current;
@@ -180,7 +182,10 @@ function RemotePlayerAvatar({
         posture={posture}
         speakingLevel={speakingLevel}
         headPitch={player.headPitch ?? 0}
+        layerWeightsRef={layerWeightsRef}
       />
+      {/* Only does anything while this player is in a headset. */}
+      <TrackedBody vrm={vrm} source={player.id} layerWeightsRef={layerWeightsRef} />
       <NameTag name={player.displayName} position={[0, 0, 0]} speaking={speakingLevel > SPEAKING_THRESHOLD} />
       {/* Clear of both the name tag (1.9m) and the speaker glyph that
           sits just above it (~2.2m) — at 2.22 the bubble and the glyph

@@ -1,7 +1,7 @@
 // Cloudflare Worker `main` script. Handles the avatar-upload API, routes
 // WebSocket upgrades to the room Durable Object (room.ts), and falls
 // through to the static SPA build (via the `ASSETS` binding) for
-// everything else. This is now a single deploy — see README's deploy
+// everything else. This is now a single deploy — see DOCS.md's deploy
 // section for why that's a change from earlier (this project used to
 // run its realtime room server on PartyKit, deployed separately; that's
 // been replaced by room.ts, a plain Durable Object bound directly here).

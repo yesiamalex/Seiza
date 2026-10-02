@@ -11,6 +11,7 @@ import type {
   WorldObject,
 } from "./types";
 import { rememberAdminKey, rememberEditorPassword } from "../edit/editAuth";
+import { trackingStore } from "../xr/body/trackingStore";
 
 // The production Worker serves both the app and the Durable Object route, so
 // same-origin is the reliable default. Set VITE_SEIZA_ROOM_HOST only when the
@@ -297,6 +298,9 @@ export function useRoomSocket(
       });
 
       socket.addEventListener("close", () => {
+        // A reconnect gets new ids for everyone; nothing tracked under the
+        // old ones should go on posing an avatar.
+        trackingStore.clearRemote();
         socketRef.current = null;
         if (cancelled || kicked) return;
         setConnectionState("reconnecting");
@@ -366,6 +370,12 @@ export function useRoomSocket(
                 : prev
             );
             break;
+          case "playerTracking":
+            // Straight into the tracking store, not React state: these
+            // arrive ten times a second per headset and are only ever read
+            // from a frame loop (see trackingStore.ts).
+            trackingStore.set(msg.id, msg.pose);
+            break;
           case "playerGesture":
             setPlayers((prev) =>
               prev[msg.id]
@@ -382,6 +392,7 @@ export function useRoomSocket(
             );
             break;
           case "playerLeft":
+            trackingStore.set(msg.id, null);
             setPlayers((prev) => {
               const next = { ...prev };
               delete next[msg.id];

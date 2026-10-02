@@ -1,3 +1,5 @@
+import type { TrackedPose } from "../xr/body/trackingWire";
+
 /**
  * A held full-body pose, named after the gesture clip that holds it — "sit"
  * when on a chair, "seiza" when kneeling, or a deployment's own clip. null
@@ -117,6 +119,12 @@ export interface ChatMessage {
 export type ClientMessage =
   | { type: "join"; displayName: string; avatarUrl: string; roomPassword?: string }
   | { type: "state"; position: [number, number, number]; rotationY: number; headPitch?: number }
+  // A headset player's head and hands, relative to their own body (see
+  // src/xr/body/trackingWire.ts), or null once they stop tracking. Its own
+  // message rather than part of `state` because it is ephemeral: the
+  // server validates and relays it but never stores it, so it can run
+  // twice as often without touching what late joiners are sent.
+  | { type: "tracking"; pose: TrackedPose | null }
   | { type: "gesture"; gesture: string | null }
   // Changes this player's avatar in place, without reconnecting. Same URL
   // rules as `join` (see sanitizeAssetUrl in worker/room.ts), including
@@ -244,6 +252,7 @@ export type ServerMessage =
   | { type: "passwordRequired" }
   | { type: "playerJoined"; player: PlayerState }
   | { type: "playerUpdated"; id: string; position: [number, number, number]; rotationY: number; headPitch?: number }
+  | { type: "playerTracking"; id: string; pose: TrackedPose | null }
   | { type: "playerGesture"; id: string; gesture: string | null; seq: number }
   | { type: "playerAvatarChanged"; id: string; avatarUrl: string }
   | { type: "playerPosture"; id: string; posture: Posture }

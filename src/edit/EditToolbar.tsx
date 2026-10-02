@@ -52,7 +52,7 @@ interface EditToolbarProps {
  * Editing is open to everyone by default (no permission system) unless
  * the deployer sets a shared editor password — see worker/room.ts. Fine
  * either way for the trusted-classroom-room scale this targets; a
- * documented limitation when unset, not an oversight — see README's
+ * documented limitation when unset, not an oversight — see DOCS.md's
  * Status section.
  */
 export function EditToolbar({

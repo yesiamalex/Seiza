@@ -5,7 +5,7 @@ import * as THREE from "three";
 import { loadWorldConfig, type WorldConfig } from "./config/worldConfig";
 import { Scene } from "./scene/Scene";
 import { VrmAvatar } from "./avatar/VrmAvatar";
-import { AvatarAnimator } from "./avatar/AvatarAnimator";
+import { AvatarAnimator, type AnimatorLayerWeights } from "./avatar/AvatarAnimator";
 import {
   buildGestureRegistry,
   CROUCH_GESTURE_NAME,
@@ -24,7 +24,12 @@ import { PlayerRig, type ViewMode } from "./player/PlayerRig";
 import { TouchControls } from "./player/TouchControls";
 import { createTouchMoveInput, type TouchMoveInput } from "./player/touchInput";
 import { useNavMesh } from "./nav/useNavMesh";
-import { useRealtimeMedia } from "./media/useRealtimeMedia";
+import { useRealtimeMedia, VOICE_ENABLED } from "./media/useRealtimeMedia";
+import { XrBodyTracker } from "./xr/body/XrBodyTracker";
+import { TrackedBody } from "./xr/body/TrackedBody";
+import { XrSelfView } from "./xr/body/XrSelfView";
+import { LOCAL_TRACKING_SOURCE } from "./xr/body/trackingStore";
+import { XrHud, type XrHudModel } from "./xr/hud/XrHud";
 import { MediaControls } from "./media/MediaControls";
 import { CameraBadge } from "./media/CameraBadge";
 import { ScreenZoomOverlay } from "./media/ScreenZoomOverlay";
@@ -289,6 +294,9 @@ export default function App() {
 
   const lookYawRef = useRef(0);
   const lookPitchRef = useRef(0);
+  // What the local avatar's animation is doing, for body tracking to
+  // step aside from (see TrackedBody).
+  const localLayerWeightsRef = useRef<AnimatorLayerWeights>({ gesture: 0, posture: 0 });
 
   // media.updateSpatial is recreated whenever `players` changes (i.e.
   // often) — read it through a ref inside the interval below rather than
@@ -832,6 +840,42 @@ export default function App() {
     }
   }
 
+  // The headset menu (src/xr/hud): the same controls as the flat control
+  // bar, handed over as data so that module knows nothing about rooms or
+  // media.
+  const xrHudModel: XrHudModel = {
+    title: currentWorld.displayName,
+    people: Math.max(1, Object.keys(players).length),
+    voice: !(VOICE_ENABLED && voiceVisible)
+      ? "unavailable"
+      : media.micEnabled
+        ? media.muted
+          ? "muted"
+          : "live"
+        : media.connecting
+          ? "connecting"
+          : "off",
+    onVoice: () => (media.micEnabled ? media.toggleMute() : void media.enableMic()),
+    // Seiza gets its own toggle below rather than a slot in the grid: it
+    // is a posture, so "is it on" is a different question from "is this
+    // gesture playing".
+    gestures: menuGestures
+      .filter((g) => g.name !== SEIZA_GESTURE_NAME)
+      .map((g) => ({ name: g.name, label: g.label, hold: g.hold })),
+    activeGesture: localGesture?.gesture.name ?? null,
+    onGestureStart: requestGesture,
+    onGestureEnd: (name) => releaseGesture(name),
+    seiza: seizaGesture
+      ? { active: posture?.name === SEIZA_GESTURE_NAME, toggle: () => requestGesture(seizaGesture.name) }
+      : null,
+    crouch: crouchGesture
+      ? { active: crouching, start: () => requestGesture(crouchGesture.name), end: () => releaseGesture(crouchGesture.name) }
+      : null,
+    standUp: seat || posture ? standUp : null,
+    chat: messages.slice(-3).map((m) => ({ id: m.id, name: m.senderName, text: m.text })),
+    onExit: () => void xrStore.getState().session?.end(),
+  };
+
   return (
     <div style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden" }}>
       <Canvas
@@ -909,8 +953,15 @@ export default function App() {
               onGestureEnd={endGesture}
               posture={posture}
               speakingLevel={media.localSpeakingLevel}
+              layerWeightsRef={localLayerWeightsRef}
             />
+            {/* VR only, both: your own hands and body following yours, and
+                the head hidden from the headset's camera. */}
+            <TrackedBody vrm={localVrm} source={LOCAL_TRACKING_SOURCE} layerWeightsRef={localLayerWeightsRef} />
+            <XrSelfView vrm={localVrm} />
           </PlayerRig>
+          <XrBodyTracker positionRef={positionRef} rotationRef={rotationRef} onSend={(pose) => send({ type: "tracking", pose })} />
+          <XrHud model={xrHudModel} />
           <RemotePlayers
             players={players}
             selfId={selfId}

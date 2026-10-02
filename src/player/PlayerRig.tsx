@@ -4,6 +4,7 @@ import { useXR, useXRControllerLocomotion, XROrigin } from "@react-three/xr";
 import * as THREE from "three";
 import type { TouchMoveInput } from "./touchInput";
 import { isGizmoDragging } from "../edit/gizmoState";
+import { readXrHead } from "../xr/body/xrPose";
 import {
   CAMERA_RADIUS,
   ceilingHeightAt,
@@ -66,6 +67,15 @@ const XR_SEAT_RELEASE_DISTANCE = 0.25;
  *  than any real room, small enough to catch a stale desktop camera pose
  *  in the first frames of a session. */
 const XR_MAX_PLAUSIBLE_HEAD_OFFSET = 12;
+/** A VR player's body turns to follow their head once the head is this
+ *  far round (radians), and stops once it is back within the second.
+ *  Roughly where a real torso starts to follow a turning head. */
+const XR_BODY_TURN_START = THREE.MathUtils.degToRad(55);
+const XR_BODY_TURN_STOP = THREE.MathUtils.degToRad(8);
+const XR_BODY_TURN_RATE = 5;
+/** Faster than this (m/s) counts as walking, and a walking body faces
+ *  where it is looking. */
+const XR_MOVING_SPEED = 0.3;
 const GRAVITY = 14; // m/s^2
 const GROUNDED_EPSILON = 0.01;
 /** How far a left-drag must travel in Edit Mode before it counts as
@@ -498,25 +508,51 @@ export function PlayerRig({
   const xrQuaternion = useRef(new THREE.Quaternion()).current;
   const xrSeatOrigin = useRef(new THREE.Vector3()).current;
   const xrWasSeatedRef = useRef(false);
+  const xrBodyYawRef = useRef(0);
+  const xrTurningRef = useRef(false);
 
   /**
    * Publishes a VR player's pose the way the desktop path's
-   * applyTransforms does.
+   * applyTransforms does, and puts their own body there.
    *
    * Facing comes from the headset, not from the XR origin. The origin's
    * yaw only changes on a snap turn, so taking the body's direction from
    * it meant a player could turn to face someone, in the room and on
    * their own screen, while their avatar went on facing a wall for
-   * everyone else. Head pitch is published for the same reason it is on
-   * desktop: so other people can tell what someone is looking at.
+   * everyone else.
+   *
+   * But the *body* lags the head rather than copying it. A glance to the
+   * side is a head turn, and with body tracking (src/xr/body) the head
+   * now turns on its own; if the body swung round with every glance,
+   * looking at someone would rotate your whole avatar toward them, which
+   * is not what a person does. The body catches up once the head has
+   * turned well past the shoulders, or as soon as you move. Seated, it
+   * faces the way the seat does.
+   *
+   * `xrQuaternion` must already hold this frame's head orientation (see
+   * readXrHead, called at the top of the XR branch).
    */
-  const publishXrPose = (feetX: number, feetY: number, feetZ: number) => {
-    camera.getWorldQuaternion(xrQuaternion);
+  const publishXrPose = (feetX: number, feetY: number, feetZ: number, delta: number, seatYaw: number | null) => {
     xrEuler.setFromQuaternion(xrQuaternion, "YXZ");
+    const headYaw = xrEuler.y;
+    const previous = positionRef.current;
+    const moving = Math.hypot(feetX - previous[0], feetZ - previous[2]) / Math.max(delta, 1e-3) > XR_MOVING_SPEED;
+    const goal = seatYaw ?? headYaw;
+    const apart = Math.abs(Math.atan2(Math.sin(goal - xrBodyYawRef.current), Math.cos(goal - xrBodyYawRef.current)));
+    if (apart > XR_BODY_TURN_START) xrTurningRef.current = true;
+    if (xrTurningRef.current || moving || seatYaw !== null) {
+      xrBodyYawRef.current = lerpAngle(xrBodyYawRef.current, goal, 1 - Math.exp(-XR_BODY_TURN_RATE * delta));
+    }
+    if (apart < XR_BODY_TURN_STOP) xrTurningRef.current = false;
+
     positionRef.current = [feetX, feetY, feetZ];
-    rotationRef.current = xrEuler.y;
-    if (lookYawRef) lookYawRef.current = xrEuler.y;
+    rotationRef.current = xrBodyYawRef.current;
+    if (lookYawRef) lookYawRef.current = headYaw;
     if (lookPitchRef) lookPitchRef.current = xrEuler.x;
+    if (rigRef.current) {
+      rigRef.current.position.set(feetX, feetY, feetZ);
+      rigRef.current.rotation.set(0, xrBodyYawRef.current, 0);
+    }
   };
 
   useFrame((_, rawDelta) => {
@@ -544,7 +580,7 @@ export function PlayerRig({
           // leaves a roomscale player standing however far off-target
           // they happen to be within their own room, which for an admin
           // "gather everyone here" is the whole point missed.
-          xrHead.setFromMatrixPosition(camera.matrixWorld);
+          readXrHead(gl, xrHead, xrQuaternion);
           xrOrigin.position.x += target.x - xrHead.x;
           xrOrigin.position.z += target.z - xrHead.z;
           xrOrigin.position.y = target.y;
@@ -572,7 +608,7 @@ export function PlayerRig({
       // all. Everything below works from the head and corrects the origin
       // underneath it, so roomscale movement counts as movement — it
       // collides, it steps up onto the tatami, and other people see it.
-      xrHead.setFromMatrixPosition(camera.matrixWorld);
+      readXrHead(gl, xrHead, xrQuaternion);
 
       // The same two-step the desktop path uses, applied to the head and
       // then pushed back through the origin. The player's body cannot be
@@ -626,7 +662,7 @@ export function PlayerRig({
             delta
           );
           xrSeatOrigin.set(origin.position.x, 0, origin.position.z);
-          publishXrPose(xrSeat.position[0], xrSeat.position[1], xrSeat.position[2]);
+          publishXrPose(xrSeat.position[0], xrSeat.position[1], xrSeat.position[2], delta, xrSeat.rotationY);
           return;
         }
       }
@@ -634,7 +670,7 @@ export function PlayerRig({
       // Damped rather than snapped: a step up read as a jolt otherwise,
       // and in a headset a jolt is worse than a slow floor.
       origin.position.y = THREE.MathUtils.damp(origin.position.y, xrFloorY, XR_FLOOR_EASE_RATE, delta);
-      publishXrPose(xrCorrected.x, xrFloorY, xrCorrected.z);
+      publishXrPose(xrCorrected.x, xrFloorY, xrCorrected.z, delta, null);
       return;
     }
 
@@ -894,11 +930,13 @@ export function PlayerRig({
   return (
     <>
       <XROrigin ref={xrOriginRef} position={spawnPoint} />
-      {/* Own avatar body: hidden in VR and in first person (the camera
-          sits inside the head in both), shown in third person. It stays
+      {/* Own avatar body: shown in third person, and in VR — where the
+          head is hidden from the headset's camera instead (XrSelfView), so
+          you can look down at your own body and hands. Hidden in desktop
+          first person, where the camera sits inside the head. It stays
           mounted either way so animation and spring bones keep running and
           switching views doesn't reload the model. */}
-      <group ref={rigRef} visible={!isPresenting && viewMode === "third"}>
+      <group ref={rigRef} visible={isPresenting || viewMode === "third"}>
         {children}
       </group>
     </>
