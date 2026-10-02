@@ -133,6 +133,40 @@ const LILY_PADS: Array<[number, number, number, number]> = [
 /** Rocks left out of the ring, so there are obvious places to step in. */
 const ROCK_GAPS = new Set([3, 4, 11, 12]);
 
+const BANK_OUTER_RADIUS = POND_RADIUS + 0.12;
+const BANK_INNER_RADIUS = BASIN_RADIUS - 0.02;
+
+/**
+ * The bank: damp earth at the waterline, feathering out to nothing over
+ * the decking. It used to be a solid dark-moss ring, which against the
+ * pale planks read as a black circle drawn round the pond. Its inner edge
+ * now matches the basin bed, so the cut in the floor disappears, and its
+ * outer edge has no line to see.
+ *
+ * RingGeometry's UVs are planar over the outer radius (centre 0.5, edge
+ * at 0/1), so a radial gradient painted into a square canvas lines up.
+ */
+function makeBankTexture(): THREE.Texture | null {
+  if (typeof document === "undefined") return null;
+  const size = 256;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  const inner = BANK_INNER_RADIUS / BANK_OUTER_RADIUS;
+  const gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  gradient.addColorStop(0, "rgba(125,114,89,1)");
+  gradient.addColorStop(inner, "rgba(125,114,89,1)");
+  gradient.addColorStop(inner + (1 - inner) * 0.3, "rgba(150,132,100,0.85)");
+  gradient.addColorStop(inner + (1 - inner) * 0.7, "rgba(185,158,118,0.35)");
+  gradient.addColorStop(1, "rgba(205,174,130,0)");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, size, size);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
 /** The basin: a lathe following the depth profile, from the rim to the middle. */
 function basinGeometry() {
   const points: THREE.Vector2[] = [];
@@ -179,7 +213,13 @@ export function Pond() {
   const materials = useMemo(
     () => ({
       bed: new THREE.MeshStandardMaterial({ color: "#7d7259", roughness: 1, side: THREE.DoubleSide }),
-      bank: new THREE.MeshStandardMaterial({ color: "#3f4a2c", roughness: 1 }),
+      bank: new THREE.MeshStandardMaterial({
+        map: makeBankTexture(),
+        color: "#ffffff",
+        roughness: 1,
+        transparent: true,
+        depthWrite: false,
+      }),
       rocks: ["#6f6a63", "#837d73", "#5c5852"].map((color) => new THREE.MeshStandardMaterial({ color, roughness: 0.95, flatShading: true })),
       pad: new THREE.MeshStandardMaterial({ color: "#3f7a3a", roughness: 0.7, side: THREE.DoubleSide }),
       lotus: new THREE.MeshStandardMaterial({ color: "#f3a6c0", roughness: 0.6 }),
@@ -193,6 +233,7 @@ export function Pond() {
     () => () => {
       water.dispose();
       basin.dispose();
+      materials.bank.map?.dispose();
       for (const value of Object.values(materials)) {
         for (const material of Array.isArray(value) ? value : [value]) material.dispose();
       }
@@ -288,9 +329,9 @@ export function Pond() {
 
   return (
     <group position={[POND_CENTER[0], 0, POND_CENTER[1]]}>
-      {/* Mossy bank, covering the edge of the hole cut in the floor. */}
+      {/* Damp earth bank, covering the edge of the hole cut in the floor. */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]} material={materials.bank} receiveShadow userData={{ navIgnore: true }}>
-        <ringGeometry args={[BASIN_RADIUS - 0.02, POND_RADIUS + 0.12, 48]} />
+        <ringGeometry args={[BANK_INNER_RADIUS, BANK_OUTER_RADIUS, 64]} />
       </mesh>
       {/* The basin. Left in the navmesh bake, so tap-to-walk can wade. */}
       <mesh geometry={basin} material={materials.bed} receiveShadow />

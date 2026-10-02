@@ -549,6 +549,11 @@ const SHOJI_TRACK_DEPTH = WALL_THICKNESS / 2 + SHOJI_TRACK_BACK;
 const SHOJI_TRACK_CENTER = (WALL_THICKNESS / 2 - SHOJI_TRACK_BACK) / 2;
 /** The door runs down the middle of the wall. */
 const SHOJI_DOOR_Z = CLASSROOM.maxZ;
+/** How far the sill runs past each side of the opening: the full travel
+ *  of an open leaf plus a lip. */
+const SHOJI_SILL_RUN = 0.02 + SHOJI_PANEL_WIDTH + 0.04;
+/** The sill's back edge outside the opening, against the wainscot's face. */
+const SHOJI_SILL_BACK = WALL_THICKNESS / 2 + WAINSCOT_PROUD;
 /** Top of the head jamb (kamoi) the leaves slide under. */
 const SHOJI_HEAD_TOP = SHOJI_PANEL_HEIGHT + 0.14;
 
@@ -566,6 +571,11 @@ function ClassroomDoor({ m }: { m: WorldMaterials }) {
   const [open, setOpen] = useState(false);
   const leftRef = useRef<THREE.Group>(null);
   const rightRef = useRef<THREE.Group>(null);
+  // The sill and head rail are in the darker beam wood so they read
+  // against both the pale floor and the leaves' own frames; the grooves
+  // darker still, so the track is legible from across the room.
+  const grooveMaterial = useMemo(() => new THREE_RUNTIME.MeshStandardMaterial({ color: "#3b2a1c", roughness: 0.9 }), []);
+  useEffect(() => () => grooveMaterial.dispose(), [grooveMaterial]);
   // Each leaf's centre (absolute x, mirrored for the left leaf). Closed:
   // outer edge tucked into the wall, inner edge past the centre line.
   // Open: slid into the wall until its inner edge is just inside the
@@ -613,12 +623,51 @@ function ClassroomDoor({ m }: { m: WorldMaterials }) {
       {/* Sill (shikii) and head jamb (kamoi), each exactly as wide as the
           opening and as deep as the wall plus a lip, then plain wall above
           the head jamb up to the top, flush with the wall either side. */}
-      <mesh position={[0, 0.015, SHOJI_DOOR_Z + SHOJI_TRACK_CENTER]} material={m.trim} receiveShadow>
+      <mesh position={[0, 0.015, SHOJI_DOOR_Z + SHOJI_TRACK_CENTER]} material={m.beam} receiveShadow>
         <boxGeometry args={[openingWidth, 0.03, SHOJI_TRACK_DEPTH]} />
       </mesh>
-      <mesh position={[0, SHOJI_HEAD_TOP - 0.07, SHOJI_DOOR_Z + SHOJI_TRACK_CENTER]} material={m.trim} castShadow>
+      {/* The shikii carried on past the opening along the leaves' whole
+          travel, in front of the wall (and its wainscot), so an open leaf
+          still rides in a track instead of gliding over bare floor. */}
+      {[-1, 1].map((side) => (
+        <mesh
+          key={`sill-${side}`}
+          position={[side * (SHOJI_HALF_OPENING + SHOJI_SILL_RUN / 2), 0.015, SHOJI_DOOR_Z - (SHOJI_TRACK_BACK + SHOJI_SILL_BACK) / 2]}
+          material={m.beam}
+          receiveShadow
+        >
+          <boxGeometry args={[SHOJI_SILL_RUN, 0.03, SHOJI_TRACK_BACK - SHOJI_SILL_BACK]} />
+        </mesh>
+      ))}
+      {/* A darker groove under each leaf, end to end, which is what makes
+          the sill read as a track rather than a step. */}
+      {[SHOJI_FACE_OFFSET, SHOJI_FACE_OFFSET + SHOJI_TRACK_SPACING].map((offset) => (
+        <mesh key={`groove-${offset}`} position={[0, 0.0305, SHOJI_DOOR_Z - offset]} material={grooveMaterial}>
+          <boxGeometry args={[(SHOJI_HALF_OPENING + SHOJI_SILL_RUN) * 2, 0.002, SHOJI_PANEL_DEPTH + 0.008]} />
+        </mesh>
+      ))}
+      <mesh position={[0, SHOJI_HEAD_TOP - 0.07, SHOJI_DOOR_Z + SHOJI_TRACK_CENTER]} material={m.beam} castShadow>
         <boxGeometry args={[openingWidth, 0.14, SHOJI_TRACK_DEPTH]} />
       </mesh>
+      {/* The kamoi likewise runs the leaves' whole travel, against the
+          wall face, so an open leaf stays held at the top as well as the
+          bottom. The leaves reach 3cm up into it. */}
+      {[-1, 1].map((side) => (
+        <mesh
+          key={`kamoi-${side}`}
+          position={[side * (SHOJI_HALF_OPENING + SHOJI_SILL_RUN / 2), SHOJI_HEAD_TOP - 0.07, SHOJI_DOOR_Z - (SHOJI_TRACK_BACK + WALL_THICKNESS / 2) / 2]}
+          material={m.beam}
+          castShadow
+        >
+          <boxGeometry args={[SHOJI_SILL_RUN, 0.14, SHOJI_TRACK_BACK - WALL_THICKNESS / 2]} />
+        </mesh>
+      ))}
+      {/* Grooves along its underside, one per leaf, matching the sill's. */}
+      {[SHOJI_FACE_OFFSET, SHOJI_FACE_OFFSET + SHOJI_TRACK_SPACING].map((offset) => (
+        <mesh key={`kamoi-groove-${offset}`} position={[0, SHOJI_HEAD_TOP - 0.1405, SHOJI_DOOR_Z - offset]} material={grooveMaterial}>
+          <boxGeometry args={[(SHOJI_HALF_OPENING + SHOJI_SILL_RUN) * 2, 0.002, SHOJI_PANEL_DEPTH + 0.008]} />
+        </mesh>
+      ))}
       {/* Thin edge liners where the wall is cut for the doorway: wainscot
           material up to the wainscot's height (it stands 4cm proud of the
           wall, and its raw cut end read as clipping beside the closed
@@ -824,7 +873,10 @@ function CorridorShell({ m }: { m: WorldMaterials }) {
           straddling the wall's edge. Sharing a face with the wall there put
           two coplanar surfaces at identical depth, which is exactly the
           flicker that showed up when looking at a doorway from an angle. */}
-      {[CORRIDOR.minZ, CORRIDOR.maxZ].map((z) => (
+      {/* Only the hall end: the classroom end is the shoji's own wall,
+          framed by its sill and head rail (ClassroomDoor), and these
+          posts and header stood in the leaves' path there. */}
+      {[CORRIDOR.maxZ].map((z) => (
         <group key={z} position={[0, 0, z]}>
           <mesh position={[0, 2.45, 0]} material={m.trim} castShadow>
             <boxGeometry args={[DOOR_HALF_WIDTH * 2 - 0.2, 0.3, 0.5]} />
@@ -1033,13 +1085,15 @@ function ClassroomFurniture({ m }: { m: WorldMaterials }) {
           beside it. Both show the viewer's own local time. */}
       {/* Two time-zone clocks, hotel-lobby style. Facing into the room,
           the Philippines clock is on the left. */}
-      <group position={[4.85, 2.78, CLASSROOM.maxZ - WALL_THICKNESS / 2 - 0.035]} rotation={[0, Math.PI, 0]}>
+      {/* Kept past the end of the shoji's head rail (x ≈ 5.36), which
+          would otherwise run straight across their name plates. */}
+      <group position={[6.8, 2.78, CLASSROOM.maxZ - WALL_THICKNESS / 2 - 0.035]} rotation={[0, Math.PI, 0]}>
         <WallClock m={m} timeZone="Asia/Manila" label="PHILIPPINES" />
       </group>
-      <group position={[4.05, 2.78, CLASSROOM.maxZ - WALL_THICKNESS / 2 - 0.035]} rotation={[0, Math.PI, 0]}>
+      <group position={[6.0, 2.78, CLASSROOM.maxZ - WALL_THICKNESS / 2 - 0.035]} rotation={[0, Math.PI, 0]}>
         <WallClock m={m} timeZone="Asia/Tokyo" label="JAPAN" />
       </group>
-      <group position={[5.75, 2.66, CLASSROOM.maxZ - WALL_THICKNESS / 2 - 0.012]} rotation={[0, Math.PI, 0]}>
+      <group position={[7.7, 2.66, CLASSROOM.maxZ - WALL_THICKNESS / 2 - 0.012]} rotation={[0, Math.PI, 0]}>
         <DateCalendar m={m} />
       </group>
     </group>
