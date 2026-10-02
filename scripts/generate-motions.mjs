@@ -537,10 +537,11 @@ const GESTURES = [
     keys: [
       { t: 0, pose: {} },
       {
-        t: 0.28,
+        // Lowered over about two-thirds of a second, not a third: a
+        // crouch that drops in one beat reads as a stumble, not as someone
+        // choosing to get low.
+        t: 0.55,
         pose: {
-          // Fold at the hips and lean in slightly, so it reads as
-          // lowering rather than shrinking.
           // Fold deeper than a stoop: the torso leads, which is what
           // carries the hands out in front of the knees.
           spine: { x: 24 },
@@ -558,8 +559,14 @@ const GESTURES = [
             // so the hands end up ahead of the body rather than hanging
             // beside it — the difference between crouching and stooping.
             // Absolute, not an offset from the T-pose: see note 1 above.
-            leftUpperArm: { z: -72, x: 20 },
-            leftLowerArm: { x: 56, y: -14 },
+            //
+            // Signs, because both were wrong once: with the arm hanging,
+            // NEGATIVE x swings it forward (positive put the hands behind
+            // the back), and the elbow bends about y, negative on the left
+            // — the axis idle's slight bend and clap's deep one both use.
+            // An x on the forearm twists it about its own length instead.
+            leftUpperArm: { z: -68, x: -22 },
+            leftLowerArm: { y: -58 },
           }),
           // Matches the deeper bend: hip 42° and knee 58° shorten the
           // legs by ~12cm.
