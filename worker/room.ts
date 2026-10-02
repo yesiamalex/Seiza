@@ -9,6 +9,7 @@ import {
   type PlayerState,
   type Posture,
   type ServerMessage,
+  isTextObjectKind,
   PRESENT_SOURCES,
   type PresentSource,
   type WorldObject,
@@ -424,7 +425,7 @@ export class SeizaRoom extends DurableObject<Env> {
         // which is the moderation escape hatch for anything written on it.
         if (!attachment.player) return;
         const object = this.objects.get(message.id);
-        if (!object || object.kind !== "text") return;
+        if (!object || !isTextObjectKind(object.kind)) return;
         const now = Date.now();
         if (attachment.lastTextAt && now - attachment.lastTextAt < TEXT_EDIT_MIN_INTERVAL_MS) return;
         if (typeof message.text !== "string") return;
@@ -707,7 +708,7 @@ function validateNewObject(input: unknown): Omit<WorldObject, "id" | "ownerId"> 
   const pitch =
     typeof obj.pitch === "number" && Number.isFinite(obj.pitch) ? Math.min(Math.PI, Math.max(-Math.PI, obj.pitch)) : 0;
 
-  const text = kind === "text" ? sanitizeText(obj.text) : undefined;
+  const text = isTextObjectKind(kind) ? sanitizeText(obj.text) : undefined;
   // `presenterId` is never accepted from a client: a screen is claimed
   // through objectPresent, which checks it's actually free.
   const presenterId = kind === "screen" ? null : undefined;

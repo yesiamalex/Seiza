@@ -35,6 +35,18 @@ export const PAD_ROWS = 3;
  *  at every size instead of only at the ceiling. */
 export const JUMP_BUTTON_SIZE = "clamp(52px, 11vh, 76px)";
 
+/**
+ * The seiza button that sits above Jump, and the gap between them.
+ *
+ * Deliberately smaller than Jump and separated by more than the pad's
+ * own 4px gutter: Jump is pressed repeatedly and often in a hurry, and
+ * seiza is a state you enter on purpose, so an accidental hit on either
+ * is worse than the space it costs. The gap is roughly a third of the
+ * seiza button, which clears a fingertip.
+ */
+export const SEIZA_BUTTON_SIZE = "clamp(42px, 8.5vh, 58px)";
+export const SEIZA_JUMP_GAP_PX = 18;
+
 /** TouchControls' own distance from the true bottom edge (see its
  *  wrapperStyle) — kept here too so the clearance formula below doesn't
  *  have two copies of this number to keep in sync. */
@@ -47,6 +59,11 @@ export const TOUCH_WRAPPER_BOTTOM_OFFSET_PX = 12;
  * control bar docks just above the pad instead of overlapping it —
  * however tall or short the pad currently is.
  */
+/** Height of the jump column: the seiza button, the gap, and Jump. Used
+ *  by anything that stacks above it (see FpsCounter). */
+export const JUMP_COLUMN_HEIGHT_CSS =
+  `calc(${SEIZA_BUTTON_SIZE} + ${SEIZA_JUMP_GAP_PX}px + ${JUMP_BUTTON_SIZE})`;
+
 export const TOUCH_CONTROLS_CLEARANCE_CSS =
   `calc(${TOUCH_WRAPPER_BOTTOM_OFFSET_PX}px + ` +
   `(${PAD_ROWS} * ${PAD_BUTTON_SIZE}) + ${(PAD_ROWS - 1) * PAD_GAP_PX}px + 16px)`;

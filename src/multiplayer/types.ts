@@ -33,12 +33,21 @@ export interface PlayerState {
   gestureSeq: number;
 }
 
-export const WORLD_OBJECT_KINDS = ["box", "sphere", "cylinder", "model", "text", "screen", "image", "video", "chair"] as const;
+// "sign" is a text object like "text", but shaped and typeset to be read
+// from across the room rather than up close — see createTextTexture's
+// "sign" surface and SignObject in src/edit/WorldObjects.tsx.
+export const WORLD_OBJECT_KINDS = ["box", "sphere", "cylinder", "model", "text", "sign", "screen", "image", "video", "chair"] as const;
 export type WorldObjectKind = (typeof WORLD_OBJECT_KINDS)[number];
 
 /** Longest text a board or note will hold. Long enough for a notice, short
  *  enough that it stays readable on a panel and cheap to sync. */
 export const MAX_OBJECT_TEXT_LENGTH = 600;
+
+/** Object kinds whose `text` field is editable in the world. */
+export const TEXT_OBJECT_KINDS = ["text", "sign"] as const;
+export function isTextObjectKind(kind: string): boolean {
+  return (TEXT_OBJECT_KINDS as readonly string[]).includes(kind);
+}
 
 /** Longest asset URL accepted for an image or a video, matching the room
  *  server's own cap (MAX_URL_LENGTH in worker/room.ts). */

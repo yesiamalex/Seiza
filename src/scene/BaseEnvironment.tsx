@@ -1133,8 +1133,14 @@ function ClassroomFurniture({ m }: { m: WorldMaterials }) {
         <mesh position={[0, 0.74, 0]} material={m.furnitureTop} castShadow receiveShadow>
           <boxGeometry args={[1.9, 0.08, 0.85]} />
         </mesh>
-        <mesh position={[0, 0.38, 0.36]} material={m.furnitureWarm} castShadow>
-          <boxGeometry args={[1.9, 0.72, 0.1]} />
+        {/* Modesty panel. Narrower than the 1.9 desktop on purpose: at
+            the same width its left and right faces were coplanar with
+            the desktop's over the 4cm the two overlapped, and coplanar
+            faces z-fight — which is the seam that showed between the
+            pale top and the darker board. It also now tucks only 2cm
+            under the top instead of 4. */}
+        <mesh position={[0, 0.37, 0.36]} material={m.furnitureWarm} castShadow>
+          <boxGeometry args={[1.8, 0.7, 0.1]} />
         </mesh>
         {[
           [-0.88, -0.36],

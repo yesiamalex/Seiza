@@ -48,6 +48,13 @@ const PINCH_ZOOM_SENSITIVITY = 0.02; // meters per pixel of pinch
 const PINCH_FOV_SENSITIVITY = 0.12; // degrees per pixel of pinch
 const MOVE_TARGET_ARRIVE_DISTANCE = 0.25;
 const JUMP_SPEED = 5; // initial upward velocity, m/s
+/** Crouching speed, as a fraction of a walk. Slow enough to read as
+ *  deliberate, not so slow that crossing a room becomes a chore. */
+const CROUCH_MULTIPLIER = 0.42;
+/** How far the view drops while crouched. Matched to the pose rather
+ *  than chosen: the clip lowers the hips ~6cm and folds the spine, which
+ *  takes the head down about twice that. */
+const CROUCH_EYE_DROP = 0.12;
 const GRAVITY = 14; // m/s^2
 const GROUNDED_EPSILON = 0.01;
 /** How far a left-drag must travel in Edit Mode before it counts as
@@ -107,6 +114,9 @@ interface PlayerRigProps {
    *  selecting and dragging objects, so looking moves to the right or
    *  middle mouse button and a two-finger drag. */
   editMode?: boolean;
+  /** True while the player holds the crouch pose: moves slower, and the
+   *  camera sits lower. */
+  crouching?: boolean;
   viewMode: ViewMode;
   /** Set by a floor double-click/tap (Scene.tsx → App.tsx) to walk the
    *  player there; cleared on arrival or as soon as manual movement starts. */
@@ -171,6 +181,7 @@ export function PlayerRig({
   lookYawRef,
   lookPitchRef,
   editMode = false,
+  crouching = false,
   viewMode,
   moveTargetRef,
   movePathRef,
@@ -224,6 +235,10 @@ export function PlayerRig({
   const bobLastPositionRef = useRef<THREE.Vector2 | null>(null);
   // Motion sensitivity is a real accessibility need and a bobbing camera is
   // one of the worst offenders, so the OS setting turns it off outright.
+  const crouchingRef = useRef(crouching);
+  crouchingRef.current = crouching;
+  /** Eased, so standing up isn't a jump cut. */
+  const crouchEyeDropRef = useRef(0);
   const reducedMotionRef = useRef(false);
 
   useEffect(() => {
@@ -675,7 +690,9 @@ export function PlayerRig({
     const heading = new THREE.Vector3();
     if (move.lengthSq() > 0) {
       heading.copy(move).normalize();
-      vcam.position.addScaledVector(heading, MOVE_SPEED * (running ? RUN_MULTIPLIER : 1) * delta);
+      // Crouching wins over running: holding both should not sprint.
+      const speedScale = crouchingRef.current ? CROUCH_MULTIPLIER : running ? RUN_MULTIPLIER : 1;
+      vcam.position.addScaledVector(heading, MOVE_SPEED * speedScale * delta);
     } else if (moveTargetRef.current) {
       const target = moveTargetRef.current;
       const toTarget = new THREE.Vector3(target.x - vcam.position.x, 0, target.z - vcam.position.z);
@@ -707,7 +724,18 @@ export function PlayerRig({
     );
     const postureBlend = postureCameraBlendRef.current;
     const postureEye = postureBlend > 0.001 ? THREE.MathUtils.lerp(EYE_HEIGHT, postureTarget, postureBlend) : null;
-    const groundEyeY = floorY + (postureEye ?? EYE_HEIGHT);
+    // Crouching lowers the view with the body. Not in VR: there the
+    // headset is the camera, and moving the floor under someone who is
+    // physically standing still is how you make them ill. Not while
+    // sitting or kneeling either — those own the camera height already.
+    crouchEyeDropRef.current = approach(
+      crouchEyeDropRef.current,
+      crouchingRef.current && !isPresenting && postureEye === null ? CROUCH_EYE_DROP : 0,
+      POSTURE_CAMERA_EASE_RATE,
+      delta
+    );
+    const crouchDrop = crouchEyeDropRef.current;
+    const groundEyeY = floorY + (postureEye ?? EYE_HEIGHT) - crouchDrop;
     groundEyeYRef.current = groundEyeY;
     if (postureEye !== null || seatedExitRef.current) {
       verticalVelocityRef.current = 0;
@@ -734,7 +762,10 @@ export function PlayerRig({
     }
 
     applyTransforms(
-      postureEye !== null ? floorY : vcam.position.y - EYE_HEIGHT,
+      // The body's feet, derived from the eye. The crouch drop has to be
+      // added back here or the avatar would sink into the floor by it:
+      // the clip already lowers the body, and this would lower it twice.
+      postureEye !== null ? floorY : vcam.position.y - EYE_HEIGHT + crouchDrop,
       vcam.position.y <= groundEyeY + GROUNDED_EPSILON
     );
   });

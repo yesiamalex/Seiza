@@ -4,7 +4,7 @@ import { optimizeVrmAvatar } from "../avatar/optimizeVrm";
 import { compressImage } from "./compressImage";
 import { editAuthHeaders } from "./editAuth";
 import { BAR_LABEL_CLASS, barButtonActiveStyle, barButtonStyle, inputStyle, panelStyle, pillButtonActiveStyle, pillButtonStyle, popoverStyle } from "../ui/styles";
-import { ChairIcon, EditIcon, ScreenShareIcon, TextBoardIcon } from "../ui/icons";
+import { ChairIcon, EditIcon, ScreenShareIcon, SignIcon, TextBoardIcon } from "../ui/icons";
 
 interface EditToolbarProps {
   enabled: boolean;
@@ -362,6 +362,14 @@ export function EditToolbar({
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             <button style={pillButtonStyle} disabled={!connected} onClick={() => onSpawn("text")} title="A board to write on">
               <TextBoardIcon /> Board
+            </button>
+            <button
+              style={pillButtonStyle}
+              disabled={!connected}
+              onClick={() => onSpawn("sign")}
+              title="A sign on a post. Raise it onto a wall and the post drops away."
+            >
+              <SignIcon /> Sign
             </button>
             <button
               style={pillButtonStyle}

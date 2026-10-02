@@ -1,9 +1,29 @@
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import type { TouchMoveInput } from "./touchInput";
-import { PAD_BUTTON_SIZE, PAD_GAP_PX, JUMP_BUTTON_SIZE, TOUCH_WRAPPER_BOTTOM_OFFSET_PX } from "./touchControlsMetrics";
+import { CrouchIcon, JumpIcon, SeizaIcon } from "../ui/icons";
+import {
+  PAD_BUTTON_SIZE,
+  PAD_GAP_PX,
+  JUMP_BUTTON_SIZE,
+  SEIZA_BUTTON_SIZE,
+  SEIZA_JUMP_GAP_PX,
+  TOUCH_WRAPPER_BOTTOM_OFFSET_PX,
+} from "./touchControlsMetrics";
 
 interface TouchControlsProps {
   inputRef: MutableRefObject<TouchMoveInput>;
+  /** Toggles the kneeling seiza posture. Omitted if the deployment has
+   *  no seiza clip (world.json can disable built-in gestures), in which
+   *  case the button isn't drawn at all rather than drawn dead. */
+  onToggleSeiza?: () => void;
+  /** True while kneeling, so the button can show it. */
+  seizaActive?: boolean;
+  /** Press and release the crouch stance. Omitted, like seiza, if the
+   *  deployment has no crouch clip. */
+  onCrouchStart?: () => void;
+  onCrouchEnd?: () => void;
+  /** True while crouched. */
+  crouching?: boolean;
 }
 
 const DOUBLE_TAP_MS = 320;
@@ -27,7 +47,9 @@ const CELL_LABELS: Record<Cell, string> = {
   down: "Back",
 };
 /** Grid position of each cell, [column, row], top-left origin. The centre
- *  and the two bottom corners are dead zones. */
+ *  holds the crouch button and the two bottom corners are dead zones.
+ *  The centre is still mapped to null here: the button sits on top of the
+ *  pad and takes its own touches, so the pad never sees that cell. */
 const CELL_AT: (Cell | null)[][] = [
   ["upleft", "up", "upright"],
   ["left", null, "right"],
@@ -50,7 +72,14 @@ const CELL_AT: (Cell | null)[][] = [
  * Rendered only on coarse-pointer devices — on desktop this would just
  * be clutter sitting on top of WASD.
  */
-export function TouchControls({ inputRef }: TouchControlsProps) {
+export function TouchControls({
+  inputRef,
+  onToggleSeiza,
+  seizaActive = false,
+  onCrouchStart,
+  onCrouchEnd,
+  crouching = false,
+}: TouchControlsProps) {
   const lastForwardTapRef = useRef(0);
   const padRef = useRef<HTMLDivElement>(null);
   const padPointerRef = useRef<number | null>(null);
@@ -149,23 +178,64 @@ export function TouchControls({ inputRef }: TouchControlsProps) {
             <Chevron direction={cell} />
           </span>
         ))}
+        {onCrouchStart && (
+          <button
+            aria-label={crouching ? "Stand up from crouch" : "Crouch"}
+            aria-pressed={crouching}
+            style={{ ...crouchButtonStyle, ...(crouching ? padButtonPressedStyle : null) }}
+            onPointerDown={(e) => {
+              e.preventDefault();
+              // Keeps the press off the pad underneath, so crouching
+              // never also starts a walk.
+              e.stopPropagation();
+              e.currentTarget.setPointerCapture(e.pointerId);
+              onCrouchStart();
+            }}
+            onPointerUp={(e) => {
+              e.stopPropagation();
+              onCrouchEnd?.();
+            }}
+            onPointerCancel={() => onCrouchEnd?.()}
+            onContextMenu={(e) => e.preventDefault()}
+          >
+            <CrouchIcon size={20} />
+          </button>
+        )}
         {sprinting && <span style={sprintBadgeStyle}>RUN</span>}
       </div>
 
-      <button
-        aria-label="Jump"
-        style={{ ...jumpButtonStyle, ...(jumpPressed ? padButtonPressedStyle : null) }}
-        onPointerDown={(e) => {
-          e.preventDefault();
-          setJumpPressed(true);
-          inputRef.current.jumpRequested = true;
-        }}
-        onPointerUp={() => setJumpPressed(false)}
-        onPointerCancel={() => setJumpPressed(false)}
-        onContextMenu={(e) => e.preventDefault()}
-      >
-        JUMP
-      </button>
+      {/* Jump and seiza share a column, with a deliberate gap. See
+          SEIZA_JUMP_GAP_PX for why it is wider than the pad's gutter. */}
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: SEIZA_JUMP_GAP_PX }}>
+        {onToggleSeiza && (
+          <button
+            aria-label={seizaActive ? "Stand up" : "Kneel in seiza"}
+            aria-pressed={seizaActive}
+            style={{ ...seizaButtonStyle, ...(seizaActive ? padButtonPressedStyle : null) }}
+            onPointerDown={(e) => {
+              e.preventDefault();
+              onToggleSeiza();
+            }}
+            onContextMenu={(e) => e.preventDefault()}
+          >
+            <SeizaIcon size={22} />
+          </button>
+        )}
+        <button
+          aria-label="Jump"
+          style={{ ...jumpButtonStyle, ...(jumpPressed ? padButtonPressedStyle : null) }}
+          onPointerDown={(e) => {
+            e.preventDefault();
+            setJumpPressed(true);
+            inputRef.current.jumpRequested = true;
+          }}
+          onPointerUp={() => setJumpPressed(false)}
+          onPointerCancel={() => setJumpPressed(false)}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          <JumpIcon size={26} />
+        </button>
+      </div>
     </div>
   );
 }
@@ -201,7 +271,7 @@ const wrapperStyle: React.CSSProperties = {
 const padGridStyle: React.CSSProperties = {
   position: "relative",
   display: "grid",
-  gridTemplateAreas: '"upleft up upright" "left . right" ". down ."',
+  gridTemplateAreas: '"upleft up upright" "left crouch right" ". down ."',
   gridTemplateColumns: `repeat(3, ${PAD_BUTTON_SIZE})`,
   gridTemplateRows: `repeat(3, ${PAD_BUTTON_SIZE})`,
   gap: PAD_GAP_PX,
@@ -250,6 +320,42 @@ const diagonalHiddenStyle: React.CSSProperties = {
 const padButtonPressedStyle: React.CSSProperties = {
   background: "rgba(232,195,122,0.28)",
   borderColor: "rgba(232,195,122,0.7)",
+};
+
+/** The pad's centre cell. Smaller than a direction cell and inset, so a
+ *  thumb sliding between forward and back passes around it rather than
+ *  catching it; held, not toggled, to match the keyboard. */
+const crouchButtonStyle: React.CSSProperties = {
+  gridArea: "crouch",
+  justifySelf: "center",
+  alignSelf: "center",
+  width: "72%",
+  height: "72%",
+  borderRadius: "50%",
+  border: "1px solid rgba(255,255,255,0.18)",
+  background: "rgba(18,18,22,0.52)",
+  color: "white",
+  display: "grid",
+  placeItems: "center",
+  touchAction: "none",
+  userSelect: "none",
+  WebkitUserSelect: "none",
+  pointerEvents: "auto",
+};
+
+const seizaButtonStyle: React.CSSProperties = {
+  width: SEIZA_BUTTON_SIZE,
+  height: SEIZA_BUTTON_SIZE,
+  borderRadius: "50%",
+  border: "1px solid rgba(255,255,255,0.22)",
+  background: "rgba(16,17,22,0.5)",
+  color: "white",
+  display: "grid",
+  placeItems: "center",
+  touchAction: "none",
+  userSelect: "none",
+  WebkitUserSelect: "none",
+  pointerEvents: "auto",
 };
 
 const jumpButtonStyle: React.CSSProperties = {

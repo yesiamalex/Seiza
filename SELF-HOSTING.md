@@ -6,7 +6,7 @@ server room — instead of on Cloudflare Workers.
 
 **Read this first, because it will save you time:** Seiza was built *for*
 Cloudflare, and porting it is a real engineering task, not a configuration
-change. The main README's deploy path is one command. This one is a fork.
+change. The deploy path in [DOCS.md](DOCS.md) is one command. This one is a fork.
 §1 tells you honestly whether you should do it at all.
 
 ---
@@ -25,7 +25,7 @@ than by a port:
 | "We're air-gapped, or behind a firewall with no egress." | **Yes**, with caveats — see §6. |
 | "We want to learn how it works." | Sure. Enjoy. |
 
-If you are in one of the "yes" rows, read on. Otherwise the main README will
+If you are in one of the "yes" rows, read on. Otherwise [DOCS.md](DOCS.md) will
 get you running in an afternoon and this will take considerably longer.
 
 ---
@@ -190,7 +190,7 @@ no amount of server-side scaling changes it — that would need an SFU.
 
 ## 6. TURN without Cloudflare
 
-Read the main README's "Voice/video across different networks" first for *why*
+Read "Voice/video across different networks" in [DOCS.md](DOCS.md) first for *why*
 this matters. Short version: without TURN, two people on restrictive networks
 (mobile carriers, many campus networks) cannot connect to each other at all.
 

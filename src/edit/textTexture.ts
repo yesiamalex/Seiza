@@ -15,7 +15,7 @@ import * as THREE from "three";
  * language nobody asked for.
  */
 
-export type TextSurface = "board" | "note";
+export type TextSurface = "board" | "note" | "sign";
 
 export interface TextTextureResult {
   texture: THREE.CanvasTexture;
@@ -26,6 +26,11 @@ export interface TextTextureResult {
 const SURFACES = {
   board: { width: 1024, height: 576, pad: 52, title: 64, body: 40, lineGap: 1.34 },
   note: { width: 640, height: 880, pad: 54, title: 48, body: 34, lineGap: 1.36 },
+  // A sign is read from across the room rather than from arm's length,
+  // so it is typeset the other way round from a board: a very large
+  // heading, a small amount of supporting text, and centred, because a
+  // short centred line reads faster at distance than a ragged-right one.
+  sign: { width: 1024, height: 512, pad: 60, title: 128, body: 52, lineGap: 1.3 },
 } as const;
 
 const FONT_STACK = `system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`;
@@ -57,14 +62,25 @@ export function createTextTexture(text: string, surface: TextSurface, accent: st
   if (!ctx) return null;
 
   const paper = surface === "note";
-  const background = paper ? "#fdfaf1" : "#f7f3e8";
+  const sign = surface === "sign";
+  // A sign is dark with light lettering: it is usually seen against a
+  // bright floor or a sunlit wall, where a pale panel washes out.
+  const background = sign ? "#232a36" : paper ? "#fdfaf1" : "#f7f3e8";
   ctx.fillStyle = background;
   ctx.fillRect(0, 0, spec.width, spec.height);
 
   // A coloured band along the top ties the board to its object colour and
   // gives an empty one something to look at.
   ctx.fillStyle = accent;
-  ctx.fillRect(0, 0, spec.width, paper ? 14 : 22);
+  if (sign) {
+    // Framed rather than banded: a border reads as a sign from any
+    // angle, where a top stripe disappears when seen from below.
+    ctx.lineWidth = 10;
+    ctx.strokeStyle = accent;
+    ctx.strokeRect(14, 14, spec.width - 28, spec.height - 28);
+  } else {
+    ctx.fillRect(0, 0, spec.width, paper ? 14 : 22);
+  }
   if (paper) {
     // Faint ruled lines, so an empty note still reads as a sheet of paper.
     ctx.strokeStyle = "rgba(70,90,120,0.16)";
@@ -84,24 +100,32 @@ export function createTextTexture(text: string, surface: TextSurface, accent: st
 
   let y = spec.pad + spec.title * 0.85;
   ctx.textBaseline = "alphabetic";
-  ctx.fillStyle = "#1e2430";
+  ctx.fillStyle = sign ? "#f4efe3" : "#1e2430";
+  if (sign) ctx.textAlign = "center";
+  // Everything below measures from the left padding; on a centred sign
+  // the anchor is the middle instead.
+  const anchorX = sign ? spec.width / 2 : spec.pad;
   if (heading) {
     ctx.font = `600 ${spec.title}px ${FONT_STACK}`;
     for (const line of wrap(ctx, heading, maxWidth).slice(0, 2)) {
-      ctx.fillText(line, spec.pad, y);
+      ctx.fillText(line, anchorX, y);
       y += spec.title * 1.12;
     }
-    ctx.strokeStyle = "rgba(30,36,48,0.25)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(spec.pad, y - spec.title * 0.45);
-    ctx.lineTo(spec.width - spec.pad, y - spec.title * 0.45);
-    ctx.stroke();
+    // The rule under a board's heading would cut a sign in half, and a
+    // sign is usually just the heading anyway.
+    if (!sign) {
+      ctx.strokeStyle = "rgba(30,36,48,0.25)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(spec.pad, y - spec.title * 0.45);
+      ctx.lineTo(spec.width - spec.pad, y - spec.title * 0.45);
+      ctx.stroke();
+    }
     y += spec.body * 0.5;
   }
 
   ctx.font = `400 ${spec.body}px ${FONT_STACK}`;
-  ctx.fillStyle = "#333b49";
+  ctx.fillStyle = sign ? "rgba(244,239,227,0.82)" : "#333b49";
   const limit = spec.height - spec.pad;
   for (const raw of body) {
     if (y > limit) break;
@@ -116,20 +140,25 @@ export function createTextTexture(text: string, surface: TextSurface, accent: st
     const wrapped = wrap(ctx, content, maxWidth - indent);
     wrapped.forEach((line, index) => {
       if (y > limit) return;
-      if (bullet && index === 0) {
+      if (bullet && index === 0 && !sign) {
         ctx.fillStyle = accent;
         ctx.fillText("•", spec.pad, y);
         ctx.fillStyle = "#333b49";
       }
-      ctx.fillText(line, spec.pad + indent, y);
+      ctx.fillText(line, sign ? anchorX : spec.pad + indent, y);
       y += spec.body * spec.lineGap;
     });
   }
 
   if (!heading && body.every((line) => !line.trim())) {
     ctx.font = `400 ${spec.body}px ${FONT_STACK}`;
-    ctx.fillStyle = "rgba(51,59,73,0.45)";
-    ctx.fillText(paper ? "Click to write on this note" : "Click to write on this board", spec.pad, spec.pad + spec.title);
+    ctx.fillStyle = sign ? "rgba(244,239,227,0.5)" : "rgba(51,59,73,0.45)";
+    const placeholder = sign
+      ? "Click to name this sign"
+      : paper
+        ? "Click to write on this note"
+        : "Click to write on this board";
+    ctx.fillText(placeholder, anchorX, spec.pad + spec.title);
   }
 
   const texture = new THREE.CanvasTexture(canvas);

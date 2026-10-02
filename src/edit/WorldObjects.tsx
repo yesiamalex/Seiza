@@ -2,7 +2,7 @@ import { Component, Suspense, useEffect, useMemo, useRef, useState, type ReactNo
 import { TransformControls, useGLTF } from "@react-three/drei";
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
-import type { WorldObject } from "../multiplayer/types";
+import { isTextObjectKind, type WorldObject } from "../multiplayer/types";
 import { placedChairSeat, type Seat } from "../scene/layout";
 import { Chair } from "../scene/Chair";
 import { SeatPad } from "../scene/SeatPad";
@@ -100,7 +100,7 @@ function PlacedObject({
   // Boards and screens are used, not just arranged, so they answer clicks
   // outside edit mode too. The server still decides whether a write is
   // allowed (worker/room.ts).
-  const interactive = !editMode && ((object.kind === "text" && !!onEditText) || (object.kind === "screen" && !!onPresentToggle));
+  const interactive = !editMode && ((isTextObjectKind(object.kind) && !!onEditText) || (object.kind === "screen" && !!onPresentToggle));
 
   useEffect(
     () => () => {
@@ -115,7 +115,7 @@ function PlacedObject({
       onSelect(object.id);
       return;
     }
-    if (object.kind === "text" && onEditText) {
+    if (isTextObjectKind(object.kind) && onEditText) {
       event.stopPropagation();
       onEditText(object);
     } else if (object.kind === "screen" && onPresentToggle) {
@@ -206,6 +206,8 @@ function ObjectGeometry({ object, screenStream }: { object: WorldObject; screenS
   switch (object.kind) {
     case "text":
       return <TextSurfaceObject object={object} />;
+    case "sign":
+      return <SignObject object={object} />;
     case "screen":
       return <ScreenObject object={object} stream={screenStream} />;
     case "sphere":
@@ -239,6 +241,66 @@ function ObjectGeometry({ object, screenStream }: { object: WorldObject; screenS
  * avoids carrying a second field over the wire for what is really the same
  * object used two ways.
  */
+/**
+ * A signboard: a dark panel with large centred lettering, on a post when
+ * it is standing on the ground and bare when it is mounted up a wall.
+ *
+ * The post is decided by height rather than by a separate field or a
+ * second object kind. A sign near the floor is a garden or corridor sign
+ * and needs legs; one at head height or above is a plaque and would look
+ * absurd with a post running down through the wall behind it. Deriving
+ * it means the same object does both jobs and there is nothing extra to
+ * get wrong when placing one.
+ */
+const SIGN_POST_MAX_Y = 1.5;
+
+function SignObject({ object }: { object: WorldObject }) {
+  const drawn = useMemo(() => createTextTexture(object.text ?? "", "sign", object.color), [object.text, object.color]);
+  useEffect(() => () => drawn?.texture.dispose(), [drawn]);
+  if (!drawn) return null;
+
+  const height = 0.62;
+  const width = height * drawn.aspect;
+  // Object transforms are applied by the parent group, so the sign's own
+  // height above the floor is what the post has to span.
+  const standing = object.position[1] <= SIGN_POST_MAX_Y;
+  const postHeight = Math.max(0, object.position[1] - height / 2);
+
+  return (
+    <group>
+      {/* Panel, with its frame set back so the two don't fight for the
+          same pixels — the same lesson as the notice board below. */}
+      <mesh position={[0, 0, -0.035]} castShadow receiveShadow>
+        <boxGeometry args={[width + 0.06, height + 0.06, 0.06]} />
+        <meshStandardMaterial color="#6f4a2e" roughness={0.7} />
+      </mesh>
+      <mesh>
+        <planeGeometry args={[width, height]} />
+        <meshBasicMaterial map={drawn.texture} toneMapped={false} />
+      </mesh>
+      {/* Readable from behind too, rather than vanishing. */}
+      <mesh position={[0, 0, -0.071]} rotation={[0, Math.PI, 0]}>
+        <planeGeometry args={[width, height]} />
+        <meshBasicMaterial map={drawn.texture} toneMapped={false} />
+      </mesh>
+
+      {standing && postHeight > 0.05 && (
+        <group position={[0, -height / 2 - postHeight / 2, -0.035]}>
+          <mesh castShadow receiveShadow>
+            <cylinderGeometry args={[0.035, 0.042, postHeight, 10]} />
+            <meshStandardMaterial color="#6f4a2e" roughness={0.8} />
+          </mesh>
+          {/* A small base, so it reads as planted rather than floating. */}
+          <mesh position={[0, -postHeight / 2 + 0.02, 0]} castShadow receiveShadow>
+            <cylinderGeometry args={[0.13, 0.15, 0.04, 12]} />
+            <meshStandardMaterial color="#5d4028" roughness={0.9} />
+          </mesh>
+        </group>
+      )}
+    </group>
+  );
+}
+
 function TextSurfaceObject({ object }: { object: WorldObject }) {
   const flat = Math.abs(object.pitch ?? 0) > 0.6;
   const drawn = useMemo(

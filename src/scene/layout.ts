@@ -234,6 +234,17 @@ export const TEACHER_DESK: [number, number, number] = [-3.4, 0, CLASSROOM_FRONT_
  */
 const SEAT_FORWARD_OFFSET = 0.17;
 
+/**
+ * The same idea for a chair placed through the editor, but smaller.
+ *
+ * A bench is deep and backless, so sitting well forward on one looks
+ * right. A placed chair is a shallower seat with a backrest much closer
+ * behind, and reusing the bench's 0.17 put the avatar on the very front
+ * lip of it — perched rather than seated. Half that still clears the
+ * backrest while leaving the body over the seat.
+ */
+const PLACED_CHAIR_FORWARD_OFFSET = 0.08;
+
 /** Unit vector an avatar at this yaw faces (avatars face -Z at yaw 0). */
 export function facingVector(rotationY: number): [number, number] {
   return [-Math.sin(rotationY), -Math.cos(rotationY)];
@@ -266,9 +277,9 @@ export function placedChairSeat(
   return {
     id,
     position: [
-      position[0] + fx * SEAT_FORWARD_OFFSET * scale,
+      position[0] + fx * PLACED_CHAIR_FORWARD_OFFSET * scale,
       position[1] + SEAT_HEIGHT * (scale - 1),
-      position[2] + fz * SEAT_FORWARD_OFFSET * scale,
+      position[2] + fz * PLACED_CHAIR_FORWARD_OFFSET * scale,
     ],
     rotationY,
     label: "Chair",

@@ -184,11 +184,14 @@ function gainForDistance(distance?: number): number {
  * little ring, tatami is a soft low thud that woven straw absorbs almost
  * entirely, stone is brighter and sharper than wood, and water is a
  * splash — a wash of high noise sweeping downward as it collapses.
+ *
+ * `scale` quietens the step without changing its character, for a crouched
+ * walk: moving carefully is quieter, not differently shaped.
  */
-export function playFootstep(surface: StepSurface, distance?: number) {
+export function playFootstep(surface: StepSurface, distance?: number, scale = 1) {
   const a = audio();
   if (!a) return;
-  const level = gainForDistance(distance);
+  const level = gainForDistance(distance) * scale;
   if (level <= 0.01) return;
   // Steps are the most repeated sound in the world, so each one is
   // detuned slightly; identical repeats are what make footsteps grating.

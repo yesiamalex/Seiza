@@ -174,6 +174,22 @@ export function JumpIcon(props: IconProps) {
   );
 }
 
+/** A figure bent low, knees in front — the crouch stance, next to
+ *  JumpIcon's extended one. */
+export function CrouchIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="9" cy="7" r="2.2" />
+      {/* Back curled forward over the knees. */}
+      <path d="M8.4 9.3c-1.4 1.6-1.8 3.3-1.4 4.8" />
+      {/* Thigh forward, shin down to the foot. */}
+      <path d="M7.2 14.1h5.4l1 5.3" />
+      <path d="M7.2 14.1 6 19.4" />
+      <path d="M3.5 20.4h17" strokeDasharray="1 3" />
+    </Svg>
+  );
+}
+
 export function SignalIcon(props: IconProps) {
   return (
     <Svg {...props}>
@@ -252,6 +268,39 @@ export function LockIcon(props: IconProps) {
     <Svg {...props}>
       <rect x="5" y="10.5" width="14" height="9.5" rx="2" />
       <path d="M8 10.5V7a4 4 0 0 1 8 0v3.5" />
+    </Svg>
+  );
+}
+
+/**
+ * A figure kneeling in seiza, side on — the same pose as the app's own
+ * mark, reduced to strokes. Distinct from ChairIcon, which is furniture:
+ * this is the posture.
+ */
+export function SeizaIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="10.5" cy="5" r="2.2" />
+      {/* Back, upright the way the pose requires. */}
+      <path d="M10 7.4c-.9 2.2-1.3 4.3-1.2 6.4" />
+      {/* Thigh forward to the knee, then the shin folded back under. */}
+      <path d="M8.8 13.8h6.4" />
+      <path d="M15.2 13.8c1 0 1.2 1.3.2 1.6H7.6" />
+      {/* Ground. */}
+      <path d="M4.5 17.4h15" strokeDasharray="1 3" />
+    </Svg>
+  );
+}
+
+/** A signboard on a post — distinct from TextBoardIcon, which is a
+ *  wall-mounted notice board. */
+export function SignIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="4" y="4" width="16" height="9" rx="1.5" />
+      <path d="M7.5 7.5h9M7.5 10h5" />
+      <path d="M12 13v7" />
+      <path d="M9 20h6" />
     </Svg>
   );
 }

@@ -1,0 +1,36 @@
+# Line endings.
+#
+# `text=auto` lets git decide per file: anything it detects as text is
+# stored in the repository with LF, and checked out with whatever the
+# platform wants — CRLF on Windows (where core.autocrlf is usually true),
+# LF on macOS and Linux. The point is that the repository itself has one
+# convention, so a file edited on Windows and a file edited on a Mac do
+# not show up as thousands of changed lines apiece.
+#
+# This file is the authority, not each machine's git config, so a fresh
+# clone behaves the same everywhere without anyone configuring anything.
+* text=auto
+
+# Binary assets. Git detects most of these on its own; saying so
+# explicitly means a .vrma is never line-ending-converted by a
+# misconfigured clone, which would corrupt it silently.
+*.vrma binary
+*.vrm  binary
+*.glb  binary
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.webp binary
+*.ico  binary
+*.woff binary
+*.woff2 binary
+*.ktx2 binary
+*.hdr  binary
+*.docx binary
+*.pdf  binary
+
+# Generated. Marked so a diff of a regenerated file stays collapsed in
+# review and does not count toward the repository's language stats.
+src/avatar/builtinMotions.generated.ts linguist-generated=true
+public/gestures/builtin/*.vrma         linguist-generated=true
+public/animations/*.vrma               linguist-generated=true

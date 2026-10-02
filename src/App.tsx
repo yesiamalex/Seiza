@@ -6,7 +6,14 @@ import { loadWorldConfig, type WorldConfig } from "./config/worldConfig";
 import { Scene } from "./scene/Scene";
 import { VrmAvatar } from "./avatar/VrmAvatar";
 import { AvatarAnimator } from "./avatar/AvatarAnimator";
-import { buildGestureRegistry, findGesture, SIT_GESTURE_NAME, type GestureDefinition } from "./avatar/gestures";
+import {
+  buildGestureRegistry,
+  CROUCH_GESTURE_NAME,
+  findGesture,
+  SEIZA_GESTURE_NAME,
+  SIT_GESTURE_NAME,
+  type GestureDefinition,
+} from "./avatar/gestures";
 import type { Seat } from "./scene/layout";
 import type { VRM } from "@pixiv/three-vrm";
 import { useRoomSocket } from "./multiplayer/useRoomSocket";
@@ -39,7 +46,7 @@ import { useMediaQuery, useWantsTouchControls } from "./ui/useMediaQuery";
 import { saveProfile } from "./profile/profileStore";
 import { BAR_LABEL_CLASS, barButtonActiveStyle, barButtonStyle, inputStyle, panelStyle, pillButtonStyle, primaryButtonStyle } from "./ui/styles";
 import { CloseIcon, LockIcon, PersonIcon, VrHeadsetIcon } from "./ui/icons";
-import type { PresentSource, WorldObject, WorldObjectKind } from "./multiplayer/types";
+import { isTextObjectKind, type PresentSource, type WorldObject, type WorldObjectKind } from "./multiplayer/types";
 
 // Keep baseline immersive VR compatible with headsets that do not implement
 // optional scene-understanding or DOM-overlay features. These are not needed
@@ -95,6 +102,12 @@ export default function App() {
   );
   const [chatOpen, setChatOpen] = useState(false);
   const [transformMode, setTransformMode] = useState<"translate" | "rotate">("translate");
+  // Read by the key handler, which is bound once and must not be rebound
+  // every time Edit Mode flips.
+  const editModeRef = useRef(false);
+  editModeRef.current = editMode;
+  // Same reason as editModeRef: the key handler is bound once.
+  const crouchGestureRef = useRef<GestureDefinition | null>(null);
   const [xrError, setXrError] = useState<string | null>(null);
   const [webglLost, setWebglLost] = useState(false);
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
@@ -139,6 +152,15 @@ export default function App() {
   // directly; `sit` is hidden because chairs trigger it.
   const menuGestures = useMemo(() => gestures.filter((g) => !g.hidden), [gestures]);
   const sitGesture = useMemo(() => findGesture(gestures, SIT_GESTURE_NAME), [gestures]);
+  // The kneeling pose the app is named for, offered as its own button on
+  // touch (requestGesture already toggles it, so one handler does both).
+  const seizaGesture = useMemo(() => findGesture(gestures, SEIZA_GESTURE_NAME), [gestures]);
+  const crouchGesture = useMemo(() => findGesture(gestures, CROUCH_GESTURE_NAME), [gestures]);
+  // Crouch is an ordinary held gesture, so the existing machinery already
+  // plays it, holds it, releases it and syncs it. All that is left is to
+  // notice it is active and slow the walk down.
+  const crouching = localGesture?.gesture.name === CROUCH_GESTURE_NAME;
+  crouchGestureRef.current = crouchGesture;
 
   useEffect(() => () => {
     if (gestureTimerRef.current !== null) window.clearTimeout(gestureTimerRef.current);
@@ -396,6 +418,31 @@ export default function App() {
         setGuideOpen((open) => !open);
         return;
       }
+      // Crouch, held rather than toggled. Z and not Ctrl: crouch-walking
+      // means holding the key while pressing W, and Ctrl+W closes the tab
+      // in every Chromium browser — a shortcut a page cannot intercept.
+      // Shift is already run, and Minecraft's own Shift-to-sneak is
+      // therefore taken; C and V are the avatar menu and the view toggle.
+      if (joined && crouchGestureRef.current && event.code === "KeyZ") {
+        if (!event.repeat && !heldKeys.has(event.code)) {
+          heldKeys.add(event.code);
+          requestGesture(crouchGestureRef.current.name);
+        }
+        return;
+      }
+      // Gizmo mode, the way every 3D editor does it. Only while editing,
+      // so G and R stay free for gestures the rest of the time — which
+      // is also why these are checked before the gesture lookup below.
+      if (editModeRef.current) {
+        if (event.code === "KeyG") {
+          setTransformMode("translate");
+          return;
+        }
+        if (event.code === "KeyR") {
+          setTransformMode("rotate");
+          return;
+        }
+      }
       if (!joined) return;
       const gesture = gestureFor(event.code);
       if (!gesture || event.repeat || heldKeys.has(event.code)) return;
@@ -403,6 +450,10 @@ export default function App() {
       requestGesture(gesture.name);
     };
     const onKeyUp = (event: KeyboardEvent) => {
+      if (event.code === "KeyZ" && heldKeys.delete(event.code)) {
+        if (crouchGestureRef.current) releaseGesture(crouchGestureRef.current.name);
+        return;
+      }
       if (!heldKeys.delete(event.code)) return;
       const gesture = gestureFor(event.code);
       if (gesture?.hold) releaseGesture(gesture.name);
@@ -442,7 +493,23 @@ export default function App() {
       // floor (its own geometry is measured up from its base).
       const distance = flat ? 1.1 : kind === "chair" ? 1.4 : 2;
       const height =
-        kind === "chair" ? 0 : flat ? 0.78 : kind === "screen" ? 1.9 : picture ? 1.75 : kind === "text" ? 1.6 : 1;
+        kind === "chair"
+          ? 0
+          : flat
+            ? 0.78
+            : kind === "screen"
+              ? 1.9
+              : picture
+                ? 1.75
+                : kind === "text"
+                  ? 1.6
+                  : // A sign spawns at waist height, which is under
+                    // SIGN_POST_MAX_Y, so it arrives standing on a post.
+                    // Raise it past that and the post drops away and it
+                    // becomes a wall plaque.
+                    kind === "sign"
+                    ? 1.1
+                    : 1;
       const spawnPosition: [number, number, number] = [
         px - Math.sin(yaw) * distance,
         py + height,
@@ -453,7 +520,7 @@ export default function App() {
         modelUrl: kind === "model" ? url : undefined,
         src: picture ? url : undefined,
         color:
-          kind === "text" || kind === "screen" || picture
+          isTextObjectKind(kind) || kind === "screen" || picture
             ? ACCENT_OBJECT_COLOR
             : OBJECT_COLORS[Math.floor(Math.random() * OBJECT_COLORS.length)],
         position: spawnPosition,
@@ -463,7 +530,7 @@ export default function App() {
         rotationY: kind === "chair" ? yaw : yaw + Math.PI,
         pitch,
         scale: 1,
-        text: kind === "text" ? "" : undefined,
+        text: isTextObjectKind(kind) ? "" : undefined,
       });
     },
     [addObject]
@@ -816,6 +883,7 @@ export default function App() {
             rotationRef={rotationRef}
             lookYawRef={lookYawRef}
             lookPitchRef={lookPitchRef}
+            crouching={crouching}
             editMode={editMode}
             viewMode={viewMode}
             moveTargetRef={moveTargetRef}
@@ -1060,7 +1128,19 @@ export default function App() {
           onSetSkybox={setSkybox}
         />
       </HUD>
-      {showTouchControls && !webglLost && <TouchControls inputRef={touchInputRef} />}
+      {showTouchControls && !webglLost && (
+        <TouchControls
+          inputRef={touchInputRef}
+          // Only offered when this deployment actually has the clip —
+          // world.json can narrow the built-in gesture list, and a
+          // button that silently does nothing is worse than no button.
+          onToggleSeiza={seizaGesture ? () => requestGesture(seizaGesture.name) : undefined}
+          seizaActive={posture?.name === SEIZA_GESTURE_NAME}
+          onCrouchStart={crouchGesture ? () => requestGesture(crouchGesture.name) : undefined}
+          onCrouchEnd={crouchGesture ? () => releaseGesture(crouchGesture.name) : undefined}
+          crouching={crouching}
+        />
+      )}
       {!webglLost && <FpsCounter aboveTouchControls={showTouchControls} />}
       {editingText && (
         <TextEditorDialog

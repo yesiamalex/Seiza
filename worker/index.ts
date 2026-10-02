@@ -38,7 +38,7 @@ export interface Env {
   /** Maximum simultaneous joined players for the deployed world. */
   SEIZA_MAX_OCCUPANTS?: string;
   /** Optional pair for minting short-lived Cloudflare Realtime TURN
-   *  credentials (see handleTurnCredentials below, and README.md's
+   *  credentials (see handleTurnCredentials below, and DOCS.md's
    *  "Voice/video across different networks" for why this exists at all:
    *  STUN alone — the only thing configured without it — cannot traverse
    *  every NAT, and a peer pair split across two network types where at

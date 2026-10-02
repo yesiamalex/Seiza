@@ -17,7 +17,7 @@ If you only set one thing, set `SEIZA_ADMIN_KEY` and skip
 > **Voice/video across networks (TURN) uses two more Worker secrets, and
 > needs both:** `CLOUDFLARE_TURN_KEY_ID` *and* `CLOUDFLARE_TURN_KEY_API_TOKEN`,
 > from **Realtime → TURN** in the Cloudflare dashboard. Setting only the API
-> token does nothing. See "Voice/video across different networks" in the README,
+> token does nothing. See "Voice/video across different networks" in [DOCS.md](DOCS.md),
 > which also shows how to check it's working.
 
 ## `SEIZA_EDITOR_PASSWORD`: gates editing only

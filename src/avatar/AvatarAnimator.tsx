@@ -15,7 +15,7 @@ import type { GestureDefinition, GroundContact } from "./gestures";
 import { SEAT_HEIGHT } from "../scene/layout";
 import { playClap, playFootstep, playWaterRipple } from "../audio/sfx";
 import { surfaceAt } from "../scene/layout";
-import { GESTURE_SOUND_TIMES } from "./gestures";
+import { CROUCH_GESTURE_NAME, GESTURE_SOUND_TIMES } from "./gestures";
 
 /**
  * Drives every avatar's body animation from VRM Animation clips, in three
@@ -79,6 +79,9 @@ const LOWER_BODY_BONES = new Set<VRMHumanBoneName>([
 
 const WALK_SPEED = 3.2; // m/s the walk clip was authored for
 const RUN_SPEED = 6.1;
+/** How much of a step's volume survives a crouched walk. */
+const CROUCH_STEP_GAIN = 0.4;
+
 const WALK_STRIDE = 3.2; // meters travelled per walk cycle
 const RUN_STRIDE = 3.9;
 const GESTURE_FADE_IN = 0.2;
@@ -643,10 +646,15 @@ export function AvatarAnimator({
           const fx = here instanceof THREE.Vector3 ? here.x : here[0];
           const fz = here instanceof THREE.Vector3 ? here.z : here[2];
           const surface = surfaceAt(fx, fz);
-          playFootstep(surface, distanceToCameraRef.current);
+          // A crouched walk is a quiet one. Applied here rather than in
+          // sfx.ts so it reaches remote avatars too: crouch syncs like any
+          // other held gesture, so everyone hears everyone else's steps
+          // soften, not just their own.
+          const stepGain = gestureName === CROUCH_GESTURE_NAME ? CROUCH_STEP_GAIN : 1;
+          playFootstep(surface, distanceToCameraRef.current, stepGain);
           // Wading disturbs the water audibly as well as visually, but
           // quietly — it is a step in shallow water, not a dive.
-          if (surface === "water") playWaterRipple(0.25, distanceToCameraRef.current);
+          if (surface === "water") playWaterRipple(0.25 * stepGain, distanceToCameraRef.current);
         }
       }
     }

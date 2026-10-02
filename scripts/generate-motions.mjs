@@ -431,6 +431,13 @@ const CLAP_CLOSED = mirror({
   ...leftHand(PRESSED),
 });
 const palmsTogether = (close) => blendPose(CLAP_OPEN, CLAP_CLOSED, close);
+/**
+ * How much deeper than intended the crouch clip's legs are authored.
+ * See the crouch entry below: the mixer averages them with the
+ * locomotion clip's legs at equal weight, so they come out halved.
+ */
+const CROUCH_LEG_BLEND = 2;
+
 const GESTURES = [
   {
     name: "wave",
@@ -478,6 +485,81 @@ const GESTURES = [
         },
       },
       { t: 2.6, pose: {} },
+    ],
+  },
+  {
+    /**
+     * A low, slow stance you can still walk in — Minecraft's sneak,
+     * rather than a pose you stop to adopt.
+     *
+     * Deliberately NOT full-body. Seiza and sit replace the legs
+     * entirely because you are stationary in them; crouching has to
+     * layer over walking, so it bends the hips, knees and spine and
+     * leaves the legs' walk cycle to play underneath. That is also why
+     * it holds: you stay crouched until you let go.
+     *
+     * The drop is modest. A deep squat looks dramatic standing still and
+     * terrible in motion, because the walk clip underneath was authored
+     * for a standing stride and the feet start to skate.
+     *
+     * Two things about the numbers below come from AvatarAnimator.tsx
+     * and are worth knowing before editing them:
+     *
+     * 1. The UPPER body is authored absolutely. A gesture layer wins the
+     *    whole upper body outright, so what is written here is what the
+     *    arms do — no idle pose shows through. The VRM rest pose is a
+     *    T-pose, so arms left unstated, or nudged a few degrees from it,
+     *    is an avatar standing with its arms straight out. Arms hang at
+     *    roughly z = ∓68; compare the idle and walk clips.
+     *
+     * 2. The LOWER body is authored at CROUCH_LEG_BLEND times its
+     *    intended value. A non-full-body gesture does not suppress
+     *    locomotion's legs — that is the point, the walk keeps playing —
+     *    so the mixer averages this clip's leg tracks with idle's or
+     *    walk's at equal weight, and half of what is written here is
+     *    what you see.
+     *
+     * The hips translation follows from the leg bend rather than being
+     * picked for looks: an effective ~30° hip and ~40° knee shortens the
+     * legs by about 6cm, so the hips drop about that far. Drop them
+     * further and the feet go through the floor, because an upper-body
+     * gesture does not re-settle the avatar on the ground.
+     */
+    name: "crouch",
+    label: "Crouch (hold)",
+    fullBody: false,
+    // Carries leg tracks even though it is not full-body — see note 2 above.
+    legs: true,
+    hold: true,
+    hidden: true,
+    fingers: false,
+    ground: "none",
+    keys: [
+      { t: 0, pose: {} },
+      {
+        t: 0.28,
+        pose: {
+          // Fold at the hips and lean in slightly, so it reads as
+          // lowering rather than shrinking.
+          spine: { x: 16 },
+          chest: { x: 7 },
+          // Head stays level: the eyes keep looking where they were.
+          neck: { x: -12 },
+          head: { x: -9 },
+          ...mirror({
+            // Doubled — see note 2 above.
+            leftUpperLeg: { x: -30 * CROUCH_LEG_BLEND, z: 3 * CROUCH_LEG_BLEND },
+            leftLowerLeg: { x: 40 * CROUCH_LEG_BLEND },
+            leftFoot: { x: -11 * CROUCH_LEG_BLEND },
+            // Arms hang and tuck forward, elbows in — most of what makes
+            // a crouch read as deliberate from a distance. Absolute, not
+            // an offset from the T-pose: see note 1 above.
+            leftUpperArm: { z: -66, x: 12 },
+            leftLowerArm: { x: 34, y: -16 },
+          }),
+          _hips: [0, -0.06 * CROUCH_LEG_BLEND, 0],
+        },
+      },
     ],
   },
   {
@@ -534,6 +616,16 @@ const GESTURES = [
           // normal points 83% of the way straight down on every rig,
           // against 46% before. Elbow bend is held at a relaxed 28 degrees.
           ...mirror({
+            // -68, not the -62 this was authored at, and the number is
+            // worth explaining because it looks arbitrary. The committed
+            // sit.vrma was hand-picked and has been reverted twice, so
+            // regenerating used to overwrite it with a slightly
+            // different pose and everyone learned to avoid running this
+            // script. The only bone that actually differed was this one,
+            // by about 6 degrees of roll after the hand solver had run.
+            // Authoring -68 makes the solver land exactly on the kept
+            // file: `npm run generate:motions` now reproduces it
+            // byte-for-byte, so the script is safe to run again.
             leftUpperArm: { x: -24, y: -10, z: -68 },
             leftLowerArm: { x: 111, y: -40 },
             leftHand: { x: -5, y: 18, z: 34 },
@@ -781,7 +873,17 @@ const GESTURES = [
           // seiza because a seated thigh is closer to horizontal, so the
           // hand has further to travel forward to land on it.
           ...mirror({
-            leftUpperArm: { x: -24, y: -10, z: -62 },
+            // -68, not the -62 this was authored at, and the number is
+            // worth explaining because it looks arbitrary. The committed
+            // sit.vrma was hand-picked and has been reverted twice, so
+            // regenerating used to overwrite it with a slightly
+            // different pose and everyone learned to avoid running this
+            // script. The only bone that actually differed was this one,
+            // by about 6 degrees of roll after the hand solver had run.
+            // Authoring -68 makes the solver land exactly on the kept
+            // file: `npm run generate:motions` now reproduces it
+            // byte-for-byte, so the script is safe to run again.
+            leftUpperArm: { x: -24, y: -10, z: -68 },
             leftLowerArm: { x: 102, y: -40 },
             leftHand: { x: 3, y: 21, z: 40 },
             ...leftHand(RELAXED),
@@ -938,7 +1040,13 @@ for (const gesture of GESTURES) {
   const duration = keys[keys.length - 1].t;
   // Finger tracks only go into clips that shape the hand; everywhere else
   // the avatar's own resting hand is left alone.
-  const bones = (gesture.fullBody ? allBones : allBones.filter((b) => UPPER_BODY.has(b))).filter(
+  // `legs` is not the same thing as `fullBody`. fullBody is a claim made to
+  // the app — this pose owns the legs, stop the walk cycle — while `legs`
+  // only decides which bones get written into the file. A crouch wants the
+  // second without the first: it needs knee and hip tracks in the clip, but
+  // the walk has to keep playing underneath, blended with them.
+  const carriesLegs = gesture.fullBody || gesture.legs === true;
+  const bones = (carriesLegs ? allBones : allBones.filter((b) => UPPER_BODY.has(b))).filter(
     (b) => gesture.fingers === true || !FINGER_BONES.has(b)
   );
   const bytes = writeVrma({ name: gesture.name, duration, sample: keyed(keys), loop: false, bones });

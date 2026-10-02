@@ -111,6 +111,9 @@ const BUILTIN_GESTURE_EXPRESSIONS: Record<string, string> = {
   seiza: "relaxed",
   sit: "relaxed",
   shrug: "sad",
+  // Narrowed eyes and a slight set to the mouth: concentrating and
+  // keeping quiet, which is what a crouch is for.
+  crouch: "relaxed",
   // `point` and `raisehand` stay neutral: both are about directing
   // attention somewhere else, and a face on them reads as editorial.
 };
@@ -205,6 +208,14 @@ export function isValidGestureName(name: unknown): name is string {
 /** The clip a seated avatar holds. Named `sit` so a deployment can replace
  *  it through `customGestures` like any other gesture. */
 export const SIT_GESTURE_NAME = "sit";
+
+/** The low, slow stance. A held upper-body clip, so it layers over
+ *  walking rather than replacing it (see scripts/generate-motions.mjs). */
+export const CROUCH_GESTURE_NAME = "crouch";
+
+/** The kneeling pose the project is named for. Toggled by its number key
+ *  and, on touch, by its own button beside the D-pad. */
+export const SEIZA_GESTURE_NAME = "seiza";
 
 export function findGesture(gestures: GestureDefinition[], name: string | null): GestureDefinition | null {
   if (!name) return null;

@@ -60,6 +60,16 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
     "ground": "none"
   },
   {
+    "name": "crouch",
+    "label": "Crouch (hold)",
+    "url": "/gestures/builtin/crouch.vrma?v=70d75953",
+    "duration": 0.336,
+    "fullBody": false,
+    "hold": true,
+    "hidden": true,
+    "ground": "none"
+  },
+  {
     "name": "seiza",
     "label": "Seiza (hold)",
     "url": "/gestures/builtin/seiza.vrma?v=3fe699f2",
@@ -142,7 +152,7 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
   {
     "name": "sit",
     "label": "Sit",
-    "url": "/gestures/builtin/sit.vrma?v=37ac7789",
+    "url": "/gestures/builtin/sit.vrma?v=4855efff",
     "duration": 1.14,
     "fullBody": true,
     "hold": true,

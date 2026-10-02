@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { JUMP_BUTTON_SIZE, TOUCH_WRAPPER_BOTTOM_OFFSET_PX } from "../player/touchControlsMetrics";
+import { JUMP_COLUMN_HEIGHT_CSS, TOUCH_WRAPPER_BOTTOM_OFFSET_PX } from "../player/touchControlsMetrics";
 
 /**
  * A small frames-per-second readout in the bottom-right corner.
@@ -44,7 +44,7 @@ export function FpsCounter({ aboveTouchControls }: { aboveTouchControls: boolean
         position: "absolute",
         right: "calc(12px + env(safe-area-inset-right, 0px))",
         bottom: aboveTouchControls
-          ? `calc(env(safe-area-inset-bottom, 0px) + ${TOUCH_WRAPPER_BOTTOM_OFFSET_PX}px + ${JUMP_BUTTON_SIZE} + 10px)`
+          ? `calc(env(safe-area-inset-bottom, 0px) + ${TOUCH_WRAPPER_BOTTOM_OFFSET_PX}px + ${JUMP_COLUMN_HEIGHT_CSS} + 10px)`
           : "calc(10px + env(safe-area-inset-bottom, 0px))",
         zIndex: 6,
         pointerEvents: "none",
