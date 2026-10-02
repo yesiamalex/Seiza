@@ -1034,6 +1034,21 @@ deliberate limitations (paper Section 7 has the fuller discussion):
   from a stream that arrived audio-first kept an `srcObject` it had already
   decided had no video. It now re-attaches on `addtrack` and `unmute`. Not
   yet confirmed across two machines on different networks.
+- **In a headset you can move and be seen, but there is no menu.**
+  Immersive VR gets the same world and the same presence as the desktop:
+  thumbstick and roomscale movement both collide, the floor steps up onto
+  the tatami, your avatar faces where your head faces and tilts with it,
+  chairs can be sat on with a controller ray (push the stick to stand up
+  again), doors and light switches work, and an admin's gather or
+  teleport lands your head on the spot rather than your playspace origin.
+  What a headset does *not* get is the HUD. It is ordinary DOM, drawn
+  over the canvas, and an immersive session does not composite DOM over
+  the scene (`domOverlay` is off, and it is handheld-AR-only in any
+  case), so the mic toggle, gesture menu, chat, avatar picker, roster and
+  edit panel are all unreachable until you exit VR. An in-world panel is
+  the obvious fix and is not built yet. Phones are not a way around this:
+  Chrome for Android dropped Cardboard support, so a phone is the touch
+  build, not an immersive session.
 - **Sound effects are synthesised, not sampled.** Footsteps (which differ
   by surface and fire on the walk cycle's own foot contacts), the clap
   gesture, light switches, doors, the classroom clock and the pond are all
@@ -1046,11 +1061,15 @@ deliberate limitations (paper Section 7 has the fuller discussion):
   stay consistent without extra traffic — but an avatar cannot be given an
   expression independently of a gesture, and uploaded VRMs without
   expression data simply show none.
-- **Physics is a clamp and a box list, not a simulation.** On a desktop
-  or a phone, every way of moving — WASD, the D-pad, click-to-move — is
-  resolved against the same set of axis-aligned boxes once a frame
-  (`resolveObstacles` in `src/scene/layout.ts`), on top of a clamp that
-  keeps you inside the room rectangles. That set covers the built-in
+- **Physics is a clamp and a box list, not a simulation.** Every way of
+  moving — WASD, the D-pad, click-to-move, VR thumbstick, and physically
+  walking around a headset's playspace — is resolved against the same set
+  of axis-aligned boxes once a frame (`resolveObstacles` in
+  `src/scene/layout.ts`), on top of a clamp that keeps you inside the room
+  rectangles. In VR the resolution works from the headset rather than the
+  playspace origin and corrects by sliding the playspace underneath the
+  player, since their actual body is not ours to move. That set covers the
+  built-in
   world's walls, benches, desks, lockers, posts, planters and the rocks
   round the pond, and a door contributes whichever footprint matches its
   current state, so an open door stops blocking the doorway and starts
@@ -1058,13 +1077,10 @@ deliberate limitations (paper Section 7 has the fuller discussion):
   through `sceneUrl` contributes boxes derived from its own mesh bounds,
   unless `environmentCollision: false` turns that off.
 
-  What is *not* covered: **in VR**, thumbstick locomotion is clamped to
-  the room rectangles but not pushed out of furniture — `PlayerRig`
-  moves the XR origin down a separate path that skips the obstacle pass
-  — so a headset user can walk through a bench. Neither are objects
-  placed through the in-world editor, in VR or out of it. Nor is there
-  any rigid-body simulation — nothing stacks, falls, rolls, or collides
-  with anything other than a player. VRM's own spring-bone physics (hair and skirt secondary motion)
+  What is *not* covered: objects placed through the in-world editor. You
+  can walk through those. Nor is there any rigid-body simulation —
+  nothing stacks, falls, rolls, or collides with anything other than a
+  player. VRM's own spring-bone physics (hair and skirt secondary motion)
   is real and does run via `vrm.update()`, so avatars aren't *entirely*
   without physics. A real object physics layer (e.g.
   [@react-three/rapier](https://github.com/pmndrs/react-three-rapier))

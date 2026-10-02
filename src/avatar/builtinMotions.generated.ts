@@ -62,7 +62,7 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
   {
     "name": "crouch",
     "label": "Crouch (hold)",
-    "url": "/gestures/builtin/crouch.vrma?v=70d75953",
+    "url": "/gestures/builtin/crouch.vrma?v=1c4b5675",
     "duration": 0.336,
     "fullBody": false,
     "hold": true,

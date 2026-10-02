@@ -55,6 +55,17 @@ const CROUCH_MULTIPLIER = 0.42;
  *  than chosen: the clip lowers the hips ~6cm and folds the spine, which
  *  takes the head down about twice that. */
 const CROUCH_EYE_DROP = 0.12;
+/** How fast a VR playspace settles onto a new floor height. Slower than
+ *  the desktop clamp on purpose: an instant step up is a jolt, and a jolt
+ *  in a headset costs more than a floor that arrives a moment late. */
+const XR_FLOOR_EASE_RATE = 8;
+/** How far a seated VR player has to drive before it counts as standing
+ *  up, rather than as drift or a snap turn. */
+const XR_SEAT_RELEASE_DISTANCE = 0.25;
+/** How far from the playspace origin a headset can plausibly be. Bigger
+ *  than any real room, small enough to catch a stale desktop camera pose
+ *  in the first frames of a session. */
+const XR_MAX_PLAUSIBLE_HEAD_OFFSET = 12;
 const GRAVITY = 14; // m/s^2
 const GROUNDED_EPSILON = 0.01;
 /** How far a left-drag must travel in Edit Mode before it counts as
@@ -478,6 +489,36 @@ export function PlayerRig({
 
   useXRControllerLocomotion(xrOriginRef, { speed: MOVE_SPEED * 0.6 });
 
+  // Scratch vectors for the XR branch, reused rather than allocated 72
+  // times a second (90Hz headsets are the ones that can least afford it).
+  const xrHead = useRef(new THREE.Vector3()).current;
+  const xrDesired = useRef(new THREE.Vector3()).current;
+  const xrCorrected = useRef(new THREE.Vector3()).current;
+  const xrEuler = useRef(new THREE.Euler(0, 0, 0, "YXZ")).current;
+  const xrQuaternion = useRef(new THREE.Quaternion()).current;
+  const xrSeatOrigin = useRef(new THREE.Vector3()).current;
+  const xrWasSeatedRef = useRef(false);
+
+  /**
+   * Publishes a VR player's pose the way the desktop path's
+   * applyTransforms does.
+   *
+   * Facing comes from the headset, not from the XR origin. The origin's
+   * yaw only changes on a snap turn, so taking the body's direction from
+   * it meant a player could turn to face someone, in the room and on
+   * their own screen, while their avatar went on facing a wall for
+   * everyone else. Head pitch is published for the same reason it is on
+   * desktop: so other people can tell what someone is looking at.
+   */
+  const publishXrPose = (feetX: number, feetY: number, feetZ: number) => {
+    camera.getWorldQuaternion(xrQuaternion);
+    xrEuler.setFromQuaternion(xrQuaternion, "YXZ");
+    positionRef.current = [feetX, feetY, feetZ];
+    rotationRef.current = xrEuler.y;
+    if (lookYawRef) lookYawRef.current = xrEuler.y;
+    if (lookPitchRef) lookPitchRef.current = xrEuler.x;
+  };
+
   useFrame((_, rawDelta) => {
     // A long hitch (tab in background) would otherwise launch the player
     // through the bounds or deep into the floor in a single step.
@@ -496,7 +537,21 @@ export function PlayerRig({
       verticalVelocityRef.current = 0;
       groundEyeYRef.current = target.y + EYE_HEIGHT;
       virtualCameraRef.current!.position.set(target.x, target.y + EYE_HEIGHT, target.z);
-      xrOriginRef.current?.position.set(target.x, target.y, target.z);
+      const xrOrigin = xrOriginRef.current;
+      if (xrOrigin) {
+        if (isPresenting) {
+          // Put the *head* on the target. Moving the origin there instead
+          // leaves a roomscale player standing however far off-target
+          // they happen to be within their own room, which for an admin
+          // "gather everyone here" is the whole point missed.
+          xrHead.setFromMatrixPosition(camera.matrixWorld);
+          xrOrigin.position.x += target.x - xrHead.x;
+          xrOrigin.position.z += target.z - xrHead.z;
+          xrOrigin.position.y = target.y;
+        } else {
+          xrOrigin.position.set(target.x, target.y, target.z);
+        }
+      }
       // Leave any seat behind *here*, before the seated branch below sees
       // it: otherwise it eases the camera back onto the chair, and the
       // "just left a seat" step then puts the player beside that chair,
@@ -511,9 +566,75 @@ export function PlayerRig({
     if (isPresenting) {
       const origin = xrOriginRef.current;
       if (!origin) return;
-      clampToRooms(origin.position);
-      positionRef.current = [origin.position.x, origin.position.y, origin.position.z];
-      rotationRef.current = origin.rotation.y;
+
+      // Where the headset actually is, which is not where the origin is:
+      // a player can walk around their room without the origin moving at
+      // all. Everything below works from the head and corrects the origin
+      // underneath it, so roomscale movement counts as movement — it
+      // collides, it steps up onto the tatami, and other people see it.
+      xrHead.setFromMatrixPosition(camera.matrixWorld);
+
+      // The same two-step the desktop path uses, applied to the head and
+      // then pushed back through the origin. The player's body cannot be
+      // moved, so a physical step into a wall is resolved by sliding the
+      // world instead — which is the usual WebXR compromise, and better
+      // than letting someone stand inside a bench.
+      xrDesired.set(xrHead.x, 0, xrHead.z);
+      // Sanity guard for the frames around session start, where the
+      // camera's world matrix can still hold the desktop camera's pose.
+      // Correcting against that would shove the playspace halfway across
+      // the world once; ignoring a frame costs nothing.
+      const headOffset = Math.hypot(xrHead.x - origin.position.x, xrHead.z - origin.position.z);
+      if (headOffset < XR_MAX_PLAUSIBLE_HEAD_OFFSET) {
+        xrCorrected.copy(xrDesired);
+        clampToRooms(xrCorrected);
+        resolveObstacles(xrCorrected);
+        origin.position.x += xrCorrected.x - xrDesired.x;
+        origin.position.z += xrCorrected.z - xrDesired.z;
+      } else {
+        xrCorrected.copy(origin.position).setY(0);
+      }
+
+      // Stand on whatever is underfoot. Without this the whole playspace
+      // stays at spawn height and the tatami platform's step up is a
+      // surface you walk through rather than onto.
+      const xrFloorY = floorHeightAt(xrCorrected.x, xrCorrected.z);
+      // How tall this player physically is, measured rather than assumed,
+      // so sitting lands their eyes on the seat whoever they are.
+      const standingEye = Math.max(0.4, xrHead.y - origin.position.y);
+
+      const xrSeat = sitAnchorRef.current;
+      if (xrSeat) {
+        // Pushing the stick is how you stand up, exactly as moving is on
+        // desktop — there is no HUD in a headset to find a button on.
+        const moved = Math.hypot(origin.position.x - xrSeatOrigin.x, origin.position.z - xrSeatOrigin.z);
+        if (xrWasSeatedRef.current && moved > XR_SEAT_RELEASE_DISTANCE) {
+          onStandUpRef.current?.();
+        } else {
+          if (!xrWasSeatedRef.current) {
+            xrWasSeatedRef.current = true;
+            origin.position.x += xrSeat.position[0] - xrCorrected.x;
+            origin.position.z += xrSeat.position[2] - xrCorrected.z;
+          }
+          // Lower the playspace instead of the person: their eyes end up
+          // at seat height whether they are physically standing or
+          // sitting in a real chair.
+          origin.position.y = THREE.MathUtils.damp(
+            origin.position.y,
+            xrSeat.position[1] + SEATED_EYE_HEIGHT - standingEye,
+            POSTURE_CAMERA_EASE_RATE,
+            delta
+          );
+          xrSeatOrigin.set(origin.position.x, 0, origin.position.z);
+          publishXrPose(xrSeat.position[0], xrSeat.position[1], xrSeat.position[2]);
+          return;
+        }
+      }
+      xrWasSeatedRef.current = false;
+      // Damped rather than snapped: a step up read as a jolt otherwise,
+      // and in a headset a jolt is worse than a slow floor.
+      origin.position.y = THREE.MathUtils.damp(origin.position.y, xrFloorY, XR_FLOOR_EASE_RATE, delta);
+      publishXrPose(xrCorrected.x, xrFloorY, xrCorrected.z);
       return;
     }
 

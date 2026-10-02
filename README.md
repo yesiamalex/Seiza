@@ -37,7 +37,10 @@ short version.
 - **Be whoever you like.** Build an avatar in the designer, pick one of the
   deployment's presets, or upload your own VRM file.
 
-It works on a phone, a laptop, or a VR headset, from the same link.
+It works on a phone, a laptop, or a VR headset, from the same link — with
+one caveat in a headset: you can walk, sit, open doors and talk, but the
+menus are still flat screen only, so gestures and chat mean stepping out
+of VR for now.
 
 ## Why run it yourself
 
@@ -104,6 +107,8 @@ It is real and working, not production-hardened. The short list:
 - "Admin" and "editor" are shared passwords, not individual logins.
 - There is no whiteboard, no chat history, and no physics for objects you
   place.
+- VR has the world but not the menus — see "In a headset" in the status
+  list.
 
 [DOCS.md](DOCS.md)'s "Status" section has the honest, complete list,
 including what each limit means for safety and moderation.

@@ -520,8 +520,8 @@ const GESTURES = [
      *    what you see.
      *
      * The hips translation follows from the leg bend rather than being
-     * picked for looks: an effective ~30° hip and ~40° knee shortens the
-     * legs by about 6cm, so the hips drop about that far. Drop them
+     * picked for looks: an effective ~42° hip and ~58° knee shortens the
+     * legs by about 12cm, so the hips drop about that far. Drop them
      * further and the feet go through the floor, because an upper-body
      * gesture does not re-settle the avatar on the ground.
      */
@@ -541,23 +541,29 @@ const GESTURES = [
         pose: {
           // Fold at the hips and lean in slightly, so it reads as
           // lowering rather than shrinking.
-          spine: { x: 16 },
-          chest: { x: 7 },
-          // Head stays level: the eyes keep looking where they were.
-          neck: { x: -12 },
-          head: { x: -9 },
+          // Fold deeper than a stoop: the torso leads, which is what
+          // carries the hands out in front of the knees.
+          spine: { x: 24 },
+          chest: { x: 10 },
+          // Head stays level: the eyes keep looking where they were, so
+          // these cancel most of the fold above.
+          neck: { x: -17 },
+          head: { x: -13 },
           ...mirror({
             // Doubled — see note 2 above.
-            leftUpperLeg: { x: -30 * CROUCH_LEG_BLEND, z: 3 * CROUCH_LEG_BLEND },
-            leftLowerLeg: { x: 40 * CROUCH_LEG_BLEND },
-            leftFoot: { x: -11 * CROUCH_LEG_BLEND },
-            // Arms hang and tuck forward, elbows in — most of what makes
-            // a crouch read as deliberate from a distance. Absolute, not
-            // an offset from the T-pose: see note 1 above.
-            leftUpperArm: { z: -66, x: 12 },
-            leftLowerArm: { x: 34, y: -16 },
+            leftUpperLeg: { x: -42 * CROUCH_LEG_BLEND, z: 3 * CROUCH_LEG_BLEND },
+            leftLowerLeg: { x: 58 * CROUCH_LEG_BLEND },
+            leftFoot: { x: -15 * CROUCH_LEG_BLEND },
+            // Arms swing forward from the shoulder and bend at the elbow,
+            // so the hands end up ahead of the body rather than hanging
+            // beside it — the difference between crouching and stooping.
+            // Absolute, not an offset from the T-pose: see note 1 above.
+            leftUpperArm: { z: -72, x: 20 },
+            leftLowerArm: { x: 56, y: -14 },
           }),
-          _hips: [0, -0.06 * CROUCH_LEG_BLEND, 0],
+          // Matches the deeper bend: hip 42° and knee 58° shorten the
+          // legs by ~12cm.
+          _hips: [0, -0.12 * CROUCH_LEG_BLEND, 0],
         },
       },
     ],
