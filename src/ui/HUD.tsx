@@ -294,7 +294,9 @@ export function HUD({ connectionState, worldName, topRight, topLeft, touchContro
           .seiza-bar-btn, .seiza-drawer { transition: none; }
         }
       `}</style>
-      <div style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+      {/* Relative so a top-bar control can centre itself on the screen
+          (AdminButton) rather than wherever space-between puts it. */}
+      <div style={{ position: "relative", width: "100%", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
         {topLeft ?? (
           <div style={{ ...panelStyle, padding: "6px 12px", fontSize: 13, display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
             <strong style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{worldName}</strong>
