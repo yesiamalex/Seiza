@@ -1046,18 +1046,27 @@ deliberate limitations (paper Section 7 has the fuller discussion):
   stay consistent without extra traffic — but an avatar cannot be given an
   expression independently of a gesture, and uploaded VRMs without
   expression data simply show none.
-- **Physics is a clamp and a box list, not a simulation.** Players are kept
-  inside the room rectangles and pushed out of the built-in furniture, which
-  covers walls, benches, desks and the like. A custom environment loaded
-  through `sceneUrl` also contributes collision boxes derived from its own
-  mesh bounds, unless `environmentCollision: false` turns that off. Objects
-  placed through the in-world editor are still not in that list, so you can
-  walk through those, and nothing stacks, falls or collides with anything
-  else. Placed objects don't
-  fall, roll, or collide — there's no rigid-body simulation. VRM's own
-  spring-bone physics (hair/skirt secondary motion) is real and does run
-  via `vrm.update()`, so avatars aren't *entirely* without physics. A
-  real object physics layer (e.g.
+- **Physics is a clamp and a box list, not a simulation.** On a desktop
+  or a phone, every way of moving — WASD, the D-pad, click-to-move — is
+  resolved against the same set of axis-aligned boxes once a frame
+  (`resolveObstacles` in `src/scene/layout.ts`), on top of a clamp that
+  keeps you inside the room rectangles. That set covers the built-in
+  world's walls, benches, desks, lockers, posts, planters and the rocks
+  round the pond, and a door contributes whichever footprint matches its
+  current state, so an open door stops blocking the doorway and starts
+  blocking where its leaves actually are. A custom environment loaded
+  through `sceneUrl` contributes boxes derived from its own mesh bounds,
+  unless `environmentCollision: false` turns that off.
+
+  What is *not* covered: **in VR**, thumbstick locomotion is clamped to
+  the room rectangles but not pushed out of furniture — `PlayerRig`
+  moves the XR origin down a separate path that skips the obstacle pass
+  — so a headset user can walk through a bench. Neither are objects
+  placed through the in-world editor, in VR or out of it. Nor is there
+  any rigid-body simulation — nothing stacks, falls, rolls, or collides
+  with anything other than a player. VRM's own spring-bone physics (hair and skirt secondary motion)
+  is real and does run via `vrm.update()`, so avatars aren't *entirely*
+  without physics. A real object physics layer (e.g.
   [@react-three/rapier](https://github.com/pmndrs/react-three-rapier))
   is a large enough addition — new dependency, collision authoring for
   BaseEnvironment, network sync implications — that it's future work to
@@ -1078,7 +1087,7 @@ deliberate limitations (paper Section 7 has the fuller discussion):
   for glTF-Transform to safely reason about humanoid bone references or
   blend shapes during structural transforms — see the reasoning in
   `src/avatar/optimizeVrm.ts`.
-- **Click-to-move routes around obstacles, but nothing else collides.**
+- **Click-to-move routes around obstacles; it does not replace them.**
   A navmesh is generated at runtime from whatever environment geometry is
   actually in the scene — procedural `BaseEnvironment` or an uploaded
   glTF world — via
@@ -1089,7 +1098,6 @@ deliberate limitations (paper Section 7 has the fuller discussion):
   generated in code and an editor can swap the whole environment live —
   there's no authoring step where a navmesh could have been baked. It is
   strictly additive: if the WASM module fails to load, generation fails,
-  or no route exists, movement falls back to the previous straight-line
-  walk. **WASD/D-pad movement still has no collision** — only a radius
-  clamp — so direct input can still walk through a wall. Rigid-body
-  physics for placed objects is still absent.
+  or no route exists, movement falls back to a straight-line walk — which
+  is still resolved against the obstacle boxes described above, so losing
+  the navmesh costs you the route-finding, not the walls.
