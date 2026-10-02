@@ -72,6 +72,10 @@ export function TouchControls({ inputRef }: TouchControlsProps) {
     };
   }, [inputRef]);
 
+  // The forward diagonals only appear once you're going forward, where
+  // they're useful; the rest of the time the pad is a plain cross.
+  const movingForward = activeCell !== null && CELL_VECTORS[activeCell][1] === 1;
+
   function cellAt(clientX: number, clientY: number): Cell | null {
     const rect = padRef.current?.getBoundingClientRect();
     if (!rect) return null;
@@ -136,7 +140,9 @@ export function TouchControls({ inputRef }: TouchControlsProps) {
             style={{
               ...padButtonStyle,
               gridArea: cell,
-              ...(cell === "upleft" || cell === "upright" ? diagonalButtonStyle : null),
+              ...(cell === "upleft" || cell === "upright"
+                ? { ...diagonalButtonStyle, ...(movingForward ? null : diagonalHiddenStyle) }
+                : null),
               ...(activeCell === cell ? padButtonPressedStyle : null),
             }}
           >
@@ -227,12 +233,18 @@ const padButtonStyle: React.CSSProperties = {
   WebkitUserSelect: "none",
 };
 
-/** Diagonals read as secondary: same size, so they're as easy to hit,
- *  but quieter until used. */
+/** Diagonals read as secondary: same size, so they're as easy to slide
+ *  onto, but quieter. Hidden (not removed: the pad still maps those
+ *  corners) until a forward cell is held, and they fade in then. */
 const diagonalButtonStyle: React.CSSProperties = {
   background: "rgba(18,18,22,0.4)",
   borderColor: "rgba(255,255,255,0.14)",
   opacity: 0.85,
+  transition: "opacity 140ms ease-out, transform 140ms ease-out",
+};
+const diagonalHiddenStyle: React.CSSProperties = {
+  opacity: 0,
+  transform: "scale(0.85)",
 };
 
 const padButtonPressedStyle: React.CSSProperties = {

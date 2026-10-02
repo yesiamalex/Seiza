@@ -19,8 +19,11 @@ import {
   CLASSROOM_WALL_HEIGHT,
   CORRIDOR,
   DESKS,
+  DOOR_CASING_INNER,
+  DOOR_CLEAR_HALF,
   DOOR_HALF_WIDTH,
   GARDEN_DOOR_OBSTACLE,
+  GARDEN_DOOR_OPEN_OBSTACLES,
   HALL,
   HALL_CENTRE,
   OUTDOOR,
@@ -404,9 +407,10 @@ function HallShell({ m }: { m: WorldMaterials }) {
       <DoorLintel z={HALL.minZ} bottom={2.6} m={m} />
       <DoorLintel z={HALL.maxZ} bottom={2.64} m={m} />
 
-      {/* Entrance into the bounded garden beyond the hall. The header
-          clears the leaves' tops so they can swing without cutting into it. */}
-      <DoorCasing z={HALL.maxZ} headerBottom={GARDEN_LEAF_HEIGHT + 0.02} headerTop={2.64} m={m} />
+      {/* Entrance into the bounded garden beyond the hall. The header sits
+          just above the leaves' tops: close enough that no slot of sky
+          shows over a shut door, clear enough that they swing freely. */}
+      <DoorCasing z={HALL.maxZ} headerBottom={GARDEN_LEAF_HEIGHT + 0.005} headerTop={2.64} m={m} />
       <GardenDoor m={m} />
 
       {/* Open beam ceiling: keeps the hall bright while giving it a top. */}
@@ -424,13 +428,13 @@ function HallShell({ m }: { m: WorldMaterials }) {
 
 /** How far a door casing's posts reach in from the opening's edge, and
  *  past it over the wall either side. */
-const CASING_INNER = 0.29;
+const CASING_INNER = DOOR_CASING_INNER;
 const CASING_OUTER = 0.06;
 /** Deeper than the wainscot (WALL_THICKNESS + 0.08) by a 4cm lip on each
  *  face, so no cut wall or wainscot end shows past it. */
 const CASING_DEPTH = WALL_THICKNESS + 0.08 + 0.08;
 /** Inner face of a casing's posts: the clear half-width of the doorway. */
-const CASING_CLEAR_HALF = DOOR_HALF_WIDTH - CASING_INNER;
+const CASING_CLEAR_HALF = DOOR_CLEAR_HALF;
 
 /**
  * Posts and header round a hall doorway.
@@ -490,6 +494,7 @@ function GardenDoor({ m }: { m: WorldMaterials }) {
   // always restarts closed, so the shared obstacle should too.
   useEffect(() => {
     GARDEN_DOOR_OBSTACLE.disabled = false;
+    for (const leaf of GARDEN_DOOR_OPEN_OBSTACLES) leaf.disabled = true;
   }, []);
   useFrame((_, delta) => {
     const amount = 1 - Math.exp(-7 * Math.min(delta, 0.05));
@@ -508,6 +513,7 @@ function GardenDoor({ m }: { m: WorldMaterials }) {
       // there's nothing to wait for. See resolveObstacles in layout.ts,
       // which skips any obstacle with `disabled: true`.
       GARDEN_DOOR_OBSTACLE.disabled = next;
+      for (const leaf of GARDEN_DOOR_OPEN_OBSTACLES) leaf.disabled = !next;
       playDoorSwing();
       return next;
     });
@@ -533,7 +539,7 @@ const GARDEN_LEAF_DEPTH = 0.08;
 const GARDEN_STILE = 0.14;
 /** The leaves' hall-side face, where they hinge. They hang just inside
  *  the hall, clear of the wall's thickness, as before. */
-const GARDEN_HINGE_Z = HALL.maxZ - 0.22;
+const GARDEN_HINGE_Z = HALL.maxZ - 0.22; // matched in layout.ts's GARDEN_DOOR_OPEN_OBSTACLES
 /** Solid kick panel at the bottom; glass from here up. */
 const GARDEN_KICK = 0.5;
 
@@ -1035,7 +1041,22 @@ function ClassroomShell({ m, lit, onToggleLight }: { m: WorldMaterials; lit: boo
           headerY: CLASSROOM_WINDOW_HEADER,
         }))}
       />
-      <DressedWall axis="z" at={CLASSROOM.maxX} from={CLASSROOM.minZ} to={CLASSROOM.maxZ} height={CLASSROOM_WALL_HEIGHT} m={m} />
+      {/* Windows on both long walls, mirrored, so the room is lit from
+          either side like the hall. */}
+      <DressedWall
+        axis="z"
+        at={CLASSROOM.maxX}
+        from={CLASSROOM.minZ}
+        to={CLASSROOM.maxZ}
+        height={CLASSROOM_WALL_HEIGHT}
+        m={m}
+        windows={CLASSROOM_WINDOW_Z.map((center) => ({
+          center,
+          width: CLASSROOM_WINDOW_WIDTH,
+          sillY: CLASSROOM_WINDOW_SILL,
+          headerY: CLASSROOM_WINDOW_HEADER,
+        }))}
+      />
       <mesh
         position={[0, CLASSROOM_WALL_HEIGHT - 0.02, (CLASSROOM.minZ + CLASSROOM.maxZ) / 2]}
         rotation={[Math.PI / 2, 0, 0]}
@@ -1052,6 +1073,16 @@ function ClassroomShell({ m, lit, onToggleLight }: { m: WorldMaterials; lit: boo
           key={z}
           position={[CLASSROOM.minX + 0.2, CLASSROOM_WINDOW_CENTER_Y, z]}
           rotationY={Math.PI / 2}
+          width={CLASSROOM_WINDOW_WIDTH}
+          height={CLASSROOM_WINDOW_HEIGHT}
+          m={m}
+        />
+      ))}
+      {CLASSROOM_WINDOW_Z.map((z) => (
+        <Window
+          key={`e-${z}`}
+          position={[CLASSROOM.maxX - 0.2, CLASSROOM_WINDOW_CENTER_Y, z]}
+          rotationY={-Math.PI / 2}
           width={CLASSROOM_WINDOW_WIDTH}
           height={CLASSROOM_WINDOW_HEIGHT}
           m={m}
@@ -1146,8 +1177,10 @@ function ClassroomFurniture({ m }: { m: WorldMaterials }) {
         </group>
       ))}
 
-      {/* Notice board on the wall opposite the windows. */}
-      <group position={[CLASSROOM.maxX - 0.2, 1.9, -17]} rotation={[0, -Math.PI / 2, 0]}>
+      {/* Notice board on the back wall, left of the door as you face it.
+          It used to hang on the east wall, which now has windows; here it
+          clears the light switch and the shoji's head rail (x ≈ -5.36). */}
+      <group position={[-7, 1.9, CLASSROOM.maxZ - 0.2]} rotation={[0, Math.PI, 0]}>
         <mesh material={m.trim} castShadow>
           <boxGeometry args={[3, 1.6, 0.1] } />
         </mesh>

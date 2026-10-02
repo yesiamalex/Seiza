@@ -135,19 +135,23 @@ export function ControlsGuide({ open, onClose, touch }: ControlsGuideProps) {
       ref={rootRef}
       role="dialog"
       aria-labelledby="seiza-guide-title"
-      className="seiza-rise-in"
+      className="seiza-guide"
       style={{
         ...panelStyle,
-        // Centred with inset + auto margins, not translate(-50%, -50%):
-        // the rise-in animation ends at `transform: none` and would undo
-        // a translate, dropping the card's corner onto the centre.
+        // Hangs from just under the top bar and drops down into view, like
+        // the other top menus, rather than rising from the middle. Centred
+        // horizontally with auto margins rather than a translate, since the
+        // drop-in animation owns `transform`.
         position: "absolute",
-        inset: 0,
-        margin: "auto",
-        height: "fit-content",
+        top: "calc(60px + env(safe-area-inset-top, 0px))",
+        left: 0,
+        right: 0,
+        margin: "0 auto",
         zIndex: 40,
         width: "min(380px, calc(100vw - 32px))",
-        maxHeight: "calc(100svh - 32px)",
+        // Never the full screen: it stops well clear of the bottom bar and
+        // D-pad and scrolls inside instead.
+        maxHeight: "max(220px, min(520px, calc(100svh - 60px - env(safe-area-inset-top, 0px) - 180px)))",
         overflowY: "auto",
         boxSizing: "border-box",
         padding: 16,
@@ -157,6 +161,7 @@ export function ControlsGuide({ open, onClose, touch }: ControlsGuideProps) {
         pointerEvents: "auto",
       }}
     >
+      <style>{GUIDE_CSS}</style>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
         <strong id="seiza-guide-title" style={{ fontSize: 15 }}>
           Controls
@@ -211,3 +216,12 @@ const kbdStyle: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,0.18)",
   borderBottomWidth: 2,
 };
+
+const GUIDE_CSS = `
+  .seiza-guide { animation: seiza-guide-in 320ms var(--seiza-ease, ease-out) both; transform-origin: top center; }
+  @keyframes seiza-guide-in {
+    from { opacity: 0; transform: translateY(-10px) scale(0.98); }
+    to { opacity: 1; transform: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { .seiza-guide { animation: none; } }
+`;

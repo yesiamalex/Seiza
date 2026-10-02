@@ -69,6 +69,12 @@ export const WALL_THICKNESS = 0.3;
 export const CLASSROOM_WALL_HEIGHT = 3.4;
 /** Width of the openings between hall, corridor and classroom. */
 export const DOOR_HALF_WIDTH = CORRIDOR.maxX;
+/** How far a hall doorway's casing posts reach in from the opening's edge
+ *  (DoorCasing in BaseEnvironment.tsx). Here so collision and the garden
+ *  door's hinges agree on the clear width. */
+export const DOOR_CASING_INNER = 0.29;
+/** Clear half-width of a cased hall doorway, between its posts. */
+export const DOOR_CLEAR_HALF = DOOR_HALF_WIDTH - DOOR_CASING_INNER;
 
 /** Chair and bench seat height. The sit clip drops the hips by the same
  *  amount (see scripts/generate-motions.mjs), so feet reach the floor. */
@@ -110,9 +116,20 @@ const WALKABLE: Rect[] = [
   inset(HALL, PLAYER_RADIUS),
   {
     ...inset(OUTDOOR, PLAYER_RADIUS),
-    // Overlap the hall's inset at the entrance so movement can cross the
-    // threshold instead of being snapped back by the rectangular clamp.
-    minZ: HALL.maxZ - PLAYER_RADIUS,
+    // Stops short of the hall's south wall like every other room. It used
+    // to reach back over the wall across the garden's whole width, to let
+    // people through the entrance, and that made the entire wall
+    // walkable, not only the doorway.
+    minZ: HALL.maxZ + WALL_THICKNESS / 2 + PLAYER_RADIUS,
+  },
+  // The entrance itself: the same "mouth" the corridor has, only as wide
+  // as the gap between the door casing's posts, reaching into the hall's
+  // and the garden's walkable areas on either side.
+  {
+    minX: -(DOOR_CLEAR_HALF - PLAYER_RADIUS),
+    maxX: DOOR_CLEAR_HALF - PLAYER_RADIUS,
+    minZ: HALL.maxZ - CORRIDOR_MOUTH,
+    maxZ: HALL.maxZ + CORRIDOR_MOUTH,
   },
   {
     ...inset(CORRIDOR, PLAYER_RADIUS),
@@ -342,6 +359,17 @@ const obstacle = (x: number, z: number, halfX: number, halfZ: number, rotationY 
  *  OBSTACLES, rather than needing a second lookup/id scheme. */
 export const GARDEN_DOOR_OBSTACLE: Obstacle = obstacle(0, HALL.maxZ - 0.18, DOOR_HALF_WIDTH - 0.05, 0.22);
 
+/** The garden door's two leaves where they stand when swung open: into
+ *  the hall, along each side of the doorway from its hinge (see
+ *  GardenDoor). Disabled while the door is shut, and the closed-state box
+ *  above disabled while it's open, so one or the other is always solid. */
+const GARDEN_LEAF_LENGTH = DOOR_CLEAR_HALF;
+const GARDEN_HINGE_Z = HALL.maxZ - 0.22;
+export const GARDEN_DOOR_OPEN_OBSTACLES: Obstacle[] = [-1, 1].map((side) => ({
+  ...obstacle(side * (DOOR_CLEAR_HALF - 0.04), GARDEN_HINGE_Z - GARDEN_LEAF_LENGTH / 2, 0.08, GARDEN_LEAF_LENGTH / 2),
+  disabled: true,
+}));
+
 /** The new sliding door's closed-state footprint, at the corridor→
  *  classroom threshold (see ClassroomDoor in BaseEnvironment.tsx). */
 // Kept in sync by hand with ClassroomDoor's own DOOR_INSET in
@@ -375,6 +403,7 @@ export const POND_ROCKS = Array.from({ length: 16 }, (_, i) => {
  */
 export const OBSTACLES: Obstacle[] = [
   GARDEN_DOOR_OBSTACLE,
+  ...GARDEN_DOOR_OPEN_OBSTACLES,
   CLASSROOM_DOOR_OBSTACLE,
   ...BENCHES.map((bench) => obstacle(bench.position[0], bench.position[2], BENCH_LENGTH / 2 + 0.05, 0.32, bench.rotationY)),
   // The outdoor benches were never added here — only the indoor ones —
