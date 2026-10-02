@@ -4,7 +4,13 @@ import { optimizeVrmAvatar } from "../avatar/optimizeVrm";
 import { validateVrmFile } from "../avatar/validateVrm";
 import { AvatarDesignerDialog } from "../avatar/designer/AvatarDesigner";
 import { AVATAR_DESIGN_PRESETS, DEFAULT_AVATAR_SPEC, encodeAvatarSpec } from "../avatar/designer/avatarSpec";
-import { saveUploadedAvatarFile, uploadAvatarFile, type StoredAvatarChoice } from "../profile/profileStore";
+import {
+  ensureUploadedAvatarAvailable,
+  loadUploadedAvatarFile,
+  saveUploadedAvatarFile,
+  uploadAvatarFile,
+  type StoredAvatarChoice,
+} from "../profile/profileStore";
 import { AvatarPicker } from "./AvatarPicker";
 import { AvatarPreview } from "./AvatarPreview";
 import { ACCENT_COLOR, pillButtonActiveStyle, pillButtonStyle, primaryButtonStyle } from "./styles";
@@ -42,6 +48,38 @@ export function avatarUrlForChoice(choice: StoredAvatarChoice): string {
   }
 }
 
+function labelForChoice(choice: StoredAvatarChoice, presets: WorldConfig["defaultAvatars"]): string {
+  switch (choice.kind) {
+    case "upload":
+      return choice.fileName;
+    case "preset":
+      return presets?.find((p) => p.url === choice.url)?.label ?? "A preset from this deployment";
+    case "designer":
+      return AVATAR_DESIGN_PRESETS.find((p) => JSON.stringify(p.spec) === JSON.stringify(choice.spec))?.label ?? "Designed in the browser";
+    default:
+      return "Designed in the browser";
+  }
+}
+
+const sameChoice = (a: StoredAvatarChoice, b: StoredAvatarChoice) => JSON.stringify(a) === JSON.stringify(b);
+
+/** The last file uploaded this session, per world. IndexedDB only keeps
+ *  one when "remember me" is on; this is what lets someone who isn't
+ *  remembered still switch back to their own file without picking it
+ *  again. Module scope so it outlives the avatar menu closing. */
+let sessionUpload: { worldId: string; blob: Blob; fileName: string; remoteUrl: string } | null = null;
+
+interface PreviousUpload {
+  blob: Blob;
+  fileName: string;
+  remoteUrl?: string;
+}
+
+async function findPreviousUpload(worldId: string): Promise<PreviousUpload | null> {
+  if (sessionUpload?.worldId === worldId) return sessionUpload;
+  return loadUploadedAvatarFile(worldId);
+}
+
 /** First-visit avatar: the deployer's configured default if there is one,
  *  otherwise the designer's default look. Never an empty placeholder. */
 export function initialAvatarChoice(world: WorldConfig): StoredAvatarChoice {
@@ -62,6 +100,14 @@ interface AvatarChooserProps {
   onStagedPreview?: (url: string | null) => void;
 }
 
+/** An avatar being looked at in the chooser's preview, not yet worn. */
+interface Pending {
+  choice: StoredAvatarChoice;
+  /** A blob: URL this chooser created (a previous upload's local copy).
+   *  Revoked if the pending look is dropped instead of worn. */
+  localUrl: string | null;
+}
+
 /**
  * The three ways to get an avatar, shared by the join screen and the
  * in-world avatar menu so both behave identically:
@@ -78,6 +124,21 @@ export function AvatarChooser({ world, value, onChange, rememberLocally, onStage
     value.kind === "upload" && allowUpload ? "upload" : value.kind === "preset" && presets.length ? "presets" : "design"
   );
   const [designerOpen, setDesignerOpen] = useState(false);
+  const [pending, setPendingState] = useState<Pending | null>(null);
+  const [applying, setApplying] = useState(false);
+  const [applyError, setApplyError] = useState<string | null>(null);
+  const pendingRef = useRef<Pending | null>(null);
+  const setPending = (next: Pending | null) => {
+    const previous = pendingRef.current;
+    if (previous?.localUrl && previous.localUrl !== next?.localUrl) URL.revokeObjectURL(previous.localUrl);
+    pendingRef.current = next;
+    setPendingState(next);
+    setApplyError(null);
+  };
+  // A look left un-worn when the menu closes is simply dropped.
+  useEffect(() => () => {
+    if (pendingRef.current?.localUrl) URL.revokeObjectURL(pendingRef.current.localUrl);
+  }, []);
 
   const tabs: { id: Tab; label: string }[] = [
     { id: "design", label: "Design" },
@@ -85,8 +146,48 @@ export function AvatarChooser({ world, value, onChange, rememberLocally, onStage
     ...(allowUpload ? [{ id: "upload" as const, label: "Upload VRM" }] : []),
   ];
 
-  const designerSpec = value.kind === "designer" ? value.spec : DEFAULT_AVATAR_SPEC;
-  const selectDesign = (choice: StoredAvatarChoice) => onChange({ choice, url: avatarUrlForChoice(choice), localUrl: null });
+  // In the world, whatever you wear is what everyone in the room sees,
+  // and an uploaded file you switch away from is gone until you pick it
+  // again. So there, clicking a look only previews it, and "Wear this"
+  // commits it. The join screen needs no such step — nothing is worn
+  // until "Enter world", and its big preview already follows the
+  // selection — so there it stays one click. The designer dialog has its
+  // own Save, which is already the confirmation.
+  const previewFirst = !onStagedPreview;
+  const shown = pending?.choice ?? value;
+
+  async function wear(choice: StoredAvatarChoice, localUrl: string | null, localBlob?: Blob) {
+    setApplyError(null);
+    if (choice.kind === "upload" && localBlob) {
+      // A previous upload may have expired from the deployment (30 days
+      // in KV); put it back before anyone else tries to load it.
+      setApplying(true);
+      const url = await ensureUploadedAvatarAvailable(world.id, choice.remoteUrl || undefined, localBlob);
+      setApplying(false);
+      if (!url) return setApplyError("Couldn't upload that file again. Check your connection and try once more.");
+      choice = { ...choice, remoteUrl: url };
+      if (sessionUpload?.worldId === world.id && sessionUpload.fileName === choice.fileName) sessionUpload.remoteUrl = url;
+      if (rememberLocally) void saveUploadedAvatarFile(world.id, localBlob, choice.fileName, url);
+    }
+    // The URL now belongs to whoever gets it; don't revoke it on cleanup.
+    if (pendingRef.current?.localUrl === localUrl) pendingRef.current = null;
+    setPending(null);
+    onChange({ choice, url: avatarUrlForChoice(choice), localUrl });
+  }
+
+  // Blob kept beside the pending look so "Wear this" can re-upload it.
+  const pendingBlob = useRef<Blob | undefined>(undefined);
+  function choose(choice: StoredAvatarChoice, local?: { blob: Blob }) {
+    if (!previewFirst) {
+      void wear(choice, local ? URL.createObjectURL(local.blob) : null, local?.blob);
+      return;
+    }
+    if (sameChoice(choice, value)) return setPending(null);
+    pendingBlob.current = local?.blob;
+    setPending({ choice, localUrl: local ? URL.createObjectURL(local.blob) : null });
+  }
+
+  const designerSpec = shown.kind === "designer" ? shown.spec : DEFAULT_AVATAR_SPEC;
 
   // The join screen renders its own full-height preview of the staged
   // avatar and passes onStagedPreview to drive it; the in-world menu has
@@ -94,10 +195,8 @@ export function AvatarChooser({ world, value, onChange, rememberLocally, onStage
   // currently wearing — a filename, and only for uploads. Opening your
   // own avatar panel and not being shown your own avatar is the gap this
   // closes, so the preview appears exactly where that other one doesn't.
-  const showCurrent = !onStagedPreview;
-  const currentUrl = avatarUrlForChoice(value);
-  const currentLabel =
-    value.kind === "upload" ? value.fileName : value.kind === "preset" ? "A preset from this deployment" : "Designed in the browser";
+  const showCurrent = previewFirst;
+  const shownUrl = pending ? (pending.localUrl ?? avatarUrlForChoice(pending.choice)) : avatarUrlForChoice(value);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 0 }}>
@@ -105,13 +204,31 @@ export function AvatarChooser({ world, value, onChange, rememberLocally, onStage
         <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
           {/* Keyed on the URL so switching avatars tears the old VRM down
               rather than swapping a prop under a live scene. */}
-          <AvatarPreview key={currentUrl} url={currentUrl} height="clamp(150px, 26svh, 230px)" />
+          <AvatarPreview key={shownUrl} url={shownUrl} height="clamp(150px, 26svh, 230px)" />
           <small style={{ opacity: 0.7, display: "flex", gap: 5, minWidth: 0 }}>
-            <span style={{ opacity: 0.7, flexShrink: 0 }}>Wearing now:</span>
-            <strong style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 600 }}>{currentLabel}</strong>
+            <span style={{ opacity: 0.7, flexShrink: 0 }}>{pending ? "Previewing:" : "Wearing now:"}</span>
+            <strong style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 600 }}>
+              {labelForChoice(shown, presets)}
+            </strong>
           </small>
+          {pending && (
+            <div style={{ display: "flex", gap: 6 }}>
+              <button
+                type="button"
+                disabled={applying}
+                style={{ ...primaryButtonStyle, flex: 1, padding: "8px 12px", fontSize: 13, opacity: applying ? 0.6 : 1 }}
+                onClick={() => void wear(pending.choice, pending.localUrl, pendingBlob.current)}
+              >
+                {applying ? "Uploading…" : "Wear this"}
+              </button>
+              <button type="button" disabled={applying} style={{ ...pillButtonStyle, padding: "8px 12px", fontSize: 13 }} onClick={() => setPending(null)}>
+                Keep current
+              </button>
+            </div>
+          )}
         </div>
       )}
+      {applyError && <small style={{ color: "#ff8a80" }}>{applyError}</small>}
 
       {tabs.length > 1 && (
         <div role="tablist" aria-label="Avatar source" style={{ display: "flex", gap: 4, padding: 3, borderRadius: 10, background: "rgba(255,255,255,0.05)" }}>
@@ -121,7 +238,12 @@ export function AvatarChooser({ world, value, onChange, rememberLocally, onStage
               type="button"
               role="tab"
               aria-selected={tab === t.id}
-              onClick={() => setTab(t.id)}
+              onClick={() => {
+                setTab(t.id);
+                // Picking a file shows its own preview; two at once is a
+                // third WebGL context for nothing.
+                if (t.id === "upload" && pending?.choice.kind !== "upload") setPending(null);
+              }}
               style={{
                 flex: 1,
                 border: 0,
@@ -147,14 +269,14 @@ export function AvatarChooser({ world, value, onChange, rememberLocally, onStage
         <div key="design" className="seiza-tabpanel" role="tabpanel" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
             {AVATAR_DESIGN_PRESETS.map((preset) => {
-              const active = value.kind === "designer" && JSON.stringify(value.spec) === JSON.stringify(preset.spec);
+              const active = shown.kind === "designer" && JSON.stringify(shown.spec) === JSON.stringify(preset.spec);
               return (
                 <button
                   key={preset.id}
                   type="button"
                   aria-pressed={active}
                   style={{ ...(active ? pillButtonActiveStyle : pillButtonStyle), padding: "7px 12px", fontSize: 12 }}
-                  onClick={() => selectDesign({ kind: "designer", spec: preset.spec })}
+                  onClick={() => choose({ kind: "designer", spec: preset.spec })}
                 >
                   {preset.label}
                 </button>
@@ -162,7 +284,7 @@ export function AvatarChooser({ world, value, onChange, rememberLocally, onStage
             })}
           </div>
           <button type="button" style={{ ...primaryButtonStyle, padding: "9px 14px", fontSize: 13 }} onClick={() => setDesignerOpen(true)}>
-            {value.kind === "designer" ? "Customize this look" : "Design an avatar"}
+            {shown.kind === "designer" ? "Customize this look" : "Design an avatar"}
           </button>
           <small style={{ opacity: 0.6 }}>Made in your browser. Nothing is uploaded, and it works with every gesture.</small>
           {designerOpen && (
@@ -171,7 +293,7 @@ export function AvatarChooser({ world, value, onChange, rememberLocally, onStage
               onCancel={() => setDesignerOpen(false)}
               onSave={(spec) => {
                 setDesignerOpen(false);
-                selectDesign({ kind: "designer", spec });
+                void wear({ kind: "designer", spec }, null);
               }}
             />
           )}
@@ -182,8 +304,8 @@ export function AvatarChooser({ world, value, onChange, rememberLocally, onStage
         <div key="presets" className="seiza-tabpanel" role="tabpanel" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <AvatarPicker
             presets={presets}
-            selectedUrl={value.kind === "preset" ? value.url : null}
-            onSelect={(url) => selectDesign({ kind: "preset", url })}
+            selectedUrl={shown.kind === "preset" ? shown.url : null}
+            onSelect={(url) => choose({ kind: "preset", url })}
           />
           <small style={{ opacity: 0.6 }}>Provided by this deployment.</small>
         </div>
@@ -193,9 +315,16 @@ export function AvatarChooser({ world, value, onChange, rememberLocally, onStage
         <UploadPanel
           worldId={world.id}
           current={value.kind === "upload" ? value : null}
+          previewing={pending?.choice.kind === "upload"}
           rememberLocally={rememberLocally}
           onStagedPreview={onStagedPreview}
-          onUploaded={onChange}
+          onUploaded={(selection) => {
+            setPending(null);
+            onChange(selection);
+          }}
+          onRestore={(previous) =>
+            choose({ kind: "upload", remoteUrl: previous.remoteUrl ?? "", fileName: previous.fileName }, { blob: previous.blob })
+          }
         />
       )}
     </div>
@@ -205,15 +334,21 @@ export function AvatarChooser({ world, value, onChange, rememberLocally, onStage
 function UploadPanel({
   worldId,
   current,
+  previewing,
   rememberLocally,
   onStagedPreview,
   onUploaded,
+  onRestore,
 }: {
   worldId: string;
   current: Extract<StoredAvatarChoice, { kind: "upload" }> | null;
+  /** The previous upload is the look being previewed above. */
+  previewing: boolean;
   rememberLocally: boolean;
   onStagedPreview?: (url: string | null) => void;
   onUploaded: (selection: AvatarSelection) => void;
+  /** Wear (or, in the world, preview) a file uploaded before. */
+  onRestore: (previous: PreviousUpload) => void;
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [stagedUrl, setStagedUrl] = useState<string | null>(null);
@@ -225,6 +360,17 @@ function UploadPanel({
   const [error, setError] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [previous, setPrevious] = useState<PreviousUpload | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void findPreviousUpload(worldId).then((found) => !cancelled && setPrevious(found));
+    return () => {
+      cancelled = true;
+    };
+  }, [worldId, current]);
+  // Only offered while you're wearing something else.
+  const offerPrevious = previous && !file && !(current && current.fileName === previous.fileName);
   const onStagedPreviewRef = useRef(onStagedPreview);
   onStagedPreviewRef.current = onStagedPreview;
 
@@ -296,7 +442,8 @@ function UploadPanel({
 
       setStatus("Uploading…");
       const url = await uploadAvatarFile(blob);
-      if (rememberLocally) await saveUploadedAvatarFile(worldId, blob, file.name);
+      sessionUpload = { worldId, blob, fileName: file.name, remoteUrl: url };
+      if (rememberLocally) await saveUploadedAvatarFile(worldId, blob, file.name, url);
       onUploaded({
         choice: { kind: "upload", remoteUrl: url, fileName: file.name },
         url,
@@ -318,6 +465,16 @@ function UploadPanel({
         <small style={{ opacity: 0.75 }}>
           Current: <strong>{current.fileName}</strong>
         </small>
+      )}
+      {offerPrevious && (
+        <button
+          type="button"
+          aria-pressed={previewing}
+          style={{ ...(previewing ? pillButtonActiveStyle : pillButtonStyle), padding: "8px 12px", fontSize: 12, justifyContent: "center", minWidth: 0 }}
+          onClick={() => onRestore(previous)}
+        >
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>Your file: {previous.fileName}</span>
+        </button>
       )}
       <div
         onDragOver={(e) => {

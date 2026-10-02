@@ -34,6 +34,9 @@ export interface StoredProfile {
 interface StoredUpload {
   blob: Blob;
   fileName: string;
+  /** Where the deployment's copy lives. Missing on files saved before this
+   *  was recorded; those are simply re-uploaded when worn again. */
+  remoteUrl?: string;
 }
 
 const DB_NAME = "seiza";
@@ -104,9 +107,9 @@ export async function saveProfile(worldId: string, profile: Omit<StoredProfile, 
   }
 }
 
-export async function saveUploadedAvatarFile(worldId: string, blob: Blob, fileName: string): Promise<void> {
+export async function saveUploadedAvatarFile(worldId: string, blob: Blob, fileName: string, remoteUrl?: string): Promise<void> {
   try {
-    await withStore("readwrite", (s) => s.put({ blob, fileName } satisfies StoredUpload, uploadKey(worldId)));
+    await withStore("readwrite", (s) => s.put({ blob, fileName, remoteUrl } satisfies StoredUpload, uploadKey(worldId)));
   } catch (error) {
     console.warn("Could not keep a local copy of your avatar file:", error);
   }
@@ -115,7 +118,8 @@ export async function saveUploadedAvatarFile(worldId: string, blob: Blob, fileNa
 export async function loadUploadedAvatarFile(worldId: string): Promise<StoredUpload | null> {
   try {
     const value = await withStore<StoredUpload | undefined>("readonly", (s) => s.get(uploadKey(worldId)));
-    return value && value.blob instanceof Blob ? value : null;
+    if (!value || !(value.blob instanceof Blob) || typeof value.fileName !== "string") return null;
+    return { blob: value.blob, fileName: value.fileName, remoteUrl: typeof value.remoteUrl === "string" ? value.remoteUrl : undefined };
   } catch {
     return null;
   }
@@ -142,20 +146,24 @@ export async function uploadAvatarFile(blob: Blob): Promise<string> {
  * Makes sure a remembered upload is still reachable by other players.
  * Returns the URL to join with, re-uploading the local copy if the
  * deployment's copy expired or was removed. Null if neither works.
+ * `localCopy` stands in for the IndexedDB copy when the caller already
+ * holds the file (an upload made this session without "remember me").
  */
-export async function ensureUploadedAvatarAvailable(worldId: string, remoteUrl: string): Promise<string | null> {
-  try {
-    const head = await fetch(remoteUrl, { method: "HEAD" });
-    // The content-type check matters: an unknown path can fall through to
-    // the single-page-app fallback and answer 200 with HTML.
-    if (head.ok && (head.headers.get("content-type") ?? "").includes("gltf")) return remoteUrl;
-  } catch {
-    // Offline or blocked — try the local copy below.
+export async function ensureUploadedAvatarAvailable(worldId: string, remoteUrl: string | undefined, localCopy?: Blob): Promise<string | null> {
+  if (remoteUrl) {
+    try {
+      const head = await fetch(remoteUrl, { method: "HEAD" });
+      // The content-type check matters: an unknown path can fall through to
+      // the single-page-app fallback and answer 200 with HTML.
+      if (head.ok && (head.headers.get("content-type") ?? "").includes("gltf")) return remoteUrl;
+    } catch {
+      // Offline or blocked — try the local copy below.
+    }
   }
-  const local = await loadUploadedAvatarFile(worldId);
-  if (!local) return null;
+  const blob = localCopy ?? (await loadUploadedAvatarFile(worldId))?.blob;
+  if (!blob) return null;
   try {
-    return await uploadAvatarFile(local.blob);
+    return await uploadAvatarFile(blob);
   } catch {
     return null;
   }
