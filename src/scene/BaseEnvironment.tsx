@@ -404,15 +404,9 @@ function HallShell({ m }: { m: WorldMaterials }) {
       <DoorLintel z={HALL.minZ} bottom={2.6} m={m} />
       <DoorLintel z={HALL.maxZ} bottom={2.64} m={m} />
 
-      {/* Open entrance into the bounded garden beyond the hall. */}
-      <mesh position={[0, 2.5, HALL.maxZ]} material={m.trim} castShadow>
-        <boxGeometry args={[DOOR_HALF_WIDTH * 2, 0.28, 0.35]} />
-      </mesh>
-      {[-1, 1].map((side) => (
-        <mesh key={side} position={[side * (DOOR_HALF_WIDTH - 0.16), 1.25, HALL.maxZ]} material={m.trim} castShadow>
-          <boxGeometry args={[0.28, 2.5, 0.35]} />
-        </mesh>
-      ))}
+      {/* Entrance into the bounded garden beyond the hall. The header
+          clears the leaves' tops so they can swing without cutting into it. */}
+      <DoorCasing z={HALL.maxZ} headerBottom={GARDEN_LEAF_HEIGHT + 0.02} headerTop={2.64} m={m} />
       <GardenDoor m={m} />
 
       {/* Open beam ceiling: keeps the hall bright while giving it a top. */}
@@ -424,6 +418,48 @@ function HallShell({ m }: { m: WorldMaterials }) {
       <mesh position={[0, WALL_HEIGHT - 0.52, (HALL.minZ + HALL.maxZ) / 2]} material={m.beam} castShadow>
         <boxGeometry args={[0.32, 0.32, HALL.maxZ - HALL.minZ]} />
       </mesh>
+    </group>
+  );
+}
+
+/** How far a door casing's posts reach in from the opening's edge, and
+ *  past it over the wall either side. */
+const CASING_INNER = 0.29;
+const CASING_OUTER = 0.06;
+/** Deeper than the wainscot (WALL_THICKNESS + 0.08) by a 4cm lip on each
+ *  face, so no cut wall or wainscot end shows past it. */
+const CASING_DEPTH = WALL_THICKNESS + 0.08 + 0.08;
+/** Inner face of a casing's posts: the clear half-width of the doorway. */
+const CASING_CLEAR_HALF = DOOR_HALF_WIDTH - CASING_INNER;
+
+/**
+ * Posts and header round a hall doorway.
+ *
+ * Each post runs from inside the opening to a little past its edge, over
+ * the wall's cut end, and is deeper than the wainscot, so it covers every
+ * raw end at the opening: the hall wall's, its wainscot's, and the
+ * corridor walls' (which are centred on the opening's edges, so half of
+ * each stands inside it). The old posts stopped a few centimetres short
+ * of the edge and were shallower than the wainscot, which left a slot of
+ * mismatched ends at each corner.
+ *
+ * The posts stop at the header's underside and the header spans their
+ * full outer width, so the two meet face to face instead of overlapping
+ * with coplanar sides, which flickered.
+ */
+function DoorCasing({ z, headerBottom, headerTop, m }: { z: number; headerBottom: number; headerTop: number; m: WorldMaterials }) {
+  const outer = DOOR_HALF_WIDTH + CASING_OUTER;
+  const postWidth = outer - CASING_CLEAR_HALF;
+  return (
+    <group position={[0, 0, z]}>
+      <mesh position={[0, (headerBottom + headerTop) / 2, 0]} material={m.trim} castShadow>
+        <boxGeometry args={[outer * 2, headerTop - headerBottom, CASING_DEPTH]} />
+      </mesh>
+      {[-1, 1].map((side) => (
+        <mesh key={side} position={[side * (CASING_CLEAR_HALF + postWidth / 2), headerBottom / 2, 0]} material={m.trim} castShadow>
+          <boxGeometry args={[postWidth, headerBottom, CASING_DEPTH]} />
+        </mesh>
+      ))}
     </group>
   );
 }
@@ -478,20 +514,26 @@ function GardenDoor({ m }: { m: WorldMaterials }) {
   };
   return (
     <group>
-      <group ref={leftRef} position={[-DOOR_HALF_WIDTH + 0.16, 0, HALL.maxZ - 0.18]}>
+      {/* Hinged at the casing's inner face, on the leaf's hall-side face,
+          so a swinging leaf turns away from the post instead of through it. */}
+      <group ref={leftRef} position={[-CASING_CLEAR_HALF, 0, GARDEN_HINGE_Z]}>
         <GardenDoorLeaf direction={1} m={m} onClick={toggle} />
       </group>
-      <group ref={rightRef} position={[DOOR_HALF_WIDTH - 0.16, 0, HALL.maxZ - 0.18]}>
+      <group ref={rightRef} position={[CASING_CLEAR_HALF, 0, GARDEN_HINGE_Z]}>
         <GardenDoorLeaf direction={-1} m={m} onClick={toggle} />
       </group>
     </group>
   );
 }
 
-const GARDEN_LEAF_WIDTH = 2.44;
+/** Each leaf meets the other at the centre with a hair of clearance. */
+const GARDEN_LEAF_WIDTH = CASING_CLEAR_HALF - 0.005;
 const GARDEN_LEAF_HEIGHT = 2.4;
 const GARDEN_LEAF_DEPTH = 0.08;
 const GARDEN_STILE = 0.14;
+/** The leaves' hall-side face, where they hinge. They hang just inside
+ *  the hall, clear of the wall's thickness, as before. */
+const GARDEN_HINGE_Z = HALL.maxZ - 0.22;
 /** Solid kick panel at the bottom; glass from here up. */
 const GARDEN_KICK = 0.5;
 
@@ -507,7 +549,8 @@ function GardenDoorLeaf({ direction, m, onClick }: { direction: 1 | -1; m: World
   const glassWidth = GARDEN_LEAF_WIDTH - GARDEN_STILE * 2;
   const glassHeight = GARDEN_LEAF_HEIGHT - GARDEN_STILE - GARDEN_KICK;
   return (
-    <group>
+    // Offset so the group's origin, the hinge, is on the leaf's face.
+    <group position={[0, 0, GARDEN_LEAF_DEPTH / 2]}>
       {/* Kick panel and top rail. */}
       <mesh position={[cx, GARDEN_KICK / 2, 0]} material={m.trim} castShadow onClick={onClick}>
         <boxGeometry args={[GARDEN_LEAF_WIDTH, GARDEN_KICK, GARDEN_LEAF_DEPTH]} />
@@ -928,18 +971,7 @@ function CorridorShell({ m }: { m: WorldMaterials }) {
       {/* Only the hall end: the classroom end is the shoji's own wall,
           framed by its sill and head rail (ClassroomDoor), and these
           posts and header stood in the leaves' path there. */}
-      {[CORRIDOR.maxZ].map((z) => (
-        <group key={z} position={[0, 0, z]}>
-          <mesh position={[0, 2.45, 0]} material={m.trim} castShadow>
-            <boxGeometry args={[DOOR_HALF_WIDTH * 2 - 0.2, 0.3, 0.5]} />
-          </mesh>
-          {[-1, 1].map((side) => (
-            <mesh key={side} position={[side * (DOOR_HALF_WIDTH - 0.18), 1.2, 0]} material={m.trim} castShadow>
-              <boxGeometry args={[0.22, 2.6, 0.5]} />
-            </mesh>
-          ))}
-        </group>
-      ))}
+      <DoorCasing z={CORRIDOR.maxZ} headerBottom={2.3} headerTop={2.6} m={m} />
       {/* Getabako — the shoe lockers you'd pass on the way in. */}
       {Array.from({ length: 12 }, (_, i) => {
         const row = Math.floor(i / 4);

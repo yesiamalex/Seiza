@@ -8,21 +8,58 @@ interface TouchControlsProps {
 
 const DOUBLE_TAP_MS = 320;
 
+/** Which way each pad cell moves you: [x, y], x = strafe, y = forward. */
+type Cell = "up" | "upleft" | "upright" | "left" | "right" | "down";
+const CELL_VECTORS: Record<Cell, [number, number]> = {
+  up: [0, 1],
+  upleft: [-1, 1],
+  upright: [1, 1],
+  left: [-1, 0],
+  right: [1, 0],
+  down: [0, -1],
+};
+const CELL_LABELS: Record<Cell, string> = {
+  up: "Forward",
+  upleft: "Forward left",
+  upright: "Forward right",
+  left: "Left",
+  right: "Right",
+  down: "Back",
+};
+/** Grid position of each cell, [column, row], top-left origin. The centre
+ *  and the two bottom corners are dead zones. */
+const CELL_AT: (Cell | null)[][] = [
+  ["upleft", "up", "upright"],
+  ["left", null, "right"],
+  [null, "down", null],
+];
+
 /**
- * On-screen movement for touch devices: a four-way D-pad, a jump button,
- * and Minecraft's double-tap-forward-to-sprint. Writes into a shared
- * mutable ref that PlayerRig reads each frame (see touchInput.ts for why
- * it isn't React state).
+ * On-screen movement for touch devices: a D-pad with forward diagonals, a
+ * jump button, and Minecraft's double-tap-forward-to-sprint. Writes into
+ * a shared mutable ref that PlayerRig reads each frame (see touchInput.ts
+ * for why it isn't React state).
+ *
+ * The pad is one touch surface, not separate buttons: whichever cell the
+ * thumb is over is the direction, so it can slide from forward into
+ * forward-left/right (or anywhere else) without lifting. With separate
+ * buttons each one captured its own touch, so changing direction meant
+ * lifting off, which also dropped a sprint. A sprint now lasts as long as
+ * the thumb stays on any forward cell.
  *
  * Rendered only on coarse-pointer devices — on desktop this would just
  * be clutter sitting on top of WASD.
  */
 export function TouchControls({ inputRef }: TouchControlsProps) {
   const lastForwardTapRef = useRef(0);
+  const padRef = useRef<HTMLDivElement>(null);
+  const padPointerRef = useRef<number | null>(null);
   // Purely for the pressed-state visuals; movement itself never goes
   // through React state.
-  const [pressed, setPressed] = useState<Record<string, boolean>>({});
+  const [activeCell, setActiveCell] = useState<Cell | null>(null);
+  const [jumpPressed, setJumpPressed] = useState(false);
   const [sprinting, setSprinting] = useState(false);
+  const activeCellRef = useRef<Cell | null>(null);
 
   // If the component unmounts mid-press (e.g. rotating into VR), the
   // input ref would otherwise stay stuck holding a direction forever.
@@ -35,97 +72,90 @@ export function TouchControls({ inputRef }: TouchControlsProps) {
     };
   }, [inputRef]);
 
-  function press(key: string, apply: () => void) {
-    setPressed((p) => ({ ...p, [key]: true }));
-    apply();
+  function cellAt(clientX: number, clientY: number): Cell | null {
+    const rect = padRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+    // Clamped, so a thumb that drifts off the pad's edge keeps going the
+    // way it was pointing instead of stopping dead.
+    const column = Math.min(2, Math.max(0, Math.floor(((clientX - rect.left) / rect.width) * 3)));
+    const row = Math.min(2, Math.max(0, Math.floor(((clientY - rect.top) / rect.height) * 3)));
+    return CELL_AT[row][column];
   }
 
-  function release(key: string, apply: () => void) {
-    setPressed((p) => ({ ...p, [key]: false }));
-    apply();
-  }
-
-  function handleForwardDown() {
-    const now = Date.now();
-    if (now - lastForwardTapRef.current < DOUBLE_TAP_MS) {
-      inputRef.current.running = true;
-      setSprinting(true);
+  function setCell(cell: Cell | null, freshPress: boolean) {
+    const input = inputRef.current;
+    const forward = cell !== null && CELL_VECTORS[cell][1] === 1;
+    if (freshPress && forward) {
+      const now = Date.now();
+      if (now - lastForwardTapRef.current < DOUBLE_TAP_MS) input.running = true;
+      lastForwardTapRef.current = now;
     }
-    lastForwardTapRef.current = now;
-    press("up", () => {
-      inputRef.current.y = 1;
-    });
+    if (!forward) input.running = false;
+    [input.x, input.y] = cell ? CELL_VECTORS[cell] : [0, 0];
+    if (activeCellRef.current !== cell) {
+      activeCellRef.current = cell;
+      setActiveCell(cell);
+    }
+    setSprinting(input.running);
   }
 
-  function handleForwardUp() {
-    release("up", () => {
-      inputRef.current.y = 0;
-      inputRef.current.running = false;
-      setSprinting(false);
-    });
+  function endPadPress() {
+    padPointerRef.current = null;
+    setCell(null, false);
   }
-
-  const padButton = (key: string, label: string, onDown: () => void, onUp: () => void, gridArea: string) => (
-    <button
-      key={key}
-      aria-label={label}
-      style={{ ...padButtonStyle, gridArea, ...(pressed[key] ? padButtonPressedStyle : null) }}
-      onPointerDown={(e) => {
-        e.preventDefault();
-        e.currentTarget.setPointerCapture(e.pointerId);
-        onDown();
-      }}
-      onPointerUp={(e) => {
-        e.preventDefault();
-        onUp();
-      }}
-      onPointerCancel={onUp}
-      onPointerLeave={() => pressed[key] && onUp()}
-      onContextMenu={(e) => e.preventDefault()}
-    >
-      <Chevron direction={key as ChevronDirection} />
-    </button>
-  );
 
   return (
     <div style={wrapperStyle}>
-      <div style={padGridStyle}>
-        {padButton("up", "Move forward (double-tap to run)", handleForwardDown, handleForwardUp, "up")}
-        {padButton(
-          "left",
-          "Move left",
-          () => press("left", () => (inputRef.current.x = -1)),
-          () => release("left", () => (inputRef.current.x = 0)),
-          "left"
-        )}
-        {padButton(
-          "right",
-          "Move right",
-          () => press("right", () => (inputRef.current.x = 1)),
-          () => release("right", () => (inputRef.current.x = 0)),
-          "right"
-        )}
-        {padButton(
-          "down",
-          "Move back",
-          () => press("down", () => (inputRef.current.y = -1)),
-          () => release("down", () => (inputRef.current.y = 0)),
-          "down"
-        )}
+      <div
+        ref={padRef}
+        role="group"
+        aria-label="Movement pad. Double-tap forward to run; slide to change direction."
+        style={padGridStyle}
+        onPointerDown={(e) => {
+          e.preventDefault();
+          // One thumb drives the pad; a second touch on it is ignored.
+          if (padPointerRef.current !== null) return;
+          padPointerRef.current = e.pointerId;
+          e.currentTarget.setPointerCapture(e.pointerId);
+          setCell(cellAt(e.clientX, e.clientY), true);
+        }}
+        onPointerMove={(e) => {
+          if (e.pointerId !== padPointerRef.current) return;
+          const cell = cellAt(e.clientX, e.clientY);
+          if (cell !== activeCellRef.current) setCell(cell, false);
+        }}
+        onPointerUp={(e) => e.pointerId === padPointerRef.current && endPadPress()}
+        onPointerCancel={(e) => e.pointerId === padPointerRef.current && endPadPress()}
+        onContextMenu={(e) => e.preventDefault()}
+      >
+        {(Object.keys(CELL_VECTORS) as Cell[]).map((cell) => (
+          <span
+            key={cell}
+            aria-hidden
+            title={CELL_LABELS[cell]}
+            style={{
+              ...padButtonStyle,
+              gridArea: cell,
+              ...(cell === "upleft" || cell === "upright" ? diagonalButtonStyle : null),
+              ...(activeCell === cell ? padButtonPressedStyle : null),
+            }}
+          >
+            <Chevron direction={cell} />
+          </span>
+        ))}
         {sprinting && <span style={sprintBadgeStyle}>RUN</span>}
       </div>
 
       <button
         aria-label="Jump"
-        style={{ ...jumpButtonStyle, ...(pressed.jump ? padButtonPressedStyle : null) }}
+        style={{ ...jumpButtonStyle, ...(jumpPressed ? padButtonPressedStyle : null) }}
         onPointerDown={(e) => {
           e.preventDefault();
-          press("jump", () => {
-            inputRef.current.jumpRequested = true;
-          });
+          setJumpPressed(true);
+          inputRef.current.jumpRequested = true;
         }}
-        onPointerUp={() => release("jump", () => {})}
-        onPointerCancel={() => release("jump", () => {})}
+        onPointerUp={() => setJumpPressed(false)}
+        onPointerCancel={() => setJumpPressed(false)}
         onContextMenu={(e) => e.preventDefault()}
       >
         JUMP
@@ -134,8 +164,8 @@ export function TouchControls({ inputRef }: TouchControlsProps) {
   );
 }
 
-type ChevronDirection = "up" | "down" | "left" | "right";
-const CHEVRON_ROTATION: Record<ChevronDirection, number> = { up: 0, right: 90, down: 180, left: 270 };
+type ChevronDirection = Cell;
+const CHEVRON_ROTATION: Record<ChevronDirection, number> = { up: 0, upright: 45, right: 90, down: 180, left: 270, upleft: 315 };
 
 /** SVG, not ▲/◀ characters: Android renders some of those as color emoji. */
 function Chevron({ direction }: { direction: ChevronDirection }) {
@@ -165,11 +195,16 @@ const wrapperStyle: React.CSSProperties = {
 const padGridStyle: React.CSSProperties = {
   position: "relative",
   display: "grid",
-  gridTemplateAreas: '". up ." "left . right" ". down ."',
+  gridTemplateAreas: '"upleft up upright" "left . right" ". down ."',
   gridTemplateColumns: `repeat(3, ${PAD_BUTTON_SIZE})`,
   gridTemplateRows: `repeat(3, ${PAD_BUTTON_SIZE})`,
   gap: PAD_GAP_PX,
   pointerEvents: "auto",
+  // The pad itself takes the touch now (see TouchControls), so it needs
+  // what the buttons used to have: no scroll/zoom gesture, no selection.
+  touchAction: "none",
+  userSelect: "none",
+  WebkitUserSelect: "none",
 };
 
 const padButtonStyle: React.CSSProperties = {
@@ -190,6 +225,14 @@ const padButtonStyle: React.CSSProperties = {
   touchAction: "none",
   userSelect: "none",
   WebkitUserSelect: "none",
+};
+
+/** Diagonals read as secondary: same size, so they're as easy to hit,
+ *  but quieter until used. */
+const diagonalButtonStyle: React.CSSProperties = {
+  background: "rgba(18,18,22,0.4)",
+  borderColor: "rgba(255,255,255,0.14)",
+  opacity: 0.85,
 };
 
 const padButtonPressedStyle: React.CSSProperties = {

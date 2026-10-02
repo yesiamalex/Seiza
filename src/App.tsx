@@ -31,6 +31,7 @@ import { HUD } from "./ui/HUD";
 import { useExclusiveMenu } from "./ui/exclusiveMenu";
 import { FpsCounter } from "./ui/FpsCounter";
 import { Toast } from "./ui/Toast";
+import { ControlsGuide, hasSeenControlsGuide } from "./ui/ControlsGuide";
 import { JoinScreen, type JoinedIdentity } from "./ui/JoinScreen";
 import { CameraViewToggle } from "./ui/CameraViewToggle";
 import { AvatarChooser } from "./ui/AvatarChooser";
@@ -121,6 +122,8 @@ export default function App() {
   const touchInputRef = useRef<TouchMoveInput>(createTouchMoveInput());
   const showTouchControls = useWantsTouchControls();
   const hasHoverPointer = useMediaQuery("(hover: hover)");
+  // Shown once on a first visit; "?" or the help button reopens it.
+  const [guideOpen, setGuideOpen] = useState(() => !hasSeenControlsGuide());
   const gestureSeqRef = useRef(0);
   const gestureTimerRef = useRef<number | null>(null);
 
@@ -387,6 +390,10 @@ export default function App() {
       }
       if (event.code === "KeyV") {
         setViewMode((mode) => (mode === "first" ? "third" : "first"));
+        return;
+      }
+      if (event.key === "?") {
+        setGuideOpen((open) => !open);
         return;
       }
       if (!joined) return;
@@ -910,6 +917,19 @@ export default function App() {
                 onSetRoomPassword={adminSetRoomPassword}
               />
             )}
+            <button
+              type="button"
+              aria-label="Controls guide"
+              title="Controls (?)"
+              aria-expanded={guideOpen}
+              // Opens only. While the guide is open, a press here already
+              // closes it as an outside press (on pointerdown), so a toggle
+              // would close it and then reopen it on the click.
+              onClick={() => setGuideOpen(true)}
+              style={{ ...pillButtonStyle, width: 36, height: 36, padding: 0, justifyContent: "center", flexShrink: 0, pointerEvents: "auto", fontWeight: 600 }}
+            >
+              ?
+            </button>
             <div style={{ position: "relative", pointerEvents: "auto", flexShrink: 0 }}>
             <button
               type="button"
@@ -1064,6 +1084,7 @@ export default function App() {
       {/* An XR error outranks a plain notice, but either one must be able
           to leave the screen — see Toast.tsx for why that's stated so
           firmly. Whichever is showing is the one `onDismiss` clears. */}
+      <ControlsGuide open={guideOpen} onClose={() => setGuideOpen(false)} touch={showTouchControls} />
       {(xrError || notice) && (
         <Toast
           message={xrError ?? notice ?? ""}
