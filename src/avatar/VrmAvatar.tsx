@@ -3,6 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { useVrmLoader } from "./useVrmLoader";
 import { stirPond } from "../scene/pondActivity";
+import { extendHairCollision } from "./springColliders";
 import type { VRM } from "@pixiv/three-vrm";
 
 export interface VrmAvatarProps {
@@ -69,6 +70,10 @@ export function VrmAvatar({ url, position = [0, 0, 0], rotationY = 0, onLoaded }
   const scratch = useRef(new THREE.Vector3());
 
   useEffect(() => {
+    // Once per model: lets long hair collide with the hips and thighs, not
+    // just the torso, so crouching and kneeling don't pass it through the
+    // legs (see springColliders.ts).
+    if (vrm) extendHairCollision(vrm);
     onLoadedRef.current?.(vrm);
     lastWorld.current = null;
   }, [vrm]);
