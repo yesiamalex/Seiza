@@ -5,7 +5,9 @@ import type { VRM } from "@pixiv/three-vrm";
 import { VrmAvatar } from "../avatar/VrmAvatar";
 import { AvatarAnimator, type AnimatorLayerWeights } from "../avatar/AvatarAnimator";
 import { TrackedBody } from "../xr/body/TrackedBody";
-import { findGesture, type GestureDefinition } from "../avatar/gestures";
+import { findGesture, SEIZA_GESTURE_NAME, type GestureDefinition } from "../avatar/gestures";
+import { enduranceExpression, enduranceTremble, useSeizaEndurance } from "../avatar/seizaEndurance";
+import { SeizaMood } from "../avatar/SeizaMood";
 import { ChatBubble } from "../chat/ChatBubble";
 import { CameraBadge } from "../media/CameraBadge";
 import { NameTag } from "./NameTag";
@@ -170,6 +172,7 @@ function RemotePlayerAvatar({
   // player who waves stays seated here too. Unknown names are ignored, so a
   // deployment that removed a clip just shows that player standing.
   const posture = findGesture(gestures, player.posture ?? null);
+  const seiza = useSeizaEndurance(player.posture === SEIZA_GESTURE_NAME);
 
   return (
     <group ref={groupRef}>
@@ -183,7 +186,11 @@ function RemotePlayerAvatar({
         speakingLevel={speakingLevel}
         headPitch={player.headPitch ?? 0}
         layerWeightsRef={layerWeightsRef}
+        expression={enduranceExpression(seiza.phase)}
+        doze={seiza.phase === "dozing"}
+        tremble={enduranceTremble(seiza.phase)}
       />
+      <SeizaMood phase={seiza.phase} />
       {/* Only does anything while this player is in a headset. */}
       <TrackedBody vrm={vrm} source={player.id} layerWeightsRef={layerWeightsRef} />
       <NameTag name={player.displayName} position={[0, 0, 0]} speaking={speakingLevel > SPEAKING_THRESHOLD} />

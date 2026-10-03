@@ -78,7 +78,7 @@ const TOUCH: { title: string; rows: Row[] }[] = [
       [["Pad"], "Walk; slide your thumb to turn"],
       [["Tap ↑↑"], "Double-tap forward to run"],
       [["Jump"], "Jump, or stand up"],
-      [["Crouch"], "Hold the pad's centre to crouch"],
+      [["Crouch"], "Hold the pad's centre; slide onto an arrow to sneak"],
       [["Seiza"], "Kneel, or stand up again"],
       [["Drag"], "Look around"],
       [["Pinch"], "Zoom"],
@@ -135,6 +135,14 @@ export function ControlsGuide({ open, onClose, touch }: ControlsGuideProps) {
   closeRef.current = close;
   useExclusiveMenu("controls-guide", open, () => closeRef.current());
   useDismissOnOutside(rootRef, open, () => closeRef.current());
+
+  // Focus "Got it" so Enter dismisses the guide, but without scrolling
+  // to it: autoFocus scrolled the panel to its bottom on open, hiding
+  // the first rows, which are the ones a newcomer most needs.
+  const gotItRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (open) gotItRef.current?.focus({ preventScroll: true });
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -211,7 +219,7 @@ export function ControlsGuide({ open, onClose, touch }: ControlsGuideProps) {
         </section>
       ))}
 
-      <button type="button" onClick={close} style={{ ...primaryButtonStyle, padding: "9px 14px", fontSize: 13 }} autoFocus>
+      <button type="button" onClick={close} style={{ ...primaryButtonStyle, padding: "9px 14px", fontSize: 13 }} ref={gotItRef}>
         Got it
       </button>
       <small style={{ opacity: 0.55, textAlign: "center", marginTop: -4 }}>

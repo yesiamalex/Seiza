@@ -180,7 +180,7 @@ export function TouchControls({
         ))}
         {onCrouchStart && (
           <button
-            aria-label={crouching ? "Stand up from crouch" : "Crouch"}
+            aria-label={crouching ? "Stand up from crouch" : "Crouch (hold, and slide onto a direction to sneak)"}
             aria-pressed={crouching}
             style={{ ...crouchButtonStyle, ...(crouching ? padButtonPressedStyle : null) }}
             onPointerDown={(e) => {
@@ -191,14 +191,27 @@ export function TouchControls({
               e.currentTarget.setPointerCapture(e.pointerId);
               onCrouchStart();
             }}
+            // Crouch-walking: with the thumb still down, sliding out onto
+            // a direction walks that way, still crouched, and sliding back
+            // to the middle stands still again. The capture taken above is
+            // what keeps these moves coming here instead of to the pad.
+            onPointerMove={(e) => {
+              if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+              const cell = cellAt(e.clientX, e.clientY);
+              if (cell !== activeCellRef.current) setCell(cell, false);
+            }}
             onPointerUp={(e) => {
               e.stopPropagation();
+              setCell(null, false);
               onCrouchEnd?.();
             }}
-            onPointerCancel={() => onCrouchEnd?.()}
+            onPointerCancel={() => {
+              setCell(null, false);
+              onCrouchEnd?.();
+            }}
             onContextMenu={(e) => e.preventDefault()}
           >
-            <CrouchIcon size={20} />
+            <CrouchIcon size={26} />
           </button>
         )}
         {sprinting && <span style={sprintBadgeStyle}>RUN</span>}
@@ -218,7 +231,7 @@ export function TouchControls({
             }}
             onContextMenu={(e) => e.preventDefault()}
           >
-            <SeizaIcon size={22} />
+            <SeizaIcon size={30} />
           </button>
         )}
         <button
@@ -233,7 +246,7 @@ export function TouchControls({
           onPointerCancel={() => setJumpPressed(false)}
           onContextMenu={(e) => e.preventDefault()}
         >
-          <JumpIcon size={26} />
+          <JumpIcon size={34} />
         </button>
       </div>
     </div>

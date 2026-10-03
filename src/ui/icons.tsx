@@ -164,28 +164,36 @@ export function WaveIcon(props: IconProps) {
   );
 }
 
+/*
+ * The posture icons (jump, crouch, seiza) are drawn solid rather than in
+ * the 1.8 stroke the rest of the set uses. They sit alone on round touch
+ * buttons at about 22px, where a hairline stick figure with a dotted
+ * ground read as a scribble; a filled head and thick rounded limbs survive
+ * that size. Each stands on a soft shadow instead of a ground line, which
+ * also says "in the air" for jump without any extra marks.
+ */
+const POSE = { stroke: "currentColor", strokeWidth: 2.7, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, fill: "none" };
+
+/** Arms up, knees tucked, lifted clear of its shadow. */
 export function JumpIcon(props: IconProps) {
   return (
     <Svg {...props}>
-      <circle cx="12" cy="4.5" r="2" />
-      <path d="M9 21l1.5-6L9 12l1-4 2 2 2-2 1 4-1.5 3L15 21" />
-      <path d="M3 21h18" strokeDasharray="1 3" />
+      <circle cx="12" cy="4.4" r="2.6" fill="currentColor" stroke="none" />
+      <path {...POSE} d="M12 8.6v4.6M12 9.4 8 6.2M12 9.4l4-3.2M12 13.2l-3 2.6 1.6 2.6M12 13.2l3 2.6-1.6 2.6" />
+      <ellipse cx="12" cy="22.2" rx="4.2" ry="1" fill="currentColor" stroke="none" opacity="0.45" />
     </Svg>
   );
 }
 
-/** A figure bent low, knees in front — the crouch stance, next to
- *  JumpIcon's extended one. */
+/** Bent low over the knees, arms hanging forward: the crouch stance. */
 export function CrouchIcon(props: IconProps) {
   return (
     <Svg {...props}>
-      <circle cx="9" cy="7" r="2.2" />
-      {/* Back curled forward over the knees. */}
-      <path d="M8.4 9.3c-1.4 1.6-1.8 3.3-1.4 4.8" />
-      {/* Thigh forward, shin down to the foot. */}
-      <path d="M7.2 14.1h5.4l1 5.3" />
-      <path d="M7.2 14.1 6 19.4" />
-      <path d="M3.5 20.4h17" strokeDasharray="1 3" />
+      <circle cx="14.6" cy="5.4" r="2.6" fill="currentColor" stroke="none" />
+      {/* Back leaning forward from the hips, thigh level, shin down, and
+          one arm hanging ahead of the knee: the classic side-on crouch. */}
+      <path {...POSE} d="M13.4 8.6 8.4 13.4M8.4 13.4l6.6.8-.4 6M8.4 13.4l1 6.6M12.4 9.6l3.2 3.8" />
+      <ellipse cx="12" cy="22.2" rx="5" ry="1" fill="currentColor" stroke="none" opacity="0.45" />
     </Svg>
   );
 }
@@ -273,21 +281,19 @@ export function LockIcon(props: IconProps) {
 }
 
 /**
- * A figure kneeling in seiza, side on — the same pose as the app's own
- * mark, reduced to strokes. Distinct from ChairIcon, which is furniture:
- * this is the posture.
+ * A figure kneeling in seiza, side on: the app's own mark (public/
+ * favicon.svg), the same head and body silhouette scaled into the icon
+ * grid and filled. Distinct from ChairIcon, which is furniture: this is
+ * the posture.
  */
 export function SeizaIcon(props: IconProps) {
   return (
     <Svg {...props}>
-      <circle cx="10.5" cy="5" r="2.2" />
-      {/* Back, upright the way the pose requires. */}
-      <path d="M10 7.4c-.9 2.2-1.3 4.3-1.2 6.4" />
-      {/* Thigh forward to the knee, then the shin folded back under. */}
-      <path d="M8.8 13.8h6.4" />
-      <path d="M15.2 13.8c1 0 1.2 1.3.2 1.6H7.6" />
-      {/* Ground. */}
-      <path d="M4.5 17.4h15" strokeDasharray="1 3" />
+      <g transform="translate(-9.1 -5.7) scale(0.56)" fill="currentColor" stroke="none">
+        <circle cx="34.6" cy="18.4" r="6.9" />
+        <path d="M29.8 24.6C27.3 30.2 26.2 36.4 26.3 42.8C26.3 46.8 27.4 49 29.3 49.8L45.8 49.8C48.8 49.8 49.4 46.1 46.2 45C41.2 43.5 37.2 42.6 34.6 40.9C36.4 36.7 37 31.1 36.4 27C36 24.9 33.2 24 29.8 24.6Z" />
+      </g>
+      <ellipse cx="12" cy="22.4" rx="6.5" ry="1" fill="currentColor" stroke="none" opacity="0.45" />
     </Svg>
   );
 }

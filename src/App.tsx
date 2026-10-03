@@ -30,6 +30,16 @@ import { TrackedBody } from "./xr/body/TrackedBody";
 import { XrSelfView } from "./xr/body/XrSelfView";
 import { LOCAL_TRACKING_SOURCE } from "./xr/body/trackingStore";
 import { XrHud, type XrHudModel } from "./xr/hud/XrHud";
+import {
+  enduranceExpression,
+  enduranceTremble,
+  NUMB_AFTER,
+  NUMB_DURATION,
+  seizaSeconds,
+  useSeizaEndurance,
+} from "./avatar/seizaEndurance";
+import { SeizaMood } from "./avatar/SeizaMood";
+import { formatSeizaTime, SeizaTimer } from "./ui/SeizaTimer";
 import { MediaControls } from "./media/MediaControls";
 import { CameraBadge } from "./media/CameraBadge";
 import { ScreenZoomOverlay } from "./media/ScreenZoomOverlay";
@@ -547,6 +557,49 @@ export default function App() {
   // --- boards, notes and screens --------------------------------------------
   const [editingText, setEditingText] = useState<WorldObject | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  // ---- seiza endurance (see avatar/seizaEndurance.ts) -------------------
+  const seiza = useSeizaEndurance(posture?.name === SEIZA_GESTURE_NAME);
+  const [seizaBest, setSeizaBest] = useState(() => {
+    try {
+      return Number(localStorage.getItem("seiza-best-seconds")) || 0;
+    } catch {
+      return 0;
+    }
+  });
+  const [numbLegs, setNumbLegs] = useState(false);
+  const seizaStartRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (seiza.startedAt != null) {
+      seizaStartRef.current = seiza.startedAt;
+      return;
+    }
+    const start = seizaStartRef.current;
+    if (start == null) return;
+    seizaStartRef.current = null;
+    // Just stood up: score it, and make the legs pay for a long sit.
+    const seconds = seizaSeconds(start);
+    const record = seconds > seizaBest;
+    if (record) {
+      setSeizaBest(seconds);
+      try {
+        localStorage.setItem("seiza-best-seconds", String(Math.floor(seconds)));
+      } catch {
+        // Not remembered in a private window; the record still shows now.
+      }
+    }
+    const time = formatSeizaTime(seconds);
+    if (seconds >= NUMB_AFTER) {
+      setNumbLegs(true);
+      window.setTimeout(() => setNumbLegs(false), NUMB_DURATION * 1000);
+      setNotice(`${time} in seiza, and your legs have fallen asleep. しびれた… ${record ? "New personal best." : ""}`.trim());
+    } else if (record && seconds >= 60) {
+      setNotice(`${time} in seiza. New personal best.`);
+    }
+    // seizaBest is read for the comparison only; re-running on it would
+    // score the same sit twice.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seiza.startedAt]);
   // When this deployment has an admin key configured, it supersedes the
   // editor password for gating Edit Mode entirely (see ADMIN.md) — a
   // deployment either uses the plain shared editor password (the
@@ -927,7 +980,8 @@ export default function App() {
             rotationRef={rotationRef}
             lookYawRef={lookYawRef}
             lookPitchRef={lookPitchRef}
-            crouching={crouching}
+            // Numb legs after a long seiza walk like a crouch: slow and low.
+            crouching={crouching || numbLegs}
             editMode={editMode}
             viewMode={viewMode}
             moveTargetRef={moveTargetRef}
@@ -954,7 +1008,11 @@ export default function App() {
               posture={posture}
               speakingLevel={media.localSpeakingLevel}
               layerWeightsRef={localLayerWeightsRef}
+              expression={enduranceExpression(seiza.phase)}
+              doze={seiza.phase === "dozing"}
+              tremble={numbLegs ? 0.6 : enduranceTremble(seiza.phase)}
             />
+            <SeizaMood phase={seiza.phase} />
             {/* VR only, both: your own hands and body following yours, and
                 the head hidden from the headset's camera. */}
             <TrackedBody vrm={localVrm} source={LOCAL_TRACKING_SOURCE} layerWeightsRef={localLayerWeightsRef} />
@@ -1216,6 +1274,7 @@ export default function App() {
           to leave the screen — see Toast.tsx for why that's stated so
           firmly. Whichever is showing is the one `onDismiss` clears. */}
       <ControlsGuide open={guideOpen} onClose={() => setGuideOpen(false)} touch={showTouchControls} />
+      {seiza.startedAt != null && <SeizaTimer startedAt={seiza.startedAt} best={seizaBest} />}
       {(xrError || notice) && (
         <Toast
           message={xrError ?? notice ?? ""}

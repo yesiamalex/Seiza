@@ -29,7 +29,8 @@ short version.
 - **Write on the notice boards**, hang pictures, and put up signs. Everyone
   can, not just whoever set the room up.
 - **Wave, bow, clap, raise your hand, kneel, crouch.** Your avatar's face
-  changes to match.
+  changes to match. Kneel in seiza long enough and it nods off, then its
+  legs fall asleep.
 - **Chat by text** if you would rather not talk.
 - **Rearrange the place** in Edit Mode, down to swapping the whole
   environment for your own 3D model. What you place stays for the next

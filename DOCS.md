@@ -179,6 +179,15 @@ none of it has been tested with a large group at once. See "Status".
   are postures: they stay until you press the key again, click Stand up, or
   simply move. Postures are tracked separately from gestures, so a seated or
   kneeling player who waves stays put on everyone else's screen.
+- **Seiza endurance** — kneeling in seiza is timed, like the real thing. A
+  readout shows how long you have lasted; after 2 minutes your avatar nods
+  off with floating Zs, after 4 its legs fall asleep (trembling, sweat,
+  pins-and-needles sparks), and after 6 it fumes. Stand up after the legs
+  have gone and you walk slowly for a few seconds; your personal best is
+  remembered in the browser. Everyone sees the phases on your avatar, timed
+  by their own client from when you knelt, so it adds nothing to the network
+  protocol. `?seizaSpeed=30` in the URL runs the clock 30x for demos
+  (`src/avatar/seizaEndurance.ts`).
 - **Furniture you can't walk through** — benches, desks, the reception
   counter, lockers, posts and planters all push you around them, and the
   tatami platform is a real step up. The third-person camera stays inside the
@@ -508,7 +517,7 @@ and doesn't provide.
 |---|---|---|
 | Move | WASD or arrow keys | D-pad |
 | Run | Hold Shift | Double-tap forward and hold |
-| Crouch | Hold `Z` | Hold the button in the D-pad's centre |
+| Crouch | Hold `Z` | Hold the button in the D-pad's centre, sliding onto an arrow to move |
 | Jump | Space | Jump button |
 | Look | Drag with any mouse button | Drag with one finger |
 | Orbit around yourself | Drag in third person | Drag in third person |

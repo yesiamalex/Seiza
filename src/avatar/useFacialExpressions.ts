@@ -68,6 +68,8 @@ interface FaceState {
   blinkElapsed: number;
   blinking: boolean;
   mouthOpen: number;
+  /** How shut the eyes are held, 0..1, for a sleeping face. */
+  sleep: number;
 }
 
 /**
@@ -93,6 +95,7 @@ export function useFacialExpressions(
     blinkElapsed: 0,
     blinking: false,
     mouthOpen: 0,
+    sleep: 0,
   });
 
   // Negative priority, for the same reason AvatarAnimator's pose pass
@@ -124,7 +127,13 @@ export function useFacialExpressions(
     // Triangle wave: shut by the midpoint, open again by the end.
     const blinkPhase = state.blinking ? state.blinkElapsed / BLINK_DURATION : 0;
     const blinkWeight = state.blinking ? 1 - Math.abs(blinkPhase * 2 - 1) : 0;
-    if (manager.getExpression("blink")) manager.setValue("blink", blinkWeight);
+    // "sleep" is not a preset of its own: it holds the eyes shut, eased
+    // so they droop rather than snap, and wears "relaxed" underneath. The
+    // blink preset is the one every VRM and designer avatar shares.
+    const sleeping = expression === "sleep";
+    state.sleep += ((sleeping ? 1 : 0) - state.sleep) * (1 - Math.exp(-3 * delta));
+    if (state.sleep < 0.002) state.sleep = 0;
+    if (manager.getExpression("blink")) manager.setValue("blink", Math.max(blinkWeight, state.sleep));
 
     // --- expression ----------------------------------------------------
     // "neutral" is the absence of the others rather than a preset to
@@ -135,7 +144,7 @@ export function useFacialExpressions(
     // lurch of a jump far better than the alternatives do.
     const airborne = airborneRef?.current ?? 0;
     const wanted =
-      airborne > 0.35 ? "surprised" : expression && expression !== "neutral" ? expression : null;
+      airborne > 0.35 ? "surprised" : sleeping ? "relaxed" : expression && expression !== "neutral" ? expression : null;
     const smoothing = 1 - Math.exp(-EXPRESSION_RATE * delta);
 
     for (const name of FACE_EXPRESSIONS) {

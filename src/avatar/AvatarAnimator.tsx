@@ -271,6 +271,11 @@ export interface AvatarAnimatorProps {
    *  currently own, so something layered on top — body tracking, in
    *  src/xr/body — can step aside for a gesture instead of fighting it. */
   layerWeightsRef?: MutableRefObject<AnimatorLayerWeights>;
+  /** Seiza endurance (seizaEndurance.ts): a slow nodding head while
+   *  dozing, and a shake through the upper body, 0 to 1, as the legs give
+   *  out. Layered over the pose like headPitch, so the posture holds. */
+  doze?: boolean;
+  tremble?: number;
 }
 
 /** See AvatarAnimatorProps.layerWeightsRef. Both 0 to 1. */
@@ -319,7 +324,14 @@ export function AvatarAnimator({
   speakingLevel = 0,
   headPitch = 0,
   layerWeightsRef,
+  doze = false,
+  tremble = 0,
 }: AvatarAnimatorProps) {
+  const dozeRef = useRef(doze);
+  dozeRef.current = doze;
+  const trembleRef = useRef(tremble);
+  trembleRef.current = tremble;
+  const moodRef = useRef({ doze: 0, tremble: 0, time: 0 });
   // A played gesture's face outranks a held posture's, so waving while
   // seated shows the wave. An explicit `expression` prop outranks both.
   /** How airborne this avatar currently is, 0..1 (see the jump weight). */
@@ -853,6 +865,41 @@ export function AvatarAnimator({
       // pitch (looking up) is a negative rotation about X here.
       if (neck) neck.rotation.x -= state.headPitch * NECK_PITCH_SHARE;
       if (head) head.rotation.x -= state.headPitch * (1 - NECK_PITCH_SHARE);
+    }
+
+    // --- seiza endurance -------------------------------------------------
+    // Both ease in and out, so falling asleep is a slow droop and waking
+    // is not a snap. The nod is the familiar one: the head sinks forward,
+    // then jerks partway back up.
+    const mood = moodRef.current;
+    mood.time += delta;
+    mood.doze = approach(mood.doze, dozeRef.current ? 1 : 0, 1.5, delta);
+    mood.tremble = approach(mood.tremble, trembleRef.current, 3, delta);
+    if (mood.doze > 0.01 || mood.tremble > 0.01) {
+      const neck = vrm.humanoid.getNormalizedBoneNode("neck");
+      const head = vrm.humanoid.getNormalizedBoneNode("head");
+      const spine = vrm.humanoid.getNormalizedBoneNode("spine");
+      const chest = vrm.humanoid.getNormalizedBoneNode("chest");
+      if (mood.doze > 0.01) {
+        const cycle = (mood.time % 3.2) / 3.2;
+        const sink = cycle < 0.7 ? cycle / 0.7 : 1 - (cycle - 0.7) / 0.3 * 0.6;
+        const droop = (0.22 + 0.16 * sink) * mood.doze;
+        // Positive x bows a VRM's head forward, the opposite of headPitch.
+        if (neck) neck.rotation.x += droop * 0.4;
+        if (head) head.rotation.x += droop * 0.6;
+      }
+      if (mood.tremble > 0.01) {
+        // Two incommensurate frequencies per axis read as a shiver rather
+        // than a wobble.
+        const a = mood.tremble * 0.035;
+        const w = mood.time;
+        if (spine) spine.rotation.z += a * Math.sin(w * 47) * 0.6;
+        if (chest) chest.rotation.x += a * Math.sin(w * 53 + 1.3) * 0.5;
+        if (head) {
+          head.rotation.z += a * Math.sin(w * 61 + 0.7);
+          head.rotation.y += a * Math.sin(w * 37 + 2.1) * 0.8;
+        }
+      }
     }
   }, -1);
 

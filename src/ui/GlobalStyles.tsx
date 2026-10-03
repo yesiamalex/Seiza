@@ -24,6 +24,30 @@ const CSS = `
     --seiza-accent: #e8c37a;
   }
 
+  /* Scrollbars, everywhere at once: the guide, chat, roster, gesture and
+     edit panels all scroll, and the browser's default bar was the one
+     unstyled thing left in each. A thin translucent thumb on a clear
+     track, like the panels' own borders, brightening toward the accent
+     while held. Firefox reads the two standard properties; Chromium and
+     Safari read the -webkit- rules. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+  }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 999px;
+    /* The clear border insets the thumb, so it floats inside the panel's
+       rounded corners instead of running into them. */
+    border: 3px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover { background-color: rgba(255, 255, 255, 0.34); }
+  ::-webkit-scrollbar-thumb:active { background-color: rgba(232, 195, 122, 0.7); }
+  ::-webkit-scrollbar-corner { background: transparent; }
+
   button, select, a {
     transition:
       background-color var(--seiza-mid) var(--seiza-ease),

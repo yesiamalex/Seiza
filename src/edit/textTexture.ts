@@ -97,58 +97,92 @@ export function createTextTexture(text: string, surface: TextSurface, accent: st
   const lines = text.split("\n");
   const heading = lines[0]?.trim() ?? "";
   const body = lines.slice(1);
-
-  let y = spec.pad + spec.title * 0.85;
-  ctx.textBaseline = "alphabetic";
-  ctx.fillStyle = sign ? "#f4efe3" : "#1e2430";
-  if (sign) ctx.textAlign = "center";
+  const limit = spec.height - spec.pad;
   // Everything below measures from the left padding; on a centred sign
   // the anchor is the middle instead.
   const anchorX = sign ? spec.width / 2 : spec.pad;
-  if (heading) {
-    ctx.font = `600 ${spec.title}px ${FONT_STACK}`;
-    for (const line of wrap(ctx, heading, maxWidth).slice(0, 2)) {
-      ctx.fillText(line, anchorX, y);
-      y += spec.title * 1.12;
-    }
-    // The rule under a board's heading would cut a sign in half, and a
-    // sign is usually just the heading anyway.
-    if (!sign) {
-      ctx.strokeStyle = "rgba(30,36,48,0.25)";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(spec.pad, y - spec.title * 0.45);
-      ctx.lineTo(spec.width - spec.pad, y - spec.title * 0.45);
-      ctx.stroke();
-    }
-    y += spec.body * 0.5;
-  }
+  if (sign) ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
 
-  ctx.font = `400 ${spec.body}px ${FONT_STACK}`;
-  ctx.fillStyle = sign ? "rgba(244,239,227,0.82)" : "#333b49";
-  const limit = spec.height - spec.pad;
-  for (const raw of body) {
-    if (y > limit) break;
-    const trimmed = raw.trim();
-    if (!trimmed) {
-      y += spec.body * 0.6;
-      continue;
-    }
-    const bullet = /^[-*•]\s*/.test(trimmed);
-    const content = bullet ? trimmed.replace(/^[-*•]\s*/, "") : trimmed;
-    const indent = bullet ? spec.body * 1.1 : 0;
-    const wrapped = wrap(ctx, content, maxWidth - indent);
-    wrapped.forEach((line, index) => {
-      if (y > limit) return;
-      if (bullet && index === 0 && !sign) {
-        ctx.fillStyle = accent;
-        ctx.fillText("•", spec.pad, y);
-        ctx.fillStyle = "#333b49";
+  /**
+   * Lays the text out at a given type scale, drawing it only when asked.
+   * Returns where the last line ended and whether every line fitted.
+   *
+   * Layout is measured before anything is drawn because the sizes are
+   * fixed per surface, and a sign's large heading used to wrap to two
+   * lines and push every body line past the bottom margin, where the
+   * loop below silently dropped them. Now the type shrinks until the
+   * whole text fits, down to a floor that is still readable.
+   */
+  const layout = (scale: number, draw: boolean, offset = 0) => {
+    const title = spec.title * scale;
+    // The body gives up size more slowly than the heading: a long heading
+    // is what usually forces the shrink, and body text is already small.
+    const bodySize = spec.body * Math.min(1, scale + 0.3);
+    let y = spec.pad + title * 0.85 + offset;
+    let fits = true;
+    if (heading) {
+      ctx.font = `600 ${title}px ${FONT_STACK}`;
+      ctx.fillStyle = sign ? "#f4efe3" : "#1e2430";
+      const wrapped = wrap(ctx, heading, maxWidth);
+      if (wrapped.length > 2) fits = false;
+      for (const line of wrapped.slice(0, 2)) {
+        if (draw) ctx.fillText(line, anchorX, y);
+        y += title * 1.12;
       }
-      ctx.fillText(line, sign ? anchorX : spec.pad + indent, y);
-      y += spec.body * spec.lineGap;
-    });
-  }
+      // The rule under a board's heading would cut a sign in half.
+      if (!sign && draw) {
+        ctx.strokeStyle = "rgba(30,36,48,0.25)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(spec.pad, y - title * 0.45);
+        ctx.lineTo(spec.width - spec.pad, y - title * 0.45);
+        ctx.stroke();
+      }
+      y += bodySize * 0.5;
+    }
+
+    ctx.font = `400 ${bodySize}px ${FONT_STACK}`;
+    const bodyColor = sign ? "rgba(244,239,227,0.82)" : "#333b49";
+    ctx.fillStyle = bodyColor;
+    for (const raw of body) {
+      const trimmed = raw.trim();
+      if (!trimmed) {
+        y += bodySize * 0.6;
+        continue;
+      }
+      const bullet = /^[-*•]\s*/.test(trimmed);
+      const content = bullet ? trimmed.replace(/^[-*•]\s*/, "") : trimmed;
+      const indent = bullet ? bodySize * 1.1 : 0;
+      wrap(ctx, content, maxWidth - indent).forEach((line, index) => {
+        // A baseline below the margin means a line that doesn't fit.
+        if (y > limit) {
+          fits = false;
+          return;
+        }
+        if (draw) {
+          if (bullet && index === 0 && !sign) {
+            ctx.fillStyle = accent;
+            ctx.fillText("•", spec.pad, y);
+            ctx.fillStyle = bodyColor;
+          }
+          ctx.fillText(line, sign ? anchorX : spec.pad + indent, y);
+        }
+        y += bodySize * spec.lineGap;
+      });
+    }
+    // Where the last baseline sits, less the gap left after it.
+    return { fits, end: y - bodySize * spec.lineGap + bodySize * 0.3 };
+  };
+
+  const MIN_SCALE = 0.5;
+  let scale = 1;
+  while (scale > MIN_SCALE && !layout(scale, false).fits) scale -= 0.05;
+  scale = Math.max(scale, MIN_SCALE);
+  // A sign is read as a block, so its text sits in the middle of the
+  // panel; boards and notes keep theirs at the top, like paper.
+  const offset = sign ? Math.max(0, (limit - layout(scale, false).end) / 2) : 0;
+  layout(scale, true, offset);
 
   if (!heading && body.every((line) => !line.trim())) {
     ctx.font = `400 ${spec.body}px ${FONT_STACK}`;
