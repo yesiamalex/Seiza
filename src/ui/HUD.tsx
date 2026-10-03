@@ -4,7 +4,7 @@ import { closeAllMenus } from "./exclusiveMenu";
 import { panelStyle } from "./styles";
 import { ChevronRightIcon, CloseIcon, MenuIcon, SignalIcon, SignalOffIcon } from "./icons";
 import type { ConnectionState } from "../multiplayer/useRoomSocket";
-import { TOUCH_CONTROLS_CLEARANCE_CSS, TOUCH_CONTROLS_SIDE_CLEARANCE_CSS } from "../player/touchControlsMetrics";
+import { TOUCH_CONTROLS_CLEARANCE_CSS, TOUCH_CONTROLS_RIGHT_CLEARANCE_CSS, TOUCH_CONTROLS_SIDE_CLEARANCE_CSS } from "../player/touchControlsMetrics";
 import { useMediaQuery } from "./useMediaQuery";
 
 interface HUDProps {
@@ -106,7 +106,17 @@ export function HUD({ connectionState, worldName, topRight, topLeft, touchContro
   // horizontal (where a landscape screen has plenty) instead of vertical.
   // In drawer mode there is no bottom bar at all, so nothing is reserved.
   const besidePad = Boolean(touchControlsVisible) && !isCompact;
-  const sideClearance = besidePad ? TOUCH_CONTROLS_SIDE_CLEARANCE_CSS : "12px";
+  // The bar is fitted between the pad and the jump column, each side
+  // reserving only its own controls' width (less the root's 16px padding).
+  const bottomRowStyle: React.CSSProperties = {
+    alignSelf: "stretch",
+    display: "flex",
+    justifyContent: "center",
+    minWidth: 0,
+    boxSizing: "border-box",
+    paddingLeft: besidePad ? `calc(${TOUCH_CONTROLS_SIDE_CLEARANCE_CSS} - 16px)` : 0,
+    paddingRight: besidePad ? `calc(${TOUCH_CONTROLS_RIGHT_CLEARANCE_CSS} - 16px)` : 0,
+  };
   // Docked popovers on a portrait phone open above the D-pad.
   const popoverBottom = touchControlsVisible
     ? `calc(16px + env(safe-area-inset-bottom, 0px) + ${TOUCH_CONTROLS_CLEARANCE_CSS})`
@@ -283,6 +293,11 @@ export function HUD({ connectionState, worldName, topRight, topLeft, touchContro
         @media (max-width: 960px) {
           .seiza-bar-label { display: none; }
         }
+        /* A landscape phone's bar sits between the pad and the jump
+           button, where every pixel counts: icon buttons a little tighter. */
+        @media (max-height: 520px) {
+          .seiza-control-bar:not(.seiza-control-bar--drawer) .seiza-bar-btn { padding: 7px 8px !important; }
+        }
         /* Animates right/opacity rather than transform: a transform on
            the drawer would capture its fixed-position panels again. */
         .seiza-drawer {
@@ -317,7 +332,8 @@ export function HUD({ connectionState, worldName, topRight, topLeft, touchContro
       ) : bottomDrawer ? (
         // Landscape phone: the bar along the bottom, between the D-pad and
         // the jump button, collapsed to a single button until it's wanted.
-        <div style={{ display: "flex", alignItems: "center", gap: 8, maxWidth: `calc(100vw - 2 * ${sideClearance})` }}>
+        <div style={bottomRowStyle}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, maxWidth: "100%", minWidth: 0 }}>
           <div
             className="seiza-control-bar seiza-fade-in"
             role="group"
@@ -343,7 +359,9 @@ export function HUD({ connectionState, worldName, topRight, topLeft, touchContro
             {drawerOpen ? <CloseIcon size={18} /> : <MenuIcon size={20} />}
           </button>
         </div>
+        </div>
       ) : (
+        <div style={bottomRowStyle}>
         <div
           className="seiza-control-bar"
           style={{
@@ -355,9 +373,9 @@ export function HUD({ connectionState, worldName, topRight, topLeft, touchContro
             flexWrap: "nowrap",
             gap: 2,
             alignItems: "center",
-            // Beside the D-pad on touch screens, so it stays clear of the
-            // pad on the left and the jump button on the right.
-            maxWidth: `calc(100vw - 2 * ${sideClearance})`,
+            // Within the bottom row, which on touch screens already stops
+            // short of the pad on the left and the jump button on the right.
+            maxWidth: "100%",
             // Keeps the glass layer's z-index:-1 inside the bar without
             // making the bar a containing block for its fixed panels.
             isolation: "isolate",
@@ -370,6 +388,7 @@ export function HUD({ connectionState, worldName, topRight, topLeft, touchContro
         >
           <div className="seiza-dock-glass" aria-hidden />
           {children}
+        </div>
         </div>
       )}
     </div>

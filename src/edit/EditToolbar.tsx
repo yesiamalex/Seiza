@@ -4,7 +4,7 @@ import { optimizeVrmAvatar } from "../avatar/optimizeVrm";
 import { compressImage } from "./compressImage";
 import { editAuthHeaders } from "./editAuth";
 import { BAR_LABEL_CLASS, barButtonActiveStyle, barButtonStyle, inputStyle, panelStyle, pillButtonActiveStyle, pillButtonStyle, popoverStyle } from "../ui/styles";
-import { ChairIcon, EditIcon, ScreenShareIcon, SignIcon, TextBoardIcon } from "../ui/icons";
+import { ChairIcon, CloseIcon, EditIcon, MinimizeIcon, ScreenShareIcon, SignIcon, TextBoardIcon } from "../ui/icons";
 
 interface EditToolbarProps {
   enabled: boolean;
@@ -46,6 +46,12 @@ interface EditToolbarProps {
   onSetEnvironment: (url: string | null) => void;
   skyboxUrl: string | null;
   onSetSkybox: (url: string | null) => void;
+  /** False while the panel is minimised: still in edit mode, with the
+   *  world uncovered. */
+  panelOpen: boolean;
+  onMinimize: () => void;
+  /** Leaves edit mode. */
+  onExit: () => void;
 }
 
 /**
@@ -77,6 +83,9 @@ export function EditToolbar({
   onSetEnvironment,
   skyboxUrl,
   onSetSkybox,
+  panelOpen,
+  onMinimize,
+  onExit,
 }: EditToolbarProps) {
   const [modelUrl, setModelUrl] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
@@ -252,6 +261,23 @@ export function EditToolbar({
     setAssets((previous) => previous.filter((item) => item.id !== asset.id));
   }
 
+  const minimised = editMode && !panelOpen;
+  const buttonLabel = minimised ? "Show edit tools (still editing)" : editMode ? "Exit edit mode" : "Edit world";
+  /** Title, minimise and close, at the top of whichever panel is showing. */
+  const panelHeader = (
+    <div style={{ display: "flex", alignItems: "center", gap: 4, margin: "-2px -4px 2px 0" }}>
+      <strong style={{ display: "flex", alignItems: "center", gap: 6, flex: 1 }}>
+        <EditIcon size={15} /> Edit world
+      </strong>
+      <button type="button" className="seiza-icon-btn" style={headerIconButton} onClick={onMinimize} aria-label="Minimise, keep editing" title="Minimise, keep editing">
+        <MinimizeIcon size={16} />
+      </button>
+      <button type="button" className="seiza-icon-btn" style={headerIconButton} onClick={onExit} aria-label="Close edit mode" title="Close edit mode">
+        <CloseIcon size={15} />
+      </button>
+    </div>
+  );
+
   return (
     <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
       <button
@@ -260,13 +286,13 @@ export function EditToolbar({
         style={editMode ? barButtonActiveStyle : barButtonStyle}
         onClick={onToggleEditMode}
         aria-pressed={editMode}
-        aria-label={editMode ? "Exit edit mode" : "Edit world"}
-        title={editMode ? "Exit edit mode" : "Edit world"}
+        aria-label={buttonLabel}
+        title={buttonLabel}
       >
         <EditIcon />
-        <span className={BAR_LABEL_CLASS}>{editMode ? "Done" : "Edit"}</span>
+        <span className={BAR_LABEL_CLASS}>{minimised ? "Editing" : editMode ? "Done" : "Edit"}</span>
       </button>
-      {editMode && needsAuth && (
+      {editMode && panelOpen && needsAuth && (
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -275,6 +301,7 @@ export function EditToolbar({
           className="seiza-popover"
           style={{ ...panelStyle, ...popoverStyle, display: "flex", flexDirection: "column", gap: 8, width: 240 }}
         >
+          {panelHeader}
           <small style={{ opacity: 0.8 }}>This world requires {authLabel === "editor password" ? "an" : "the"} {authLabel}.</small>
           <input
             type="password"
@@ -290,8 +317,9 @@ export function EditToolbar({
           </button>
         </form>
       )}
-      {editMode && !needsAuth && (
+      {editMode && panelOpen && !needsAuth && (
         <div className="seiza-popover" style={{ ...panelStyle, ...popoverStyle, display: "flex", flexDirection: "column", gap: 8, width: "min(360px, calc(100vw - 32px))", maxHeight: "min(620px, calc(100svh - 120px))", overflowY: "auto", boxSizing: "border-box" }}>
+          {panelHeader}
           {!connected && (
             <small style={{ color: "#ffb347" }}>
               Not connected to the room server — placing/moving objects won't do anything until you reconnect.
@@ -576,3 +604,17 @@ export function EditToolbar({
     </div>
   );
 }
+
+const headerIconButton: React.CSSProperties = {
+  width: 28,
+  height: 28,
+  padding: 0,
+  display: "grid",
+  placeItems: "center",
+  borderRadius: 8,
+  border: "none",
+  background: "transparent",
+  color: "rgba(255,255,255,0.75)",
+  cursor: "pointer",
+  flexShrink: 0,
+};

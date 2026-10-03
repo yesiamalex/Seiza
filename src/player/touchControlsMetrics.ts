@@ -79,11 +79,13 @@ export const JUMP_COLUMN_HEIGHT_CSS =
 export const TOUCH_CONTROLS_CLEARANCE_CSS = `calc(${TOUCH_WRAPPER_BOTTOM_OFFSET_PX}px + ${PAD_EXTENT_CSS} + 16px)`;
 
 /**
- * Horizontal footprint of the D-pad from the left edge (and, because the
- * control bar is centred, the room it needs on *both* sides) when the bar
- * sits on the bottom row beside the pad instead of stacked above it —
- * TouchControls' 16px side padding, the three-column pad, and a gap.
- * The jump button on the right is narrower than the pad, so the pad's
- * side is the one that decides it.
+ * Horizontal footprint of each side's controls, from its screen edge, for
+ * when the control bar sits on the bottom row between them instead of
+ * stacked above: TouchControls' 16px side padding, the controls, and a
+ * gap. The two differ (the pad is much wider than the jump column), and
+ * the bar is fitted between them rather than reserving the pad's width
+ * on both sides, which on a small landscape phone left the bar too little
+ * room and pushed its last button off the end.
  */
 export const TOUCH_CONTROLS_SIDE_CLEARANCE_CSS = `calc(16px + ${PAD_EXTENT_CSS} + 12px)`;
+export const TOUCH_CONTROLS_RIGHT_CLEARANCE_CSS = `calc(16px + ${JUMP_BUTTON_SIZE} + 12px)`;

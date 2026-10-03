@@ -132,11 +132,12 @@ export default function App() {
   // One panel open at a time across the whole HUD (see exclusiveMenu.ts).
   useExclusiveMenu("chat", chatOpen, () => setChatOpen(false));
   useExclusiveMenu("avatar", avatarMenuOpen, () => setAvatarMenuOpen(false));
-  // Edit mode's panel counts too: opening another panel leaves edit mode.
-  useExclusiveMenu("edit", editMode, () => {
-    setEditMode(false);
-    setSelectedObjectId(null);
-  });
+  // Edit mode's panel counts too, but opening another panel only tucks it
+  // away: edit mode itself ends only by its own close button (or Done).
+  // Minimised, the world is all yours to walk and edit in, which on a
+  // small phone the panel otherwise covers.
+  const [editPanelOpen, setEditPanelOpen] = useState(true);
+  useExclusiveMenu("edit", editMode && editPanelOpen, () => setEditPanelOpen(false));
   const [avatarMessage, setAvatarMessage] = useState<string | null>(null);
   /** Id of the screen object currently blown up to fill the viewport. */
   const [zoomedScreenId, setZoomedScreenId] = useState<string | null>(null);
@@ -1253,8 +1254,21 @@ export default function App() {
           enabled={editingEnabled}
           connected={connected}
           editMode={editMode}
+          panelOpen={editPanelOpen}
           onToggleEditMode={() => {
+            // Minimised, the bar button brings the tools back rather than
+            // ending edit mode out from under the player.
+            if (editMode && !editPanelOpen) {
+              setEditPanelOpen(true);
+              return;
+            }
+            setEditPanelOpen(true);
             setEditMode((v) => !v);
+            setSelectedObjectId(null);
+          }}
+          onMinimize={() => setEditPanelOpen(false)}
+          onExit={() => {
+            setEditMode(false);
             setSelectedObjectId(null);
           }}
           onSpawn={handleSpawn}

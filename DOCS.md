@@ -123,7 +123,8 @@ none of it has been tested with a large group at once. See "Status".
   screens so nothing runs off-screen.
 - **In-world editing** — anyone in a room can toggle Edit Mode and place
   primitives or paste in a custom glTF model URL, with drag-to-move and
-  delete; placements persist per-room.
+  delete; placements persist per-room. The panel minimises (–) so a small
+  screen can still see the world while editing; its × leaves Edit Mode.
 - **Placeable chairs** — a chair is one of the default objects in Edit Mode,
   and it's the same chair the classroom uses, so anyone can sit on one the
   moment it's placed. Leave Edit Mode and click it, exactly like a built-in
