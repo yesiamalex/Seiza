@@ -21,6 +21,9 @@ interface HUDProps {
   /** Reserve room at the bottom for the on-screen D-pad/jump controls so
    *  the control bar doesn't sit underneath them on phones. */
   touchControlsVisible?: boolean;
+  /** In edit mode: a collapsed drawer's button turns green, so a
+   *  minimised edit session is never invisible. */
+  editing?: boolean;
   children?: ReactNode;
 }
 
@@ -65,13 +68,21 @@ const LAUNCHER_STYLE: React.CSSProperties = {
   padding: 0,
 };
 
+/** A collapsed drawer's button while edit mode is on: the Edit button's
+ *  own green, since that button is hidden in the drawer with it. */
+const LAUNCHER_EDITING_STYLE: React.CSSProperties = {
+  background: "rgba(36,78,50,0.92)",
+  border: "1px solid rgba(124,255,158,0.6)",
+  color: "#c8ffd6",
+};
+
 /** Gap between the open drawer and anything that steps aside for it
  *  (its own launcher tab, docked popovers). */
 const DRAWER_GAP_PX = 8;
 /** The drawer's distance from the right edge of the screen. */
 const DRAWER_EDGE_PX = 10;
 
-export function HUD({ connectionState, worldName, topRight, topLeft, touchControlsVisible, children }: HUDProps) {
+export function HUD({ connectionState, worldName, topRight, topLeft, touchControlsVisible, editing = false, children }: HUDProps) {
   const connected = connectionState === "connected";
 
   // Portrait phones get a drawer on the right edge. A landscape phone is
@@ -326,7 +337,7 @@ export function HUD({ connectionState, worldName, topRight, topLeft, touchContro
       </div>
 
       {isCompact ? (
-        <ControlDrawer open={drawerOpen} onOpenChange={setDrawerOpen} onWidthChange={setDrawerWidth} launcherRight={drawerClearance}>
+        <ControlDrawer open={drawerOpen} onOpenChange={setDrawerOpen} onWidthChange={setDrawerWidth} launcherRight={drawerClearance} editing={editing}>
           {children}
         </ControlDrawer>
       ) : bottomDrawer ? (
@@ -353,8 +364,8 @@ export function HUD({ connectionState, worldName, topRight, topLeft, touchContro
             type="button"
             onClick={() => setDrawerOpen(!drawerOpen)}
             aria-expanded={drawerOpen}
-            aria-label={drawerOpen ? "Hide controls" : "Show controls"}
-            style={{ ...LAUNCHER_STYLE, position: "relative" }}
+            aria-label={drawerOpen ? "Hide controls" : editing ? "Show controls (editing)" : "Show controls"}
+            style={{ ...LAUNCHER_STYLE, position: "relative", ...(editing && !drawerOpen ? LAUNCHER_EDITING_STYLE : null) }}
           >
             {drawerOpen ? <CloseIcon size={18} /> : <MenuIcon size={20} />}
           </button>
@@ -415,6 +426,7 @@ function ControlDrawer({
   onOpenChange,
   onWidthChange,
   launcherRight,
+  editing,
   children,
 }: {
   open: boolean;
@@ -422,6 +434,7 @@ function ControlDrawer({
   onWidthChange: (width: number) => void;
   /** Where the launcher sits while open: just left of the panel. */
   launcherRight: number;
+  editing: boolean;
   children?: ReactNode;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
@@ -472,7 +485,7 @@ function ControlDrawer({
         type="button"
         onClick={() => onOpenChange(!open)}
         aria-expanded={open}
-        aria-label={open ? "Close controls" : "Open controls"}
+        aria-label={open ? "Close controls" : editing ? "Open controls (editing)" : "Open controls"}
         className="seiza-drawer"
         data-open="true"
         style={{
@@ -496,6 +509,7 @@ function ControlDrawer({
           boxShadow: "0 10px 30px rgba(0,0,0,0.38)",
           cursor: "pointer",
           padding: 0,
+          ...(editing && !open ? LAUNCHER_EDITING_STYLE : null),
         }}
       >
         {open ? <ChevronRightIcon size={20} /> : <MenuIcon size={20} />}

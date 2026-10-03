@@ -1087,6 +1087,7 @@ export default function App() {
         connectionState={connectionState}
         worldName={world.displayName}
         touchControlsVisible={showTouchControls}
+        editing={editMode}
         topLeft={(
           <ParticipantRoster
             worldName={world.displayName}
