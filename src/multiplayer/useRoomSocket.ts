@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { DEFAULT_LIGHTS } from "./types";
 import type {
   ChatMessage,
   ClientMessage,
@@ -165,7 +166,7 @@ export function useRoomSocket(
   const [roomFull, setRoomFull] = useState<number | null>(null);
   const [environmentUrl, setEnvironmentUrl] = useState<string | null>(null);
   const [skyboxUrl, setSkyboxUrl] = useState<string | null>(null);
-  const [lights, setLights] = useState<Record<LightZone, boolean>>({ hall: true, classroom: true });
+  const [lights, setLights] = useState<Record<LightZone, boolean>>({ ...DEFAULT_LIGHTS });
   const onVoiceSignalRef = useRef(onVoiceSignal);
   onVoiceSignalRef.current = onVoiceSignal;
   const callbacksRef = useRef(callbacks);
@@ -341,7 +342,7 @@ export function useRoomSocket(
             setEnvironmentUrl(msg.environmentUrl);
             // Older room servers predate skyboxes and omit the field.
             setSkyboxUrl(msg.skyboxUrl ?? null);
-            setLights({ hall: true, classroom: true, ...(msg.lights ?? {}) });
+            setLights({ ...DEFAULT_LIGHTS, ...(msg.lights ?? {}) });
             break;
           }
           case "passwordRequired":

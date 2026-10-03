@@ -180,9 +180,10 @@ none of it has been tested with a large group at once. See "Status".
   simply move. Postures are tracked separately from gestures, so a seated or
   kneeling player who waves stays put on everyone else's screen.
 - **Seiza endurance** — kneeling in seiza is timed, like the real thing. A
-  readout shows how long you have lasted; after 2 minutes your avatar nods
-  off with floating Zs, after 4 its legs fall asleep (trembling, sweat,
-  pins-and-needles sparks), and after 6 it fumes. Stand up after the legs
+  readout shows how long you have lasted, what comes next, and a rotating
+  tip about the posture; after 1 minute your avatar nods off with floating
+  Zs, after 2 its legs fall asleep (trembling, sweat, pins-and-needles
+  sparks), and after 3 it fumes. Stand up after the legs
   have gone and you walk slowly for a few seconds; your personal best is
   remembered in the browser. Everyone sees the phases on your avatar, timed
   by their own client from when you knelt, so it adds nothing to the network
@@ -954,8 +955,10 @@ detail spent where people actually look.
   pixel from a hash, with no star texture, and are sized to at least one
   screen pixel so they hold still instead of shimmering as you move.
 - **Pond water** is one shader on one flat disc. Waves, sky reflection, sun
-  glints and click ripples are a few lines of math each. There's no second
-  camera rendering a reflection, which is the usual (expensive) way.
+  glints and click ripples are a few lines of math each, and so is the glow
+  of its pool lights (switched from the hall's garden-side wall), which
+  adds one point light rather than one per lamp. There's no second camera
+  rendering a reflection, which is the usual (expensive) way.
 - **Shadows are drawn once and kept.** The sun's shadow map is refreshed
   only on a slow timer or when something that casts shadows actually
   changes, rather than every frame. Avatars use a soft contact shadow

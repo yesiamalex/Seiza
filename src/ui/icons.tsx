@@ -174,13 +174,16 @@ export function WaveIcon(props: IconProps) {
  */
 const POSE = { stroke: "currentColor", strokeWidth: 2.7, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, fill: "none" };
 
-/** Arms up, knees tucked, lifted clear of its shadow. */
+/** Side on, mid-leap: front knee driving up, back leg trailing, arms
+ *  swinging, with lift lines between the feet and the shadow. A front-on
+ *  figure with every limb splayed read as a starfish, not a jump. */
 export function JumpIcon(props: IconProps) {
   return (
     <Svg {...props}>
-      <circle cx="12" cy="4.4" r="2.6" fill="currentColor" stroke="none" />
-      <path {...POSE} d="M12 8.6v4.6M12 9.4 8 6.2M12 9.4l4-3.2M12 13.2l-3 2.6 1.6 2.6M12 13.2l3 2.6-1.6 2.6" />
-      <ellipse cx="12" cy="22.2" rx="4.2" ry="1" fill="currentColor" stroke="none" opacity="0.45" />
+      <circle cx="14.6" cy="3.9" r="2.5" fill="currentColor" stroke="none" />
+      <path {...POSE} d="M13.8 7.1 11.6 12.4M13.3 8.4l4.1-2.2M13.3 8.4 9.6 6.4M11.6 12.4l3.6 1.6-1 3.6M11.6 12.4 9.4 15.6l-3 .6" />
+      <path {...POSE} strokeWidth={1.6} opacity={0.6} d="M8.4 19.4v1.6M11.6 19.8v1.4M14.8 19.4v1.6" />
+      <ellipse cx="11.6" cy="23" rx="4.4" ry="0.8" fill="currentColor" stroke="none" opacity="0.4" />
     </Svg>
   );
 }

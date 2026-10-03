@@ -31,6 +31,18 @@ import { setPondAmbience } from "../audio/sfx";
 const WATER_RADIUS = POND_WATER_RADIUS;
 const WATER_Y = POND_WATER_Y;
 const BASIN_RADIUS = POND_WATER_RADIUS + 0.04;
+
+/** Pool lights, evenly round the basin wall just inside the water's edge,
+ *  turned off the start of the ring so none sits under the stepping gap. */
+const POOL_LAMP_COUNT = 6;
+const POOL_LAMPS: [number, number][] = Array.from({ length: POOL_LAMP_COUNT }, (_, i) => {
+  const angle = (i / POOL_LAMP_COUNT) * Math.PI * 2 + 0.3;
+  const r = POND_WATER_RADIUS - 0.16;
+  return [Math.cos(angle) * r, Math.sin(angle) * r];
+});
+/** Set into the wall, below the surface, so the light comes up through it. */
+const POOL_LAMP_Y = POND_WATER_Y - 0.12;
+const POOL_LIGHT_INTENSITY = 2.2;
 const MAX_RIPPLES = 8;
 /** Same direction as the scene's sun (Scene.tsx), so glints line up with it. */
 const SUN_DIRECTION = new THREE.Vector3(-34, 4.6, 14).normalize();
@@ -58,6 +70,11 @@ const fragmentShader = /* glsl */ `
   uniform vec3 uSun;
   uniform vec3 uSunDir;
   uniform vec4 uRipples[${MAX_RIPPLES}];
+  // Pool lights: how far on (eased 0..1), their colour, and where each
+  // fixture sits in the water disc's own coordinates.
+  uniform float uGlow;
+  uniform vec3 uGlowColor;
+  uniform vec2 uLamps[${POOL_LAMP_COUNT}];
   varying vec3 vWorld;
   varying vec2 vLocal;
 
@@ -110,6 +127,21 @@ const fragmentShader = /* glsl */ `
     // visible at all. A flat 0.74 made the pond a coloured disc with fish
     // hidden somewhere underneath it.
     float alpha = mix(0.16, 0.92, fresnel) * (1.0 - smoothstep(0.96, 1.0, length(vLocal) / uRadius));
+
+    // Pool lights glow up through the water from the fixtures round the
+    // rim, brightest just over each lamp, with a soft fill across the
+    // pool. The glow also thickens the water's alpha a little: lit water
+    // reads as a body of light, not a hole showing the lit bed.
+    if (uGlow > 0.001) {
+      float near = 0.0;
+      for (int i = 0; i < ${POOL_LAMP_COUNT}; i++) {
+        vec2 d = vLocal - uLamps[i];
+        near += exp(-dot(d, d) * 3.0);
+      }
+      float glow = uGlow * (0.18 + 1.1 * min(near, 1.2));
+      color += uGlowColor * glow * (1.0 - fresnel * 0.6);
+      alpha = max(alpha, glow * 0.55);
+    }
     gl_FragColor = vec4(color, alpha);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
@@ -241,7 +273,10 @@ function basinGeometry() {
   return new THREE.LatheGeometry(points.reverse(), 48);
 }
 
-export function Pond() {
+export function Pond({ lit = true }: { lit?: boolean }) {
+  const litRef = useRef(lit);
+  litRef.current = lit;
+  const lampLight = useRef<THREE.PointLight>(null);
   const rippleIndex = useRef(0);
   const nextKoiRipple = useRef(4);
   const koiRefs = useRef<Array<THREE.Group | null>>([]);
@@ -266,6 +301,10 @@ export function Pond() {
           uSun: { value: new THREE.Color("#ffd9a8") },
           uSunDir: { value: SUN_DIRECTION.clone() },
           uRipples: { value: Array.from({ length: MAX_RIPPLES }, () => new THREE.Vector4(0, 0, -100, 0)) },
+          uGlow: { value: 0 },
+          uGlowColor: { value: new THREE.Color("#5fd8ff") },
+          // The disc is rotated flat, so its local y is world -z.
+          uLamps: { value: POOL_LAMPS.map(([x, z]) => new THREE.Vector2(x, -z)) },
         },
       }),
     []
@@ -278,6 +317,8 @@ export function Pond() {
       rocks: ["#6f6a63", "#837d73", "#5c5852"].map((color) => new THREE.MeshStandardMaterial({ color, roughness: 0.95, flatShading: true })),
       pad: new THREE.MeshStandardMaterial({ color: "#3f7a3a", roughness: 0.7, side: THREE.DoubleSide }),
       lotus: new THREE.MeshStandardMaterial({ color: "#f3a6c0", roughness: 0.6 }),
+      housing: new THREE.MeshStandardMaterial({ color: "#3a3d42", roughness: 0.5, metalness: 0.6 }),
+      lens: new THREE.MeshStandardMaterial({ color: "#cdf3ff", emissive: new THREE.Color("#5fd8ff"), emissiveIntensity: 0, roughness: 0.2 }),
       koi: KOI.map((k) => new THREE.MeshStandardMaterial({ color: k.color, roughness: 0.5 })),
       koiAccent: KOI.map((k) => new THREE.MeshStandardMaterial({ color: k.accent, roughness: 0.5 })),
     }),
@@ -306,6 +347,16 @@ export function Pond() {
   useFrame((frameState, delta) => {
     const step = Math.min(delta, 0.1);
     const time = (water.uniforms.uTime.value += step);
+
+    // Lights fade up and down over about half a second, like real ones
+    // warming, rather than snapping.
+    const glow = water.uniforms.uGlow;
+    glow.value += ((litRef.current ? 1 : 0) - glow.value) * (1 - Math.exp(-6 * step));
+    if (Math.abs(glow.value - (litRef.current ? 1 : 0)) < 0.002) glow.value = litRef.current ? 1 : 0;
+    materials.lens.emissiveIntensity = 2.4 * glow.value;
+    // Dimmed to zero, never hidden: changing the light count would
+    // recompile every material's shader.
+    if (lampLight.current) lampLight.current.intensity = POOL_LIGHT_INTENSITY * glow.value;
 
     // Continuous trickle, loudest at the water's edge. Driven every
     // frame because it is a gain on a running loop, not a new sound.
@@ -412,6 +463,21 @@ export function Pond() {
           </mesh>
         </group>
       ))}
+
+      {/* Pool lights: a lamp set into the basin wall at each fixture,
+          angled up and in, under one soft light over the middle that
+          catches the bed, the rocks and the koi. */}
+      {POOL_LAMPS.map(([x, z], i) => (
+        <group key={`lamp-${i}`} position={[x, POOL_LAMP_Y, z]} rotation={[0, Math.atan2(-x, -z), 0]} userData={{ navIgnore: true }}>
+          <mesh rotation={[Math.PI / 2 - 0.5, 0, 0]} material={materials.housing}>
+            <cylinderGeometry args={[0.075, 0.085, 0.05, 16]} />
+          </mesh>
+          <mesh position={[0, 0.01, 0.024]} rotation={[-0.5, 0, 0]} material={materials.lens}>
+            <circleGeometry args={[0.058, 16]} />
+          </mesh>
+        </group>
+      ))}
+      <pointLight ref={lampLight} position={[0, -0.05, 0]} color="#7fe3ff" intensity={0} distance={POND_RADIUS * 2.2} decay={2} />
 
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, WATER_Y, 0]} material={water} onClick={onWaterClick} userData={{ navIgnore: true }}>
         <circleGeometry args={[WATER_RADIUS, 64]} />

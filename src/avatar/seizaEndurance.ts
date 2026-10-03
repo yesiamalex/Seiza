@@ -6,9 +6,10 @@ import { useEffect, useState } from "react";
  * Real seiza is comfortable for a few minutes and then famously isn't:
  * the mind wanders, the feet go to sleep, and standing up becomes an
  * event. Seiza plays that for laughs. An avatar held in the seiza posture
- * nods off with floating Zs after two minutes, trembles with pins and
- * needles after four, and fumes after six; and standing up after the legs
- * have gone leaves them numb for a few steps.
+ * nods off with floating Zs after one minute, trembles with pins and
+ * needles after two, and fumes after three; and standing up after the legs
+ * have gone leaves them numb for a few steps. The phases come a minute
+ * apart: long enough to feel earned, short enough that a class sees them.
  *
  * Each client times every avatar from the moment it saw that avatar kneel,
  * so the phases need no network traffic of their own. Someone who joins a
@@ -16,7 +17,7 @@ import { useEffect, useState } from "react";
  * fair trade for adding nothing to the protocol.
  *
  * `?seizaSpeed=30` in the page URL runs the clock thirty times faster, for
- * demonstrating the whole sequence in under a quarter of a minute.
+ * demonstrating the whole sequence in about six seconds.
  */
 
 export type SeizaPhase = "composed" | "dozing" | "numb" | "agony";
@@ -32,13 +33,13 @@ interface PhaseInfo {
 
 export const SEIZA_PHASES: readonly PhaseInfo[] = [
   { id: "composed", at: 0, label: "Composed", jp: "落ち着いている" },
-  { id: "dozing", at: 120, label: "Dozing off", jp: "うとうと" },
-  { id: "numb", at: 240, label: "Legs falling asleep", jp: "足がしびれてきた" },
-  { id: "agony", at: 360, label: "Agony", jp: "げ、限界！" },
+  { id: "dozing", at: 60, label: "Dozing off", jp: "うとうと" },
+  { id: "numb", at: 120, label: "Legs falling asleep", jp: "足がしびれてきた" },
+  { id: "agony", at: 180, label: "Agony", jp: "げ、限界！" },
 ];
 
 /** Standing up after this many seconds leaves the legs numb. */
-export const NUMB_AFTER = 240;
+export const NUMB_AFTER = 120;
 /** How long numb legs last after standing, in seconds. */
 export const NUMB_DURATION = 5;
 

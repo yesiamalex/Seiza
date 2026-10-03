@@ -9,7 +9,7 @@ import { SeatPad } from "./SeatPad";
 import { Pond } from "./Pond";
 import { DateCalendar, WallClock } from "./ClassroomClock";
 import { LightSwitch } from "./LightSwitch";
-import type { LightZone } from "../multiplayer/types";
+import { DEFAULT_LIGHTS, type LightZone } from "../multiplayer/types";
 import { playDoorSlide, playDoorSwing } from "../audio/sfx";
 import {
   BENCHES,
@@ -66,7 +66,7 @@ interface BaseEnvironmentProps {
   onToggleLight?: (zone: LightZone, on: boolean) => void;
 }
 
-const ALL_LIGHTS_ON: Record<LightZone, boolean> = { hall: true, classroom: true };
+const ALL_LIGHTS_ON = DEFAULT_LIGHTS;
 
 /**
  * A lamp material for one zone: a clone of the shared lantern material, so
@@ -93,7 +93,7 @@ export const BaseEnvironment = memo(function BaseEnvironment({
       <Floors m={m} onFloorDoubleClick={onFloorDoubleClick} />
       <HallShell m={m} />
       <HallFurniture m={m} lit={lights.hall} onToggleLight={onToggleLight} />
-      <OutdoorGarden m={m} />
+      <OutdoorGarden m={m} lit={lights.pond} onToggleLight={onToggleLight} />
       <CorridorShell m={m} />
       <ClassroomShell m={m} lit={lights.classroom} onToggleLight={onToggleLight} />
       <ClassroomFurniture m={m} />
@@ -832,11 +832,25 @@ function ClassroomDoor({ m }: { m: WorldMaterials }) {
 }
 
 
-function OutdoorGarden({ m }: { m: WorldMaterials }) {
+function OutdoorGarden({
+  m,
+  lit,
+  onToggleLight,
+}: {
+  m: WorldMaterials;
+  lit: boolean;
+  onToggleLight?: (zone: LightZone, on: boolean) => void;
+}) {
   return (
     <group>
       {OUTDOOR_BENCHES.map((bench, i) => <Bench key={`outdoor-bench-${i}`} placement={bench} m={m} />)}
-      <Pond />
+      <Pond lit={lit} />
+
+      {/* Switch for the pool lights, on the hall's outside wall beside the
+          garden doorway, facing the pond. */}
+      <group position={[DOOR_HALF_WIDTH + 0.95, 1.2, HALL.maxZ + WALL_THICKNESS / 2 + 0.008]}>
+        <LightSwitch on={lit} onToggle={onToggleLight && ((on) => onToggleLight("pond", on))} />
+      </group>
     </group>
   );
 }

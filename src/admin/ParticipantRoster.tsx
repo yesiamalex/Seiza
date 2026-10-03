@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { WorldName } from "../ui/WorldName";
 import { useExclusiveMenu } from "../ui/exclusiveMenu";
 import { useDismissOnOutside } from "../ui/useDismissOnOutside";
 import type { PlayerState } from "../multiplayer/types";
@@ -97,7 +98,7 @@ export function ParticipantRoster({
         aria-label={`${worldName} — ${roster.length} ${roster.length === 1 ? "person" : "people"} here. Click to see who's in this room.`}
       >
         <span aria-hidden style={{ width: 8, height: 8, borderRadius: "50%", background: statusColor, flexShrink: 0 }} />
-        <strong style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{worldName}</strong>
+        <strong style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}><WorldName name={worldName} /></strong>
         <span style={{ opacity: 0.65, fontSize: 11, whiteSpace: "nowrap" }}>{statusLabel}</span>
         <span
           style={{

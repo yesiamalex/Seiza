@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { WorldName } from "./WorldName";
 import { closeAllMenus } from "./exclusiveMenu";
 import { panelStyle } from "./styles";
 import { ChevronRightIcon, CloseIcon, MenuIcon, SignalIcon, SignalOffIcon } from "./icons";
@@ -299,7 +300,7 @@ export function HUD({ connectionState, worldName, topRight, topLeft, touchContro
       <div style={{ position: "relative", width: "100%", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
         {topLeft ?? (
           <div style={{ ...panelStyle, padding: "6px 12px", fontSize: 13, display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-            <strong style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{worldName}</strong>
+            <strong style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}><WorldName name={worldName} /></strong>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 4, opacity: 0.85, flexShrink: 0 }}>
               {connected ? <SignalIcon size={14} /> : <SignalOffIcon size={14} />}
               {STATUS_LABEL[connectionState]}

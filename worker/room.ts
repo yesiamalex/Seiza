@@ -4,6 +4,7 @@ import {
   MAX_OBJECT_TEXT_LENGTH,
   WORLD_OBJECT_KINDS,
   type ClientMessage,
+  DEFAULT_LIGHTS,
   type LightZone,
   type PlayerMedia,
   type PlayerState,
@@ -130,7 +131,7 @@ export class SeizaRoom extends DurableObject<Env> {
   objects = new Map<string, WorldObject>();
   environmentUrl: string | null = null;
   skyboxUrl: string | null = null;
-  lights: Record<LightZone, boolean> = { hall: true, classroom: true };
+  lights: Record<LightZone, boolean> = { ...DEFAULT_LIGHTS };
   /** Entry password for this room, or null when anyone can join. Unlike
    *  SEIZA_EDITOR_PASSWORD/SEIZA_ADMIN_KEY (Worker secrets, fixed at
    *  deploy time), this is mutable at runtime via adminSetRoomPassword

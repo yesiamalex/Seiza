@@ -286,6 +286,8 @@ export type ServerMessage =
   | { type: "gatherRequest"; position: [number, number, number] }
   | { type: "voiceSignal"; from: string; data: unknown };
 
-/** Rooms with a light switch in the built-in world. */
-export type LightZone = "hall" | "classroom";
-export const LIGHT_ZONES: readonly LightZone[] = ["hall", "classroom"];
+/** Places with a light switch in the built-in world. */
+export type LightZone = "hall" | "classroom" | "pond";
+export const LIGHT_ZONES: readonly LightZone[] = ["hall", "classroom", "pond"];
+/** Every light starts on, for a new room and for anything a stored state lacks. */
+export const DEFAULT_LIGHTS: Readonly<Record<LightZone, boolean>> = { hall: true, classroom: true, pond: true };
