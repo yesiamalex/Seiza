@@ -76,6 +76,9 @@ const LAUNCHER_EDITING_STYLE: React.CSSProperties = {
   color: "#c8ffd6",
 };
 
+/** How long the landscape bar takes to fold away before it is hidden. */
+const BAR_CONCEAL_MS = 200;
+
 /** Gap between the open drawer and anything that steps aside for it
  *  (its own launcher tab, docked popovers). */
 const DRAWER_GAP_PX = 8;
@@ -100,6 +103,18 @@ export function HUD({ connectionState, worldName, topRight, topLeft, touchContro
     if (!open) closeAllMenus();
     setDrawerOpenState(open);
   }, []);
+
+  // The landscape bar stays laid out for a moment after closing, so it
+  // can play its closing animation before it goes to display:none.
+  const [barShown, setBarShown] = useState(false);
+  useEffect(() => {
+    if (drawerOpen) {
+      setBarShown(true);
+      return;
+    }
+    const timer = window.setTimeout(() => setBarShown(false), BAR_CONCEAL_MS);
+    return () => window.clearTimeout(timer);
+  }, [drawerOpen]);
 
   // Switching layouts (rotating the phone, docking a keyboard) starts the
   // new layout closed, instead of carrying the other one's open flag over.
@@ -317,8 +332,24 @@ export function HUD({ connectionState, worldName, topRight, topLeft, touchContro
         .seiza-drawer[data-open="true"] {
           transition: right 240ms var(--seiza-ease, ease-out), opacity 240ms var(--seiza-ease, ease-out), visibility 0s;
         }
+        /* The landscape bar opens out of its menu button and folds back
+           into it. A clip rather than a transform: a transform would make
+           the bar the containing block for its fixed-position panels.
+           The reveal fills backwards only: a clip left in place after it
+           would cut off the panels that open out of the bar. */
+        .seiza-bar-reveal { animation: seiza-bar-reveal 240ms var(--seiza-ease, ease-out) backwards; }
+        .seiza-bar-conceal { animation: seiza-bar-conceal ${BAR_CONCEAL_MS}ms var(--seiza-ease, ease-out) both; }
+        @keyframes seiza-bar-reveal {
+          from { clip-path: inset(0 0 0 100% round 16px); opacity: 0; }
+          to { clip-path: inset(0 0 0 0 round 16px); opacity: 1; }
+        }
+        @keyframes seiza-bar-conceal {
+          from { clip-path: inset(0 0 0 0 round 16px); opacity: 1; }
+          to { clip-path: inset(0 0 0 100% round 16px); opacity: 0; }
+        }
         @media (prefers-reduced-motion: reduce) {
           .seiza-bar-btn, .seiza-drawer { transition: none; }
+          .seiza-bar-reveal, .seiza-bar-conceal { animation: none; }
         }
       `}</style>
       {/* Relative so a top-bar control can centre itself on the screen
@@ -346,15 +377,17 @@ export function HUD({ connectionState, worldName, topRight, topLeft, touchContro
         <div style={bottomRowStyle}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, maxWidth: "100%", minWidth: 0 }}>
           <div
-            className="seiza-control-bar seiza-fade-in"
+            className={`seiza-control-bar ${drawerOpen ? "seiza-bar-reveal" : "seiza-bar-conceal"}`}
             role="group"
             aria-label="World controls"
+            aria-hidden={!drawerOpen}
             style={{
               ...BAR_STYLE,
               // display:none rather than unmounting, so each control keeps
               // its own state (an unread count, a half-typed message).
-              display: drawerOpen ? "flex" : "none",
+              display: drawerOpen || barShown ? "flex" : "none",
               minWidth: 0,
+              ...(drawerOpen ? null : { pointerEvents: "none" }),
             }}
           >
             <div className="seiza-dock-glass" aria-hidden />
