@@ -1110,6 +1110,10 @@ export default function App() {
                 onSetRoomPassword={adminSetRoomPassword}
               />
             )}
+            {/* One group, so the top bar's space-between spacing treats these
+                as a single item: the seiza badge appearing or leaving then
+                adds to the group's left instead of re-spacing every button. */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
             {seiza.startedAt != null && seizaView === "badge" && (
               <SeizaTimerBadge startedAt={seiza.startedAt} onOpen={() => setSeizaView("full")} />
             )}
@@ -1183,12 +1187,13 @@ export default function App() {
                   <span style={{ display: "grid", gap: 2 }}>
                     <span>Seiza reactions</span>
                     <small style={{ opacity: 0.6, lineHeight: 1.4 }}>
-                      Kneeling avatars doze off and wince as the minutes pass. Turn off for meetings: nobody sees yours, and you see nobody's.
+                      Your avatar dozes off and winces the longer it kneels. Turn off to keep it composed for meetings; you still see everyone else's.
                     </small>
                   </span>
                 </label>
               </div>
             )}
+            </div>
             </div>
           </>
         )}
@@ -1315,7 +1320,7 @@ export default function App() {
           onViewChange={setSeizaView}
           onTurnOff={() => {
             setSeizaReactions(false);
-            setNotice("Seiza reactions are off, on your screen and on your avatar for everyone else. Turn them back on in the Avatar menu.");
+            setNotice("Your avatar will now kneel composed, for everyone. Others' reactions still show. Turn yours back on in the Avatar menu.");
           }}
         />
       )}

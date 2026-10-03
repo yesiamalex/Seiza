@@ -30,7 +30,7 @@ short version.
   can, not just whoever set the room up.
 - **Wave, bow, clap, raise your hand, kneel, crouch.** Your avatar's face
   changes to match. Kneel in seiza for a minute and it nods off, then its
-  legs fall asleep (switch that off in the Avatar menu for meetings).
+  legs fall asleep (switch yours off in the Avatar menu for meetings).
 - **Chat by text** if you would rather not talk.
 - **Rearrange the place** in Edit Mode, down to swapping the whole
   environment for your own 3D model. What you place stays for the next

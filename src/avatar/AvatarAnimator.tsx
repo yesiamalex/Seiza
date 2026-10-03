@@ -45,6 +45,15 @@ import { CROUCH_GESTURE_NAME, GESTURE_SOUND_TIMES } from "./gestures";
  * the second useFrame pass at the bottom of this file.
  */
 
+/** Bones that get offsets added after the mixer (gaze, doze, tremble). */
+const ADDITIVE_BONES = ["spine", "chest", "neck", "head"] as const;
+/** A bone's pose before our offsets, and as we left it after them. */
+interface AdditiveBase {
+  base: THREE.Quaternion;
+  left: THREE.Quaternion;
+  valid: boolean;
+}
+
 const animationCache = new Map<string, Promise<VRMAnimation>>();
 
 export function loadVrmAnimation(url: string): Promise<VRMAnimation> {
@@ -332,6 +341,9 @@ export function AvatarAnimator({
   const trembleRef = useRef(tremble);
   trembleRef.current = tremble;
   const moodRef = useRef({ doze: 0, tremble: 0, time: 0 });
+  /** How much of the upper body gestures hold this frame (pass 1 to 2). */
+  const gestureTakeoverRef = useRef(0);
+  const additiveBases = useRef(new Map<string, AdditiveBase>());
   // A played gesture's face outranks a held posture's, so waving while
   // seated shows the wave. An explicit `expression` prop outranks both.
   /** How airborne this avatar currently is, 0..1 (see the jump weight). */
@@ -722,6 +734,7 @@ export function AvatarAnimator({
     }
     upperTakeover = Math.min(1, upperTakeover);
     gestureLowerTakeover = Math.min(1, gestureLowerTakeover);
+    gestureTakeoverRef.current = upperTakeover;
     if (layerWeightsRef) {
       layerWeightsRef.current.gesture = upperTakeover;
       layerWeightsRef.current.posture = postureWeight;
@@ -847,6 +860,21 @@ export function AvatarAnimator({
     // local position is enough.
     vrm.scene.position.y = state.groundOffset;
 
+    // Everything below adds to the bones the mixer just posed. The mixer
+    // skips writing a bone whose blended value hasn't changed since last
+    // frame (a held gesture over a held posture), and adding to a value
+    // nobody reset piles one frame's offset on the last: the head rolled
+    // further every frame. So undo our own offset first wherever the
+    // mixer left the bone exactly as we did.
+    for (const name of ADDITIVE_BONES) {
+      const bone = vrm.humanoid.getNormalizedBoneNode(name);
+      if (!bone) continue;
+      let base = additiveBases.current.get(name);
+      if (!base) additiveBases.current.set(name, (base = { base: new THREE.Quaternion(), left: new THREE.Quaternion(), valid: false }));
+      if (base.valid && bone.quaternion.equals(base.left)) bone.quaternion.copy(base.base);
+      base.base.copy(bone.quaternion);
+    }
+
     // --- head gaze -----------------------------------------------------
     // Applied last, on top of whatever the clips just wrote, so looking
     // around composes with an animation instead of fighting it. Added to
@@ -873,7 +901,9 @@ export function AvatarAnimator({
     // then jerks partway back up.
     const mood = moodRef.current;
     mood.time += delta;
-    mood.doze = approach(mood.doze, dozeRef.current ? 1 : 0, 1.5, delta);
+    // A gesture wakes the avatar for as long as it plays: a nod stacked on
+    // a bow put the chin through the chest.
+    mood.doze = approach(mood.doze, dozeRef.current ? 1 - gestureTakeoverRef.current : 0, 1.5, delta);
     mood.tremble = approach(mood.tremble, trembleRef.current, 3, delta);
     if (mood.doze > 0.01 || mood.tremble > 0.01) {
       const neck = vrm.humanoid.getNormalizedBoneNode("neck");
@@ -900,6 +930,15 @@ export function AvatarAnimator({
           head.rotation.y += a * Math.sin(w * 37 + 2.1) * 0.8;
         }
       }
+    }
+
+    // What we left, to recognise next frame whether the mixer wrote over it.
+    for (const name of ADDITIVE_BONES) {
+      const bone = vrm.humanoid.getNormalizedBoneNode(name);
+      const base = additiveBases.current.get(name);
+      if (!bone || !base) continue;
+      base.left.copy(bone.quaternion);
+      base.valid = true;
     }
   }, -1);
 

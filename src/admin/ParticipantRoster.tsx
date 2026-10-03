@@ -78,7 +78,9 @@ export function ParticipantRoster({
     // (see HUD.tsx), which means every interactive child has to opt back in.
     // Without this the world-name pill below cannot be clicked at all and the
     // roster simply never opens — a regression that shipped once already.
-    <div ref={rootRef} style={{ position: "relative", pointerEvents: "auto" }}>
+    // minWidth 0 lets the pill give way (its name ellipsizes) when the top
+    // bar runs short, instead of pushing the buttons beside it off screen.
+    <div ref={rootRef} style={{ position: "relative", pointerEvents: "auto", minWidth: 0 }}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -91,7 +93,7 @@ export function ParticipantRoster({
           minHeight: 36,
           boxSizing: "border-box",
           borderRadius: 999,
-          maxWidth: "60vw",
+          maxWidth: "min(60vw, 100%)",
           overflow: "hidden",
           cursor: "pointer",
           border: open ? "1px solid rgba(232,195,122,0.7)" : (panelStyle.border as string),
@@ -113,6 +115,7 @@ export function ParticipantRoster({
             background: "rgba(255,255,255,0.1)",
             borderRadius: 999,
             padding: "2px 7px",
+            flexShrink: 0,
           }}
         >
           <UsersIcon size={12} /> {roster.length}

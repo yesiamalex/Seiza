@@ -188,9 +188,10 @@ none of it has been tested with a large group at once. See "Status".
   remembered in the browser. Everyone sees the phases on your avatar, timed
   by their own client from when you knelt, so the phases add nothing to the
   network protocol. The readout folds to one line or a badge in the top bar,
-  and its power button (or the Avatar menu) turns the feature off for
-  meetings: nobody sees your avatar doze, and you see nobody's. That switch
-  is the one thing sent, as a `calm` flag on your player.
+  and its power button (or the Avatar menu) turns it off for your own
+  avatar, for meetings: it kneels composed for everyone, while everyone
+  else's still show. That switch is the one thing sent, as a `calm` flag
+  on your player.
   `?seizaSpeed=30` in the URL runs the clock 30x for demos
   (`src/avatar/seizaEndurance.ts`).
 - **Furniture you can't walk through** — benches, desks, the reception

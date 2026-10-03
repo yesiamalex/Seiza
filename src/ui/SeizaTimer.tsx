@@ -161,7 +161,7 @@ export function SeizaTimer({ startedAt, best, view, onViewChange, onTurnOff }: S
           <MinimizeIcon size={16} />
         </IconButton>
         {!compact && (
-          <IconButton label="Turn seiza reactions off" onClick={onTurnOff}>
+          <IconButton label="Turn off reactions for my avatar" onClick={onTurnOff}>
             <PowerIcon size={15} />
           </IconButton>
         )}

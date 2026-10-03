@@ -19,9 +19,10 @@ import { useEffect, useState, useSyncExternalStore } from "react";
  * `?seizaSpeed=30` in the page URL runs the clock thirty times faster, for
  * demonstrating the whole sequence in about six seconds.
  *
- * It can be switched off (useSeizaReactions), for a meeting where a dozing
- * avatar would be out of place. Off, this viewer sees nobody doze, and
- * their own avatar is flagged `calm` so nobody else sees it doze either.
+ * Each person can switch it off for their own avatar (useSeizaReactions),
+ * for a meeting where dozing would be out of place: their avatar is
+ * flagged `calm` and kneels composed for everyone. It never hides anyone
+ * else's, so everyone in a room still sees the same thing.
  */
 
 export type SeizaPhase = "composed" | "dozing" | "numb" | "agony";
@@ -123,7 +124,7 @@ let reactionsOn = (() => {
 })();
 const reactionListeners = new Set<() => void>();
 
-/** Whether this viewer has seiza endurance on. On unless turned off. */
+/** Whether this viewer's own avatar takes part. On unless turned off. */
 export function useSeizaReactions(): boolean {
   return useSyncExternalStore(
     (listener) => {
