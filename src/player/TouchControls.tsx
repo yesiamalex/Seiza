@@ -3,6 +3,8 @@ import type { TouchMoveInput } from "./touchInput";
 import { CrouchIcon, JumpIcon, SeizaIcon } from "../ui/icons";
 import {
   PAD_BUTTON_SIZE,
+  PAD_CENTER_SIZE,
+  CROUCH_BUTTON_SIZE,
   PAD_GAP_PX,
   JUMP_BUTTON_SIZE,
   SEIZA_BUTTON_SIZE,
@@ -108,11 +110,13 @@ export function TouchControls({
   function cellAt(clientX: number, clientY: number): Cell | null {
     const rect = padRef.current?.getBoundingClientRect();
     if (!rect) return null;
+    // The middle track is wider than the outer two, so the cell edges are
+    // read from the grid itself, splitting each gap down the middle.
     // Clamped, so a thumb that drifts off the pad's edge keeps going the
     // way it was pointing instead of stopping dead.
-    const column = Math.min(2, Math.max(0, Math.floor(((clientX - rect.left) / rect.width) * 3)));
-    const row = Math.min(2, Math.max(0, Math.floor(((clientY - rect.top) / rect.height) * 3)));
-    return CELL_AT[row][column];
+    const outer = (rect.width - centerTrackPx(padRef.current!)) / 2;
+    const track = (offset: number, size: number) => (offset < outer ? 0 : offset > size - outer ? 2 : 1);
+    return CELL_AT[track(clientY - rect.top, rect.height)][track(clientX - rect.left, rect.width)];
   }
 
   function setCell(cell: Cell | null, freshPress: boolean) {
@@ -211,10 +215,10 @@ export function TouchControls({
             }}
             onContextMenu={(e) => e.preventDefault()}
           >
-            {/* Sized as a share of the button, not in pixels: the button scales
-                with the pad (88% of a cell), so a fixed size spilled out of it
-                on smaller screens. */}
-            <CrouchIcon size={24} style={{ width: "80%", height: "80%" }} />
+            {/* Sized from the button's own size, so it scales with it. A
+                percentage here resolved against the grid-centred button's
+                content and drew the icon at a fraction of the button. */}
+            <CrouchIcon size={24} style={{ width: `calc(${CROUCH_BUTTON_SIZE} * 0.8)`, height: `calc(${CROUCH_BUTTON_SIZE} * 0.8)` }} />
           </button>
         )}
         {sprinting && <span style={sprintBadgeStyle}>RUN</span>}
@@ -284,12 +288,20 @@ const wrapperStyle: React.CSSProperties = {
   zIndex: 5,
 };
 
+/** The width of the pad's middle track, in pixels, as laid out. */
+function centerTrackPx(pad: HTMLElement): number {
+  const tracks = getComputedStyle(pad).gridTemplateColumns.split(" ").map(parseFloat);
+  const gap = parseFloat(getComputedStyle(pad).columnGap) || 0;
+  // The centre's own edges sit half a gap into each neighbouring gutter.
+  return (tracks[1] ?? 0) + gap;
+}
+
 const padGridStyle: React.CSSProperties = {
   position: "relative",
   display: "grid",
   gridTemplateAreas: '"upleft up upright" "left crouch right" ". down ."',
-  gridTemplateColumns: `repeat(3, ${PAD_BUTTON_SIZE})`,
-  gridTemplateRows: `repeat(3, ${PAD_BUTTON_SIZE})`,
+  gridTemplateColumns: `${PAD_BUTTON_SIZE} ${PAD_CENTER_SIZE} ${PAD_BUTTON_SIZE}`,
+  gridTemplateRows: `${PAD_BUTTON_SIZE} ${PAD_CENTER_SIZE} ${PAD_BUTTON_SIZE}`,
   gap: PAD_GAP_PX,
   pointerEvents: "auto",
   // The pad itself takes the touch now (see TouchControls), so it needs
@@ -302,6 +314,8 @@ const padGridStyle: React.CSSProperties = {
 const padButtonStyle: React.CSSProperties = {
   width: PAD_BUTTON_SIZE,
   height: PAD_BUTTON_SIZE,
+  // Centred in its cell: the middle row and column are wider.
+  placeSelf: "center",
   borderRadius: 12,
   border: "1px solid rgba(255,255,255,0.22)",
   background: "rgba(18,18,22,0.6)",
@@ -345,9 +359,9 @@ const crouchButtonStyle: React.CSSProperties = {
   gridArea: "crouch",
   justifySelf: "center",
   alignSelf: "center",
-  width: "88%",
+  width: CROUCH_BUTTON_SIZE,
   overflow: "hidden",
-  height: "88%",
+  height: CROUCH_BUTTON_SIZE,
   borderRadius: "50%",
   border: "1px solid rgba(255,255,255,0.18)",
   background: "rgba(18,18,22,0.52)",

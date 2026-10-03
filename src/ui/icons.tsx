@@ -192,12 +192,16 @@ export function JumpIcon(props: IconProps) {
 export function CrouchIcon(props: IconProps) {
   return (
     <Svg {...props}>
+      {/* Scaled up about the centre: the figure is narrow, and at its
+          natural size it filled too little of a small round button. */}
+      <g transform="translate(12 12) scale(1.14) translate(-12.5 -12.6)">
       <circle cx="14.4" cy="6.2" r="2.7" fill="currentColor" stroke="none" />
       {/* A low sneak, side-on: hips dropped behind the heels, back leaning
           forward over a raised knee, arm reaching ahead. Heavier strokes
           than the other figures, because it is drawn smallest (the pad's
           centre). */}
       <path {...POSE} strokeWidth={3.3} d="M12.8 9.6 7.8 15.2l7-1.2-.8 5.8M7.8 15.2l.6 4.6M12.2 10.6l5 1.6" />
+      </g>
     </Svg>
   );
 }

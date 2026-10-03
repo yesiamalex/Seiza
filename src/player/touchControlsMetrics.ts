@@ -21,14 +21,26 @@
  * whenever the viewport does (including on a device rotation).
  */
 
-/** Reaches its 54px ceiling once the viewport is roughly 675px tall or
+/** Reaches its 56px ceiling once the viewport is roughly 620px tall or
  *  more (covers essentially all portrait phone use), and shrinks toward
- *  its 36px floor as height drops below that — reached at 450px and
+ *  its 40px floor as height drops below that — reached at about 445px and
  *  below, which keeps buttons touch-usable even on the shortest common
  *  landscape phone viewports rather than shrinking indefinitely. */
-export const PAD_BUTTON_SIZE = "clamp(36px, 8vh, 54px)";
-export const PAD_GAP_PX = 4;
-export const PAD_ROWS = 3;
+export const PAD_BUTTON_SIZE = "clamp(40px, 9vh, 56px)";
+export const PAD_GAP_PX = 5;
+
+/** The pad's middle column and row: wider than a direction cell, so the
+ *  crouch button in the centre has room around it instead of being
+ *  squeezed between four arrows. */
+export const PAD_CENTER_SIZE = "clamp(48px, 10vh, 64px)";
+
+/** The crouch button in the pad's centre. Smaller than the seiza button
+ *  at every height (and so than Jump): it is the pad's least-used cell. */
+export const CROUCH_BUTTON_SIZE = "clamp(36px, 7.5vh, 48px)";
+
+/** The pad's full width and height: two direction cells, the centre,
+ *  and the gaps between them. */
+export const PAD_EXTENT_CSS = `calc(2 * ${PAD_BUTTON_SIZE} + ${PAD_CENTER_SIZE} + ${2 * PAD_GAP_PX}px)`;
 
 /** Mirrors JUMP_BUTTON's relationship to PAD_BUTTON_SIZE in the original
  *  fixed-size version (76px vs. 54px) so it keeps looking proportionate
@@ -64,9 +76,7 @@ export const TOUCH_WRAPPER_BOTTOM_OFFSET_PX = 12;
 export const JUMP_COLUMN_HEIGHT_CSS =
   `calc(${SEIZA_BUTTON_SIZE} + ${SEIZA_JUMP_GAP_PX}px + ${JUMP_BUTTON_SIZE})`;
 
-export const TOUCH_CONTROLS_CLEARANCE_CSS =
-  `calc(${TOUCH_WRAPPER_BOTTOM_OFFSET_PX}px + ` +
-  `(${PAD_ROWS} * ${PAD_BUTTON_SIZE}) + ${(PAD_ROWS - 1) * PAD_GAP_PX}px + 16px)`;
+export const TOUCH_CONTROLS_CLEARANCE_CSS = `calc(${TOUCH_WRAPPER_BOTTOM_OFFSET_PX}px + ${PAD_EXTENT_CSS} + 16px)`;
 
 /**
  * Horizontal footprint of the D-pad from the left edge (and, because the
@@ -76,5 +86,4 @@ export const TOUCH_CONTROLS_CLEARANCE_CSS =
  * The jump button on the right is narrower than the pad, so the pad's
  * side is the one that decides it.
  */
-export const TOUCH_CONTROLS_SIDE_CLEARANCE_CSS =
-  `calc(16px + (3 * ${PAD_BUTTON_SIZE}) + ${2 * PAD_GAP_PX}px + 12px)`;
+export const TOUCH_CONTROLS_SIDE_CLEARANCE_CSS = `calc(16px + ${PAD_EXTENT_CSS} + 12px)`;

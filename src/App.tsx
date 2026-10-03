@@ -56,6 +56,7 @@ import { useExclusiveMenu } from "./ui/exclusiveMenu";
 import { FpsCounter } from "./ui/FpsCounter";
 import { Toast } from "./ui/Toast";
 import { ControlsGuide, hasSeenControlsGuide } from "./ui/ControlsGuide";
+import { TopCenterCluster } from "./ui/TopCenterCluster";
 import { JoinScreen, type JoinedIdentity } from "./ui/JoinScreen";
 import { CameraViewToggle } from "./ui/CameraViewToggle";
 import { AvatarChooser } from "./ui/AvatarChooser";
@@ -1100,36 +1101,37 @@ export default function App() {
         )}
         topRight={(
           <>
-            {adminKeyRequired && (
-              <AdminButton
-                isAdmin={isAdmin}
-                authPending={adminAuthPending}
-                authFailed={adminAuthFailed}
-                onSubmit={authAdmin}
-                roomPasswordSet={roomPasswordSet}
-                onSetRoomPassword={adminSetRoomPassword}
-              />
-            )}
-            {/* One group, so the top bar's space-between spacing treats these
-                as a single item: the seiza badge appearing or leaving then
-                adds to the group's left instead of re-spacing every button. */}
-            <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-            {seiza.startedAt != null && seizaView === "badge" && (
-              <SeizaTimerBadge startedAt={seiza.startedAt} onOpen={() => setSeizaView("full")} />
-            )}
-            <button
-              type="button"
-              aria-label="Controls guide"
-              title="Controls (?)"
-              aria-expanded={guideOpen}
-              // Opens only. While the guide is open, a press here already
-              // closes it as an outside press (on pointerdown), so a toggle
-              // would close it and then reopen it on the click.
-              onClick={() => setGuideOpen(true)}
-              style={{ ...pillButtonStyle, width: 36, height: 36, padding: 0, justifyContent: "center", flexShrink: 0, pointerEvents: "auto", fontWeight: 600 }}
+            <TopCenterCluster
+              side={
+                seiza.startedAt != null && seizaView === "badge" ? (
+                  <SeizaTimerBadge startedAt={seiza.startedAt} onOpen={() => setSeizaView("full")} />
+                ) : undefined
+              }
             >
-              ?
-            </button>
+              {adminKeyRequired && (
+                <AdminButton
+                  isAdmin={isAdmin}
+                  authPending={adminAuthPending}
+                  authFailed={adminAuthFailed}
+                  onSubmit={authAdmin}
+                  roomPasswordSet={roomPasswordSet}
+                  onSetRoomPassword={adminSetRoomPassword}
+                />
+              )}
+              <button
+                type="button"
+                aria-label="Controls guide"
+                title="Controls (?)"
+                aria-expanded={guideOpen}
+                // Opens only. While the guide is open, a press here already
+                // closes it as an outside press (on pointerdown), so a toggle
+                // would close it and then reopen it on the click.
+                onClick={() => setGuideOpen(true)}
+                style={{ ...pillButtonStyle, width: 36, height: 36, padding: 0, justifyContent: "center", flexShrink: 0, pointerEvents: "auto", fontWeight: 600 }}
+              >
+                ?
+              </button>
+            </TopCenterCluster>
             <div style={{ position: "relative", pointerEvents: "auto", flexShrink: 0 }}>
             <button
               type="button"
@@ -1193,7 +1195,6 @@ export default function App() {
                 </label>
               </div>
             )}
-            </div>
             </div>
           </>
         )}

@@ -189,23 +189,17 @@ const fieldStyle: React.CSSProperties = { ...inputStyle, width: "100%", minWidth
 const dangerStyle: React.CSSProperties = { color: "#ffb3ab", border: "1px solid rgba(255,138,128,0.4)", background: "rgba(255,138,128,0.08)" };
 
 /**
- * Wide screens: the button sits at the exact top centre of the screen
- * (the HUD's top row is its positioning context), with its panel centred
- * under it. As a plain flex child between the room pill and the Avatar
- * button it only ever landed roughly mid-way, wherever space-between put
- * it.
+ * The button lives in the top bar's centre cluster (TopCenterCluster.tsx),
+ * which does the positioning. The anchor itself stays unpositioned, so on
+ * wide screens the panel centres on the cluster, under the middle of the
+ * screen, like the other panels that drop from there.
  *
- * Phones: the centre is where the room pill runs, so the button joins the
- * Avatar button on the right instead, and the panel docks full-width
- * under the top bar like the other top menus (.seiza-popover-down in
- * HUD.tsx). The transform is dropped there too, since a transformed
- * ancestor would trap that fixed-position panel inside the button.
+ * Phones: the panel docks full-width under the top bar like the other top
+ * menus (.seiza-popover-down in HUD.tsx), so the centring offset goes.
  */
 const ADMIN_CSS = `
-  .seiza-admin-anchor { position: absolute; top: 0; left: 50%; transform: translateX(-50%); }
   .seiza-admin-panel { left: 50%; margin-left: calc(min(300px, 100vw - 32px) / -2); transform-origin: top center; }
   @media (max-width: 640px) {
-    .seiza-admin-anchor { position: relative; left: auto; transform: none; margin-left: auto; flex-shrink: 0; }
     .seiza-admin-panel { margin-left: 0; }
   }
 `;
