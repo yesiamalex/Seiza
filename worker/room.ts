@@ -331,6 +331,14 @@ export class SeizaRoom extends DurableObject<Env> {
         this.broadcast({ type: "playerPosture", id: attachment.connId, posture }, attachment.connId);
         break;
       }
+      case "setCalm": {
+        if (!attachment.player || typeof message.calm !== "boolean") return;
+        if ((attachment.player.calm ?? false) === message.calm) return;
+        attachment.player.calm = message.calm;
+        ws.serializeAttachment(attachment);
+        this.broadcast({ type: "playerCalm", id: attachment.connId, calm: message.calm }, attachment.connId);
+        break;
+      }
       case "setAvatar": {
         if (!attachment.player) return;
         const avatarUrl = sanitizeAssetUrl(message.avatarUrl, { allowEmpty: true });

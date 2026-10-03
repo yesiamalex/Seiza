@@ -52,7 +52,7 @@ const KEYBOARD: { title: string; rows: Row[] }[] = [
   {
     title: "Shortcuts",
     rows: [
-      [["C"], "Avatar menu"],
+      [["C"], "Avatar menu, and seiza reactions on or off"],
       [["V"], "First / third person"],
       [["G"], "Move tool (while editing)"],
       [["R"], "Rotate tool (while editing)"],
@@ -104,7 +104,7 @@ const TOUCH: { title: string; rows: Row[] }[] = [
       [["Space"], "Jump, or stand up"],
       [["1–0"], "Gestures"],
       [["3"], "Kneel in seiza. Stay a minute and see what happens"],
-      [["C"], "Avatar menu"],
+      [["C"], "Avatar menu, and seiza reactions on or off"],
       [["V"], "First / third person"],
       [["G"], "Move tool (while editing)"],
       [["R"], "Rotate tool (while editing)"],

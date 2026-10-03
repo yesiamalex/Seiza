@@ -186,8 +186,12 @@ none of it has been tested with a large group at once. See "Status".
   sparks), and after 3 it fumes. Stand up after the legs
   have gone and you walk slowly for a few seconds; your personal best is
   remembered in the browser. Everyone sees the phases on your avatar, timed
-  by their own client from when you knelt, so it adds nothing to the network
-  protocol. `?seizaSpeed=30` in the URL runs the clock 30x for demos
+  by their own client from when you knelt, so the phases add nothing to the
+  network protocol. The readout folds to one line or a badge in the top bar,
+  and its power button (or the Avatar menu) turns the feature off for
+  meetings: nobody sees your avatar doze, and you see nobody's. That switch
+  is the one thing sent, as a `calm` flag on your player.
+  `?seizaSpeed=30` in the URL runs the clock 30x for demos
   (`src/avatar/seizaEndurance.ts`).
 - **Furniture you can't walk through** — benches, desks, the reception
   counter, lockers, posts and planters all push you around them, and the
@@ -966,6 +970,12 @@ detail spent where people actually look.
 - **Lights are switched by dimming, not removing.** Turning a light off
   sets its intensity to zero. Adding or removing a light would make every
   material recompile its shader.
+- **Every lamp is real, but only four are lit at once.** three.js shades
+  every point light on every pixel, near or far, so the lamps share a fixed
+  pool of four lights, handed each frame to the fixtures whose light
+  reaches what the camera sees (`src/scene/LightPool.tsx`). Handovers fade,
+  and a light lingers a moment after leaving view, so looking away and back
+  shows no change.
 
 ### Only update what changed
 

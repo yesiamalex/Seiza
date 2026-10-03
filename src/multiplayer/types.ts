@@ -33,6 +33,9 @@ export interface PlayerState {
    *  newly joined client tell "already playing before I arrived" apart
    *  from "just started" (see RemotePlayers.tsx). */
   gestureSeq: number;
+  /** Opted out of seiza endurance: everyone sees this avatar kneel
+   *  without dozing off or wincing. Absent means false. */
+  calm?: boolean;
 }
 
 // "sign" is a text object like "text", but shaped and typeset to be read
@@ -133,6 +136,9 @@ export type ClientMessage =
   // Takes up or drops a held pose (sitting, kneeling). Separate from
   // `gesture` because it's a state, not a one-shot.
   | { type: "setPosture"; posture: Posture }
+  // Opts this player's avatar out of (or back into) seiza endurance, for
+  // meetings where a dozing avatar would be out of place.
+  | { type: "setCalm"; calm: boolean }
   | { type: "objectAdd"; object: Omit<WorldObject, "id" | "ownerId"> }
   | { type: "objectMove"; id: string; position: [number, number, number]; rotationY: number }
   | { type: "objectRemove"; id: string }
@@ -256,6 +262,7 @@ export type ServerMessage =
   | { type: "playerGesture"; id: string; gesture: string | null; seq: number }
   | { type: "playerAvatarChanged"; id: string; avatarUrl: string }
   | { type: "playerPosture"; id: string; posture: Posture }
+  | { type: "playerCalm"; id: string; calm: boolean }
   | { type: "playerLeft"; id: string }
   | { type: "objectAdded"; object: WorldObject }
   | { type: "objectMoved"; id: string; position: [number, number, number]; rotationY: number }

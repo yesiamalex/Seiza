@@ -37,9 +37,11 @@ import {
   NUMB_DURATION,
   seizaSeconds,
   useSeizaEndurance,
+  setSeizaReactions,
+  useSeizaReactions,
 } from "./avatar/seizaEndurance";
 import { SeizaMood } from "./avatar/SeizaMood";
-import { formatSeizaTime, SeizaTimer } from "./ui/SeizaTimer";
+import { formatSeizaTime, loadSeizaTimerView, saveSeizaTimerView, SeizaTimer, SeizaTimerBadge, type SeizaTimerView } from "./ui/SeizaTimer";
 import { MediaControls } from "./media/MediaControls";
 import { CameraBadge } from "./media/CameraBadge";
 import { ScreenZoomOverlay } from "./media/ScreenZoomOverlay";
@@ -224,6 +226,7 @@ export default function App() {
     removeObject,
     sendChat,
     setPosture: sendPosture,
+    setCalm,
     setObjectText,
     presentOnObject,
     setMedia,
@@ -559,7 +562,18 @@ export default function App() {
   const [notice, setNotice] = useState<string | null>(null);
 
   // ---- seiza endurance (see avatar/seizaEndurance.ts) -------------------
-  const seiza = useSeizaEndurance(posture?.name === SEIZA_GESTURE_NAME);
+  const seizaReactions = useSeizaReactions();
+  const seiza = useSeizaEndurance(posture?.name === SEIZA_GESTURE_NAME && seizaReactions);
+  // Off also means others never see this avatar doze: tell the room, on
+  // every (re)connection, since a new connection starts without the flag.
+  useEffect(() => {
+    if (selfId) setCalm(!seizaReactions);
+  }, [selfId, seizaReactions, setCalm]);
+  const [seizaView, setSeizaViewState] = useState<SeizaTimerView>(loadSeizaTimerView);
+  const setSeizaView = useCallback((view: SeizaTimerView) => {
+    setSeizaViewState(view);
+    saveSeizaTimerView(view);
+  }, []);
   const [seizaBest, setSeizaBest] = useState(() => {
     try {
       return Number(localStorage.getItem("seiza-best-seconds")) || 0;
@@ -577,6 +591,8 @@ export default function App() {
     const start = seizaStartRef.current;
     if (start == null) return;
     seizaStartRef.current = null;
+    // Switched off mid-sit, not stood up: nothing to score.
+    if (!seizaReactions) return;
     // Just stood up: score it, and make the legs pay for a long sit.
     const seconds = seizaSeconds(start);
     const record = seconds > seizaBest;
@@ -1094,6 +1110,9 @@ export default function App() {
                 onSetRoomPassword={adminSetRoomPassword}
               />
             )}
+            {seiza.startedAt != null && seizaView === "badge" && (
+              <SeizaTimerBadge startedAt={seiza.startedAt} onOpen={() => setSeizaView("full")} />
+            )}
             <button
               type="button"
               aria-label="Controls guide"
@@ -1154,6 +1173,20 @@ export default function App() {
                   }}
                 />
                 {avatarMessage && <small style={{ color: "#7CFF9E" }}>{avatarMessage}</small>}
+                <label style={{ display: "flex", alignItems: "flex-start", gap: 10, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.08)", cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={seizaReactions}
+                    onChange={(e) => setSeizaReactions(e.target.checked)}
+                    style={{ marginTop: 2, accentColor: "#e8c37a" }}
+                  />
+                  <span style={{ display: "grid", gap: 2 }}>
+                    <span>Seiza reactions</span>
+                    <small style={{ opacity: 0.6, lineHeight: 1.4 }}>
+                      Kneeling avatars doze off and wince as the minutes pass. Turn off for meetings: nobody sees yours, and you see nobody's.
+                    </small>
+                  </span>
+                </label>
               </div>
             )}
             </div>
@@ -1274,7 +1307,18 @@ export default function App() {
           to leave the screen — see Toast.tsx for why that's stated so
           firmly. Whichever is showing is the one `onDismiss` clears. */}
       <ControlsGuide open={guideOpen} onClose={() => setGuideOpen(false)} touch={showTouchControls} />
-      {seiza.startedAt != null && <SeizaTimer startedAt={seiza.startedAt} best={seizaBest} />}
+      {seiza.startedAt != null && seizaView !== "badge" && (
+        <SeizaTimer
+          startedAt={seiza.startedAt}
+          best={seizaBest}
+          view={seizaView}
+          onViewChange={setSeizaView}
+          onTurnOff={() => {
+            setSeizaReactions(false);
+            setNotice("Seiza reactions are off, on your screen and on your avatar for everyone else. Turn them back on in the Avatar menu.");
+          }}
+        />
+      )}
       {(xrError || notice) && (
         <Toast
           message={xrError ?? notice ?? ""}

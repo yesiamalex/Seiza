@@ -4,6 +4,7 @@ import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import { POND_CENTER, POND_RADIUS, POND_ROCKS, POND_WATER_RADIUS, POND_WATER_Y, pondDepthAtRadius } from "./layout";
 import { pondWaders, takePondRipples } from "./pondActivity";
 import { setPondAmbience } from "../audio/sfx";
+import { PooledLight } from "./LightPool";
 
 /**
  * The garden pond: a sunken basin you can wade into, rocks round the rim,
@@ -276,7 +277,7 @@ function basinGeometry() {
 export function Pond({ lit = true }: { lit?: boolean }) {
   const litRef = useRef(lit);
   litRef.current = lit;
-  const lampLight = useRef<THREE.PointLight>(null);
+  const lampIntensity = useRef(0);
   const rippleIndex = useRef(0);
   const nextKoiRipple = useRef(4);
   const koiRefs = useRef<Array<THREE.Group | null>>([]);
@@ -354,9 +355,7 @@ export function Pond({ lit = true }: { lit?: boolean }) {
     glow.value += ((litRef.current ? 1 : 0) - glow.value) * (1 - Math.exp(-6 * step));
     if (Math.abs(glow.value - (litRef.current ? 1 : 0)) < 0.002) glow.value = litRef.current ? 1 : 0;
     materials.lens.emissiveIntensity = 2.4 * glow.value;
-    // Dimmed to zero, never hidden: changing the light count would
-    // recompile every material's shader.
-    if (lampLight.current) lampLight.current.intensity = POOL_LIGHT_INTENSITY * glow.value;
+    lampIntensity.current = POOL_LIGHT_INTENSITY * glow.value;
 
     // Continuous trickle, loudest at the water's edge. Driven every
     // frame because it is a gain on a running loop, not a new sound.
@@ -477,7 +476,7 @@ export function Pond({ lit = true }: { lit?: boolean }) {
           </mesh>
         </group>
       ))}
-      <pointLight ref={lampLight} position={[0, -0.05, 0]} color="#7fe3ff" intensity={0} distance={POND_RADIUS * 2.2} decay={2} />
+      <PooledLight position={[0, -0.05, 0]} color="#7fe3ff" intensityRef={lampIntensity} distance={POND_RADIUS * 2.2} />
 
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, WATER_Y, 0]} material={water} onClick={onWaterClick} userData={{ navIgnore: true }}>
         <circleGeometry args={[WATER_RADIUS, 64]} />

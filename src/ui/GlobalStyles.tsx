@@ -83,6 +83,10 @@ const CSS = `
     to { opacity: 1; transform: none; }
   }
 
+  /* Small borderless icon buttons inside a panel (the seiza timer's). */
+  .seiza-icon-btn { transition: background 160ms ease, color 160ms ease; }
+  .seiza-icon-btn:hover { background: rgba(255,255,255,0.1) !important; color: white !important; }
+
   .seiza-fade-in { animation: seiza-fade-in 420ms ease both; }
   @keyframes seiza-fade-in {
     from { opacity: 0; }

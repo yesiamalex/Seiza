@@ -8,6 +8,7 @@ import { Outdoors } from "./Outdoors";
 import { ImageSkybox, SunsetSky, SUNSET_HORIZON_COLOR } from "./SunsetSky";
 import { deriveObstaclesFromObject, OBSTACLES, setActiveObstacles } from "./layout";
 import type { Seat } from "./layout";
+import { LightPool } from "./LightPool";
 
 interface SceneProps {
   sceneUrl?: string;
@@ -205,6 +206,8 @@ export const Scene = memo(function Scene({
         shadow-camera-near={1}
         shadow-camera-far={80}
       />
+      {/* The lamps' shared point lights (see LightPool.tsx). */}
+      <LightPool />
       <BaseEnvironment
         onFloorDoubleClick={onFloorDoubleClick}
         onSit={onSit}

@@ -192,11 +192,12 @@ export function JumpIcon(props: IconProps) {
 export function CrouchIcon(props: IconProps) {
   return (
     <Svg {...props}>
-      <circle cx="14.6" cy="5.4" r="2.6" fill="currentColor" stroke="none" />
-      {/* Back leaning forward from the hips, thigh level, shin down, and
-          one arm hanging ahead of the knee: the classic side-on crouch. */}
-      <path {...POSE} d="M13.4 8.6 8.4 13.4M8.4 13.4l6.6.8-.4 6M8.4 13.4l1 6.6M12.4 9.6l3.2 3.8" />
-      <ellipse cx="12" cy="22.2" rx="5" ry="1" fill="currentColor" stroke="none" opacity="0.45" />
+      <circle cx="14.4" cy="6.2" r="2.7" fill="currentColor" stroke="none" />
+      {/* A low sneak, side-on: hips dropped behind the heels, back leaning
+          forward over a raised knee, arm reaching ahead. Heavier strokes
+          than the other figures, because it is drawn smallest (the pad's
+          centre). */}
+      <path {...POSE} strokeWidth={3.3} d="M12.8 9.6 7.8 15.2l7-1.2-.8 5.8M7.8 15.2l.6 4.6M12.2 10.6l5 1.6" />
     </Svg>
   );
 }
@@ -328,6 +329,40 @@ export function ChevronRightIcon(props: IconProps) {
   return (
     <Svg {...props}>
       <path d="M9 5l7 7-7 7" />
+    </Svg>
+  );
+}
+
+export function ChevronUpIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M6 15l6-6 6 6" />
+    </Svg>
+  );
+}
+
+export function ChevronDownIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M6 9l6 6 6-6" />
+    </Svg>
+  );
+}
+
+/** Shrinks a panel to a small badge. */
+export function MinimizeIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M5 12h14" />
+    </Svg>
+  );
+}
+
+/** Turns a feature off. */
+export function PowerIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 3.5v8M7.2 6.6a7 7 0 1 0 9.6 0" />
     </Svg>
   );
 }

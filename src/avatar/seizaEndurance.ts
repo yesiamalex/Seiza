@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 /**
  * Seiza endurance: what kneeling too long does to an avatar.
@@ -18,6 +18,10 @@ import { useEffect, useState } from "react";
  *
  * `?seizaSpeed=30` in the page URL runs the clock thirty times faster, for
  * demonstrating the whole sequence in about six seconds.
+ *
+ * It can be switched off (useSeizaReactions), for a meeting where a dozing
+ * avatar would be out of place. Off, this viewer sees nobody doze, and
+ * their own avatar is flagged `calm` so nobody else sees it doze either.
  */
 
 export type SeizaPhase = "composed" | "dozing" | "numb" | "agony";
@@ -105,4 +109,38 @@ export function useSeizaEndurance(kneeling: boolean): { phase: SeizaPhase | null
   }, [kneeling]);
 
   return { phase, startedAt };
+}
+
+// --- the viewer's own switch -------------------------------------------
+
+const REACTIONS_KEY = "seiza-reactions";
+let reactionsOn = (() => {
+  try {
+    return localStorage.getItem(REACTIONS_KEY) !== "off";
+  } catch {
+    return true;
+  }
+})();
+const reactionListeners = new Set<() => void>();
+
+/** Whether this viewer has seiza endurance on. On unless turned off. */
+export function useSeizaReactions(): boolean {
+  return useSyncExternalStore(
+    (listener) => {
+      reactionListeners.add(listener);
+      return () => reactionListeners.delete(listener);
+    },
+    () => reactionsOn,
+    () => true
+  );
+}
+
+export function setSeizaReactions(on: boolean) {
+  reactionsOn = on;
+  try {
+    localStorage.setItem(REACTIONS_KEY, on ? "on" : "off");
+  } catch {
+    // Not remembered in a private window; still applies until reload.
+  }
+  reactionListeners.forEach((listener) => listener());
 }

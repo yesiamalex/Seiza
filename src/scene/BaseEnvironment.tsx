@@ -9,6 +9,7 @@ import { SeatPad } from "./SeatPad";
 import { Pond } from "./Pond";
 import { DateCalendar, WallClock } from "./ClassroomClock";
 import { LightSwitch } from "./LightSwitch";
+import { PooledLight } from "./LightPool";
 import { DEFAULT_LIGHTS, type LightZone } from "../multiplayer/types";
 import { playDoorSlide, playDoorSwing } from "../audio/sfx";
 import {
@@ -67,6 +68,9 @@ interface BaseEnvironmentProps {
 }
 
 const ALL_LIGHTS_ON = DEFAULT_LIGHTS;
+/** Each hall lantern's light. Four of them now, where two used to carry
+ *  13 each, so each is dimmer and the hall is lit more evenly. */
+const LANTERN_INTENSITY = 8;
 
 /**
  * A lamp material for one zone: a clone of the shared lantern material, so
@@ -900,15 +904,14 @@ function HallFurniture({ m, lit, onToggleLight }: { m: WorldMaterials; lit: bool
         <LightSwitch on={lit} onToggle={onToggleLight && ((on) => onToggleLight("hall", on))} />
       </group>
 
-      {/* Posts with paper lanterns. Only two of the four carry an actual
-          light: every extra point light is paid for by every material in
-          the scene, avatars included, and the lanterns read as lit from
-          their emissive glow either way. */}
+      {/* Posts with paper lanterns, each a real light. They share the
+          world's few lights with every other lamp (see LightPool.tsx), so
+          four of them cost no more than two did. */}
       {[
-        { x: -8.6, z: 0.8, light: true },
-        { x: 8.6, z: 0.8, light: false },
-        { x: -8.6, z: 12.2, light: false },
-        { x: 8.6, z: 12.2, light: true },
+        { x: -8.6, z: 0.8 },
+        { x: 8.6, z: 0.8 },
+        { x: -8.6, z: 12.2 },
+        { x: 8.6, z: 12.2 },
       ].map((post) => (
         <group key={`${post.x}-${post.z}`} position={[post.x, 0, post.z]}>
           <mesh position={[0, WALL_HEIGHT / 2, 0]} material={m.trim} castShadow>
@@ -917,10 +920,7 @@ function HallFurniture({ m, lit, onToggleLight }: { m: WorldMaterials; lit: bool
           <mesh position={[0, 2.75, 0]} material={lamp}>
             <sphereGeometry args={[0.26, 20, 14]} />
           </mesh>
-          {/* Dimmed to zero rather than unmounted when switched off: removing
-              a light changes the light count, which recompiles every
-              material's shader; an intensity of 0 costs nothing. */}
-          {post.light && <pointLight position={[0, 2.75, 0]} intensity={lit ? 13 : 0} distance={20} decay={2} color="#ffd2a0" />}
+          <PooledLight position={[0, 2.75, 0]} intensity={lit ? LANTERN_INTENSITY : 0} distance={20} color="#ffd2a0" />
         </group>
       ))}
 
@@ -1112,7 +1112,7 @@ function ClassroomShell({ m, lit, onToggleLight }: { m: WorldMaterials; lit: boo
           <mesh material={lamp}>
             <cylinderGeometry args={[0.7, 0.7, 0.12, 20]} />
           </mesh>
-          <pointLight position={[0, -0.2, 0]} intensity={lit ? 5.5 : 0} distance={17} decay={2} color="#ffeccd" />
+          <PooledLight position={[0, -0.2, 0]} intensity={lit ? 5.5 : 0} distance={17} color="#ffeccd" />
         </group>
       ))}
       {/* The glow of a low sun coming through the window wall. It used to
@@ -1120,7 +1120,7 @@ function ClassroomShell({ m, lit, onToggleLight }: { m: WorldMaterials; lit: boo
           beside it took the full brightness and blew out to white. Moved
           into the room and dimmed: the windows still wash the floor warm,
           but nothing near them clips. */}
-      <pointLight position={[CLASSROOM.minX + 4.2, 2.1, -17]} intensity={5} distance={19} decay={2} color="#ffbe86" />
+      <PooledLight position={[CLASSROOM.minX + 4.2, 2.1, -17]} intensity={5} distance={19} color="#ffbe86" />
     </group>
   );
 }

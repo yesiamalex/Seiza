@@ -45,6 +45,8 @@ export interface MultiplayerState {
   sendChat: (text: string) => void;
   /** Take up or drop a held pose, so other clients hold it too. */
   setPosture: (posture: Posture) => void;
+  /** Opt our avatar out of seiza endurance for everyone, or back in. */
+  setCalm: (calm: boolean) => void;
   /** Write on a board or a note. */
   setObjectText: (id: string, text: string) => void;
   /** Claim a screen to present on, or hand it back. */
@@ -209,6 +211,7 @@ export function useRoomSocket(
   const removeObject = useCallback((id: string) => send({ type: "objectRemove", id }), [send]);
   const sendChat = useCallback((text: string) => send({ type: "chat", text }), [send]);
   const setPosture = useCallback((posture: Posture) => send({ type: "setPosture", posture }), [send]);
+  const setCalm = useCallback((calm: boolean) => send({ type: "setCalm", calm }), [send]);
   const setObjectText = useCallback((id: string, text: string) => send({ type: "objectSetText", id, text }), [send]);
   const presentOnObject = useCallback(
     (id: string, active: boolean, source?: PresentSource) => send({ type: "objectPresent", id, active, source }),
@@ -387,6 +390,9 @@ export function useRoomSocket(
           case "playerPosture":
             setPlayers((prev) => (prev[msg.id] ? { ...prev, [msg.id]: { ...prev[msg.id], posture: msg.posture } } : prev));
             break;
+          case "playerCalm":
+            setPlayers((prev) => (prev[msg.id] ? { ...prev, [msg.id]: { ...prev[msg.id], calm: msg.calm } } : prev));
+            break;
           case "playerAvatarChanged":
             setPlayers((prev) =>
               prev[msg.id] ? { ...prev, [msg.id]: { ...prev[msg.id], avatarUrl: msg.avatarUrl } } : prev
@@ -504,6 +510,7 @@ export function useRoomSocket(
     removeObject,
     sendChat,
     setPosture,
+    setCalm,
     setObjectText,
     presentOnObject,
     setMedia,

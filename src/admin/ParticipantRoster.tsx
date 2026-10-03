@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { WorldName } from "../ui/WorldName";
+import { WorldTitle } from "../ui/WorldName";
 import { useExclusiveMenu } from "../ui/exclusiveMenu";
 import { useDismissOnOutside } from "../ui/useDismissOnOutside";
 import type { PlayerState } from "../multiplayer/types";
@@ -86,8 +86,10 @@ export function ParticipantRoster({
           ...panelStyle,
           display: "inline-flex",
           alignItems: "center",
-          gap: 8,
-          padding: "8px 14px",
+          gap: 10,
+          padding: "5px 8px 5px 14px",
+          minHeight: 36,
+          boxSizing: "border-box",
           borderRadius: 999,
           maxWidth: "60vw",
           overflow: "hidden",
@@ -95,11 +97,12 @@ export function ParticipantRoster({
           border: open ? "1px solid rgba(232,195,122,0.7)" : (panelStyle.border as string),
         }}
         aria-expanded={open}
-        aria-label={`${worldName} — ${roster.length} ${roster.length === 1 ? "person" : "people"} here. Click to see who's in this room.`}
+        aria-label={`${worldName}, ${statusLabel}. ${roster.length} ${roster.length === 1 ? "person" : "people"} here. Click to see who's in this room.`}
       >
-        <span aria-hidden style={{ width: 8, height: 8, borderRadius: "50%", background: statusColor, flexShrink: 0 }} />
-        <strong style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}><WorldName name={worldName} /></strong>
-        <span style={{ opacity: 0.65, fontSize: 11, whiteSpace: "nowrap" }}>{statusLabel}</span>
+        <span aria-hidden title={statusLabel} style={{ width: 8, height: 8, borderRadius: "50%", background: statusColor, flexShrink: 0 }} />
+        <WorldTitle name={worldName} />
+        {/* The dot says "connected" by itself; words only when it isn't. */}
+        {connectionState !== "connected" && <span style={{ opacity: 0.65, fontSize: 11, whiteSpace: "nowrap" }}>{statusLabel}</span>}
         <span
           style={{
             display: "inline-flex",

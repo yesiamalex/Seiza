@@ -23,3 +23,22 @@ export function WorldName({ name }: { name: string }) {
     </>
   );
 }
+
+/**
+ * A world's name as a title over a subtitle, split at its first dash:
+ * "Seiza — Default World" reads as "Seiza 正座 · 星座" over a smaller
+ * "Default World", which fits a top-bar pill without crowding it. A name
+ * with no dash is just the title.
+ */
+export function WorldTitle({ name }: { name: string }) {
+  const [, title, subtitle] = /^(.*?)\s+[—–-]\s+(.+)$/s.exec(name) ?? [name, name, ""];
+  const clip = { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 } as const;
+  return (
+    <span style={{ display: "grid", minWidth: 0, lineHeight: 1.2, textAlign: "left" }}>
+      <strong style={clip}>
+        <WorldName name={title} />
+      </strong>
+      {subtitle && <span style={{ ...clip, fontSize: 11, opacity: 0.6 }}>{subtitle}</span>}
+    </span>
+  );
+}

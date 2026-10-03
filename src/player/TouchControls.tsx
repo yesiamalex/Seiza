@@ -212,9 +212,9 @@ export function TouchControls({
             onContextMenu={(e) => e.preventDefault()}
           >
             {/* Sized as a share of the button, not in pixels: the button scales
-                with the pad (72% of a cell), so a fixed size spilled out of it
+                with the pad (88% of a cell), so a fixed size spilled out of it
                 on smaller screens. */}
-            <CrouchIcon size={24} style={{ width: "66%", height: "66%" }} />
+            <CrouchIcon size={24} style={{ width: "80%", height: "80%" }} />
           </button>
         )}
         {sprinting && <span style={sprintBadgeStyle}>RUN</span>}
@@ -345,9 +345,9 @@ const crouchButtonStyle: React.CSSProperties = {
   gridArea: "crouch",
   justifySelf: "center",
   alignSelf: "center",
-  width: "72%",
+  width: "88%",
   overflow: "hidden",
-  height: "72%",
+  height: "88%",
   borderRadius: "50%",
   border: "1px solid rgba(255,255,255,0.18)",
   background: "rgba(18,18,22,0.52)",
