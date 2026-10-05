@@ -1,8 +1,12 @@
-# Seiza
+# 🌸 Seiza
 
 Seiza is a small 3D world that people can walk around in together from a web
 browser. It runs entirely on your own Cloudflare account, not on a server
 that someone else operates.
+
+<p align="center">
+  <img src="docs/media/hero.gif" width="720" alt="In Seiza's hall, two avatars kneel in seiza on the tatami and start to doze while a third waves, a fourth claps, and one bows from seiza.">
+</p>
 
 Pick a name and an avatar, open the link, and you are in a room with everyone
 else who opened it. Nothing to install, and no headset needed (though it
@@ -13,10 +17,11 @@ replacement. It is smaller and plainer. In return, you get a room that nobody
 else can shut down, re-price, or take your data out of.
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/yesiamalex/Seiza)
+[![License: AGPL-3.0-or-later](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue.svg)](LICENSE)
 
 For the full guide, see [DOCS.md](DOCS.md).
 
-## What you can do in a room
+## 🏯 What you can do in a room
 
 - **Walk around** a hall, a classroom, and a garden, and sit on the chairs and
   benches.
@@ -37,11 +42,30 @@ For the full guide, see [DOCS.md](DOCS.md).
 - **Choose your look.** Build an avatar in the designer, pick a preset, or
   upload your own VRM file.
 
+<table>
+  <tr>
+    <td width="50%"><img src="docs/media/classroom.jpg" alt="The classroom from the back: students seated at desks, one raising a hand, the teacher at the chalkboard, and a presentation screen on the wall."></td>
+    <td width="50%"><img src="docs/media/garden.jpg" alt="The garden at dusk: an avatar wades in the pond among koi and lily pads, another sits on a bench, and a third stands by the water."></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>A class in the classroom</sub></td>
+    <td align="center"><sub>Wading in the garden pond</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/media/designer.jpg" alt="The avatar designer: a preview of a designed avatar with a happy expression, next to controls for presets, skin, body shape, and hair."></td>
+    <td width="50%"><img src="docs/media/avatar-presets.jpg" alt="The in-world Avatar menu on the Presets tab, showing four VRoid sample avatars and their CC0 license credit."></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Design your own avatar in the browser</sub></td>
+    <td align="center"><sub>Or pick a ready-made VRM preset</sub></td>
+  </tr>
+</table>
+
 The same link works on a phone, a laptop, or a VR headset. In a headset, your
 avatar follows your head and hands, and turning your left palm toward you
 opens a menu for voice and gestures.
 
-## Why run it yourself
+## 🔒 Why run it yourself
 
 Hosted worlds keep closing. Mozilla Hubs shut down in 2024, Ready Player Me
 in January 2026, and Spatial.io retired its free 3D worlds in July 2026. None
@@ -51,7 +75,7 @@ You, your school, or your club set up Seiza on your own Cloudflare account.
 Everything placed in a room, and everyone in it, lives on that account. The
 Seiza project does not run a server, so there is nothing in the middle.
 
-## What it costs
+## 💸 What it costs
 
 For a class-sized room, it is usually free. Seiza fits in Cloudflare's free
 tiers, and audio and video travel directly between browsers instead of
@@ -62,7 +86,7 @@ people's networks can't connect directly, and it is off until you turn it on.
 Cloudflare includes 1,000 GB per month before charging. See
 [Voice and video across networks](DOCS.md#voice-and-video-across-networks).
 
-## Run your own
+## 🚀 Run your own
 
 You don't need to write code, but you do need to run a few commands.
 
@@ -78,7 +102,7 @@ thing, after first copying the repository into your GitHub account.
 - Full setup, configuration, and world customization: [DOCS.md](DOCS.md)
 - Hosting somewhere other than Cloudflare: [SELF-HOSTING.md](SELF-HOSTING.md)
 
-## Who controls a room
+## 🛡️ Who controls a room
 
 Anyone who joins can walk, talk, present, and write on boards. You can put
 room editing behind a password. If you set an **admin key**, whoever has it
@@ -93,7 +117,7 @@ Two limits apply:
 - There are no user accounts, so removing someone ends their session but
   doesn't stop them from rejoining.
 
-## Known limitations
+## 🚧 Known limitations
 
 Seiza works, but it isn't production-hardened yet.
 
@@ -108,7 +132,7 @@ Seiza works, but it isn't production-hardened yet.
 For the complete list, including what each limit means for safety and
 moderation, see [Known limitations](DOCS.md#known-limitations) in DOCS.md.
 
-## Documentation
+## 📚 Documentation
 
 | Document | Contents |
 |---|---|
@@ -118,7 +142,7 @@ moderation, see [Known limitations](DOCS.md#known-limitations) in DOCS.md.
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute, the CLA, and the documentation style guide |
 | [THIRD_PARTY_ASSETS.md](THIRD_PARTY_ASSETS.md) | Asset licenses, including uploaded avatars |
 
-## License
+## ⚖️ License
 
 Seiza is dual-licensed:
 
@@ -128,3 +152,6 @@ Seiza is dual-licensed:
 
 3D assets are licensed separately. See
 [THIRD_PARTY_ASSETS.md](THIRD_PARTY_ASSETS.md).
+
+The avatars in the screenshots were made with Seiza's built-in designer, plus
+the CC0 VRoid Studio sample "Sendagaya Shino" (pixiv Inc.).
