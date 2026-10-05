@@ -39,7 +39,7 @@ export interface Env {
   SEIZA_MAX_OCCUPANTS?: string;
   /** Optional pair for minting short-lived Cloudflare Realtime TURN
    *  credentials (see handleTurnCredentials below, and DOCS.md's
-   *  "Voice/video across different networks" for why this exists at all:
+   *  "Voice and video across networks" for why this exists at all:
    *  STUN alone — the only thing configured without it — cannot traverse
    *  every NAT, and a peer pair split across two network types where at
    *  least one is restrictive is exactly the "works on the same Wi-Fi,

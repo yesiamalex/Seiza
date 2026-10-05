@@ -1,170 +1,174 @@
-# Admin & moderation
+# Admin and moderation
 
-Seiza has three separate secrets that gate three separate things. They're
-kept deliberately separate rather than folded into one "password" concept,
-because they answer three different questions and carry three different
-levels of risk if one leaks:
+Seiza uses three separate secrets to control three separate things. Each one
+answers a different question and carries a different risk if it leaks, so
+they aren't combined into one password.
 
-| Secret | Answers | Where it lives | Who can change it, and how |
+| Secret | Controls | Stored in | Who changes it, and how |
 |---|---|---|---|
-| `SEIZA_EDITOR_PASSWORD` | Can this connection edit the world? | Worker secret | A deployer, via `wrangler secret put` — never from inside the app |
-| `SEIZA_ADMIN_KEY` | Can this connection edit the world **and** moderate people? | Worker secret | Same — a deployer, via `wrangler secret put` |
-| Room entry password | Can this connection join the room **at all**? | This room's own Durable Object storage | Any signed-in admin, live, from the Admin button — no redeploy |
+| `SEIZA_EDITOR_PASSWORD` | Editing the world | Worker secret | A deployer, with `wrangler secret put` or the Cloudflare dashboard. Not from inside the app. |
+| `SEIZA_ADMIN_KEY` | Editing the world **and** moderating people | Worker secret | A deployer, with `wrangler secret put` or the Cloudflare dashboard. Not from inside the app. |
+| Room entry password | Joining the room at all | The room's own Durable Object storage | Any signed-in admin, live, from the **Admin** button. No redeploy needed. |
 
-If you only set one thing, set `SEIZA_ADMIN_KEY` and skip
-`SEIZA_EDITOR_PASSWORD` entirely — see "Do I need both?" below.
+If you only set one, set `SEIZA_ADMIN_KEY` and skip `SEIZA_EDITOR_PASSWORD`.
+See [Do I need both?](#do-i-need-both-seiza_editor_password-and-seiza_admin_key)
 
-> **Voice/video across networks (TURN) uses two more Worker secrets, and
-> needs both:** `CLOUDFLARE_TURN_KEY_ID` *and* `CLOUDFLARE_TURN_KEY_API_TOKEN`,
-> from **Realtime → TURN** in the Cloudflare dashboard. Setting only the API
-> token does nothing. See "Voice/video across different networks" in [DOCS.md](DOCS.md),
-> which also shows how to check it's working.
+> **Note:** Voice and video across networks (TURN) need two more Worker
+> secrets, and both are required: `CLOUDFLARE_TURN_KEY_ID` and
+> `CLOUDFLARE_TURN_KEY_API_TOKEN`, from **Realtime > TURN** in the Cloudflare
+> dashboard. Setting only the API token does nothing. See
+> [Voice and video across networks](DOCS.md#voice-and-video-across-networks),
+> which also explains how to check that it works.
 
-## `SEIZA_EDITOR_PASSWORD`: gates editing only
+## Set a Worker secret
 
-Unchanged from before this document existed. One shared password; anyone
-who has it can enable Edit Mode and place, move, or delete objects. No
-roster, no moderation. Set it with:
+You can set any of the Worker secrets in two ways.
 
-```bash
-npx wrangler secret put SEIZA_EDITOR_PASSWORD
-```
-
-## `SEIZA_ADMIN_KEY`: gates editing *and* moderation
+**From the command line:**
 
 ```bash
 npx wrangler secret put SEIZA_ADMIN_KEY
 ```
 
-**OR EDIT THE SECRETS VARIABLES with these values in your Cloudflare deployment dashboard UI!**
+**From the Cloudflare dashboard:**
 
-When this is set, it **supersedes** `SEIZA_EDITOR_PASSWORD` for the Edit
-Mode gate specifically — clicking the pencil icon now asks for the admin
-key, not the editor password, and entering it correctly grants both
-editing and everything below. If you set both, the editor password still
-technically works as a Worker secret, but the client's UI only ever
-prompts for the admin key once one exists, so in practice the editor
-password becomes unreachable from the interface. Set one or the other,
-not both, unless you have a specific reason to keep the editor password
-alive for some other integration.
+1. Go to **Workers & Pages** and select your Worker.
+2. Go to **Settings > Variables and Secrets** and select **Add**.
+3. Choose the **Secret** type, enter the secret's name and value, and save.
 
-An admin, once signed in, can:
+## `SEIZA_EDITOR_PASSWORD`: editing only
 
-- **See the participant roster.** Click the world-name pill, top left —
-  this is visible to *everyone*, admin or not; only the action buttons on
-  each row are admin-only.
-- **Mute or unmute someone's mic.** "Mute" is enforceable — the target's
-  own client is told to disable its microphone track. "Unmute" is really
-  a *request* the target's client fulfills, not something forced on
-  them, because voice is peer-to-peer (see the project paper, Section
-  5.7) and the server never has access to anyone's actual audio to turn
-  on remotely.
-- **Kick someone.** Disconnects them immediately, with a message
-  explaining an admin removed them (not a generic connection error).
-  This is a one-time disconnect, not a ban — nothing stops them
-  rejoining with the same link a moment later. If you need to actually
-  keep someone out, use the room entry password below and change it.
-- **Teleport to someone.** Moves *your own* avatar to theirs. No one
-  else's position is touched.
-- **Gather everyone here.** The reverse — moves *everyone else's* avatar
-  to your current position. Each client teleports itself in response to
-  a server message; nothing here reaches into another client's state
-  directly, consistent with every player always being the sole authority
-  over their own position over the wire.
+One shared password. Anyone who has it can turn on Edit Mode and place, move,
+or delete objects. It doesn't give access to the participant list or
+moderation.
 
-### Why isn't the admin key remembered after I reload the page?
+```bash
+npx wrangler secret put SEIZA_EDITOR_PASSWORD
+```
 
-On purpose. Admin status lives only in that WebSocket connection's
-server-side memory (`attachment.isAdmin` in `worker/room.ts`) and the
-matching client-side React state — nowhere in `localStorage`,
-`sessionStorage`, or any other browser storage. A closed tab or a reload
-means signing in again.
+## `SEIZA_ADMIN_KEY`: editing and moderation
 
-This was a specific choice, not an oversight. Persisting the raw admin
-key in browser storage would mean:
+```bash
+npx wrangler secret put SEIZA_ADMIN_KEY
+```
 
-- **Shared or borrowed devices become a standing risk.** Anyone who
-  later opens Seiza in that same browser profile — a shared classroom
-  computer, a borrowed laptop — would silently inherit admin rights with
-  no prompt at all, unlike a login system there'd be no visible "signed
-  in as admin" step to notice and undo.
-- **Any future stored-XSS bug becomes worse than it has to be.** This
-  app already renders user-supplied text (chat, notes, board text) and
-  loads user-supplied asset URLs. If a bug ever let one of those inject
-  a script, a key sitting in `localStorage` is exactly what that script
-  would go looking for first. Keeping the key out of any browser storage
-  means there's nothing there to steal even if that happens.
+When the admin key is set, it replaces `SEIZA_EDITOR_PASSWORD` for Edit
+Mode. Selecting the pencil icon asks for the admin key instead of the editor
+password, and the correct key grants editing plus everything in the list
+below.
 
-Re-entering it each session is the tradeoff this makes deliberately in
-exchange for that: mildly less convenient, meaningfully harder to leak.
+If you set both, the editor password still works as a Worker secret, but the
+app only ever asks for the admin key, so there's no way to enter the editor
+password in the interface. Set one or the other, unless another integration
+needs the editor password.
+
+### What an admin can do
+
+After signing in, an admin can:
+
+- **See the participant list.** Select the world-name pill at the top left.
+  Everyone can see the list; only the action buttons on each row are for
+  admins.
+- **Mute or unmute someone's microphone.** Mute is enforced: the person's
+  browser is told to turn off their microphone. Unmute is a request that the
+  person's browser carries out, because voice is peer-to-peer and the server
+  never has access to anyone's audio.
+- **Remove someone.** This disconnects them immediately, with a message
+  saying an admin removed them. It isn't a ban: they can rejoin with the same
+  link right away. To keep someone out, set a
+  [room entry password](#room-entry-password-who-can-join) and change it.
+- **Teleport to someone.** This moves your own avatar to theirs. Nobody else
+  moves.
+- **Gather everyone.** This moves everyone else's avatar to your position.
+  Each person's browser moves its own avatar in response to a server
+  message, because every player is the only authority over their own
+  position.
+
+### Why do I have to enter the admin key again after reloading?
+
+This is intentional. Admin status exists only in that connection's memory on
+the server (`attachment.isAdmin` in `worker/room.ts`) and in the page's
+state. It's never saved in `localStorage`, `sessionStorage`, or any other
+browser storage. Closing the tab or reloading means signing in again.
+
+Saving the key in the browser would create two risks:
+
+- **Shared devices.** Anyone who later opened Seiza in the same browser
+  profile, such as a shared classroom computer or a borrowed laptop, would
+  become an admin without being asked. Unlike a login system, there'd be no
+  visible "signed in as admin" step to notice and undo.
+- **Script injection.** Seiza displays text from users (chat, notes, and
+  boards) and loads URLs that users provide. If a bug ever let one of those
+  inject a script, a stored key is the first thing that script would look
+  for. With nothing stored, there's nothing to steal.
+
+Entering the key each session is slightly less convenient, and much harder to
+leak.
 
 ### Why can't I change the admin key from inside the app?
 
-You can rotate it without a full redeploy — `wrangler secret put
-SEIZA_ADMIN_KEY` again updates a live Worker in place — but there's
-deliberately no "change admin key" form inside the app itself. A few
-reasons stacked together:
+You can change it without a full redeploy: running
+`wrangler secret put SEIZA_ADMIN_KEY` again updates the live Worker. The app
+intentionally has no form for it, for three reasons:
 
-- **Bootstrapping problem.** Whoever's allowed to change the key would
-  itself need to be gated by *something* — normally the key itself,
-  which makes "forgot/leaked the key, need to rotate it" exactly the
-  case where an in-app flow is least useful.
-- **More UI surface is more exposure.** A "change admin key" screen adds
-  a place the key transits through the browser (visible on screen,
-  subject to autofill, screen-sharing, shoulder-surfing) beyond the one
-  unavoidable moment of typing it to sign in.
-- **It's genuinely low-frequency.** Unlike a room entry password (see
-  below), the admin key is realistically set once per deployment and
-  rarely touched again, so paying a small amount of CLI friction for a
-  meaningfully smaller attack surface is a good trade here specifically.
+- **It would need its own protection.** Changing the key would have to be
+  protected by something, usually the key itself. That makes an in-app form
+  least useful in the case that matters most: a forgotten or leaked key.
+- **More screens mean more exposure.** A form would show the key in the
+  browser more often (on screen, to autofill, during screen sharing, and to
+  people nearby) than the one time you type it to sign in.
+- **You rarely change it.** Unlike the room entry password, you usually set
+  the admin key once per deployment. A little command-line effort is worth
+  the smaller attack surface.
 
 ### Do I need both `SEIZA_EDITOR_PASSWORD` and `SEIZA_ADMIN_KEY`?
 
-No. For almost every deployment, set `SEIZA_ADMIN_KEY` alone and skip the
-editor password entirely — it does everything the editor password does,
-plus moderation. The editor password on its own still exists for a
-narrower case: you want *some* people to edit the world without also
-being able to kick or mute anyone, and you're comfortable that being a
-second password rather than a per-user role (there still isn't one).
+No. For almost every deployment, set only `SEIZA_ADMIN_KEY`. It does
+everything the editor password does, plus moderation.
 
-## Room entry password: gates who can join
+The editor password alone is for one narrower case: you want some people to
+edit the world without being able to remove or mute anyone, and you're fine
+with a second shared password instead of per-user roles (which Seiza
+doesn't have).
 
-This is the odd one out on purpose, and it's the one thing an admin *can*
-change live from inside the app: the Admin button (next to Avatar, top
-right) has a "Room entry password" field once you're signed in. Setting
-it means anyone trying to join needs that password too, checked before
-they can join it at all — you get a password prompt instead of the world;
-clearing the field and applying removes the requirement again.
+## Room entry password: who can join
 
-This is a **third, separate secret** from the admin key, stored in this
-room's own Durable Object (`worker/room.ts`), not a Worker secret at all
-— and that's a deliberate asymmetry with the admin key above, not an
-inconsistency:
+The room entry password is the only secret an admin can change from inside
+the app:
 
-- **The stakes are different.** If an admin key leaks, someone can edit
-  the world and moderate — kick people, mute people, move people. If a
-  *room password* leaks, the worst case is an uninvited guest gets in,
-  same as anyone forwarding a normal link. Lower stakes justify a lower
-  ceremony for changing it.
-- **It's likely to change far more often.** An admin key is set once per
-  deployment. A room password is much more plausibly something an
-  instructor rotates per class, or an event organizer sets fresh per
-  event ("this week's code is..."). Requiring a redeploy or a CLI command
-  for something you might change weekly would be genuinely annoying in a
-  way it isn't for the admin key.
+1. Sign in as an admin.
+2. Select the **Admin** button, next to **Avatar** at the top right.
+3. Enter a password in the **Room entry password** field and apply it.
 
-If you'd rather this also be a fixed, redeploy-only secret for your own
-threat model, that's a reasonable call for your fork — the pattern to
-follow would be adding it to `wrangler.jsonc`'s secrets the same way as
-the other two and checking it in `worker/index.ts` instead of
-`worker/room.ts`'s mutable storage, trading the runtime flexibility above
-for the same lower-exposure profile the admin key has.
+From then on, anyone joining sees a password prompt instead of the world.
+To remove the requirement, clear the field and apply it again.
 
-## What none of this is
+The room entry password is stored in the room's own Durable Object
+(`worker/room.ts`), not as a Worker secret. It's handled differently from the
+admin key on purpose:
 
-Not per-user accounts. Not roles beyond "admin" and "everyone else" (an
-admin can moderate other admins; there's no hierarchy). Not a ban list —
-kicking someone doesn't stop them rejoining, only a room password
-(changed afterward) does that. If your deployment needs any of those,
-they're reasonable extensions to build on top of the three secrets
-above, not something this version tries to be.
+- **The risk is lower.** A leaked admin key lets someone edit the world,
+  remove people, mute people, and move people. A leaked room password lets
+  an uninvited guest in, the same as forwarding the link. Lower risk
+  justifies an easier way to change it.
+- **It changes more often.** You set the admin key once per deployment. A
+  teacher might change the room password for every class, or an organizer
+  for every event. Needing a redeploy or a command for a weekly change would
+  be a burden.
+
+If your threat model calls for a fixed, redeploy-only room password, you can
+change that in your fork. Add the password to `wrangler.jsonc` as a secret,
+the same way as the other two, and check it in `worker/index.ts` instead of
+in `worker/room.ts`'s storage. You give up changing it at runtime, and gain
+the admin key's lower exposure.
+
+## What Seiza doesn't provide
+
+- **Per-user accounts.**
+- **Roles beyond "admin" and "everyone else."** An admin can moderate other
+  admins; there's no hierarchy.
+- **A ban list.** Removing someone doesn't stop them from rejoining. Only a
+  room password, changed afterward, does.
+
+If your deployment needs these, you can build them on top of the three
+secrets above.

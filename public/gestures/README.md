@@ -1,75 +1,83 @@
 # Gesture clips
 
 Seiza plays gestures from **VRM Animation** (`.vrma`) files. A `.vrma` clip
-animates the VRM *humanoid* bones (hips, spine, upperArm, …) rather than any
-one model's skeleton, so a single clip works on every avatar in a room: an
-uploaded VRM 0.x or 1.0 file, a deployment preset, or a designer avatar.
-Retargeting is done by `@pixiv/three-vrm-animation` at load time.
+animates the VRM **humanoid** bones (`hips`, `spine`, `upperArm`, and so on)
+rather than one model's own skeleton. As a result, one clip works on every
+avatar in a room: an uploaded VRM 0.x or 1.0 file, a deployment preset, or a
+designer avatar. `@pixiv/three-vrm-animation` retargets the clip when it
+loads.
 
 ```
 public/gestures/
-  builtin/   generated clips that ship with Seiza (do not edit by hand)
-  custom/    your deployment's own clips (create this folder)
+  builtin/   Generated clips that ship with Seiza (don't edit by hand)
+  custom/    Your deployment's own clips (create this folder)
 ```
 
 ## Built-in gestures
 
-`builtin/*.vrma` and `public/animations/{idle,walk,run}.vrma` are written by
-`scripts/generate-motions.mjs`. The keyframes are authored in that script, so
-there is no third-party motion data and the clips are covered by this
-repository's license (see `THIRD_PARTY_ASSETS.md`). To change a motion, edit
-the script and run:
+`scripts/generate-motions.mjs` writes `builtin/*.vrma` and
+`public/animations/{idle,walk,run}.vrma`. The keyframes are written in that
+script, so the clips contain no third-party motion data and are covered by
+this repository's license (see `THIRD_PARTY_ASSETS.md`).
+
+To change a motion, edit the script and run:
 
 ```bash
 npm run generate:motions
 ```
 
-That also rewrites `src/avatar/builtinMotions.generated.ts`, the manifest the
-app reads names, labels, durations, and the full-body flag from.
+This also rewrites `src/avatar/builtinMotions.generated.ts`, the manifest from
+which the app reads each clip's name, label, duration, and full-body flag.
 
-| Key | Name | Label | Body | Kind |
+| Key | Name | Label | Body | Type |
 |---|---|---|---|---|
-| 1 | `wave` | Wave | upper | one-shot |
-| 2 | `bow` | Bow (ojigi) | upper | one-shot |
-| 3 | `seiza` | Seiza (hold) | full | hold, toggle |
-| 4 | `nod` | Nod | upper | one-shot |
-| 5 | `clap` | Clap | upper | one-shot |
-| 6 | `cheer` | Cheer | upper | one-shot |
-| 7 | `shrug` | Shrug | upper | one-shot |
-| 8 | `point` | Point | upper | one-shot |
-| 9 | `gassho` | Gasshō (thanks) | upper | one-shot |
-| 0 | `raisehand` | Raise hand (hold) | upper | hold |
-| — | `sit` | Sit | full | hold, hidden |
+| `1` | `wave` | Wave | Upper | One-shot |
+| `2` | `bow` | Bow (ojigi) | Upper | One-shot |
+| `3` | `seiza` | Seiza (hold) | Full | Hold, toggle |
+| `4` | `nod` | Nod | Upper | One-shot |
+| `5` | `clap` | Clap | Upper | One-shot |
+| `6` | `cheer` | Cheer | Upper | One-shot |
+| `7` | `shrug` | Shrug | Upper | One-shot |
+| `8` | `point` | Point | Upper | One-shot |
+| `9` | `gassho` | Gasshō (thanks) | Upper | One-shot |
+| `0` | `raisehand` | Raise hand (hold) | Upper | Hold |
+| None | `sit` | Sit | Full | Hold, hidden |
 
-Upper-body gestures layer over walking, so you can wave while moving. Full-body
-gestures also drive the legs and take over from walking while they play.
+Upper-body gestures play on top of walking, so you can wave while you move.
+Full-body gestures also control the legs, and replace walking while they
+play.
 
-A **hold** clip ends on the pose it should keep and stays there instead of
-playing through. How it's released depends on which half of the body it
-drives:
+### Hold clips
 
-- An upper-body hold (the raised hand) lasts while you hold its key or
-  button, and drops when you let go.
-- A full-body hold is a **posture**: its key toggles it, so seiza stays until
-  you press 3 again or move. Sitting works the same way, triggered by
-  clicking a chair instead of by a key.
+A **hold** clip ends on the pose it keeps and stays there instead of playing
+through. How it's released depends on which part of the body it controls:
 
-Postures are tracked separately from gestures on the wire, which is what lets
-a seated or kneeling player wave without standing up on everyone's screen.
+- **Upper-body hold** (the raised hand): lasts while you hold its key or
+  button, and ends when you let go.
+- **Full-body hold**: a **posture**. Its key toggles it, so seiza stays until
+  you press `3` again or move. Sitting works the same way, but you start it
+  by clicking a chair instead of pressing a key.
 
-A **hidden** clip never appears in the menu or on the number keys because
-something else triggers it — `sit` is played when a player clicks a chair.
+Postures are tracked separately from gestures on the network. This lets a
+seated or kneeling player wave without standing up on everyone else's
+screen.
 
-Replacing `sit` with your own clip changes how everyone sits in your world.
-Keep the hips drop in the final pose equal to `SEAT_HEIGHT` in
-`src/scene/layout.ts` (0.45m), or avatars will float above the chairs or sink
-into them.
+### Hidden clips
 
-## Adding your own
+A **hidden** clip never appears in the menu or on the number keys, because
+something else triggers it. For example, `sit` plays when a player clicks a
+chair.
+
+If you replace `sit` with your own clip, it changes how everyone sits in your
+world. In the final pose, keep the hips' drop equal to `SEAT_HEIGHT` in
+`src/scene/layout.ts` (0.45 m), or avatars float above the chairs or sink into
+them.
+
+## Add your own gestures
 
 1. Put the clip in `public/gestures/custom/`, for example
    `public/gestures/custom/salute.vrma`.
-2. Register it in your world config (`public/worlds/<id>/world.json`):
+2. Register it in your world configuration (`public/worlds/<id>/world.json`):
 
    ```json
    "customGestures": [
@@ -82,48 +90,43 @@ into them.
 
 3. Record the clip's source and license in `THIRD_PARTY_ASSETS.md`.
 
-Rules, enforced in `src/avatar/gestures.ts`:
+`src/avatar/gestures.ts` enforces these rules:
 
-- **Same name as a built-in replaces it.** Above, `bow` swaps the built-in
-  bow for your clip. The gesture menu lists it under "Custom for this world"
-  and marks it as replacing the built-in.
-- **Any other name is added** alongside the built-ins.
-- `name` is lowercase letters, digits, `-` or `_`, up to 32 characters. The
-  room server checks the same shape before relaying a gesture.
-- `url` must be a same-origin path or an `https://` URL.
-- `fullBody: true` for clips that move the legs (sitting, kneeling, dancing).
-  Leave it out for arm, head, and torso gestures.
-- `hold: true` for a pose that should stay until released. Author the clip so
-  its last frame *is* that pose, since that's the frame it holds. Combined
-  with `fullBody: true` it becomes a posture, toggled by its key.
-- To hide some built-ins, list the ones to keep in `enabledGestures`. Custom
-  gestures are always shown.
+| Field or case | Rule |
+|---|---|
+| Same `name` as a built-in | Replaces the built-in. In the example, `bow` replaces the built-in bow. The gesture menu lists it under **Custom for this world** and marks it as a replacement. |
+| Any other `name` | Adds a new gesture next to the built-ins. |
+| `name` format | Lowercase letters, digits, `-`, or `_`, up to 32 characters. The room server checks the same format before relaying a gesture. |
+| `url` | A same-origin path or an `https://` URL. |
+| `fullBody: true` | For clips that move the legs, such as sitting, kneeling, or dancing. Leave it out for arm, head, and torso gestures. |
+| `hold: true` | For a pose that stays until released. Make the clip's last frame that pose, because that's the frame it holds. With `fullBody: true`, the clip becomes a posture, toggled by its key. |
+| `enabledGestures` | To hide some built-in gestures, list the ones to keep. Custom gestures are always shown. |
 
-Everyone in a room loads the same `world.json`, so a custom gesture resolves
-to the same clip for every client.
+Everyone in a room loads the same `world.json`, so a custom gesture plays the
+same clip for everyone.
 
-## Making a `.vrma`
+## Create a `.vrma` file
 
 - **Blender:** the VRM Add-on for Blender can import a VRM, animate its
   humanoid rig, and export VRM Animation.
-- **Motion capture (BVH):** convert with a BVH-to-VRMA tool, then trim in
-  Blender.
-- **Code:** copy the approach in `scripts/generate-motions.mjs`.
+- **Motion capture (BVH):** convert the file with a BVH-to-VRMA tool, then
+  trim it in Blender.
+- **Code:** follow the approach in `scripts/generate-motions.mjs`.
 
-Keep clips short and not looping. A one-shot should start and end near a
-relaxed standing pose, because the app blends in and out over a fraction of a
-second and a clip that ends mid-motion will visibly snap back; a `hold` clip
-should instead end exactly on the pose it keeps. Clips that animate
-`expressions` or `lookAt` are fine; only humanoid bone tracks are required.
+### Authoring tips
 
-**Watch the palms.** The forearm's X rotation rolls the wrist, and it is the
-difference between a wave and a shrug reading correctly or looking like the
-hand is on backwards. On a left arm at rest, -90 turns the palm forward, 0
-faces it inward toward the thigh, and +90 turns it backward; the right
-forearm is mirrored. The built-in clips set these angles from measurements
-taken on a real rig rather than by eye — see the notes at the top of
-`scripts/generate-motions.mjs`.
-
-Test a new clip on both a VRM 0.x and a VRM 1.0 avatar. The two formats use
-mirrored axis conventions, and three-vrm corrects for that automatically only
-when the clip itself is valid VRMA.
+- **Keep clips short, and don't loop them.** The app blends in and out over a
+  fraction of a second, so a one-shot clip should start and end near a
+  relaxed standing pose. A clip that ends mid-motion snaps back visibly. A
+  `hold` clip should end exactly on the pose it keeps.
+- **Other tracks are optional.** Clips can animate `expressions` or `lookAt`,
+  but only humanoid bone tracks are required.
+- **Check the palms.** The forearm's X rotation rolls the wrist, and it
+  decides whether a wave or shrug looks right or the hand looks backward. On
+  a left arm at rest, -90 turns the palm forward, 0 faces it toward the
+  thigh, and +90 turns it backward. The right forearm is mirrored. The
+  built-in clips set these angles from measurements on a real rig; see the
+  notes at the top of `scripts/generate-motions.mjs`.
+- **Test on both VRM versions.** Try each new clip on a VRM 0.x and a VRM 1.0
+  avatar. The two formats use mirrored axes, and three-vrm only corrects for
+  that automatically when the clip is valid VRMA.

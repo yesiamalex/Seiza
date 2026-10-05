@@ -1,35 +1,83 @@
 # Contributing to Seiza
 
-Thanks for considering it. A couple of things that matter more here than
-in a typical repo, because of the dual-license (AGPL + commercial —
-see `COMMERCIAL-LICENSE.md`):
+Thank you for your interest in contributing. Seiza is dual-licensed (AGPL
+and commercial, see [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md)), which
+adds one requirement that most repositories don't have: a Contributor
+License Agreement.
 
-## Contributor License Agreement (CLA) — required before merge
+## Contributor License Agreement (CLA)
 
-Because contributions may be relicensed commercially (that's what funds
-paid support/hosting for people who can't self-deploy), the maintainer
-needs clean, unambiguous rights to every line merged. That means:
+You must sign a CLA before your pull request can be merged.
 
-- **TODO: wire up a CLA bot** (e.g. [cla-assistant.io](https://cla-assistant.io)
-  or SAP's CLA bot) so first-time contributors get an explicit,
-  affirmative sign-off prompt on their first PR, before merge is possible.
-- Until that bot is set up, **do not merge external PRs** — an implied
-  "PRing means you agree" note in this file is not a substitute for an
-  actual signed agreement, and relying on it would undermine the exact
-  thing the CLA is supposed to protect.
+The maintainer can relicense contributions commercially, and that revenue
+funds paid support and hosting for people who can't deploy Seiza
+themselves. To do that, the maintainer needs clear rights to every merged
+line.
 
-## Be upfront about this tradeoff
+Current status:
 
-CLAs are a legitimate and common practice for dual-licensed projects
-(Sentry, Grafana, and many others use one), but some contributors
-reasonably don't want to sign one. That's a fair position — no hard
-feelings, and forks are always possible under the AGPL. Better that
-tradeoff is visible here than discovered after someone's already put
-work in.
+- **To do:** set up a CLA bot, such as
+  [cla-assistant.io](https://cla-assistant.io) or SAP's CLA bot, so that
+  first-time contributors are asked to sign on their first pull request.
+- Until the bot is in place, external pull requests are not merged. A note
+  in this file saying "opening a PR means you agree" is not a signed
+  agreement, and relying on it would undermine what the CLA protects.
 
-## Everything else
+### If you don't want to sign a CLA
 
-- Open an issue before a large PR, so design direction (see the paper
-  draft's Sections 3–4) doesn't get relitigated in review.
-- Adding a new gesture or 3D asset? Update `THIRD_PARTY_ASSETS.md` in the
-  same PR — assets without a documented license won't be merged.
+That's a reasonable choice. CLAs are common in dual-licensed projects (for
+example, Sentry and Grafana use them), but not everyone wants to sign one.
+You can always fork Seiza under the AGPL. This section is here so you know
+before you start work, not after.
+
+## Before you open a pull request
+
+- **Open an issue first for large changes**, so that design decisions are
+  agreed before review.
+- **Record new assets.** If you add a gesture, avatar, model, or other 3D
+  asset, add a row to [THIRD_PARTY_ASSETS.md](THIRD_PARTY_ASSETS.md) in the
+  same pull request. Assets without a documented license are not merged.
+- **Update the docs** when you change behavior that they describe.
+
+## Documentation style guide
+
+Seiza's documentation follows common technical-writing conventions, based on
+the [Google developer documentation style guide](https://developers.google.com/style)
+and the [Diátaxis](https://diataxis.fr/) framework. Please follow them when
+you write or edit docs.
+
+### Structure
+
+- Keep each section to one purpose:
+  - **How-to:** numbered steps that get a task done.
+  - **Reference:** facts, usually in a table.
+  - **Explanation:** why something works the way it does.
+- Put the most important information first.
+- Use numbered lists for steps in order, and bulleted lists for everything
+  else.
+- Use a table when you compare items or list options.
+- Link to other sections instead of repeating them.
+
+### Voice and tone
+
+- Write to the reader as "you".
+- Use the active voice and the present tense: "The server rejects the URL",
+  not "The URL will be rejected by the server".
+- Use short sentences, about 25 words or fewer, and short paragraphs.
+- Be direct. Avoid filler such as "simply", "just", "basically", "honestly",
+  "genuinely", or "in order to".
+- State limits plainly. Don't oversell or apologize.
+- Describe how things work now. Leave the history of a change to commit
+  messages and code comments.
+
+### Formatting
+
+- Use sentence case for headings: "Deploy your own instance", not "Deploy
+  Your Own Instance".
+- Don't use em dashes (—). Use a period, comma, colon, or parentheses
+  instead.
+- Use `code format` for file names, paths, commands, keys, field names, and
+  values.
+- Use **bold** for UI labels and for a few key terms. Don't use it for
+  general emphasis.
+- Use American English spelling.

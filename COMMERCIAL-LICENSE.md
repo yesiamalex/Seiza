@@ -1,42 +1,44 @@
-# Commercial Licensing
+# Commercial licensing
 
 Seiza is dual-licensed:
 
-1. **AGPL-3.0-or-later** (see `LICENSE`) — free to use, modify, and
-   self-host, provided that any modified version you run as a network
-   service makes its complete source available to users of that service,
-   per AGPL §13.
-2. **A separate commercial license** — for organizations that want to use
-   Seiza (including modified versions) in a proprietary product or hosted
+1. **AGPL-3.0-or-later** (see `LICENSE`). You can use, modify, and self-host
+   Seiza for free. If you run a modified version as a network service, you
+   must make its complete source code available to that service's users
+   (AGPL section 13).
+2. **A separate commercial license.** This is for organizations that want to
+   use Seiza, including modified versions, in a proprietary product or hosted
    service without the AGPL's source-disclosure requirement.
 
-## Who actually needs the commercial license
+## Who needs the commercial license
 
-If you're an individual, educator, or institution self-hosting this
-as-is or with modifications you're fine keeping open — you almost
-certainly just need the AGPL and don't need to read further.
+If you're an individual, educator, or institution self-hosting Seiza as it
+is, or with changes you're happy to keep open, you need only the AGPL. You
+can stop reading here.
 
-You likely want the commercial license if your legal team has a blanket
-policy against AGPL dependencies, or you want to bundle a modified
-version into a closed product or paid hosted service without releasing
-your changes.
+You probably need the commercial license if:
 
-## What this document is not
+- Your legal team has a policy against AGPL dependencies, or
+- You want to include a modified version in a closed product or a paid
+  hosted service without releasing your changes.
 
-This is a plain-language summary, not the license agreement itself, and
-not legal advice. **TODO before this is used commercially: have the
-actual commercial license agreement reviewed by a lawyer** — it needs to
-cover scope, term, warranty disclaimers, liability limits, termination,
-and governing law at minimum. Don't send a company a one-page ad hoc
-document in place of this.
+## What this document isn't
 
-## Setup / deployment services
+This is a plain-language summary. It isn't the license agreement, and it
+isn't legal advice.
 
-Separately from licensing: paid setup, customization, and managed
-hosting support is available directly from the maintainer — useful for
-institutions that want this running but don't want to operate Cloudflare
-infrastructure themselves. Contact: **[email/contact placeholder]**.
+**To do before commercial use:** have a lawyer review the actual commercial
+license agreement. At a minimum, it needs to cover scope, term, warranty
+disclaimers, liability limits, termination, and governing law. Don't send a
+company an informal one-page document instead.
+
+## Setup and deployment services
+
+Separately from licensing, the maintainer offers paid setup, customization,
+and managed hosting support. This is useful for institutions that want Seiza
+running but don't want to operate Cloudflare infrastructure themselves.
+Contact: **[email/contact placeholder]**.
 
 ## Contact
 
-**[email/contact placeholder]** for commercial license inquiries.
+For commercial license inquiries, contact **[email/contact placeholder]**.
