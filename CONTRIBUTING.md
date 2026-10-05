@@ -60,13 +60,10 @@ you write or edit docs.
 
 ### Voice and tone
 
-- Write to the reader as "you".
-- Use the active voice and the present tense: "The server rejects the URL",
-  not "The URL will be rejected by the server".
 - Use short sentences, about 25 words or fewer, and short paragraphs.
 - Be direct. Avoid filler such as "simply", "just", "basically", "honestly",
   "genuinely", or "in order to".
-- State limits plainly. Don't oversell or apologize.
+- State limits plainly.
 - Describe how things work now. Leave the history of a change to commit
   messages and code comments.
 
