@@ -76,15 +76,3 @@ you write or edit docs.
 - Use **bold** for UI labels and for a few key terms. Don't use it for
   general emphasis.
 - Use American English spelling.
-
-### Emojis and media
-
-- **Emojis:** only in README.md section headings, at most one per heading.
-  Don't use them in body text, lists, or the other docs, which are
-  reference material.
-- **Images and GIFs:** store them in `docs/media/`. Keep a GIF under 5 MB
-  and about 720 px wide, and a screenshot under about 200 KB (JPEG).
-- **Alt text:** describe what happens in the image, not just "screenshot"
-  or "demo".
-- **Accuracy:** capture media from the current version of the app, and
-  retake it when the interface it shows changes.
