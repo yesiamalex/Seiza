@@ -74,8 +74,6 @@ you write or edit docs.
 
 - Use sentence case for headings: "Deploy your own instance", not "Deploy
   Your Own Instance".
-- Don't use em dashes (—). Use a period, comma, colon, or parentheses
-  instead.
 - Use `code format` for file names, paths, commands, keys, field names, and
   values.
 - Use **bold** for UI labels and for a few key terms. Don't use it for
