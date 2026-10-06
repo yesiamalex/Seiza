@@ -157,7 +157,7 @@ The avatars in the screenshots were made with Seiza's built-in designer, plus
 the CC0 VRoid Studio sample "Sendagaya Shino" (pixiv Inc.).
 
 <sup>*</sup> The pink-haired avatar is "Hitori 'Bocchi' Gotoh", a fan-made VRM by
-[@wawari_w](https://wawari.carrd.co/), of the character from *Bocchi the
+[@wawari_w](https://hub.vroid.com/en/users/42324143), of the character from *Bocchi the
 Rock!* (© Aki Hamaji / Houbunsha / Aniplex). It appears only in this
 screenshot, from the maintainer's own copy, to show how an uploaded,
 artist-made VRM looks in Seiza. The model is **not** included in this
