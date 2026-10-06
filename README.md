@@ -5,7 +5,7 @@ browser. It runs entirely on your own Cloudflare account, not on a server
 that someone else operates.
 
 <p align="center">
-  <img src="docs/media/hero.gif" width="720" alt="In Seiza's hall, two avatars kneel in seiza on the tatami and start to doze while a third waves, a fourth claps, and one bows from seiza.">
+  <img src="docs/media/hero.gif" width="720" alt="In Seiza's hall, a pink-haired, fan-made VRM avatar waves and then bows on the tatami, while two designer avatars kneel in seiza and doze, one of them bowing from seiza, and two more clap and cheer behind them.">
 </p>
 
 Pick a name and an avatar, open the link, and you are in a room with everyone
@@ -153,13 +153,14 @@ Seiza is dual-licensed:
 3D assets are licensed separately. See
 [THIRD_PARTY_ASSETS.md](THIRD_PARTY_ASSETS.md).
 
-The avatars in the screenshots were made with Seiza's built-in designer, plus
-the CC0 VRoid Studio sample "Sendagaya Shino" (pixiv Inc.).
+The avatars in the GIF and screenshots were made with Seiza's built-in designer,
+plus the CC0 VRoid Studio sample "Sendagaya Shino" (pixiv Inc.) and the
+fan-made model credited below.
 
 <sup>*</sup> The pink-haired avatar is "Hitori 'Bocchi' Gotoh", a fan-made VRM by
 [@wawari_w](https://hub.vroid.com/en/users/42324143), of the character from *Bocchi the
-Rock!* (© Aki Hamaji / Houbunsha / Aniplex). It appears only in this
-screenshot, from the maintainer's own copy, to show how an uploaded,
+Rock!* (© Aki Hamaji / Houbunsha / Aniplex). It appears only in the GIF at
+the top and in this screenshot, from the maintainer's own copy, to show how an uploaded,
 artist-made VRM looks in Seiza. The model is **not** included in this
 repository or in any deployment, and its license doesn't allow
 redistribution or corporate commercial use. Seiza isn't affiliated with or
