@@ -56,6 +56,16 @@ If you replace a generated clip with one from elsewhere, that clip is a
 third-party asset and needs a row in the
 [Tracked assets](#tracked-assets) table.
 
+## Third-party content in documentation media
+
+These assets appear only in screenshots or GIFs in `docs/media/`. The asset
+files themselves aren't in this repository and aren't served by any
+deployment.
+
+| Media | Asset shown | Author and source | License terms that apply | Notes |
+|---|---|---|---|---|
+| `docs/media/uploaded-vrm.jpg` | "Hitori 'Bocchi' Gotoh" VRM | Fan model by [@wawari_w](https://wawari.carrd.co/), of the character from *Bocchi the Rock!* (© Aki Hamaji / Houbunsha / Aniplex) | VRoid Hub license: use by everyone allowed; personal commercial use allowed; corporate commercial use **not** allowed; redistribution **not** allowed. | Captured from the maintainer's own copy for personal, illustrative use. Not an endorsement for commercial use or for forks. If you fork Seiza, consider replacing this image. Remove it on request from the model's author or the rights holders. |
+
 ## Add a new asset
 
 1. Record the source URL, the exact license, and whether the license allows

@@ -53,11 +53,11 @@ For the full guide, see [DOCS.md](DOCS.md).
   </tr>
   <tr>
     <td width="50%"><img src="docs/media/designer.jpg" alt="The avatar designer: a preview of a designed avatar with a happy expression, next to controls for presets, skin, body shape, and hair."></td>
-    <td width="50%"><img src="docs/media/avatar-presets.jpg" alt="The in-world Avatar menu on the Presets tab, showing four VRoid sample avatars and their CC0 license credit."></td>
+    <td width="50%"><img src="docs/media/uploaded-vrm.jpg" alt="A detailed anime-style VRM avatar with long pink hair waves on the tatami in the hall, while two designer avatars kneel in seiza and doze behind her."></td>
   </tr>
   <tr>
     <td align="center"><sub>Design your own avatar in the browser</sub></td>
-    <td align="center"><sub>Or pick a ready-made VRM preset</sub></td>
+    <td align="center"><sub>Or bring a full VRM, like this fan-made model<sup>*</sup></sub></td>
   </tr>
 </table>
 
@@ -155,3 +155,12 @@ Seiza is dual-licensed:
 
 The avatars in the screenshots were made with Seiza's built-in designer, plus
 the CC0 VRoid Studio sample "Sendagaya Shino" (pixiv Inc.).
+
+<sup>*</sup> The pink-haired avatar is "Hitori 'Bocchi' Gotoh", a fan-made VRM by
+[@wawari_w](https://wawari.carrd.co/), of the character from *Bocchi the
+Rock!* (© Aki Hamaji / Houbunsha / Aniplex). It appears only in this
+screenshot, from the maintainer's own copy, to show how an uploaded,
+artist-made VRM looks in Seiza. The model is **not** included in this
+repository or in any deployment, and its license doesn't allow
+redistribution or corporate commercial use. Seiza isn't affiliated with or
+endorsed by the model's author or the rights holders.
