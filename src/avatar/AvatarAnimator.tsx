@@ -285,6 +285,10 @@ export interface AvatarAnimatorProps {
    *  out. Layered over the pose like headPitch, so the posture holds. */
   doze?: boolean;
   tremble?: number;
+  /** Update every Nth frame instead of every frame (see RemotePlayers'
+   *  detail planner): for avatars far away or out of view. Time still
+   *  advances in full, so gestures and reactions keep their timing. */
+  updateEvery?: () => number;
 }
 
 /** See AvatarAnimatorProps.layerWeightsRef. Both 0 to 1. */
@@ -335,6 +339,7 @@ export function AvatarAnimator({
   layerWeightsRef,
   doze = false,
   tremble = 0,
+  updateEvery,
 }: AvatarAnimatorProps) {
   const dozeRef = useRef(doze);
   dozeRef.current = doze;
@@ -354,6 +359,10 @@ export function AvatarAnimator({
   const activeExpression = expression !== undefined ? expression : (gesture?.expression ?? posture?.expression ?? null);
   useFacialExpressions(vrm, activeExpression, speakingLevel, airborneRef);
   const stateRef = useRef<AnimatorState | null>(null);
+  const updateEveryRef = useRef(updateEvery);
+  updateEveryRef.current = updateEvery;
+  /** Shared by both frame passes so they skip, and catch up, together. */
+  const throttleRef = useRef({ frame: 0, pending: 0, skip: false, delta: 0, every: 1 });
   const getPositionRef = useRef(getPosition);
   getPositionRef.current = getPosition;
   const onGestureEndRef = useRef(onGestureEnd);
@@ -588,10 +597,26 @@ export function AvatarAnimator({
 
   // Negative priority: runs before VrmAvatar's vrm.update(), so the pose
   // written here reaches the rendered skeleton in the same frame.
-  useFrame((frameState, rawDelta) => {
+  useFrame((frameState, frameDelta) => {
     const state = stateRef.current;
     if (!state) return;
-    const delta = Math.min(rawDelta, MAX_DELTA);
+    // On a reduced update rate, accumulate the frames skipped and apply
+    // them as one step. The cap scales with the rate, so a far-off wave
+    // finishes on time rather than slowing down.
+    const throttle = throttleRef.current;
+    const every = Math.max(1, Math.round(updateEveryRef.current?.() ?? 1));
+    throttle.frame += 1;
+    throttle.pending += frameDelta;
+    if (every > 1 && throttle.frame % every !== 0) {
+      throttle.skip = true;
+      return;
+    }
+    throttle.skip = false;
+    throttle.every = every;
+    const rawDelta = throttle.pending;
+    throttle.pending = 0;
+    throttle.delta = rawDelta;
+    const delta = Math.min(rawDelta, MAX_DELTA * every);
 
     if (holdTPose) {
       state.vrm.humanoid.resetNormalizedPose();
@@ -813,11 +838,14 @@ export function AvatarAnimator({
    * Priority -1 keeps this on the same automatic footing as the pose layer
    * above, just in its own pass.
    */
-  useFrame((_, rawDelta) => {
+  useFrame(() => {
     const state = stateRef.current;
     if (!state) return;
+    // Runs on exactly the frames the pose pass did, with the same step.
+    const throttle = throttleRef.current;
+    if (throttle.skip) return;
     const { vrm } = state;
-    const delta = Math.min(rawDelta, MAX_DELTA);
+    const delta = Math.min(throttle.delta, MAX_DELTA * throttle.every);
 
     let target = 0;
     if (!holdTPose && state.groundWeight > 0.001) {

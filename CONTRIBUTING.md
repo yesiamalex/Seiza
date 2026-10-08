@@ -38,6 +38,8 @@ before you start work, not after.
   asset, add a row to [THIRD_PARTY_ASSETS.md](THIRD_PARTY_ASSETS.md) in the
   same pull request. Assets without a documented license are not merged.
 - **Update the docs** when you change behavior that they describe.
+- **Run the checks**: `npm run typecheck` and `npm test` (build once with
+  `npx vite build` first; see [DOCS.md](DOCS.md#local-development)).
 
 ## Documentation style guide
 

@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import { useFrame } from "@react-three/fiber";
+import { useCallback, useRef, useState, type MutableRefObject } from "react";
+import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import type { VRM } from "@pixiv/three-vrm";
 import { VrmAvatar } from "../avatar/VrmAvatar";
@@ -11,6 +11,7 @@ import { SeizaMood } from "../avatar/SeizaMood";
 import { ChatBubble } from "../chat/ChatBubble";
 import { CameraBadge } from "../media/CameraBadge";
 import { NameTag } from "./NameTag";
+import { avatarUpdateEvery } from "./avatarDetail";
 import type { PlayerState } from "./types";
 
 interface RemotePlayersProps {
@@ -46,12 +47,20 @@ const AVATAR_HIDE_DISTANCE = 0.55;
 const AVATAR_SHOW_DISTANCE = 0.7;
 const SNAP_DISTANCE = 6;
 
+/** Radius of the sphere tested against the view for each avatar. */
+const VIEW_RADIUS = 1.3;
+
 /** Renders every connected player except the local one. */
 export function RemotePlayers({ players, selfId, speakingLevels, lastMessages, gestures, getStream, streamsVersion = 0 }: RemotePlayersProps) {
   const [visibleCameras, setVisibleCameras] = useState<string[]>([]);
   const playersRef = useRef(players);
   playersRef.current = players;
   const sinceCheck = useRef(0);
+  const detailRef = useRef(new Map<string, number>());
+  const { gl } = useThree();
+  const frustum = useRef(new THREE.Frustum());
+  const viewProjection = useRef(new THREE.Matrix4());
+  const sphere = useRef(new THREE.Sphere());
 
   // Which camera panels are close enough to be worth decoding. Recomputed a
   // couple of times a second rather than every frame — people don't move
@@ -60,6 +69,26 @@ export function RemotePlayers({ players, selfId, speakingLevels, lastMessages, g
     sinceCheck.current += delta;
     if (sinceCheck.current < 0.5) return;
     sinceCheck.current = 0;
+
+    // How often each remote avatar updates (see avatarDetail.ts).
+    // In a headset, the XR camera's projection covers both eyes.
+    const view = gl.xr.isPresenting ? gl.xr.getCamera() : state.camera;
+    viewProjection.current.multiplyMatrices(view.projectionMatrix, view.matrixWorldInverse);
+    frustum.current.setFromProjectionMatrix(viewProjection.current);
+    const remotes = Object.values(playersRef.current).filter((player) => player.id !== selfId);
+    const detail = detailRef.current;
+    detail.clear();
+    for (const player of remotes) {
+      sphere.current.center.set(player.position[0], player.position[1] + 0.9, player.position[2]);
+      sphere.current.radius = VIEW_RADIUS;
+      const every = avatarUpdateEvery({
+        inView: frustum.current.intersectsSphere(sphere.current),
+        distance: sphere.current.center.distanceTo(state.camera.position),
+        remoteCount: remotes.length,
+      });
+      if (every > 1) detail.set(player.id, every);
+    }
+
     const nearest = Object.values(playersRef.current)
       .filter((player) => player.id !== selfId && player.media?.camera)
       .map((player) => ({
@@ -89,6 +118,7 @@ export function RemotePlayers({ players, selfId, speakingLevels, lastMessages, g
             lastMessage={lastMessages?.[p.id] ?? null}
             cameraStream={getStream?.(p.id, p.media?.camera) ?? null}
             cameraActive={visibleCameras.includes(p.id)}
+            detailRef={detailRef}
             streamsVersion={streamsVersion}
           />
         ))}
@@ -108,6 +138,7 @@ function RemotePlayerAvatar({
   gestures,
   cameraStream,
   cameraActive,
+  detailRef,
 }: {
   player: PlayerState;
   /** Raw mic RMS: the boolean indicator and lip sync both derive from it. */
@@ -118,6 +149,8 @@ function RemotePlayerAvatar({
   cameraActive: boolean;
   /** Only here to re-render this avatar when its stream arrives. */
   streamsVersion: number;
+  /** Per-avatar update rate from the detail planner above. */
+  detailRef: MutableRefObject<Map<string, number>>;
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const [vrm, setVrm] = useState<VRM | null>(null);
@@ -176,11 +209,15 @@ function RemotePlayerAvatar({
   // switch never hides anyone else's: the room should see the same thing.
   const seiza = useSeizaEndurance(player.posture === SEIZA_GESTURE_NAME && !player.calm);
 
+  const playerId = player.id;
+  const updateEvery = useCallback(() => detailRef.current.get(playerId) ?? 1, [detailRef, playerId]);
+
   return (
     <group ref={groupRef}>
-      <VrmAvatar url={player.avatarUrl} onLoaded={setVrm} />
+      <VrmAvatar url={player.avatarUrl} onLoaded={setVrm} updateEvery={updateEvery} />
       <AvatarAnimator
         vrm={vrm}
+        updateEvery={updateEvery}
         getPosition={() => groupRef.current?.position ?? new THREE.Vector3()}
         gesture={gesture}
         gestureSeq={seq}

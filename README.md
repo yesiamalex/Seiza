@@ -86,6 +86,11 @@ people's networks can't connect directly, and it is off until you turn it on.
 Cloudflare includes 1,000 GB per month before charging. See
 [Voice and video across networks](DOCS.md#voice-and-video-across-networks).
 
+The free plan covers about 7 hours a day of a full 16-person room. If you
+outgrow it, Cloudflare's $5-a-month plan covers about 1,100 person-hours a
+month, and every extra dollar about 7,400 more. See [Cost](DOCS.md#cost) for
+the tables.
+
 ## 🚀 Run your own
 
 You don't need to write code, but you do need to run a few commands.

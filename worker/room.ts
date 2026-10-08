@@ -7,6 +7,7 @@ import {
   DEFAULT_LIGHTS,
   type LightZone,
   type PlayerMedia,
+  type PlayerMovement,
   type PlayerState,
   type Posture,
   type ServerMessage,
@@ -104,7 +105,17 @@ interface ConnectionAttachment {
    *  "can edit" apart from "can moderate" — see canModerate(). */
   isAdmin?: boolean;
   adminAuthAttempts?: number;
+  /** Joined with caps ["batch"]: gets movement as one playersUpdated per
+   *  tick instead of a playerUpdated per player per update. */
+  batch?: boolean;
 }
+
+/** How often batched movement goes out: the client's own send rate. */
+const MOVEMENT_FLUSH_MS = 200;
+/** A moving player's position is written to the socket's stored
+ *  attachment at most this often. Only a room woken from hibernation
+ *  reads it back, and the next update corrects it within seconds. */
+const POSITION_PERSIST_MS = 10_000;
 
 /**
  * One Durable Object instance = one deployed world instance's shared
@@ -149,6 +160,12 @@ export class SeizaRoom extends DurableObject<Env> {
    * worst case is one pose let through early.
    */
   private lastTrackingAt = new Map<string, number>();
+  /** In-memory copies of each socket's attachment (see att()). */
+  private attachments = new WeakMap<WebSocket, ConnectionAttachment>();
+  /** Movement waiting for the next flush, latest per player. */
+  private pendingMovement = new Map<string, PlayerMovement>();
+  private movementTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastPositionPersist = new Map<string, number>();
   private ready: Promise<void>;
 
   constructor(ctx: DurableObjectState, env: Env) {
@@ -185,7 +202,7 @@ export class SeizaRoom extends DurableObject<Env> {
   async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer) {
     await this.ready;
     if (typeof raw !== "string") return;
-    const attachment = ws.deserializeAttachment() as ConnectionAttachment | null;
+    const attachment = this.att(ws);
     if (!attachment) return; // shouldn't happen — fetch() always attaches before accepting
 
     let message: ClientMessage;
@@ -234,7 +251,8 @@ export class SeizaRoom extends DurableObject<Env> {
           posture: null,
           media: {},
         };
-        ws.serializeAttachment({ connId: attachment.connId, player } satisfies ConnectionAttachment);
+        const caps = Array.isArray(message.caps) ? message.caps : [];
+        this.save(ws, { connId: attachment.connId, player, batch: caps.includes("batch") } satisfies ConnectionAttachment);
 
         const welcome: ServerMessage = {
           type: "welcome",
@@ -273,11 +291,20 @@ export class SeizaRoom extends DurableObject<Env> {
         attachment.player.position = message.position;
         attachment.player.rotationY = message.rotationY;
         attachment.player.headPitch = headPitch;
-        ws.serializeAttachment(attachment);
-        this.broadcast(
-          { type: "playerUpdated", id: attachment.connId, position: message.position, rotationY: message.rotationY, headPitch },
-          attachment.connId
-        );
+        // Kept in memory every time, written to storage now and then:
+        // serializing the attachment on every update was most of the
+        // cost of a busy room.
+        const now = Date.now();
+        if (now - (this.lastPositionPersist.get(attachment.connId) ?? 0) > POSITION_PERSIST_MS) {
+          this.lastPositionPersist.set(attachment.connId, now);
+          this.save(ws, attachment);
+        }
+        const movement = { id: attachment.connId, position: message.position, rotationY: message.rotationY, headPitch };
+        this.pendingMovement.set(attachment.connId, movement);
+        this.scheduleMovementFlush();
+        // Tabs still running a build from before batching get each
+        // update as it arrives, as they always did.
+        this.broadcast({ type: "playerUpdated", ...movement }, attachment.connId, (other) => !other.batch);
         break;
       }
       case "tracking": {
@@ -311,7 +338,7 @@ export class SeizaRoom extends DurableObject<Env> {
           player.gestureSeq = (player.gestureSeq ?? 0) + 1;
         }
         player.activeGesture = gesture;
-        ws.serializeAttachment(attachment);
+        this.save(ws, attachment);
         this.broadcast(
           { type: "playerGesture", id: attachment.connId, gesture, seq: player.gestureSeq ?? 0 },
           attachment.connId
@@ -327,7 +354,7 @@ export class SeizaRoom extends DurableObject<Env> {
         const posture = raw as Posture;
         if (attachment.player.posture === posture) return;
         attachment.player.posture = posture;
-        ws.serializeAttachment(attachment);
+        this.save(ws, attachment);
         this.broadcast({ type: "playerPosture", id: attachment.connId, posture }, attachment.connId);
         break;
       }
@@ -335,7 +362,7 @@ export class SeizaRoom extends DurableObject<Env> {
         if (!attachment.player || typeof message.calm !== "boolean") return;
         if ((attachment.player.calm ?? false) === message.calm) return;
         attachment.player.calm = message.calm;
-        ws.serializeAttachment(attachment);
+        this.save(ws, attachment);
         this.broadcast({ type: "playerCalm", id: attachment.connId, calm: message.calm }, attachment.connId);
         break;
       }
@@ -347,7 +374,7 @@ export class SeizaRoom extends DurableObject<Env> {
         if (attachment.lastAvatarChangeAt && now - attachment.lastAvatarChangeAt < AVATAR_CHANGE_MIN_INTERVAL_MS) return;
         attachment.lastAvatarChangeAt = now;
         attachment.player.avatarUrl = avatarUrl;
-        ws.serializeAttachment(attachment);
+        this.save(ws, attachment);
         this.broadcast({ type: "playerAvatarChanged", id: attachment.connId, avatarUrl }, attachment.connId);
         break;
       }
@@ -368,7 +395,7 @@ export class SeizaRoom extends DurableObject<Env> {
         const granted = timingSafeEqual(message.password, required);
         attachment.isEditor = granted || attachment.isEditor;
         attachment.authAttempts = granted ? attempts : attempts + 1;
-        ws.serializeAttachment(attachment);
+        this.save(ws, attachment);
         ws.send(JSON.stringify({ type: "editorAuthResult", granted } satisfies ServerMessage));
         break;
       }
@@ -397,7 +424,7 @@ export class SeizaRoom extends DurableObject<Env> {
           attachment.isEditor = true; // admin implies editor — see editingRequiresAuth's call sites
         }
         attachment.adminAuthAttempts = granted ? attempts : attempts + 1;
-        ws.serializeAttachment(attachment);
+        this.save(ws, attachment);
         ws.send(JSON.stringify({ type: "adminAuthResult", granted } satisfies ServerMessage));
         break;
       }
@@ -467,7 +494,7 @@ export class SeizaRoom extends DurableObject<Env> {
         if (attachment.lastTextAt && now - attachment.lastTextAt < TEXT_EDIT_MIN_INTERVAL_MS) return;
         if (typeof message.text !== "string") return;
         attachment.lastTextAt = now;
-        ws.serializeAttachment(attachment);
+        this.save(ws, attachment);
         object.text = sanitizeText(message.text);
         this.persistObjects();
         // Echoed to everyone including the writer: an object's text lives
@@ -485,7 +512,7 @@ export class SeizaRoom extends DurableObject<Env> {
         const now = Date.now();
         if (attachment.lastPresentAt && now - attachment.lastPresentAt < PRESENT_MIN_INTERVAL_MS) return;
         attachment.lastPresentAt = now;
-        ws.serializeAttachment(attachment);
+        this.save(ws, attachment);
         if (message.active === true) {
           if (object.presenterId && object.presenterId !== attachment.connId) return; // taken
           object.presenterId = attachment.connId;
@@ -514,7 +541,7 @@ export class SeizaRoom extends DurableObject<Env> {
         if (!media) return;
         attachment.lastMediaAt = now;
         attachment.player.media = media;
-        ws.serializeAttachment(attachment);
+        this.save(ws, attachment);
         this.broadcast({ type: "playerMedia", id: attachment.connId, media }, attachment.connId);
         break;
       }
@@ -555,7 +582,7 @@ export class SeizaRoom extends DurableObject<Env> {
         const now = Date.now();
         if (attachment.lastLightAt && now - attachment.lastLightAt < LIGHT_MIN_INTERVAL_MS) return;
         attachment.lastLightAt = now;
-        ws.serializeAttachment(attachment);
+        this.save(ws, attachment);
         if (this.lights[message.zone] === message.on) return;
         this.lights = { ...this.lights, [message.zone]: message.on };
         void this.ctx.storage.put(LIGHTS_STORAGE_KEY, this.lights);
@@ -570,7 +597,7 @@ export class SeizaRoom extends DurableObject<Env> {
         const text = message.text.trim().slice(0, 500);
         if (!text) return;
         attachment.lastChatAt = now;
-        ws.serializeAttachment(attachment);
+        this.save(ws, attachment);
         // Ephemeral by design — not persisted to ctx.storage like
         // objects are, so history doesn't carry across a reconnect.
         this.broadcast({
@@ -627,7 +654,7 @@ export class SeizaRoom extends DurableObject<Env> {
   }
 
   async webSocketClose(ws: WebSocket) {
-    const attachment = ws.deserializeAttachment() as ConnectionAttachment | null;
+    const attachment = this.att(ws);
     if (attachment?.player) {
       // Free any screen they were presenting on, or it would stay claimed by
       // someone who isn't here any more.
@@ -639,7 +666,12 @@ export class SeizaRoom extends DurableObject<Env> {
       }
       this.broadcast({ type: "playerLeft", id: attachment.connId });
     }
-    if (attachment) this.lastTrackingAt.delete(attachment.connId);
+    if (attachment) {
+      this.lastTrackingAt.delete(attachment.connId);
+      this.lastPositionPersist.delete(attachment.connId);
+      this.pendingMovement.delete(attachment.connId);
+    }
+    this.attachments.delete(ws);
   }
 
   async webSocketError(ws: WebSocket) {
@@ -657,26 +689,27 @@ export class SeizaRoom extends DurableObject<Env> {
 
   private listPlayers(): PlayerState[] {    return this.ctx
       .getWebSockets()
-      .map((ws) => (ws.deserializeAttachment() as ConnectionAttachment | null)?.player)
+      .map((ws) => (this.att(ws))?.player)
       .filter((p): p is PlayerState => !!p);
   }
 
   private findConnection(connId: string): WebSocket | undefined {
     return this.ctx
       .getWebSockets()
-      .find((ws) => (ws.deserializeAttachment() as ConnectionAttachment | null)?.connId === connId);
+      .find((ws) => (this.att(ws))?.connId === connId);
   }
 
   /** Broadcasts to every connected, joined player except `excludeConnId`
    *  (if given) — mirrors the previous PartyKit version's exclude-list
    *  broadcast, just re-derived from ctx.getWebSockets() each call
    *  instead of an in-memory connection list. */
-  private broadcast(message: ServerMessage, excludeConnId?: string) {
+  private broadcast(message: ServerMessage, excludeConnId?: string, only?: (attachment: ConnectionAttachment) => boolean) {
     const json = JSON.stringify(message);
     for (const ws of this.ctx.getWebSockets()) {
-      const attachment = ws.deserializeAttachment() as ConnectionAttachment | null;
+      const attachment = this.att(ws);
       if (!attachment?.player) continue; // hasn't joined yet
       if (excludeConnId && attachment.connId === excludeConnId) continue;
+      if (only && !only(attachment)) continue;
       try {
         ws.send(json);
       } catch {
@@ -685,6 +718,41 @@ export class SeizaRoom extends DurableObject<Env> {
         // the iteration order silently misses the message.
       }
     }
+  }
+
+  /**
+   * A socket's attachment, from memory when this instance already has it.
+   * deserializeAttachment() copies the stored value out every time, and
+   * broadcast() used to do that for every socket on every message. After
+   * the room wakes from hibernation the cache is empty and fills again
+   * from storage, one socket at a time.
+   */
+  private att(ws: WebSocket): ConnectionAttachment | null {
+    let attachment = this.attachments.get(ws);
+    if (!attachment) {
+      attachment = (ws.deserializeAttachment() as ConnectionAttachment | null) ?? undefined;
+      if (attachment) this.attachments.set(ws, attachment);
+    }
+    return attachment ?? null;
+  }
+
+  /** Stores an attachment, in memory and on the socket. */
+  private save(ws: WebSocket, attachment: ConnectionAttachment) {
+    this.attachments.set(ws, attachment);
+    ws.serializeAttachment(attachment);
+  }
+
+  /** Sends everything that moved since the last tick as one message. */
+  private scheduleMovementFlush() {
+    if (this.movementTimer !== null) return;
+    this.movementTimer = setTimeout(() => {
+      this.movementTimer = null;
+      if (this.pendingMovement.size === 0) return;
+      const updates = Array.from(this.pendingMovement.values());
+      this.pendingMovement.clear();
+      // The same message for everyone; each client skips its own entry.
+      this.broadcast({ type: "playersUpdated", updates }, undefined, (attachment) => !!attachment.batch);
+    }, MOVEMENT_FLUSH_MS);
   }
 
   private persistObjects() {
@@ -780,6 +848,7 @@ function sanitizeMedia(input: unknown): PlayerMedia | null {
     if (typeof value !== "string" || !STREAM_ID.test(value)) return null;
     media[key] = value;
   }
+  if (raw.micMuted === true) media.micMuted = true;
   return media;
 }
 

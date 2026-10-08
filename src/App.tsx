@@ -57,6 +57,7 @@ import { FpsCounter } from "./ui/FpsCounter";
 import { Toast } from "./ui/Toast";
 import { ControlsGuide, hasSeenControlsGuide } from "./ui/ControlsGuide";
 import { TopCenterCluster } from "./ui/TopCenterCluster";
+import { NETWORK_TICK_MS, shouldSendState, shouldStepAway, type SentState } from "./multiplayer/presence";
 import { JoinScreen, type JoinedIdentity } from "./ui/JoinScreen";
 import { CameraViewToggle } from "./ui/CameraViewToggle";
 import { AvatarChooser } from "./ui/AvatarChooser";
@@ -75,7 +76,6 @@ const OBJECT_COLORS = ["#c94f4f", "#4f8fc9", "#4fc97e", "#c9a94f", "#9a4fc9"];
 const ACCENT_OBJECT_COLOR = "#e8c37a";
 // How far a "share my screen" from the toolbar will reach for a display.
 const SHARE_REACH = 30;
-const NETWORK_TICK_MS = 200;
 /** How far from the target a teleport or gather lands (metres). */
 const GATHER_RADIUS = 1.1;
 // Custom clips don't declare a duration up front. AvatarAnimator reports
@@ -217,6 +217,9 @@ export default function App() {
   // Read by the gather handler, which is created before selfId exists.
   const selfIdRef = useRef<string | null>(null);
   const roomId = world && joined ? world.id : "";
+  // Set while an idle background tab has stepped out of the room (see the
+  // away effect below); the socket closes and rejoins when it flips back.
+  const [away, setAway] = useState(false);
   const {
     selfId,
     players,
@@ -283,7 +286,8 @@ export default function App() {
         },
       }),
       []
-    )
+    ),
+    away
   );
   selfIdRef.current = selfId;
 
@@ -322,12 +326,74 @@ export default function App() {
 
   useEffect(() => {
     if (!connected) return;
+    // Starts empty on every (re)connect, so the first tick always sends
+    // and a rejoining player never sits at the room's origin.
+    let last: SentState | null = null;
     const interval = window.setInterval(() => {
-      send({ type: "state", position: positionRef.current, rotationY: rotationRef.current, headPitch: lookPitchRef.current });
-      updateSpatialRef.current(positionRef.current);
+      const position = positionRef.current;
+      const rotationY = rotationRef.current;
+      const headPitch = lookPitchRef.current;
+      const now = Date.now();
+      if (shouldSendState(last, { position, rotationY, headPitch }, now, document.hidden)) {
+        send({ type: "state", position, rotationY, headPitch });
+        last = { position: [position[0], position[1], position[2]], rotationY, headPitch, at: now };
+      }
+      updateSpatialRef.current(position);
     }, NETWORK_TICK_MS);
     return () => window.clearInterval(interval);
   }, [connected, send]);
+
+  // ---- stepping out when idle in the background ----------------------
+  // A tab left open and forgotten kept a seat in the room, and its
+  // heartbeat, indefinitely. After an hour hidden and untouched, with
+  // nothing being sent (listening alone doesn't count as sending, so a
+  // muted listener steps out too), it leaves the room; the first key,
+  // click, or return to the tab rejoins. Voice keeps playing in a hidden
+  // tab right up to that point, since listening from another tab is real
+  // use.
+  const lastInputAtRef = useRef(Date.now());
+  const hiddenSinceRef = useRef<number | null>(typeof document !== "undefined" && document.hidden ? Date.now() : null);
+  const sendingMediaRef = useRef(false);
+  sendingMediaRef.current = (media.micEnabled && !media.muted) || media.cameraOn || media.screenOn;
+  useEffect(() => {
+    const wake = () => {
+      lastInputAtRef.current = Date.now();
+      setAway(false);
+    };
+    const onVisibility = () => {
+      if (document.hidden) {
+        hiddenSinceRef.current = Date.now();
+      } else {
+        hiddenSinceRef.current = null;
+        wake();
+      }
+    };
+    const inputs = ["pointerdown", "keydown", "wheel", "touchstart"] as const;
+    for (const type of inputs) window.addEventListener(type, wake, { passive: true });
+    document.addEventListener("visibilitychange", onVisibility);
+    // Background timers are throttled to about once a minute anyway.
+    const check = window.setInterval(() => {
+      const step = shouldStepAway({
+        hiddenSince: hiddenSinceRef.current,
+        lastInputAt: lastInputAtRef.current,
+        sendingMedia: sendingMediaRef.current,
+        now: Date.now(),
+      });
+      if (step) setAway(true);
+    }, 60_000);
+    return () => {
+      for (const type of inputs) window.removeEventListener(type, wake);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.clearInterval(check);
+    };
+  }, []);
+  const wasAwayRef = useRef(false);
+  useEffect(() => {
+    if (wasAwayRef.current && !away) {
+      setNotice("You were away for over an hour, so Seiza stepped you out of the room to save bandwidth. You're back in now.");
+    }
+    wasAwayRef.current = away;
+  }, [away]);
 
   const endGesture = useCallback(() => {
     if (gestureTimerRef.current !== null) window.clearTimeout(gestureTimerRef.current);

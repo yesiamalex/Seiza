@@ -31,6 +31,7 @@ const STATUS_LABEL: Record<ConnectionState, string> = {
   connected: "connected",
   connecting: "connecting…",
   reconnecting: "reconnecting…",
+  away: "away",
 };
 
 /** The dock's own look, shared by the bar and the landscape bottom drawer. */

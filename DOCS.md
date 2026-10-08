@@ -68,6 +68,68 @@ The one part that can cost money is a TURN relay, described in
 [Voice and video across networks](#voice-and-video-across-networks).
 Cloudflare includes 1,000 GB of relayed traffic per month before charging.
 
+#### How much the free plan covers
+
+The room server's limit is requests, not people. Each participant sends at
+most 5 position updates a second, and Cloudflare bills incoming WebSocket
+messages at 1 request per 20, so a person moving the whole time costs about
+**900 requests an hour**. A seated or idle person sends only a heartbeat
+every 5 seconds (every 30 in a hidden tab), so real classes cost much less
+than the figures below, which assume everyone is moving. Headset users cost
+about three times as much, because they also send hand and head tracking.
+
+The free plan allows 100,000 requests a day, which resets at 00:00 UTC
+(8:00 in the Philippines). When it runs out, rooms stop working until the
+reset. That is about:
+
+| Room | Free hours a day, everyone moving |
+| --- | --- |
+| 4 people | about 28 |
+| 12 people | about 9 |
+| 16 people (the default limit) | about 7 |
+| 30 people | about 3.7 |
+| 40 people | about 2.8 |
+
+The room server's running time (13,000 GB-s a day) covers about 28
+room-hours a day, so it only matters for many small rooms.
+
+#### If you outgrow it: Workers Paid, US$5 a month
+
+The paid plan is $5 a month per Cloudflare account, for every Worker in it.
+It never stops a room mid-class; usage beyond what it includes is billed
+instead. It includes 1 million room-server requests and 400,000 GB-s a month,
+with further requests at $0.15 per million.
+
+| Room, in one world | Hours a month within the $5 | About per weekday |
+| --- | --- | --- |
+| 12 people | 93 | 4.2 |
+| 16 people | 69 | 3.2 |
+| 30 people | 37 | 1.7 |
+| 40 people | 28 | 1.3 |
+
+Every further US$1 buys about 7,400 person-hours, for example 185 hours of a
+40-person room. As a worked example, two worlds each holding two sessions a
+week of 20 to 40 people for 2 to 3 hours (about 17 sessions a month) come to
+$5.00 to $5.30 a month.
+
+Two things to know before upgrading:
+
+- There is no built-in spending cap. Set a billing notification in the
+  Cloudflare dashboard (at $7, say) so a surprise shows up early.
+- The free plan's daily allowance adds up to more requests a month (about 3
+  million) than the paid plan includes (1 million). What the $5 buys is never
+  being cut off mid-class.
+
+#### Media
+
+TURN relays and Cloudflare's media forwarding service (its Realtime SFU,
+which Seiza doesn't use yet) share one allowance: the first 1,000 GB each
+month is free, then $0.05 per GB of egress. A relayed participant uses about
+0.16 GB an hour for voice and about 0.75 GB with cameras on, so the free
+allowance covers well over a thousand relayed person-hours a month. Check
+[Cloudflare's pricing](https://developers.cloudflare.com/workers/platform/pricing/)
+before relying on these numbers; they were taken in October 2026.
+
 ### Who controls a room
 
 Anyone can join, walk around, talk, present, and write on boards. Changing the
@@ -300,6 +362,20 @@ purpose.
 `wrangler dev` simulates the Worker, KV, and the Durable Object locally with
 Miniflare, and doesn't need a Cloudflare login.
 
+To run the tests:
+
+```bash
+npx vite build   # once: the room-server tests start the Worker, which serves dist/
+npm test
+```
+
+The unit tests cover the rules that decide when a client sends its position,
+when an idle tab steps out, which voice peers to connect to, and how often a
+remote avatar updates. The room-server tests start the real Worker and Durable
+Object in-process and talk to them over plain WebSockets, so no browser is
+involved and the whole run takes seconds. Anything that needs a real browser,
+such as WebRTC or rendering, still has to be checked by hand.
+
 On first run, you'll see the join screen and then the built-in world. Before
 you add any 3D asset to the repository, read
 `public/worlds/default/README.md` and `THIRD_PARTY_ASSETS.md`.
@@ -435,7 +511,7 @@ Approximate usage for one relayed stream to one receiving peer for one hour:
 
 | Stream | Cap when relayed | Per hour, per receiving peer |
 | --- | --- | --- |
-| Voice | about 40 kbps | about 18 MB |
+| Voice | 24 kbps, near zero while silent or muted | about 11 MB at most |
 | Camera | 120 kbps | about 54 MB |
 | Screen share | 600 kbps | about 270 MB |
 
@@ -1041,6 +1117,20 @@ materials, textures drawn in code, and detail where people look.
   or the gesture menu never re-renders the 3D scene.
 - Remote players ease toward their latest network position, rather than each
   network update triggering work of its own.
+- Your position goes out only when it changes, plus a heartbeat every 5
+  seconds (30 in a hidden tab). A seated class costs the room a fraction of
+  a moving one.
+- The room server sends everyone's movement as one message per 200 ms tick
+  instead of one message per player per update, which grew with the square
+  of the room's size. It also keeps each connection's details in memory
+  rather than reading them back from storage for every message.
+- A tab left hidden and untouched for an hour, with nothing being sent,
+  steps out of the room, and rejoins on the next key, click, or return to
+  the tab. Voice keeps playing in a hidden tab until then.
+- Remote avatars that are out of view update every 4th frame, and in a room
+  of more than 8 people, those further than 12 m away update every 2nd.
+  Animation time still advances in full, so gestures and reactions stay on
+  time; only how often the pose is recomputed changes.
 
 ### Render fewer pixels where it isn't visible
 
@@ -1122,8 +1212,10 @@ Seiza works, including movement, voice, editing, and avatar uploads, but
 it isn't production-hardened. These limitations are known:
 
 - **Voice is a WebRTC mesh, not an SFU.** Cost grows with the square of the
-  number of connected people. The client connects automatically to at most
-  about 12 peers (see `src/media/useRealtimeMedia.ts`). This suits
+  number of connected people. Each client connects to at most about 12
+  peers, the nearest first, with anyone who can be heard ranked ahead of
+  someone only listening (see `src/media/useRealtimeMedia.ts`). In a bigger
+  room you hear the people around you, as in a hall. This suits
   classroom-sized rooms, not large events. Because the server never carries
   media, it can't enforce muting: an admin's "mute" is a request that the
   other browser follows. There's no recording or server-side audio

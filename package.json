@@ -9,6 +9,7 @@
     "dev": "vite",
     "build": "node scripts/fetch-assets.mjs && tsc --noEmit && vite build && node scripts/ensure-kv-namespace.mjs",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "preview": "vite preview",
     "worker:dev": "wrangler dev",
     "worker:deploy": "npm run build && wrangler deploy",
@@ -38,6 +39,7 @@
     "@vitejs/plugin-react": "^4.3.2",
     "typescript": "^5.6.3",
     "vite": "^5.4.9",
+    "vitest": "^2.1.9",
     "wrangler": "^3.80.0"
   }
 }

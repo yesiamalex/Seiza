@@ -1,4 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  BUSY_BACKOFF_MS,
+  hasAnyMedia,
+  planPeers,
+  tuneOpus,
+  VOICE_MAX_BITRATE,
+} from "./meshPolicy";
 import type { PlayerMedia, PlayerState } from "../multiplayer/types";
 
 // On unless a deployer explicitly turns it off. The per-world switch is
@@ -14,8 +21,9 @@ export const VOICE_ENABLED = import.meta.env.VITE_SEIZA_VOICE_ENABLED !== "false
  *
  * Every participant connects to every other (O(n²)), which is the right
  * trade for classroom-sized rooms and needs no extra infrastructure. Past
- * the soft cap below, later joiners stay visible and audible to the people
- * already connected but aren't auto-connected themselves.
+ * the soft cap (see meshPolicy.ts), each client keeps its nearest peers (anyone who can
+ * be heard first), so in a big room you hear the people around you, as
+ * you would in a hall.
  *
  * Costs are kept down deliberately:
  * - capture resolution and frame rate are constrained at the source, and
@@ -23,10 +31,17 @@ export const VOICE_ENABLED = import.meta.env.VITE_SEIZA_VOICE_ENABLED !== "false
  * - connections exist only while someone actually has media on;
  * - remote video is decoded only while something on screen is showing it
  *   (see VideoPanel), so an idle share costs nothing to a viewer looking
- *   the other way.
+ *   the other way;
+ * - a muted mic sends nothing at all, and voice is capped at 24 kbps with
+ *   discontinuous transmission, so silence is nearly free.
  */
-const VOICE_MESH_SOFT_CAP = 12;
 const VOICE_FALLOFF_DISTANCE = 12;
+
+/** setLocalDescription(), with this app's voice preferences written in. */
+async function setTunedLocalDescription(connection: RTCPeerConnection) {
+  const description = connection.signalingState === "have-remote-offer" ? await connection.createAnswer() : await connection.createOffer();
+  await connection.setLocalDescription({ type: description.type, sdp: tuneOpus(description.sdp ?? "") });
+}
 
 // A webcam thumbnail beside an avatar is small on screen, so capture it
 // small: a 320x240 stream at 15fps is a fraction of the bandwidth and the
@@ -145,6 +160,10 @@ interface Peer {
    *  early throws, and a dropped candidate can be the one route that would
    *  have connected — which shows up as a stream that never paints. */
   pendingCandidates: RTCIceCandidateInit[];
+  /** The sender carrying our microphone. Muting swaps its track for null
+   *  (nothing is sent) rather than sending silence. */
+  micSender: RTCRtpSender | null;
+  createdAt: number;
 }
 
 export interface RealtimeMediaState {
@@ -194,8 +213,6 @@ interface UseRealtimeMediaArgs {
   sendSignal: (to: string, data: unknown) => void;
 }
 
-const hasAnyMedia = (media: PlayerMedia | undefined) => !!(media && (media.mic || media.camera || media.screen));
-
 export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMediaArgs): RealtimeMediaState {
   // Read synchronously by createPeer, so it has to be a ref rather than
   // state: a peer connection is built the instant someone joins, which
@@ -244,6 +261,13 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
   playersRef.current = players;
   const mutedRef = useRef(muted);
   mutedRef.current = muted;
+  /** Where we are, as of the last updateSpatial call (for peer ranking). */
+  const localPositionRef = useRef<[number, number, number] | null>(null);
+  /** Peers that answered "busy", and until when to leave them be. */
+  const busyUntilRef = useRef(new Map<string, number>());
+  /** When the room has more peers than the budget, the ones we'd accept
+   *  a connection from; null while everyone fits. */
+  const acceptableRef = useRef<Set<string> | null>(null);
 
   const bumpStreams = useCallback(() => setStreamsVersion((version) => version + 1), []);
 
@@ -257,7 +281,29 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
       mic: micStreamRef.current?.id ?? null,
       camera: cameraStreamRef.current?.id ?? null,
       screen: screenStreamRef.current?.id ?? null,
+      ...(micStreamRef.current && mutedRef.current ? { micMuted: true } : {}),
     });
+  }, []);
+
+  /** Adds our tracks to a connection, holding the mic back while muted. */
+  const addLocalTracks = useCallback((peer: Peer, stream: MediaStream) => {
+    for (const track of stream.getTracks()) {
+      const sender = peer.connection.addTrack(track, stream);
+      if (stream === micStreamRef.current && track.kind === "audio") {
+        peer.micSender = sender;
+        if (mutedRef.current) void sender.replaceTrack(null);
+      }
+    }
+  }, []);
+
+  /** Starts or stops actually sending the mic on every connection. */
+  const syncMicSending = useCallback((isMuted: boolean) => {
+    const track = micStreamRef.current?.getAudioTracks()[0] ?? null;
+    for (const peer of peersRef.current.values()) {
+      peer.micSender?.replaceTrack(isMuted ? null : track).catch(() => {
+        // A closing connection refuses; nothing to fix.
+      });
+    }
   }, []);
 
   const localStreams = useCallback(
@@ -268,6 +314,14 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
   /** Bitrate caps, applied once a sender exists for each video track. */
   const applySendCaps = useCallback((peer: Peer) => {
     const relayed = peer.relayed;
+    if (peer.micSender) {
+      const parameters = peer.micSender.getParameters();
+      if (!parameters.encodings || parameters.encodings.length === 0) parameters.encodings = [{}];
+      parameters.encodings[0].maxBitrate = VOICE_MAX_BITRATE;
+      peer.micSender.setParameters(parameters).catch(() => {
+        // Same as below: not fatal, and the SDP preference still applies.
+      });
+    }
     for (const sender of peer.connection.getSenders()) {
       if (!sender.track || sender.track.kind !== "video") continue;
       const isScreen = screenStreamRef.current?.getTracks().includes(sender.track) ?? false;
@@ -392,6 +446,8 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
         streams: new Map(),
         audio: new Map(),
         pendingCandidates: [],
+        micSender: null,
+        createdAt: Date.now(),
       };
       peersRef.current.set(peerId, peer);
 
@@ -404,7 +460,7 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
       connection.onnegotiationneeded = async () => {
         try {
           peer.makingOffer = true;
-          await connection.setLocalDescription();
+          await setTunedLocalDescription(connection);
           if (connection.localDescription) {
             sendSignalRef.current(peerId, { kind: "sdp", description: connection.localDescription.toJSON() });
           }
@@ -463,26 +519,28 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
         bumpStreams();
       };
 
-      for (const stream of localStreams()) {
-        for (const track of stream.getTracks()) connection.addTrack(track, stream);
-      }
+      for (const stream of localStreams()) addLocalTracks(peer, stream);
       return peer;
     },
-    [applySendCaps, attachAudio, closePeer, detachAudio, localStreams, bumpStreams]
+    [applySendCaps, attachAudio, closePeer, detachAudio, localStreams, bumpStreams, addLocalTracks]
   );
 
   /** Sends a newly started local stream to everyone already connected. */
-  const publishStream = useCallback((stream: MediaStream) => {
-    for (const peer of peersRef.current.values()) {
-      for (const track of stream.getTracks()) peer.connection.addTrack(track, stream);
-    }
-  }, []);
+  const publishStream = useCallback(
+    (stream: MediaStream) => {
+      for (const peer of peersRef.current.values()) addLocalTracks(peer, stream);
+    },
+    [addLocalTracks]
+  );
 
   const unpublishStream = useCallback((stream: MediaStream) => {
     const tracks = new Set(stream.getTracks());
+    const isMic = stream === micStreamRef.current;
     for (const peer of peersRef.current.values()) {
       for (const sender of peer.connection.getSenders()) {
-        if (sender.track && tracks.has(sender.track)) {
+        // A muted mic's sender has no track, so it's found by identity.
+        if ((sender.track && tracks.has(sender.track)) || (isMic && sender === peer.micSender)) {
+          if (sender === peer.micSender) peer.micSender = null;
           try {
             peer.connection.removeTrack(sender);
           } catch {
@@ -495,9 +553,23 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
 
   const handleSignal = useCallback(
     (from: string, raw: unknown) => {
-      const data = raw as { kind: "sdp" | "ice"; description?: RTCSessionDescriptionInit; candidate?: RTCIceCandidateInit };
+      const data = raw as { kind: "sdp" | "ice" | "busy"; description?: RTCSessionDescriptionInit; candidate?: RTCIceCandidateInit };
+      if (data.kind === "busy") {
+        // They're over budget and we didn't make their cut: leave it a
+        // while rather than retrying at once.
+        busyUntilRef.current.set(from, Date.now() + BUSY_BACKOFF_MS);
+        closePeer(from);
+        return;
+      }
       // An offer can arrive before we know the sender has media, so accept
-      // the connection and let the roster effect tidy up if it's unwanted.
+      // the connection and let the roster effect tidy up if it's unwanted,
+      // unless the room is over budget and they aren't among the peers
+      // this side would choose.
+      const acceptable = acceptableRef.current;
+      if (!peersRef.current.has(from) && acceptable && !acceptable.has(from)) {
+        sendSignalRef.current(from, { kind: "busy" });
+        return;
+      }
       const peer = peersRef.current.get(from) ?? createPeer(from);
       const { connection } = peer;
 
@@ -515,7 +587,7 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
               await connection.addIceCandidate(candidate).catch(() => {});
             }
             if (description.type === "offer") {
-              await connection.setLocalDescription();
+              await setTunedLocalDescription(connection);
               if (connection.localDescription) {
                 sendSignalRef.current(from, { kind: "sdp", description: connection.localDescription.toJSON() });
               }
@@ -537,7 +609,7 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
         }
       })();
     },
-    [applySendCaps, createPeer]
+    [applySendCaps, createPeer, closePeer]
   );
 
   const enableMic = useCallback(async () => {
@@ -583,12 +655,13 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
   }, [publishLocalMedia, unpublishStream]);
 
   const toggleMute = useCallback(() => {
-    setMuted((previous) => {
-      const next = !previous;
-      micStreamRef.current?.getAudioTracks().forEach((track) => (track.enabled = !next));
-      return next;
-    });
-  }, []);
+    const next = !mutedRef.current;
+    mutedRef.current = next;
+    setMuted(next);
+    micStreamRef.current?.getAudioTracks().forEach((track) => (track.enabled = !next));
+    syncMicSending(next);
+    publishLocalMedia();
+  }, [syncMicSending, publishLocalMedia]);
 
   /** Sets mute to an explicit value rather than flipping it — used when
    *  an admin's adminSetMute arrives (see App.tsx): the target's own
@@ -597,9 +670,12 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
    *  mute directly. A no-op if the mic isn't on — nothing to mute yet. */
   const forceMute = useCallback((next: boolean) => {
     if (!micStreamRef.current) return;
+    mutedRef.current = next;
     setMuted(next);
     micStreamRef.current.getAudioTracks().forEach((track) => (track.enabled = !next));
-  }, []);
+    syncMicSending(next);
+    publishLocalMedia();
+  }, [syncMicSending, publishLocalMedia]);
 
   const selectDevice = useCallback(
     async (deviceId: string) => {
@@ -610,9 +686,11 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
       track.enabled = !mutedRef.current;
       // replaceTrack swaps the microphone without renegotiating.
       const previous = micStreamRef.current;
-      for (const peer of peersRef.current.values()) {
-        const sender = peer.connection.getSenders().find((candidate) => candidate.track?.kind === "audio");
-        void sender?.replaceTrack(track);
+      // The mic's own sender, not whichever audio sender comes first: a
+      // shared tab's audio is an audio sender too. While muted it stays
+      // empty and picks the new track up on unmute.
+      if (!mutedRef.current) {
+        for (const peer of peersRef.current.values()) void peer.micSender?.replaceTrack(track);
       }
       previous.getAudioTracks().forEach((old) => old.stop());
       micStreamRef.current = stream;
@@ -724,24 +802,29 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
   // change. A connection exists only when at least one side has something to
   // send, so a quiet room costs nothing.
   const localActive = micEnabled || cameraOn || screenOn;
+  // While everyone fits in the budget this connects to all of them, as it
+  // always has. Past it, the nearest win (see rankPeers) instead of
+  // whoever happened to be first in the roster, which used to leave a
+  // late arrival standing beside you unheard.
   useEffect(() => {
     if (!selfId) return;
-    const remoteIds = Object.keys(players).filter((id) => id !== selfId);
-    let slots = VOICE_MESH_SOFT_CAP - peersRef.current.size;
-
-    for (const id of remoteIds) {
-      const wanted = localActive || hasAnyMedia(players[id]?.media);
-      if (!wanted || peersRef.current.has(id)) continue;
-      if (slots <= 0) break;
-      createPeer(id);
-      slots -= 1;
+    const plan = planPeers({
+      selfId,
+      players,
+      localActive,
+      here: localPositionRef.current,
+      existing: peersRef.current,
+      busyUntil: busyUntilRef.current,
+      now: Date.now(),
+    });
+    acceptableRef.current = plan.acceptable;
+    for (const id of plan.close) closePeer(id);
+    for (const id of plan.closeBusy) {
+      // Tell them, so they back off instead of reconnecting straight away.
+      sendSignalRef.current(id, { kind: "busy" });
+      closePeer(id);
     }
-
-    for (const id of Array.from(peersRef.current.keys())) {
-      const gone = !players[id];
-      const idle = !localActive && !hasAnyMedia(players[id]?.media);
-      if (gone || idle) closePeer(id);
-    }
+    for (const id of plan.create) createPeer(id);
   }, [players, selfId, localActive, createPeer, closePeer]);
 
   useEffect(
@@ -763,6 +846,7 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
 
   const updateSpatial = useCallback(
     (localPosition: [number, number, number]) => {
+      localPositionRef.current = localPosition;
       if (peersRef.current.size === 0 && !localAnalyserRef.current) return;
       if (localAnalyserRef.current) {
         // Kept as a raw level as well as a boolean: the boolean drives

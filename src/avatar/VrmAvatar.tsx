@@ -11,6 +11,8 @@ export interface VrmAvatarProps {
   position?: [number, number, number];
   rotationY?: number;
   onLoaded?: (vrm: VRM | null) => void;
+  /** Update every Nth frame (see AvatarAnimator's prop of the same name). */
+  updateEvery?: () => number;
 }
 
 // Beyond this much movement in one frame, treat it as a teleport and let
@@ -62,12 +64,15 @@ const MAX_SPRING_DELTA = 1 / 30;
  * any instant jump in the model's world position flings them. Two guards:
  * the update delta is capped, and a teleport resets the simulation.
  */
-export function VrmAvatar({ url, position = [0, 0, 0], rotationY = 0, onLoaded }: VrmAvatarProps) {
+export function VrmAvatar({ url, position = [0, 0, 0], rotationY = 0, onLoaded, updateEvery }: VrmAvatarProps) {
   const { vrm, error } = useVrmLoader(url || null);
   const onLoadedRef = useRef(onLoaded);
   onLoadedRef.current = onLoaded;
   const lastWorld = useRef<THREE.Vector3 | null>(null);
   const scratch = useRef(new THREE.Vector3());
+  const updateEveryRef = useRef(updateEvery);
+  updateEveryRef.current = updateEvery;
+  const throttle = useRef({ frame: 0, pending: 0 });
 
   useEffect(() => {
     // Once per model: lets long hair collide with the hips and thighs, not
@@ -82,8 +87,15 @@ export function VrmAvatar({ url, position = [0, 0, 0], rotationY = 0, onLoaded }
     if (error) console.error("VRM load failed:", error);
   }, [error]);
 
-  useFrame((_, delta) => {
+  useFrame((_, frameDelta) => {
     if (!vrm) return;
+    const every = Math.max(1, Math.round(updateEveryRef.current?.() ?? 1));
+    const t = throttle.current;
+    t.frame += 1;
+    t.pending += frameDelta;
+    if (every > 1 && t.frame % every !== 0) return;
+    const delta = t.pending;
+    t.pending = 0;
     const world = vrm.scene.getWorldPosition(scratch.current);
     if (lastWorld.current && world.distanceTo(lastWorld.current) > TELEPORT_DISTANCE) {
       vrm.springBoneManager?.reset();

@@ -31,7 +31,9 @@ const RECONNECT_MAX_DELAY_MS = 10_000;
 // A little over the room server's AVATAR_CHANGE_MIN_INTERVAL_MS (1500).
 const AVATAR_CHANGE_MIN_INTERVAL_MS = 1600;
 
-export type ConnectionState = "connecting" | "connected" | "reconnecting";
+/** "away": the tab stepped out of the room after a long idle spell in the
+ *  background (see App.tsx), and rejoins when it is used again. */
+export type ConnectionState = "connecting" | "connected" | "reconnecting" | "away";
 
 export interface MultiplayerState {
   selfId: string | null;
@@ -146,7 +148,10 @@ export function useRoomSocket(
   displayName: string,
   avatarUrl: string,
   onVoiceSignal?: (from: string, data: unknown) => void,
-  callbacks?: RoomSocketCallbacks
+  callbacks?: RoomSocketCallbacks,
+  /** True closes the connection without trying to reconnect, and false
+   *  rejoins: how an idle background tab stops costing the room. */
+  paused = false
 ): MultiplayerState {
   const socketRef = useRef<WebSocket | null>(null);
   const [selfId, setSelfId] = useState<string | null>(null);
@@ -269,6 +274,15 @@ export function useRoomSocket(
 
   useEffect(() => {
     if (!roomId) return;
+    if (paused) {
+      // Nobody here while away: no stale avatars, and no voice
+      // connections held open to people we can no longer see.
+      setConnectionState("away");
+      setPlayers({});
+      setSelfId(null);
+      selfIdRef.current = null;
+      return;
+    }
 
     let cancelled = false;
     let reconnectAttempt = 0;
@@ -297,6 +311,7 @@ export function useRoomSocket(
             displayName: displayNameRef.current,
             avatarUrl: avatarUrlRef.current,
             roomPassword: roomPasswordRef.current,
+            caps: ["batch"],
           } satisfies ClientMessage)
         );
       });
@@ -373,6 +388,19 @@ export function useRoomSocket(
                 ? { ...prev, [msg.id]: { ...prev[msg.id], position: msg.position, rotationY: msg.rotationY, headPitch: msg.headPitch ?? 0 } }
                 : prev
             );
+            break;
+          case "playersUpdated":
+            // One render for the whole tick, rather than one per player.
+            setPlayers((prev) => {
+              let next: Record<string, PlayerState> | null = null;
+              for (const update of msg.updates) {
+                const player = prev[update.id];
+                if (!player || update.id === selfIdRef.current) continue;
+                next ??= { ...prev };
+                next[update.id] = { ...player, position: update.position, rotationY: update.rotationY, headPitch: update.headPitch ?? 0 };
+              }
+              return next ?? prev;
+            });
             break;
           case "playerTracking":
             // Straight into the tracking store, not React state: these
@@ -469,7 +497,7 @@ export function useRoomSocket(
       socketRef.current?.close();
       socketRef.current = null;
     };
-  }, [roomId]);
+  }, [roomId, paused]);
 
   // Avatar changes go out in place. If the socket isn't open right now,
   // the next join carries the new URL instead.

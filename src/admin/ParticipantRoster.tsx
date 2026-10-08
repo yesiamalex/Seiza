@@ -68,8 +68,10 @@ export function ParticipantRoster({
   // page — see useDismissOnOutside for the bug that caused.
   const rootRef = useRef<HTMLDivElement>(null);
   useDismissOnOutside(rootRef, open, () => setOpen(false));
-  const statusColor = connectionState === "connected" ? "#7CFF9E" : connectionState === "connecting" ? "#8ab4ff" : "#ffb347";
-  const statusLabel = connectionState === "connected" ? "connected" : connectionState === "connecting" ? "connecting…" : "reconnecting…";
+  const statusColor =
+    connectionState === "connected" ? "#7CFF9E" : connectionState === "connecting" ? "#8ab4ff" : connectionState === "away" ? "#9aa0aa" : "#ffb347";
+  const statusLabel =
+    connectionState === "connected" ? "connected" : connectionState === "connecting" ? "connecting…" : connectionState === "away" ? "away" : "reconnecting…";
   const roster = Object.values(players).sort((a, b) => a.displayName.localeCompare(b.displayName));
 
   return (

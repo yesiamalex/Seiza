@@ -103,6 +103,18 @@ export interface PlayerMedia {
   mic?: string | null;
   camera?: string | null;
   screen?: string | null;
+  /** The mic is on but muted. A muted mic sends nothing, so peers that
+   *  have to choose whom to connect to rank someone who can actually be
+   *  heard first (see useRealtimeMedia's peer selection). */
+  micMuted?: boolean;
+}
+
+/** One player's movement, as carried in a batched playersUpdated. */
+export interface PlayerMovement {
+  id: string;
+  position: [number, number, number];
+  rotationY: number;
+  headPitch?: number;
 }
 
 /** What a world screen is showing: the presenter's shared screen, or
@@ -120,7 +132,10 @@ export interface ChatMessage {
 }
 
 export type ClientMessage =
-  | { type: "join"; displayName: string; avatarUrl: string; roomPassword?: string }
+  // `caps` names optional behaviours this client understands, so the room
+  // can use them without breaking a tab still running an older build:
+  // "batch" means it handles playersUpdated.
+  | { type: "join"; displayName: string; avatarUrl: string; roomPassword?: string; caps?: string[] }
   | { type: "state"; position: [number, number, number]; rotationY: number; headPitch?: number }
   // A headset player's head and hands, relative to their own body (see
   // src/xr/body/trackingWire.ts), or null once they stop tracking. Its own
@@ -258,6 +273,10 @@ export type ServerMessage =
   | { type: "passwordRequired" }
   | { type: "playerJoined"; player: PlayerState }
   | { type: "playerUpdated"; id: string; position: [number, number, number]; rotationY: number; headPitch?: number }
+  // Every player that moved in the last tick (200 ms), in one message, for
+  // clients that joined with caps ["batch"]. Replaces one playerUpdated
+  // per player per update, which grew with the square of the room's size.
+  | { type: "playersUpdated"; updates: PlayerMovement[] }
   | { type: "playerTracking"; id: string; pose: TrackedPose | null }
   | { type: "playerGesture"; id: string; gesture: string | null; seq: number }
   | { type: "playerAvatarChanged"; id: string; avatarUrl: string }
