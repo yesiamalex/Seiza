@@ -30,7 +30,7 @@ describe.skipIf(!built)("room server", () => {
   });
 
   /** A protocol-level client: joins a room and records what it receives. */
-  async function client(room: string, name: string, caps?: string[]) {
+  async function client(room: string, name: string, caps?: string[], session?: string) {
     const socket = new WebSocket(`ws://${worker.address}:${worker.port}/rooms/${room}`);
     const received: ServerMessage[] = [];
     socket.addEventListener("message", (event) => received.push(JSON.parse(String(event.data)) as ServerMessage));
@@ -39,7 +39,7 @@ describe.skipIf(!built)("room server", () => {
       socket.addEventListener("error", () => reject(new Error("socket failed")));
     });
     const send = (message: ClientMessage) => socket.send(JSON.stringify(message));
-    send({ type: "join", displayName: name, avatarUrl: "", ...(caps ? { caps } : {}) });
+    send({ type: "join", displayName: name, avatarUrl: "", ...(caps ? { caps } : {}), ...(session ? { session } : {}) });
     const welcome = await until(() => received.find((m) => m.type === "welcome"));
     const selfId = welcome.type === "welcome" ? welcome.selfId : "";
     return { socket, received, send, selfId };
@@ -92,6 +92,40 @@ describe.skipIf(!built)("room server", () => {
     a.send({ type: "setMedia", media: { mic: "mic-stream-1", micMuted: true } });
     const media = await until(() => b.received.find((m) => m.type === "playerMedia"));
     expect(media.type === "playerMedia" && media.media).toEqual({ mic: "mic-stream-1", micMuted: true });
+    a.socket.close();
+    b.socket.close();
+  });
+
+  it("replaces a page's old connection when it reconnects", async () => {
+    // A dropped network leaves the old socket open on the server; the page
+    // then reconnects with the same session. Nobody should see two of them.
+    const room = freshRoom();
+    const watcher = await client(room, "Watcher", ["batch"]);
+    const first = await client(room, "Laptop", ["batch"], "page-session-1234");
+    let oldClosed = false;
+    first.socket.addEventListener("close", () => (oldClosed = true));
+    const second = await client(room, "Laptop", ["batch"], "page-session-1234");
+
+    const left = await until(() => watcher.received.find((m) => m.type === "playerLeft"));
+    expect(left.type === "playerLeft" && left.id).toBe(first.selfId);
+    await until(() => (oldClosed ? true : undefined));
+    const welcome = second.received.find((m) => m.type === "welcome");
+    const names = welcome?.type === "welcome" ? welcome.players.map((p) => p.displayName).sort() : [];
+    expect(names).toEqual(["Laptop", "Watcher"]);
+    // The old socket closing later must not announce the player again.
+    await sleep(300);
+    expect(watcher.received.filter((m) => m.type === "playerLeft")).toHaveLength(1);
+    watcher.socket.close();
+    second.socket.close();
+  });
+
+  it("keeps two tabs from different page loads as two players", async () => {
+    const room = freshRoom();
+    const a = await client(room, "Tab", ["batch"], "page-session-aaaa");
+    const b = await client(room, "Tab", ["batch"], "page-session-bbbb");
+    await sleep(300);
+    expect(a.received.some((m) => m.type === "playerLeft")).toBe(false);
+    expect(b.received.find((m) => m.type === "welcome")?.type === "welcome").toBe(true);
     a.socket.close();
     b.socket.close();
   });

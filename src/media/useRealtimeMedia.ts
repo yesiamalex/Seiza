@@ -276,6 +276,24 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
     return audioContextRef.current;
   }, []);
 
+  // Lets people who never turn their own mic on still hear everyone else.
+  // Browsers start audio suspended until a user gesture resumes it, and the
+  // only resume() used to be in the mic button's handler. Chrome tolerated
+  // that after the Join click; Safari on iPhone and iPad didn't, so a
+  // listener there heard nothing. Any tap, click, or key now resumes it, and
+  // keeps doing so after iOS suspends audio for a call or an app switch.
+  useEffect(() => {
+    const unlock = () => {
+      const context = ensureAudioContext();
+      if (context.state !== "running") void context.resume().catch(() => {});
+    };
+    const events = ["pointerdown", "keydown", "touchend"] as const;
+    for (const name of events) window.addEventListener(name, unlock, { capture: true, passive: true });
+    return () => {
+      for (const name of events) window.removeEventListener(name, unlock, { capture: true });
+    };
+  }, [ensureAudioContext]);
+
   const publishLocalMedia = useCallback(() => {
     setLocalMedia({
       mic: micStreamRef.current?.id ?? null,
@@ -394,6 +412,9 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
     (peer: Peer, stream: MediaStream) => {
       if (peer.audio.has(stream.id)) return;
       const context = ensureAudioContext();
+      // Allowed once the page has had a user gesture (joining counts in most
+      // browsers); otherwise the gesture listener above resumes it.
+      if (context.state !== "running") void context.resume().catch(() => {});
       const gain = context.createGain();
       gain.gain.value = 0;
       const analyser = context.createAnalyser();

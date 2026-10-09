@@ -108,7 +108,13 @@ interface ConnectionAttachment {
   /** Joined with caps ["batch"]: gets movement as one playersUpdated per
    *  tick instead of a playerUpdated per player per update. */
   batch?: boolean;
+  /** The page-load session this connection joined with (see "join" in
+   *  types.ts). Kept on the server only. */
+  session?: string;
 }
+
+/** A page-load session ID: a UUID in practice; anything else is ignored. */
+const SESSION_ID = /^[A-Za-z0-9-]{8,64}$/;
 
 /** How often batched movement goes out: the client's own send rate. */
 const MOVEMENT_FLUSH_MS = 200;
@@ -252,7 +258,16 @@ export class SeizaRoom extends DurableObject<Env> {
           media: {},
         };
         const caps = Array.isArray(message.caps) ? message.caps : [];
-        this.save(ws, { connId: attachment.connId, player, batch: caps.includes("batch") } satisfies ConnectionAttachment);
+        const session = typeof message.session === "string" && SESSION_ID.test(message.session) ? message.session : undefined;
+        // A reconnect from the same page replaces its old connection now,
+        // rather than leaving a frozen copy until that socket times out.
+        if (session) this.dropOtherSessionConnections(ws, session);
+        this.save(ws, {
+          connId: attachment.connId,
+          player,
+          batch: caps.includes("batch"),
+          ...(session ? { session } : {}),
+        } satisfies ConnectionAttachment);
 
         const welcome: ServerMessage = {
           type: "welcome",
@@ -655,17 +670,7 @@ export class SeizaRoom extends DurableObject<Env> {
 
   async webSocketClose(ws: WebSocket) {
     const attachment = this.att(ws);
-    if (attachment?.player) {
-      // Free any screen they were presenting on, or it would stay claimed by
-      // someone who isn't here any more.
-      for (const object of this.objects.values()) {
-        if (object.kind === "screen" && object.presenterId === attachment.connId) {
-          object.presenterId = null;
-          this.broadcast({ type: "objectUpdated", object });
-        }
-      }
-      this.broadcast({ type: "playerLeft", id: attachment.connId });
-    }
+    if (attachment?.player) this.removePlayer(attachment.connId);
     if (attachment) {
       this.lastTrackingAt.delete(attachment.connId);
       this.lastPositionPersist.delete(attachment.connId);
@@ -676,6 +681,47 @@ export class SeizaRoom extends DurableObject<Env> {
 
   async webSocketError(ws: WebSocket) {
     await this.webSocketClose(ws);
+  }
+
+  /** Tells everyone a player has gone, and frees any screen they held. */
+  private removePlayer(connId: string) {
+    // Free any screen they were presenting on, or it would stay claimed by
+    // someone who isn't here any more.
+    for (const object of this.objects.values()) {
+      if (object.kind === "screen" && object.presenterId === connId) {
+        object.presenterId = null;
+        this.broadcast({ type: "objectUpdated", object });
+      }
+    }
+    this.broadcast({ type: "playerLeft", id: connId });
+  }
+
+  /**
+   * Removes every other connection that joined with this page-load session.
+   *
+   * When a laptop's network drops, its socket usually isn't closed cleanly,
+   * so the server keeps it (and its player) until the connection times out,
+   * which can take minutes. Meanwhile the page reconnects on a new socket
+   * and joins again, and everyone saw two of that person, one frozen. The
+   * old player is removed straight away, and its socket closed. Clearing
+   * its player first stops webSocketClose from announcing it a second time.
+   */
+  private dropOtherSessionConnections(current: WebSocket, session: string) {
+    for (const other of this.ctx.getWebSockets()) {
+      if (other === current) continue;
+      const attachment = this.att(other);
+      if (attachment?.session !== session) continue;
+      if (attachment.player) this.removePlayer(attachment.connId);
+      this.lastTrackingAt.delete(attachment.connId);
+      this.lastPositionPersist.delete(attachment.connId);
+      this.pendingMovement.delete(attachment.connId);
+      this.save(other, { ...attachment, player: null, session: undefined });
+      try {
+        other.close(4002, "Replaced by a newer connection from the same page");
+      } catch {
+        // Already closing or dead, which is the usual case here.
+      }
+    }
   }
 
   /** Whether Edit Mode requires proving *something* on this deployment —

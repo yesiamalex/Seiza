@@ -135,7 +135,13 @@ export type ClientMessage =
   // `caps` names optional behaviours this client understands, so the room
   // can use them without breaking a tab still running an older build:
   // "batch" means it handles playersUpdated.
-  | { type: "join"; displayName: string; avatarUrl: string; roomPassword?: string; caps?: string[] }
+  // `session` is a random ID made once per page load and sent again on
+  // every reconnect from that page. When a join arrives with a session that
+  // another connection already holds, the server drops the older one: after
+  // a network drop, the old socket can stay open on the server for minutes,
+  // and without this it showed as a frozen copy of the player. It's never
+  // sent to other players.
+  | { type: "join"; displayName: string; avatarUrl: string; roomPassword?: string; caps?: string[]; session?: string }
   | { type: "state"; position: [number, number, number]; rotationY: number; headPitch?: number }
   // A headset player's head and hands, relative to their own body (see
   // src/xr/body/trackingWire.ts), or null once they stop tracking. Its own

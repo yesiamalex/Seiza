@@ -12,6 +12,19 @@ import type {
   WorldObject,
 } from "./types";
 import { rememberAdminKey, rememberEditorPassword } from "../edit/editAuth";
+
+/**
+ * One random ID per page load, sent with every join from this page, so a
+ * reconnect after a network drop replaces this page's old connection on the
+ * server instead of leaving a frozen copy of the player (see "join" in
+ * types.ts). In memory on purpose: sessionStorage would be copied by the
+ * browser's "Duplicate tab", and the duplicate would then replace the
+ * original.
+ */
+const PAGE_SESSION_ID =
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 import { trackingStore } from "../xr/body/trackingStore";
 
 // The production Worker serves both the app and the Durable Object route, so
@@ -312,16 +325,20 @@ export function useRoomSocket(
             avatarUrl: avatarUrlRef.current,
             roomPassword: roomPasswordRef.current,
             caps: ["batch"],
+            session: PAGE_SESSION_ID,
           } satisfies ClientMessage)
         );
       });
 
-      socket.addEventListener("close", () => {
+      socket.addEventListener("close", (event: CloseEvent) => {
         // A reconnect gets new ids for everyone; nothing tracked under the
         // old ones should go on posing an avatar.
         trackingStore.clearRemote();
         socketRef.current = null;
         if (cancelled || kicked) return;
+        // Replaced by a newer connection from this same page (see "join" in
+        // types.ts). Reconnecting here would replace that one in turn.
+        if (event.code === 4002) return;
         setConnectionState("reconnecting");
         const delay = Math.min(RECONNECT_MAX_DELAY_MS, RECONNECT_BASE_DELAY_MS * 2 ** reconnectAttempt);
         reconnectAttempt += 1;

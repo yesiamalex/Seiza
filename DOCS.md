@@ -182,6 +182,15 @@ guarantee yet.
   server; see [Known limitations](#known-limitations) for the scaling limit
   this sets. Voice is on unless you turn it off with `voiceEnabled` in
   `world.json` or the `VITE_SEIZA_VOICE_ENABLED=false` build flag.
+
+  You don't need to turn on your own microphone to hear others. Browsers
+  keep audio paused until you interact with the page, so your first tap,
+  click, or key press after joining starts it (on iPhone and iPad, this is
+  required).
+- **Reconnecting.** If your connection drops and comes back, Seiza rejoins
+  automatically. Each page load has a private session ID, so the room
+  replaces your old connection instead of showing a frozen copy of you
+  until the old one times out.
 - **Phones and tablets.** Touch devices get a D-pad with forward diagonals,
   buttons for jump, seiza, and crouch, and double-tap-forward to sprint.
   Drag to look, pinch to zoom, and double-tap the floor to walk there. The
