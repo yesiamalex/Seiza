@@ -173,8 +173,10 @@ guarantee yet.
   there along a navigation mesh route. Drag to look around, as in FrameVR.
   Seiza never locks the pointer, so the cursor stays free for the interface
   and the editor. Switch between first and third person, and scroll to zoom
-  (field of view in first person, distance in third). In third person, your
-  avatar turns to face where it walks. Click a chair or bench to sit, and
+  (field of view in first person, distance in third). In first person you
+  can look down and see your own body and feet; your head is hidden from your
+  own camera only, so others see you unchanged. In third person, your avatar
+  turns to face where it walks. Click a chair or bench to sit, and
   move to stand up.
 - **Voice chat.** Voice uses a peer-to-peer WebRTC mesh, signaled through the
   room server that also syncs positions. A 3D indicator shows who is
@@ -699,7 +701,8 @@ for you and for everyone else:
 - Physically crouching lowers the avatar's hips and bends its knees with the
   feet planted.
 
-You see your own body and hands, but not the inside of your own head.
+You see your own body and hands, but not the inside of your own head. The
+same self-view works in flat-screen first person (see `src/xr/body/SelfView.tsx`).
 
 How it works:
 

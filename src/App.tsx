@@ -27,7 +27,7 @@ import { useNavMesh } from "./nav/useNavMesh";
 import { useRealtimeMedia, VOICE_ENABLED } from "./media/useRealtimeMedia";
 import { XrBodyTracker } from "./xr/body/XrBodyTracker";
 import { TrackedBody } from "./xr/body/TrackedBody";
-import { XrSelfView } from "./xr/body/XrSelfView";
+import { SelfView } from "./xr/body/SelfView";
 import { LOCAL_TRACKING_SOURCE } from "./xr/body/trackingStore";
 import { XrHud, type XrHudModel } from "./xr/hud/XrHud";
 import {
@@ -1079,10 +1079,15 @@ export default function App() {
             // set a warp target nothing ever read, so both did nothing.
             warpTargetRef={warpTargetRef}
             onWarped={standUp}
+            outsideOnly={
+              <>
+                {/* Your own camera, so you can see what everyone else sees. */}
+                <CameraBadge stream={media.localCameraStream} mirrored />
+                <SeizaMood phase={seiza.phase} />
+              </>
+            }
           >
             <VrmAvatar url={joined.localUrl ?? joined.url} onLoaded={setLocalVrm} />
-            {/* Your own camera, so you can see what everyone else sees. */}
-            <CameraBadge stream={media.localCameraStream} mirrored />
             <AvatarAnimator
               vrm={localVrm}
               getPosition={() => positionRef.current}
@@ -1096,11 +1101,11 @@ export default function App() {
               doze={seiza.phase === "dozing"}
               tremble={numbLegs ? 0.6 : enduranceTremble(seiza.phase)}
             />
-            <SeizaMood phase={seiza.phase} />
-            {/* VR only, both: your own hands and body following yours, and
-                the head hidden from the headset's camera. */}
+            {/* VR only: your own hands and body following yours. */}
             <TrackedBody vrm={localVrm} source={LOCAL_TRACKING_SOURCE} layerWeightsRef={localLayerWeightsRef} />
-            <XrSelfView vrm={localVrm} />
+            {/* First person, VR or screen: your body seen from your eyes,
+                with your head hidden from your own camera. */}
+            <SelfView vrm={localVrm} firstPerson={viewMode === "first"} />
           </PlayerRig>
           <XrBodyTracker positionRef={positionRef} rotationRef={rotationRef} onSend={(pose) => send({ type: "tracking", pose })} />
           <XrHud model={xrHudModel} />

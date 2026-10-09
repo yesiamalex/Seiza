@@ -59,6 +59,8 @@ export interface BodyRig {
   modelUp: THREE.Vector3;
   /** Eye height in the model's own units, before any scaling. */
   eyeHeight: number;
+  /** How far the eyes sit ahead of the body's centre line, same units. */
+  eyeForward: number;
 }
 
 /** Palms face down in the VRM rest pose — the spec's T-pose — so this is
@@ -123,6 +125,8 @@ export function createBodyRig(vrm: VRM): BodyRig | null {
 
   const eye = restPosition(vrm, "leftEye");
   const eyeHeight = eye ? eye.y : headRest.y * 1.045;
+  // Without eye bones, a typical face's depth ahead of the head bone.
+  const eyeForward = eye ? eye.dot(modelForward) : headRest.dot(modelForward) + 0.07;
 
   const arms: BodyRig["arms"] = {};
   const legs: BodyRig["legs"] = {};
@@ -165,6 +169,7 @@ export function createBodyRig(vrm: VRM): BodyRig | null {
     modelRight,
     modelUp,
     eyeHeight,
+    eyeForward,
   };
 }
 

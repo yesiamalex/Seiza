@@ -17,7 +17,9 @@ import {
 
 export type ViewMode = "first" | "third";
 
-const EYE_HEIGHT = 1.6;
+/** Standing eye height on a flat screen. SelfView fits your own avatar to it
+ *  in first person, so its eyes are where the camera is. */
+export const EYE_HEIGHT = 1.6;
 const MOVE_SPEED = 3.2; // meters/second — matches the walk clip (AvatarAnimator.tsx)
 const RUN_MULTIPLIER = 1.9; // hold Shift, or double-tap forward on the D-pad
 // How fast a player slides onto a seat, and turns to face the way it faces.
@@ -168,7 +170,14 @@ interface PlayerRigProps {
    *  each time rather than being a no-op on an unchanged ref value. */
   warpTargetRef?: MutableRefObject<THREE.Vector3 | null>;
   onWarped?: () => void;
+  /** Your own avatar. Always drawn: in first person its head is hidden from
+   *  the camera instead (SelfView), so you can look down at your body. */
   children?: ReactNode;
+  /** Things attached to your avatar that only make sense seen from outside
+   *  it, like your camera badge: shown in third person and VR, as before,
+   *  and hidden in flat-screen first person, where they would sit against
+   *  the camera. */
+  outsideOnly?: ReactNode;
 }
 
 function lerpAngle(from: number, to: number, t: number) {
@@ -214,6 +223,7 @@ export function PlayerRig({
   warpTargetRef,
   onWarped,
   children,
+  outsideOnly,
 }: PlayerRigProps) {
   const { camera, gl } = useThree();
   const isPresenting = useXR((s) => s.session != null);
@@ -930,14 +940,12 @@ export function PlayerRig({
   return (
     <>
       <XROrigin ref={xrOriginRef} position={spawnPoint} />
-      {/* Own avatar body: shown in third person, and in VR — where the
-          head is hidden from the headset's camera instead (XrSelfView), so
-          you can look down at your own body and hands. Hidden in desktop
-          first person, where the camera sits inside the head. It stays
-          mounted either way so animation and spring bones keep running and
-          switching views doesn't reload the model. */}
-      <group ref={rigRef} visible={isPresenting || viewMode === "third"}>
+      {/* Own avatar body, in every view. In first person, flat screen or
+          VR, the head is hidden from the camera instead (SelfView), so you
+          can look down at your own body and, in VR, your hands. */}
+      <group ref={rigRef}>
         {children}
+        <group visible={isPresenting || viewMode === "third"}>{outsideOnly}</group>
       </group>
     </>
   );
