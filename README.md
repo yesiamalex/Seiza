@@ -147,6 +147,21 @@ moderation, see [Known limitations](DOCS.md#known-limitations) in DOCS.md.
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute, the CLA, and the documentation style guide |
 | [THIRD_PARTY_ASSETS.md](THIRD_PARTY_ASSETS.md) | Asset licenses, including uploaded avatars |
 
+## 🤝 Support and services
+
+Seiza is free and open source. If it's useful to you, you can support its
+development through [Ko-fi](https://ko-fi.com/seizadeveloper), GitHub
+Sponsors, or, in the Philippines, GCash or BPI. See [DONATE.md](DONATE.md).
+
+If your school or organization would like its own deployment set up,
+customized (a different world, branding, or features), or maintained, without
+working with the code yourselves, this is available as a paid service. Email
+**seizadeveloper@gmail.com** to discuss what you need.
+
+This is separate from licensing. Running Seiza under the AGPL is free and
+needs no permission; [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md) only
+matters if you want to use it in a closed-source product.
+
 ## ⚖️ License
 
 Seiza is dual-licensed:

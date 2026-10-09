@@ -37,8 +37,8 @@ company an informal one-page document instead.
 Separately from licensing, the maintainer offers paid setup, customization,
 and managed hosting support. This is useful for institutions that want Seiza
 running but don't want to operate Cloudflare infrastructure themselves.
-Contact: **[email/contact placeholder]**.
+Contact: **seizadeveloper@gmail.com**.
 
 ## Contact
 
-For commercial license inquiries, contact **[email/contact placeholder]**.
+For commercial license inquiries, contact **seizadeveloper@gmail.com**.
