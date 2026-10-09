@@ -65,6 +65,7 @@ deployment.
 | Media | Asset shown | Author and source | License terms that apply | Notes |
 |---|---|---|---|---|
 | `docs/media/hero.gif`, `docs/media/uploaded-vrm.jpg` | "Hitori 'Bocchi' Gotoh" VRM | Fan model by [@wawari_w](https://wawari.carrd.co/), of the character from *Bocchi the Rock!* (© Aki Hamaji / Houbunsha / Aniplex) | VRoid Hub license: use by everyone allowed; personal commercial use allowed; corporate commercial use **not** allowed; redistribution **not** allowed. | Captured from the maintainer's own copy for personal, illustrative use. Not an endorsement for commercial use or for forks. If you fork Seiza, consider replacing these images. Remove it on request from the model's author or the rights holders. |
+| `docs/media/buttons/*.png` | Ko-fi, GitHub Sponsors, GCash, and BPI logos | Trademarks of Ko-fi Labs, GitHub, G-Xchange, and the Bank of the Philippine Islands | Used only to identify each payment option on the support buttons | The Ko-fi and GitHub Sponsors marks come from Simple Icons; the GCash and BPI marks were taken from the maintainer's own payment QR codes. |
 
 ## Add a new asset
 
