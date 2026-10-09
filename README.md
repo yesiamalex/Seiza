@@ -18,6 +18,10 @@ else can shut down, re-price, or take your data out of.
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/yesiamalex/Seiza)
 [![License: AGPL-3.0-or-later](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue.svg)](LICENSE)
+[![Support on Ko-fi](https://img.shields.io/badge/Ko--fi-Support-FF5E5B?logo=kofi&logoColor=white)](https://ko-fi.com/seizadeveloper)
+[![Sponsor on GitHub](https://img.shields.io/badge/GitHub-Sponsor-EA4AAA?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/yesiamalex)
+[![GCash](https://img.shields.io/badge/GCash-Send-007DFE)](DONATE.md#in-the-philippines)
+[![BPI](https://img.shields.io/badge/BPI-InstaPay-D71920)](DONATE.md#in-the-philippines)
 
 For the full guide, see [DOCS.md](DOCS.md).
 
@@ -152,6 +156,11 @@ moderation, see [Known limitations](DOCS.md#known-limitations) in DOCS.md.
 Seiza is free and open source. If it's useful to you, you can support its
 development through [Ko-fi](https://ko-fi.com/seizadeveloper), GitHub
 Sponsors, or, in the Philippines, GCash or BPI. See [DONATE.md](DONATE.md).
+
+[![Support on Ko-fi](https://img.shields.io/badge/Ko--fi-Support-FF5E5B?logo=kofi&logoColor=white)](https://ko-fi.com/seizadeveloper)
+[![Sponsor on GitHub](https://img.shields.io/badge/GitHub-Sponsor-EA4AAA?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/yesiamalex)
+[![GCash](https://img.shields.io/badge/GCash-Send-007DFE)](DONATE.md#in-the-philippines)
+[![BPI](https://img.shields.io/badge/BPI-InstaPay-D71920)](DONATE.md#in-the-philippines)
 
 If your school or organization would like its own deployment set up,
 customized (a different world, branding, or features), or maintained, without

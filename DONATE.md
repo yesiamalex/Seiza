@@ -4,6 +4,11 @@ Seiza is free and open source, and it stays that way whether or not you
 donate. If it's useful to you or your school, a contribution helps keep it
 maintained.
 
+[![Support on Ko-fi](https://img.shields.io/badge/Ko--fi-Support-FF5E5B?logo=kofi&logoColor=white)](https://ko-fi.com/seizadeveloper)
+[![Sponsor on GitHub](https://img.shields.io/badge/GitHub-Sponsor-EA4AAA?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/yesiamalex)
+[![GCash](https://img.shields.io/badge/GCash-Send-007DFE)](#in-the-philippines)
+[![BPI](https://img.shields.io/badge/BPI-InstaPay-D71920)](#in-the-philippines)
+
 ## International
 
 - **Ko-fi:** [ko-fi.com/seizadeveloper](https://ko-fi.com/seizadeveloper),
