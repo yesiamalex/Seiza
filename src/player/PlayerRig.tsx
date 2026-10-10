@@ -35,6 +35,9 @@ const PLAYER_RADIUS_MARGIN = 0.4;
 const EYE_CAMERA_AHEAD = 0.04;
 const EYE_CAMERA_AHEAD_LOOKING_DOWN = 0.2;
 const eyeTurnScratch = new THREE.Quaternion();
+/** How far first person may look down or up, head and look combined. Short
+ *  of vertical, so a bow plus looking down can't flip the view over. */
+const SELF_VIEW_PITCH_LIMIT = 1.4;
 
 const THIRD_PERSON_MIN_DISTANCE = 1.2;
 const THIRD_PERSON_MAX_DISTANCE = 7;
@@ -832,9 +835,17 @@ export function PlayerRig({
           // Reduced motion keeps the eye height but not the turning.
           camera.quaternion.copy(vcam.quaternion);
           if (!reducedMotionRef.current) {
-            camera.quaternion.premultiply(
-              eyeTurnScratch.copy(rig.quaternion).multiply(selfViewStore.turn).multiply(rig.quaternion.clone().invert())
-            );
+            // The look pitch is capped against the head's own: a bow already
+            // tips the view well down, and looking down on top of it went
+            // past vertical, flipping the view over to look back at your own
+            // shoulders. Your look itself is kept, so the view returns to it
+            // as you rise.
+            const look = new THREE.Euler().setFromQuaternion(vcam.quaternion, "YXZ");
+            const headPitch = new THREE.Euler().setFromQuaternion(selfViewStore.turn, "YXZ").x;
+            look.x = THREE.MathUtils.clamp(look.x, -SELF_VIEW_PITCH_LIMIT - headPitch, SELF_VIEW_PITCH_LIMIT - headPitch);
+            camera.quaternion
+              .setFromEuler(look)
+              .premultiply(eyeTurnScratch.copy(rig.quaternion).multiply(selfViewStore.turn).multiply(rig.quaternion.clone().invert()));
           }
           // Ahead along the ground, not along the view: looking straight
           // down, "along the view" is down into the collar.

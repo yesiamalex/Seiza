@@ -18,6 +18,18 @@ const HIDDEN_SCALE = 1e-3;
 /** Head turns below this are idling and breathing, not a gesture, and the
  *  view shouldn't sway with them. */
 const TURN_DEADZONE = 0.1;
+/** How quickly the camera catches up with the eye: almost at once when
+ *  standing, so seiza and bows track closely, and slowly at running speed,
+ *  so a run's bouncing head doesn't bounce the view (it did, and it was
+ *  dizzying). Per second. */
+const EYE_FOLLOW_STILL = 25;
+const EYE_FOLLOW_MOVING = 2.5;
+/** Ground speed at which the slow rate applies fully: a walk. */
+const FOLLOW_SLOW_SPEED = 3;
+/** How much of the head's turn survives at that speed: a run's nodding
+ *  head shouldn't nod the view. */
+const MOVING_TURN_SHARE = 0.2;
+
 /** The first-person near plane on a screen. The default clips your own
  *  shoulders and hands, which are closer to your eyes than anything else. */
 const SELF_VIEW_NEAR = 0.04;
@@ -53,7 +65,18 @@ export function SelfView({ vrm, firstPerson }: { vrm: VRM | null; firstPerson: b
   const hideHeadRef = useRef(hideHead);
   hideHeadRef.current = hideHead;
   const screenFirstPerson = firstPerson && !presenting;
-  const scratch = useMemo(() => ({ parentQuat: new THREE.Quaternion(), restQuat: new THREE.Quaternion() }), []);
+  const scratch = useMemo(
+    () => ({
+      parentQuat: new THREE.Quaternion(),
+      restQuat: new THREE.Quaternion(),
+      eye: new THREE.Vector3(),
+      turn: new THREE.Quaternion(),
+      groundPos: new THREE.Vector3(),
+      lastGroundPos: null as THREE.Vector3 | null,
+      speed: 0,
+    }),
+    []
+  );
 
   useEffect(() => () => {
     selfViewStore.valid = false;
@@ -76,16 +99,17 @@ export function SelfView({ vrm, firstPerson }: { vrm: VRM | null; firstPerson: b
   // and spring bones, and measure the pose that is about to be drawn. The
   // normalized bones still hold it here — the clips write the next one
   // later this frame, and VrmAvatar copies it to the mesh a frame later.
-  useFrame(() => {
+  useFrame((_, frameDelta) => {
     hiddenBone()?.scale.setScalar(1);
     const head = vrm?.humanoid.getNormalizedBoneNode("head");
     const parent = vrm?.scene.parent;
     if (!vrm || !rig || !head || !parent) {
       selfViewStore.valid = false;
+      scratch.lastGroundPos = null;
       return;
     }
     head.updateWorldMatrix(true, false);
-    const eye = head.localToWorld(selfViewStore.eye.copy(rig.eyeOffset));
+    const eye = head.localToWorld(scratch.eye.copy(rig.eyeOffset));
     parent.worldToLocal(eye);
 
     // The head's turn away from rest, in the group's space. Normalized
@@ -94,11 +118,32 @@ export function SelfView({ vrm, firstPerson }: { vrm: VRM | null; firstPerson: b
     // turn as seen from the group. The local avatar's head is never given
     // the look pitch (the camera has that already), so all of it is
     // animation.
-    const turn = head.getWorldQuaternion(selfViewStore.turn);
+    const turn = head.getWorldQuaternion(scratch.turn);
     turn.premultiply(parent.getWorldQuaternion(scratch.parentQuat).invert());
     turn.multiply(scratch.restQuat.copy(vrm.scene.quaternion).invert());
     const angle = 2 * Math.acos(Math.min(1, Math.abs(turn.w)));
     turn.slerp(IDENTITY, angle > TURN_DEADZONE ? TURN_DEADZONE / angle : 1);
+
+    // Ground speed, from how far the avatar moved since last frame.
+    const delta = Math.min(frameDelta, 0.1);
+    parent.getWorldPosition(scratch.groundPos).setY(0);
+    if (scratch.lastGroundPos && delta > 0) {
+      const speed = scratch.groundPos.distanceTo(scratch.lastGroundPos) / delta;
+      // A teleport is one frame's huge "speed"; ignore it.
+      if (speed < 20) scratch.speed = THREE.MathUtils.damp(scratch.speed, speed, 8, delta);
+    }
+    scratch.lastGroundPos = (scratch.lastGroundPos ?? new THREE.Vector3()).copy(scratch.groundPos);
+    const moving = THREE.MathUtils.clamp(scratch.speed / FOLLOW_SLOW_SPEED, 0, 1);
+    turn.slerp(IDENTITY, moving * (1 - MOVING_TURN_SHARE));
+
+    if (!selfViewStore.valid) {
+      selfViewStore.eye.copy(eye);
+      selfViewStore.turn.copy(turn);
+    } else {
+      const follow = 1 - Math.exp(-THREE.MathUtils.lerp(EYE_FOLLOW_STILL, EYE_FOLLOW_MOVING, moving) * delta);
+      selfViewStore.eye.lerp(eye, follow);
+      selfViewStore.turn.slerp(turn, follow);
+    }
     selfViewStore.valid = true;
   }, -1);
 

@@ -839,7 +839,11 @@ Doors use the same obstacle list, but switch it on and off:
   they move the body. The head and neck are folded into the base of the neck
   for your own camera only (`src/xr/body/SelfView.tsx`), so nothing blocks the
   view and there's no open collar to look into, and looking down moves the
-  view forward over your chest, the way a real head tips. With
+  view forward over your chest, the way a real head tips. Looking down
+  during a bow stops short of vertical, so the view can't flip over onto your
+  own back. The faster you move, the more the view smooths out the head's
+  bounce and nodding, so walking and running don't bounce the camera, while
+  standing still it tracks the head closely. With
   `prefers-reduced-motion`, the view keeps the eye height but doesn't turn
   with gestures.
 - **Head bob.** When no avatar is loaded yet, the first-person camera bobs as you walk. The bob follows
