@@ -174,8 +174,10 @@ guarantee yet.
   Seiza never locks the pointer, so the cursor stays free for the interface
   and the editor. Switch between first and third person, and scroll to zoom
   (field of view in first person, distance in third). In first person you
-  can look down and see your own body and feet; your head is hidden from your
-  own camera only, so others see you unchanged. In third person, your avatar
+  see from your avatar's own eyes: look down to see your body and feet, and
+  the view kneels into seiza with you and dips and turns with bows, nods, and
+  other gestures. Your head is hidden from your own camera only, so others see
+  you unchanged. In third person, your avatar
   turns to face where it walks. Click a chair or bench to sit, and
   move to stand up.
 - **Voice chat.** Voice uses a peer-to-peer WebRTC mesh, signaled through the
@@ -831,7 +833,16 @@ Doors use the same obstacle list, but switch it on and off:
   shadow. A skinned mesh would have to be redrawn into the shadow map every
   frame it moves. A textured disc costs one draw call and still shows where
   someone is standing.
-- **Head bob.** The first-person camera bobs as you walk. The bob follows
+- **Seeing from your avatar's eyes.** On a screen, the first-person camera
+  sits at your avatar's measured eye position each frame and turns as its
+  head does, so walking, kneeling, bowing, and nodding move the view the way
+  they move the body. The head and neck are folded into the base of the neck
+  for your own camera only (`src/xr/body/SelfView.tsx`), so nothing blocks the
+  view and there's no open collar to look into, and looking down moves the
+  view forward over your chest, the way a real head tips. With
+  `prefers-reduced-motion`, the view keeps the eye height but doesn't turn
+  with gestures.
+- **Head bob.** When no avatar is loaded yet, the first-person camera bobs as you walk. The bob follows
   distance traveled rather than time, so it stays in step with your feet at
   any speed. One stride is one full cycle: the head dips twice (once per
   foot), sways once, and rolls slightly. The bob moves only the camera you

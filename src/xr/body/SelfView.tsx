@@ -2,59 +2,44 @@ import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useXR } from "@react-three/xr";
 import * as THREE from "three";
-import { VRMFirstPerson, type VRM } from "@pixiv/three-vrm";
+import type { VRM } from "@pixiv/three-vrm";
 import { createBodyRig } from "./bodyIk";
 import { trackingStore } from "./trackingStore";
-import { EYE_HEIGHT } from "../../player/PlayerRig";
-
-const FIRST_PERSON_ONLY = VRMFirstPerson.DEFAULT_FIRSTPERSON_ONLY_LAYER;
-const THIRD_PERSON_ONLY = VRMFirstPerson.DEFAULT_THIRDPERSON_ONLY_LAYER;
+import { selfViewStore } from "./selfViewStore";
 
 /** How far the self-view may rescale an avatar to fit its owner. Beyond
  *  this the avatar has stopped being the one they chose. */
 const MIN_FIT = 0.75;
 const MAX_FIT = 1.35;
+const IDENTITY = new THREE.Quaternion();
+
+/** Not zero: a singular bone matrix turns lighting and spring bones to NaN. */
+const HIDDEN_SCALE = 1e-3;
+/** Head turns below this are idling and breathing, not a gesture, and the
+ *  view shouldn't sway with them. */
+const TURN_DEADZONE = 0.1;
+/** The first-person near plane on a screen. The default clips your own
+ *  shoulders and hands, which are closer to your eyes than anything else. */
+const SELF_VIEW_NEAR = 0.04;
 
 /**
- * Prepares a VRM so a camera inside its head can see the rest of it.
+ * Lets you see your own body in first person, on a screen or in VR, with
+ * no inside of your own head in the way.
  *
- * Uploaded VRMs carry first-person annotations, and three-vrm's setup()
- * uses them to put a copy of the body *without* the head on one layer and
- * the head itself on another. Designer avatars are built in code and have
- * none, so for them the meshes hung under the head bone go to the
- * third-person layer directly — which is the same result, reached the
- * simple way their simple structure allows.
- */
-function prepareFirstPerson(vrm: VRM) {
-  if (vrm.firstPerson) {
-    vrm.firstPerson.setup({ firstPersonOnlyLayer: FIRST_PERSON_ONLY, thirdPersonOnlyLayer: THIRD_PERSON_ONLY });
-    return;
-  }
-  vrm.humanoid.getRawBoneNode("head")?.traverse((object) => {
-    if ((object as THREE.Mesh).isMesh) object.layers.set(THIRD_PERSON_ONLY);
-  });
-}
-
-/** How much further back the body goes when you look straight down, so
- *  the camera clears the neck instead of looking down through it. */
-const LOOK_DOWN_BACK = 0.1;
-
-/**
- * Lets you see your own body in first person: hands where your hands are
- * in VR, your torso and feet below you on a flat screen, and no inside of
- * your own face in either.
- *
- * Scoped to the local avatar:
- * - the avatar's head goes on a layer the first-person camera doesn't draw
- *   (and the third-person camera does, so third person is unchanged);
- * - the avatar is rescaled so its eyes are at the camera's height: the
- *   player's real eye height in VR, otherwise a 1.85m player in a 1.45m
- *   avatar would see their virtual hands land short of their real ones,
- *   and the flat-screen eye height on a screen, otherwise a tall avatar
- *   would put the camera inside its neck;
- * - on a screen, the body sits back by the depth of its face, so the
- *   camera is where its eyes are rather than at the back of its head.
- *   (VR needs none of that: TrackedBody puts the head under the headset.)
+ * - The head and neck are hidden by shrinking the neck bone to nothing
+ *   for the frames they're drawn, much as VRChat does it. Everything
+ *   weighted to them (face, hair, a hood, a collar) folds into the base of
+ *   the neck instead of being cut off, so there are no torn edges and no
+ *   open collar to look down into. The scale is undone before the next
+ *   animation update, so spring bones never see it.
+ * - On a screen the camera goes where the avatar's eyes are, measured
+ *   each frame (PlayerRig reads selfViewStore), and turns as the head
+ *   does. It kneels into seiza with the body instead of ahead of it, dips
+ *   with a bow, and nods, shakes, and glances with the gestures.
+ * - In VR the headset is the camera, so instead the avatar is rescaled to
+ *   put its eyes at the player's real eye height: a 1.85m player in a
+ *   1.45m avatar would otherwise see their virtual hands land short of
+ *   their real ones.
  *
  * What other people see is untouched: their copy of this avatar is a
  * separate instance, at its own size, with its head where it belongs.
@@ -62,60 +47,74 @@ const LOOK_DOWN_BACK = 0.1;
 export function SelfView({ vrm, firstPerson }: { vrm: VRM | null; firstPerson: boolean }) {
   const presenting = useXR((state) => state.session != null);
   const camera = useThree((state) => state.camera);
-  const gl = useThree((state) => state.gl);
   const rig = useMemo(() => (vrm ? createBodyRig(vrm) : null), [vrm]);
   const fitRef = useRef(1);
+  const hideHead = firstPerson || presenting;
+  const hideHeadRef = useRef(hideHead);
+  hideHeadRef.current = hideHead;
   const screenFirstPerson = firstPerson && !presenting;
+  const scratch = useMemo(() => ({ parentQuat: new THREE.Quaternion(), restQuat: new THREE.Quaternion() }), []);
+
+  useEffect(() => () => {
+    selfViewStore.valid = false;
+  }, []);
 
   useEffect(() => {
-    if (vrm) prepareFirstPerson(vrm);
-  }, [vrm]);
+    if (!screenFirstPerson || !(camera instanceof THREE.PerspectiveCamera)) return;
+    const near = camera.near;
+    camera.near = SELF_VIEW_NEAR;
+    camera.updateProjectionMatrix();
+    return () => {
+      camera.near = near;
+      camera.updateProjectionMatrix();
+    };
+  }, [camera, screenFirstPerson]);
 
-  // Outside a session r3f's camera is the ordinary one. In third person it
-  // has to keep seeing the head that prepareFirstPerson moved off the
-  // default layer; in first person it sees the headless body instead.
-  useEffect(() => {
-    if (presenting) return;
-    if (screenFirstPerson) {
-      camera.layers.enable(FIRST_PERSON_ONLY);
-      camera.layers.disable(THIRD_PERSON_ONLY);
-    } else {
-      camera.layers.disable(FIRST_PERSON_ONLY);
-      camera.layers.enable(THIRD_PERSON_ONLY);
+  const hiddenBone = () => vrm?.humanoid.getRawBoneNode("neck") ?? vrm?.humanoid.getRawBoneNode("head");
+
+  // First, before VrmAvatar's update: put the head back for the animation
+  // and spring bones, and measure the pose that is about to be drawn. The
+  // normalized bones still hold it here — the clips write the next one
+  // later this frame, and VrmAvatar copies it to the mesh a frame later.
+  useFrame(() => {
+    hiddenBone()?.scale.setScalar(1);
+    const head = vrm?.humanoid.getNormalizedBoneNode("head");
+    const parent = vrm?.scene.parent;
+    if (!vrm || !rig || !head || !parent) {
+      selfViewStore.valid = false;
+      return;
     }
-  }, [camera, presenting, screenFirstPerson]);
+    head.updateWorldMatrix(true, false);
+    const eye = head.localToWorld(selfViewStore.eye.copy(rig.eyeOffset));
+    parent.worldToLocal(eye);
 
-  useEffect(() => {
-    if (!presenting) return;
-    const xrCamera = gl.xr.getCamera();
-    xrCamera.layers.enable(FIRST_PERSON_ONLY);
-    xrCamera.layers.disable(THIRD_PERSON_ONLY);
-  }, [presenting, gl]);
+    // The head's turn away from rest, in the group's space. Normalized
+    // bones rest at identity in the model's space, so the head's rotation
+    // in the group is facing·pose, and facing·pose·facing⁻¹ is the pose's
+    // turn as seen from the group. The local avatar's head is never given
+    // the look pitch (the camera has that already), so all of it is
+    // animation.
+    const turn = head.getWorldQuaternion(selfViewStore.turn);
+    turn.premultiply(parent.getWorldQuaternion(scratch.parentQuat).invert());
+    turn.multiply(scratch.restQuat.copy(vrm.scene.quaternion).invert());
+    const angle = 2 * Math.acos(Math.min(1, Math.abs(turn.w)));
+    turn.slerp(IDENTITY, angle > TURN_DEADZONE ? TURN_DEADZONE / angle : 1);
+    selfViewStore.valid = true;
+  }, -1);
 
-  const view = useMemo(() => new THREE.Vector3(), []);
   useFrame((_, delta) => {
     if (!vrm || !rig) return;
-    if (presenting) {
-      const standingEye = trackingStore.getLocalStandingEye();
-      const target = standingEye > 0 ? THREE.MathUtils.clamp(standingEye / rig.eyeHeight, MIN_FIT, MAX_FIT) : 1;
-      // Eased: the standing measurement climbs over the first moments of a
-      // session, and a body visibly growing in steps is worse than one
-      // settling.
-      fitRef.current += (target - fitRef.current) * (1 - Math.exp(-4 * Math.min(delta, 0.1)));
-      if (Math.abs(fitRef.current - target) < 1e-4) fitRef.current = target;
-    } else {
-      // A fixed target on a screen, so switching views simply snaps.
-      fitRef.current = screenFirstPerson ? THREE.MathUtils.clamp(EYE_HEIGHT / rig.eyeHeight, MIN_FIT, MAX_FIT) : 1;
-    }
-    vrm.scene.scale.setScalar(fitRef.current);
+    // After VrmAvatar's update, so it lasts through this frame's render.
+    if (hideHeadRef.current) hiddenBone()?.scale.setScalar(HIDDEN_SCALE);
 
-    let back = 0;
-    if (screenFirstPerson) {
-      camera.getWorldDirection(view);
-      back = rig.eyeForward * fitRef.current + LOOK_DOWN_BACK * Math.max(0, -view.y);
-    }
-    // Avatars face -Z in the group they're drawn in, so +Z is behind them.
-    vrm.scene.position.z = back;
+    const standingEye = presenting ? trackingStore.getLocalStandingEye() : 0;
+    const target = standingEye > 0 ? THREE.MathUtils.clamp(standingEye / rig.eyeHeight, MIN_FIT, MAX_FIT) : 1;
+    // Eased: the standing measurement climbs over the first moments of a
+    // session, and a body visibly growing in steps is worse than one
+    // settling.
+    fitRef.current += (target - fitRef.current) * (1 - Math.exp(-4 * Math.min(delta, 0.1)));
+    if (Math.abs(fitRef.current - target) < 1e-4) fitRef.current = target;
+    vrm.scene.scale.setScalar(fitRef.current);
   });
 
   return null;

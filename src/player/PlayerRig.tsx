@@ -5,6 +5,7 @@ import * as THREE from "three";
 import type { TouchMoveInput } from "./touchInput";
 import { isGizmoDragging } from "../edit/gizmoState";
 import { readXrHead } from "../xr/body/xrPose";
+import { selfViewStore } from "../xr/body/selfViewStore";
 import {
   CAMERA_RADIUS,
   ceilingHeightAt,
@@ -17,9 +18,7 @@ import {
 
 export type ViewMode = "first" | "third";
 
-/** Standing eye height on a flat screen. SelfView fits your own avatar to it
- *  in first person, so its eyes are where the camera is. */
-export const EYE_HEIGHT = 1.6;
+const EYE_HEIGHT = 1.6;
 const MOVE_SPEED = 3.2; // meters/second — matches the walk clip (AvatarAnimator.tsx)
 const RUN_MULTIPLIER = 1.9; // hold Shift, or double-tap forward on the D-pad
 // How fast a player slides onto a seat, and turns to face the way it faces.
@@ -29,6 +28,13 @@ const POSTURE_CAMERA_EASE_RATE = 6;
 // The walkable area is already inset by the player's radius (layout.ts);
 // this is that inset, so the camera can be allowed closer to walls.
 const PLAYER_RADIUS_MARGIN = 0.4;
+/** First person: how far ahead of the avatar's eyes the camera sits, and
+ *  how much further when looking down — where a real head would have
+ *  tipped forward to — so it looks at the chest rather than into the
+ *  collar. */
+const EYE_CAMERA_AHEAD = 0.04;
+const EYE_CAMERA_AHEAD_LOOKING_DOWN = 0.2;
+const eyeTurnScratch = new THREE.Quaternion();
 
 const THIRD_PERSON_MIN_DISTANCE = 1.2;
 const THIRD_PERSON_MAX_DISTANCE = 7;
@@ -812,6 +818,32 @@ export function PlayerRig({
       if (rigRef.current) {
         rigRef.current.position.set(positionRef.current[0], positionRef.current[1], positionRef.current[2]);
         rigRef.current.rotation.set(0, avatarYawRef.current, 0);
+
+        // First person on a screen: see from your avatar's own eyes, so the
+        // view kneels into seiza with the body rather than ahead of it,
+        // and dips with a bow. The walk clip already moves the head, so
+        // the synthetic bob above is replaced rather than added to.
+        if (viewMode === "first" && !isPresenting && selfViewStore.valid) {
+          const rig = rigRef.current;
+          rig.updateWorldMatrix(true, false);
+          camera.position.copy(selfViewStore.eye);
+          rig.localToWorld(camera.position);
+          // The head's turn is in the body's frame: rig·turn·rig⁻¹ in world.
+          // Reduced motion keeps the eye height but not the turning.
+          camera.quaternion.copy(vcam.quaternion);
+          if (!reducedMotionRef.current) {
+            camera.quaternion.premultiply(
+              eyeTurnScratch.copy(rig.quaternion).multiply(selfViewStore.turn).multiply(rig.quaternion.clone().invert())
+            );
+          }
+          // Ahead along the ground, not along the view: looking straight
+          // down, "along the view" is down into the collar.
+          const view = camera.getWorldDirection(new THREE.Vector3());
+          const ahead = new THREE.Vector3(view.x, 0, view.z);
+          if (ahead.lengthSq() < 1e-6) ahead.set(0, 0, -1).applyQuaternion(rig.quaternion);
+          camera.position.addScaledVector(ahead.normalize(), EYE_CAMERA_AHEAD + EYE_CAMERA_AHEAD_LOOKING_DOWN * Math.max(0, -view.y));
+          clampToRooms(camera.position, PLAYER_RADIUS_MARGIN - CAMERA_RADIUS);
+        }
       }
       return lookYaw;
     };
