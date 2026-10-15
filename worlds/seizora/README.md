@@ -44,7 +44,9 @@ Everything is in the world itself; there's no separate page to open.
     overhead changes with them.
 
   When the deployment has an editor password, only editors can use the
-  console; everyone else sees it but can't press it.
+  console; with an admin key (`SEIZA_ADMIN_KEY`, set on the Seizora Worker
+  itself, since secrets are per Worker), only signed-in admins. Everyone
+  else sees it but can't press it.
 - **The garden.** The solar array (three rows facing south at 15°; the back
   row is the perovskite pilot, in brown), the battery container with a
   strip that shows its charge (green while charging, amber while

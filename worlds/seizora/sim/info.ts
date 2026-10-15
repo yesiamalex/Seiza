@@ -4,16 +4,33 @@
 // The illustrations are inline SVG, so nothing is downloaded. Every figure
 // in a card matches the model (sim/energy.ts, src/sky/weather.ts), and each
 // card lists the sources it rests on (sim/references.ts).
+import { CUT_IN, CUT_OUT, loadFraction, PEROVSKITE, PLANT, RATED_SPEED, SILICON, turbinePower, type Snapshot } from "./energy";
 import type { RefKey } from "./references";
 
 export type InfoKey = "sky" | "silicon" | "perovskite" | "wind" | "battery" | "grid" | "load" | "layers" | "degradation";
+
+/** What a card's live parts read: the plant now, its switches, and its
+ *  last 24 hours. */
+export interface LiveContext {
+  now: Snapshot;
+  gridConnected: boolean;
+  windBreaker: boolean;
+  batteryMode: string;
+  encapsulation: string;
+  day: { renewableShare: number; co2AvoidedT: number; unservedMwh: number };
+}
+
+/** One live reading on a card: a label and its value. */
+export type Stat = [label: string, value: string];
 
 export interface InfoCard {
   title: string;
   art: string;
   /** The illustration drawn from the plant's live state, when it has one;
    *  `art` is shown until the plant has started. */
-  liveArt?: (battery: { soc: number; batteryMw: number }) => string;
+  liveArt?: (live: LiveContext) => string;
+  /** Live readings shown under the illustration, refreshed while open. */
+  liveStats?: (live: LiveContext) => Stat[];
   body: string[];
   try?: string;
   sources: RefKey[];
@@ -35,6 +52,61 @@ function batteryArt(soc: number, batteryMw: number): string {
       <text x="60" y="175" font-size="11">stores the midday surplus for the evening peak</text>`);
 }
 
+const mw = (v: number) => `${v.toFixed(2)} MW`;
+const pct = (v: number) => `${Math.round(v * 100)}%`;
+/** Output lost to heat at this cell temperature, by the model's own
+ *  temperature coefficient. */
+const heatLoss = (cellTemp: number, tech: typeof SILICON) => Math.max(0, -tech.tempCoeff * (cellTemp - 25));
+
+// The model's own curves, drawn once: the community's load through a day,
+// and the wind farm's power against wind speed.
+const LOAD_X = (hour: number) => 20 + (hour / 24) * 280;
+const LOAD_Y = (mwValue: number) => 160 - (mwValue / PLANT.peakLoadMw) * 120;
+const LOAD_CURVE = Array.from({ length: 49 }, (_, i) => `${LOAD_X(i / 2).toFixed(1)},${LOAD_Y(PLANT.peakLoadMw * loadFraction(i / 2)).toFixed(1)}`).join(" ");
+const WIND_RATED = PLANT.turbines * PLANT.turbineMw;
+const WIND_X = (speed: number) => 30 + Math.min(speed, 30) * 9;
+const WIND_Y = (mwValue: number) => 160 - (mwValue / WIND_RATED) * 115;
+const WIND_CURVE = Array.from({ length: 61 }, (_, i) => {
+  const v = i / 2;
+  const p = v >= CUT_OUT ? 0 : PLANT.turbines * turbinePower(PLANT.turbineMw, v);
+  return `${WIND_X(v).toFixed(1)},${WIND_Y(p).toFixed(1)}`;
+}).join(" ");
+
+function loadArt(now?: Snapshot): string {
+  const x = now ? LOAD_X(now.hour) : 0;
+  const marker = now
+    ? `<line x1="${x.toFixed(1)}" y1="35" x2="${x.toFixed(1)}" y2="160" stroke="#e8913a" stroke-dasharray="4 4"/>
+       <circle cx="${x.toFixed(1)}" cy="${LOAD_Y(now.loadMw).toFixed(1)}" r="6" fill="#e8913a"/>
+       <text x="${Math.min(x + 8, 236).toFixed(1)}" y="30" font-size="11" fill="#b5631a">now ${now.loadMw.toFixed(2)} MW</text>`
+    : "";
+  return svg(`
+      <rect width="320" height="200" fill="#fbf6ee"/>
+      <line x1="20" y1="160" x2="300" y2="160" stroke="#bbb"/>
+      <polyline points="${LOAD_CURVE}" fill="none" stroke="#333" stroke-width="3"/>
+      ${marker}
+      <text x="232" y="46" font-size="11" text-anchor="end">evening peak</text>
+      <text x="14" y="178" font-size="10">midnight</text><text x="148" y="178" font-size="10">noon</text><text x="270" y="178" font-size="10">midnight</text>`);
+}
+
+function windArt(now?: Snapshot, braked = false): string {
+  const at = now ? (braked || now.turbinesFeathered ? 0 : now.windMw) : 0;
+  const x = now ? WIND_X(now.windSpeed) : 0;
+  const marker = now
+    ? `<circle cx="${x.toFixed(1)}" cy="${WIND_Y(at).toFixed(1)}" r="6" fill="#1d9f80"/>
+       <text x="${Math.min(x + 8, 226).toFixed(1)}" y="${(WIND_Y(at) - 8).toFixed(1)}" font-size="11" fill="#126b56">now ${now.windSpeed.toFixed(1)} m/s</text>`
+    : "";
+  return svg(`
+      <rect width="320" height="200" fill="#e7f4ef"/>
+      <line x1="30" y1="160" x2="300" y2="160" stroke="#9bb"/>
+      <polyline points="${WIND_CURVE}" fill="none" stroke="#2f5d52" stroke-width="3"/>
+      ${marker}
+      <text x="${WIND_X(CUT_IN) - 12}" y="178" font-size="10">${CUT_IN}</text>
+      <text x="${WIND_X(RATED_SPEED) - 6}" y="178" font-size="10">${RATED_SPEED}</text>
+      <text x="${WIND_X(CUT_OUT) - 6}" y="178" font-size="10">${CUT_OUT}</text>
+      <text x="246" y="194" font-size="10">wind, m/s</text>
+      <text x="34" y="38" font-size="11">${WIND_RATED} MW, both turbines</text>`);
+}
+
 export const INFO: Record<InfoKey, InfoCard> = {
   sky: {
     title: "The sun, the sky, and the weather",
@@ -50,6 +122,12 @@ export const INFO: Record<InfoKey, InfoCard> = {
     body: [
       "Sunlight arriving on the ground is measured in watts per square metre. A clear tropical noon gives about 1,000 W/m²; a low sun gives far less, because its light crosses more atmosphere and strikes the ground at a slant.",
       "Clouds cut it further: full overcast lets through only about a quarter. The sky here follows the same weather engine as the world around you, so what you see overhead is what the panels are getting.",
+    ],
+    liveStats: ({ now }) => [
+      ["Sun", now.sunElevation > 0 ? `${now.sunElevation.toFixed(0)}° up` : "below the horizon"],
+      ["Sunlight", `${now.ghi.toFixed(0)} W/m²`],
+      ["Cloud", pct(now.cloud)],
+      ["Air", `${now.ambient.toFixed(0)} °C, ${now.humidity.toFixed(0)}% humid`],
     ],
     try: "At the control room console, press 12:00 and then Rain, and watch the irradiance and the solar output fall together.",
     sources: ["duffie2013", "haurwitz1945", "reno2012", "kasten1980", "pagasa"],
@@ -70,6 +148,12 @@ export const INFO: Record<InfoKey, InfoCard> = {
       "Panels lose about 0.35% of their output for every degree they run above 25 °C, and in Philippine sun they often run at 55 to 65 °C. That is why a cool, bright morning can beat a hot afternoon. Wiring, dust, and the inverter take roughly another 17%.",
       "This farm is 3.6 MW peak, tilted 15° toward the south; the rows in the garden stand in for it, since the real thing would cover about 4 hectares. Over a year, a well-placed panel in Metro Manila makes about 1,400 kWh for each kW of its rating.",
     ],
+    liveStats: ({ now }) => [
+      ["Output", `${mw(now.siliconMw)} of ${PLANT.siliconMwp}`],
+      ["On the panels", `${now.poa.toFixed(0)} W/m²`],
+      ["Cells", `${now.cellTemp.toFixed(0)} °C`],
+      ["Lost to heat", pct(heatLoss(now.cellTemp, SILICON))],
+    ],
     try: "Press 10:00 and then 14:00 with Clear weather, and compare the cell temperature and the output on the big display.",
     sources: ["dupre2015", "duffie2013", "dobos2014", "doeSolar"],
   },
@@ -89,17 +173,24 @@ export const INFO: Record<InfoKey, InfoCard> = {
       "Perovskites are crystals that absorb sunlight very strongly, so a layer thinner than a thousandth of a millimetre does the work of thick silicon. They can be printed at low temperature onto glass or flexible film, which is why Japan is developing lightweight, flexible perovskite panels for walls, roofs, and places silicon can't go, and plans about 20 GW of them by 2040.",
       "They also lose less to heat than silicon: about 0.17% per degree instead of 0.35%. Their weakness is durability: moisture, oxygen, heat, and light break them down. This pilot row loses a little output with every humid hour, depending on how well it is sealed.",
     ],
+    liveStats: ({ now, encapsulation }) => [
+      ["Output", `${mw(now.perovskiteMw)} of ${PLANT.perovskiteMwp}`],
+      ["Health", `${(now.perovskiteHealth * 100).toFixed(2)}%`],
+      ["Seal", encapsulation],
+      ["Lost to heat", pct(heatLoss(now.cellTemp, PEROVSKITE))],
+    ],
     try: "Set the seal to None, press Rain and Run 360×, and watch the pilot's health fall on the big display.",
     sources: ["green2014", "jost2020", "boyd2019", "meti2024"],
   },
   wind: {
     title: "Wind turbines",
-    art: svg(`
-      <rect width="320" height="200" fill="#e7f3ef"/>
-      <line x1="160" y1="70" x2="160" y2="190" stroke="#cfd6d9" stroke-width="8"/>
-      <g transform="translate(160 70)">${[0, 120, 240].map((a) => `<rect x="-4" y="-62" width="8" height="62" rx="4" fill="#fff" stroke="#b5c0c4" transform="rotate(${a})"/>`).join("")}<circle r="7" fill="#9aa"/></g>
-      <polyline points="20,170 60,170 100,120 140,95 200,95 230,95 232,170 300,170" fill="none" stroke="#1d8f73" stroke-width="3"/>
-      <text x="20" y="185" font-size="10">3.5</text><text x="136" y="110" font-size="10">12 m/s: full power</text><text x="236" y="160" font-size="10">25: stop</text>`),
+    art: windArt(),
+    liveArt: ({ now, windBreaker }) => windArt(now, !windBreaker),
+    liveStats: ({ now, windBreaker }) => [
+      ["Wind", `${now.windSpeed.toFixed(1)} m/s`],
+      ["Output", `${mw(now.windMw)} of ${WIND_RATED}`],
+      ["Rotors", !windBreaker ? "braked (breaker open)" : now.turbinesFeathered ? "feathered, past cut-out" : now.windMw > 0 ? "turning" : "idle, below cut-in"],
+    ],
     body: [
       "The power carried by the wind rises with the cube of its speed: double the wind, eight times the power. A turbine makes nothing below about 3.5 m/s, follows that cube up to about 12 m/s, then turns its blades to hold its full rating; when the wind averages over 25 m/s it feathers them and brakes to protect itself.",
       "That is why a typhoon, for all its wind, produces nothing here. The two turbines are 1.5 MW each. The ones in the garden are scale models: a real 1.5 MW turbine has a rotor about 77 m across on a tower about 80 m tall, turning at 10 to 20 rpm.",
@@ -110,7 +201,12 @@ export const INFO: Record<InfoKey, InfoCard> = {
   battery: {
     title: "Battery storage",
     art: batteryArt(0.6, 0),
-    liveArt: ({ soc, batteryMw }) => batteryArt(soc, batteryMw),
+    liveArt: ({ now }) => batteryArt(now.soc, now.batteryMw),
+    liveStats: ({ now, batteryMode }) => [
+      ["Stored", `${(now.soc * PLANT.batteryMwh).toFixed(1)} of ${PLANT.batteryMwh} MWh`],
+      ["Power", now.batteryMw < -0.01 ? `charging ${mw(-now.batteryMw)}` : now.batteryMw > 0.01 ? `giving ${mw(now.batteryMw)}` : "idle"],
+      ["Mode", batteryMode],
+    ],
     body: [
       "The battery holds 6 MWh and can charge or discharge at up to 3 MW. In Auto, it stores whatever the plant makes beyond the load. On the grid it saves that energy for the evening peak: it covers only the part of the load above about 2.1 MW, so its charge lasts through the evening while the main grid supplies the rest. Cut off from the grid, it covers all it can.",
       "About 15% of the energy is lost on the round trip (85% comes back, typical of large lithium-ion systems), and the battery is kept between 10% and 95% full to protect it.",
@@ -129,18 +225,40 @@ export const INFO: Record<InfoKey, InfoCard> = {
       "In island mode, whatever the plant and battery can't supply has to be shed. Many smaller Philippine islands are not on the main grid at all: the National Power Corporation runs their power plants, nearly all on diesel, and is adding solar and batteries to burn less fuel.",
       "Every MWh the plant makes instead of the main grid avoids about 0.71 tonnes of CO₂, the grid's emission factor for Luzon and the Visayas.",
     ],
+    liveStats: ({ now, gridConnected, day }) => [
+      ["Grid tie", gridConnected ? "connected" : "island mode"],
+      [
+        "Now",
+        !gridConnected
+          ? now.unservedMw > 0.005
+            ? `shedding ${mw(now.unservedMw)}`
+            : "all load served"
+          : now.gridMw > 0.005
+            ? `importing ${mw(now.gridMw)}`
+            : now.gridMw < -0.005
+              ? `exporting ${mw(-now.gridMw)}`
+              : "balanced",
+      ],
+      ["Own share, 24 h", pct(day.renewableShare)],
+      ["CO₂ avoided, 24 h", `${day.co2AvoidedT.toFixed(1)} t`],
+    ],
     try: "Press 00:00 and Rain, then open the Grid tie and Wind breakers.",
     sources: ["npc2025", "doeNgef"],
   },
   load: {
     title: "The community load",
-    art: svg(`
-      <rect width="320" height="200" fill="#fbf6ee"/>
-      <polyline points="20,150 60,140 90,110 120,120 150,105 190,115 220,70 250,60 280,100 300,130" fill="none" stroke="#333" stroke-width="3"/>
-      <text x="215" y="50" font-size="11">evening peak</text><text x="20" y="175" font-size="10">midnight</text><text x="140" y="175" font-size="10">noon</text>`),
+    art: loadArt(),
+    liveArt: ({ now }) => loadArt(now),
+    liveStats: ({ now }) => {
+      const own = Math.max(0, now.loadMw - Math.max(0, now.gridMw) - now.unservedMw);
+      return [
+        ["Load now", `${mw(now.loadMw)} of ${PLANT.peakLoadMw} peak`],
+        ["From the plant", now.loadMw > 0 ? pct(own / now.loadMw) : "–"],
+      ];
+    },
     body: [
       "The load is a small community with a school and a clinic: a rise in the morning, a plateau through the school day, and the biggest demand in the evening, when homes switch on lights, fans, and televisions, just as the sun sets.",
-      "That mismatch between when the sun shines and when people use power is the whole reason for the battery. The shape here is illustrative, not measured from a real feeder.",
+      "That mismatch between when the sun shines and when people use power is the whole reason for the battery. The curve is the model's own, with the load right now marked; its shape is illustrative, not measured from a real feeder.",
     ],
     sources: [],
   },
@@ -155,6 +273,12 @@ export const INFO: Record<InfoKey, InfoCard> = {
       "Light passes through the glass and the transparent electrode into the perovskite, where it frees electrons. The electron-transport layer carries electrons one way and the hole-transport layer carries the gaps they leave the other way, so the two flow out as current.",
       "Each choice of material trades efficiency, cost, and stability against each other. The best single-junction lab cells now reach about 27% efficiency, close to silicon's best; keeping that for years outdoors is the open problem.",
     ],
+    liveStats: ({ now, encapsulation }) => [
+      ["Pilot row health", `${(now.perovskiteHealth * 100).toFixed(2)}%`],
+      ["Humidity", `${now.humidity.toFixed(0)}%`],
+      ["Cells", `${now.cellTemp.toFixed(0)} °C`],
+      ["Seal", encapsulation],
+    ],
     sources: ["green2014", "nrelChart", "boyd2019"],
   },
   degradation: {
@@ -168,6 +292,12 @@ export const INFO: Record<InfoKey, InfoCard> = {
     body: [
       "Humidity often above 80%, cell temperatures above 60 °C, and intense year-round sun are the three stressors perovskites handle worst. A design that lasts years in a dry, mild climate can fade within months here.",
       "Researchers compare stability by T80, the time a cell takes to fall to 80% of its starting output, under agreed test conditions. Before deploying perovskites in the Philippines, they would need testing under local conditions, with real sealed modules and measured weather. This lab shows the trade-offs; it does not predict a product's lifetime.",
+    ],
+    liveStats: ({ now, encapsulation }) => [
+      ["Pilot row health", `${(now.perovskiteHealth * 100).toFixed(2)}%`],
+      ["Humidity", `${now.humidity.toFixed(0)}%`],
+      ["Cells", `${now.cellTemp.toFixed(0)} °C`],
+      ["Seal", encapsulation],
     ],
     sources: ["boyd2019", "khenkin2020", "pagasa"],
   },

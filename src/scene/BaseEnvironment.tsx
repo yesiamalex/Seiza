@@ -200,6 +200,7 @@ function WallRun({
   material,
   thickness = WALL_THICKNESS,
   centerY,
+  corners,
 }: {
   axis: "x" | "z";
   at: number;
@@ -210,7 +211,15 @@ function WallRun({
   material: THREE.Material;
   thickness?: number;
   centerY?: number;
+  corners?: Corners;
 }) {
+  // At a corner, one wall runs through to the outside face and the other
+  // stops flush against it, layer by layer. Both stopping at the corner
+  // point left a notch the size of the wall's thickness on the outside,
+  // with the walls' end faces flickering in it.
+  const extend = corners === "through" ? thickness / 2 : corners === "inside" ? -thickness / 2 : 0;
+  from -= extend;
+  to += extend;
   const segments: [number, number][] = [];
   let cursor = from;
   for (const gap of [...gaps].sort((a, b) => a.from - b.from)) {
@@ -263,6 +272,10 @@ interface WindowOpening {
  * wainscot and trim bands don't need splitting: at this room's proportions
  * neither one's height range overlaps where windows sit.
  */
+/** How a wall meets the walls at its two ends: running through the
+ *  corners, or stopping inside them. */
+type Corners = "through" | "inside";
+
 function DressedWall(props: {
   axis: "x" | "z";
   at: number;
@@ -272,6 +285,7 @@ function DressedWall(props: {
   gaps?: Gap[];
   m: WorldMaterials;
   windows?: WindowOpening[];
+  corners?: Corners;
 }) {
   const { m, windows, ...run } = props;
   const doorGaps = run.gaps ?? [];
@@ -370,10 +384,11 @@ function HallShell({ m }: { m: WorldMaterials }) {
   return (
     <group>
       {/* North wall is the entrance; south opens into the corridor. */}
-      <DressedWall axis="x" at={HALL.maxZ} from={HALL.minX} to={HALL.maxX} height={WALL_HEIGHT} gaps={[{ from: -DOOR_HALF_WIDTH, to: DOOR_HALF_WIDTH }]} m={m} />
+      <DressedWall axis="x" at={HALL.maxZ} from={HALL.minX} to={HALL.maxX} height={WALL_HEIGHT} gaps={[{ from: -DOOR_HALF_WIDTH, to: DOOR_HALF_WIDTH }]} m={m} corners="through" />
       <DressedWall
         axis="x"
         at={HALL.minZ}
+        corners="through"
         from={HALL.minX}
         to={HALL.maxX}
         height={WALL_HEIGHT}
@@ -383,6 +398,7 @@ function HallShell({ m }: { m: WorldMaterials }) {
       <DressedWall
         axis="z"
         at={HALL.minX}
+        corners="inside"
         from={HALL.minZ}
         to={HALL.maxZ}
         height={WALL_HEIGHT}
@@ -392,6 +408,7 @@ function HallShell({ m }: { m: WorldMaterials }) {
       <DressedWall
         axis="z"
         at={HALL.maxX}
+        corners="inside"
         from={HALL.minZ}
         to={HALL.maxZ}
         height={WALL_HEIGHT}
@@ -1084,6 +1101,7 @@ function ClassroomShell({ m, lit, onToggleLight }: { m: WorldMaterials; lit: boo
       <DressedWall
         axis="x"
         at={CLASSROOM.maxZ}
+        corners="through"
         from={CLASSROOM.minX}
         to={CLASSROOM.maxX}
         height={CLASSROOM_WALL_HEIGHT}
@@ -1096,10 +1114,11 @@ function ClassroomShell({ m, lit, onToggleLight }: { m: WorldMaterials; lit: boo
       <group position={[-(DOOR_HALF_WIDTH + 0.95), 1.2, CLASSROOM.maxZ - WALL_THICKNESS / 2 - 0.008]} rotation={[0, Math.PI, 0]}>
         <LightSwitch on={lit} onToggle={onToggleLight && ((on) => onToggleLight("classroom", on))} />
       </group>
-      <DressedWall axis="x" at={CLASSROOM.minZ} from={CLASSROOM.minX} to={CLASSROOM.maxX} height={CLASSROOM_WALL_HEIGHT} m={m} />
+      <DressedWall axis="x" at={CLASSROOM.minZ} from={CLASSROOM.minX} to={CLASSROOM.maxX} height={CLASSROOM_WALL_HEIGHT} m={m} corners="through" />
       <DressedWall
         axis="z"
         at={CLASSROOM.minX}
+        corners="inside"
         from={CLASSROOM.minZ}
         to={CLASSROOM.maxZ}
         height={CLASSROOM_WALL_HEIGHT}
@@ -1116,6 +1135,7 @@ function ClassroomShell({ m, lit, onToggleLight }: { m: WorldMaterials; lit: boo
       <DressedWall
         axis="z"
         at={CLASSROOM.maxX}
+        corners="inside"
         from={CLASSROOM.minZ}
         to={CLASSROOM.maxZ}
         height={CLASSROOM_WALL_HEIGHT}

@@ -94,9 +94,56 @@ const SOLAR_GLOW = {
   perovskite: [rowOutline(ROWS - 1)],
 };
 
+/**
+ * A panel's face, painted once: a silver frame edge, and either a grid of
+ * blue silicon cells with silver gaps and fine busbars, or the perovskite
+ * module's long thin strips. A texture rather than geometry, so the detail
+ * costs no draw calls, and it's the panels' glow at night too.
+ */
+function panelTexture(kind: "silicon" | "perovskite"): THREE.CanvasTexture | null {
+  if (typeof document === "undefined") return null;
+  const canvas = document.createElement("canvas");
+  const w = (canvas.width = 192), h = (canvas.height = 320);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.fillStyle = "#c3cad4"; // frame and the gaps between cells
+  ctx.fillRect(0, 0, w, h);
+  const edge = 5;
+  if (kind === "silicon") {
+    const cols = 6, rows = 10, gap = 2;
+    const cw = (w - 2 * edge - (cols - 1) * gap) / cols, ch = (h - 2 * edge - (rows - 1) * gap) / rows;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const x = edge + c * (cw + gap), y = edge + r * (ch + gap);
+        const g = ctx.createLinearGradient(x, y, x + cw, y + ch);
+        g.addColorStop(0, "#2a52b8");
+        g.addColorStop(1, "#1b3a8f");
+        ctx.fillStyle = g;
+        ctx.fillRect(x, y, cw, ch);
+        ctx.fillStyle = "rgba(205,214,228,0.55)"; // busbars
+        for (const f of [0.25, 0.5, 0.75]) ctx.fillRect(x + cw * f - 0.5, y, 1, ch);
+      }
+    }
+  } else {
+    ctx.fillStyle = "#3d1c11";
+    ctx.fillRect(edge, edge, w - 2 * edge, h - 2 * edge);
+    ctx.fillStyle = "rgba(170,140,120,0.45)"; // the scribed lines between strips
+    for (let x = edge + 9; x < w - edge; x += 9) ctx.fillRect(x, edge, 1, h - 2 * edge);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
+  return texture;
+}
+
+function panelMaterial(kind: "silicon" | "perovskite") {
+  const map = panelTexture(kind);
+  return standard("#ffffff", 0.3, 0.2, { map, emissiveMap: map });
+}
+
 const materials = {
-  silicon: standard("#0d1838", 0.25, 0.35),
-  perovskite: standard("#3d1a10", 0.3, 0.25),
+  silicon: panelMaterial("silicon"),
+  perovskite: panelMaterial("perovskite"),
   aluminium: standard("#b8bcc2", 0.4, 0.8),
   steel: standard("#71767e", 0.5, 0.7),
   concrete: standard("#9e9b93", 0.95, 0),
@@ -642,7 +689,7 @@ function Board(b: BoardSpec) {
 export function Exhibits() {
   // The garden's exhibits catch a little of the lamps at night, so the
   // panels and the battery don't go black against the sky.
-  useNightLift("pond", [materials.silicon, materials.perovskite], 0.9);
+  useNightLift("pond", [materials.silicon, materials.perovskite], 0.45);
   useNightLift("pond", [materials.container, materials.green, materials.white, materials.steel], 0.22);
   return (
     <>
