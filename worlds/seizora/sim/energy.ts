@@ -7,7 +7,8 @@
  * on a tilted panel, temperature derating, a turbine power curve, battery
  * efficiency and limits), but the plant is invented and the weather is
  * synthetic; real estimates need measured equipment data and local
- * weather records.
+ * weather records. Each constant below names its source; the full list is
+ * in references.ts and worlds/seizora/README.md.
  */
 import {
   ambientTemperature,
@@ -33,6 +34,13 @@ export interface PlantSpec {
   peakLoadMw: number;
 }
 
+/**
+ * The plant. A community microgrid of this size would cover about 4 to 5
+ * hectares of panels (4.2 MWp at about 20% module efficiency is roughly
+ * 2.1 ha of modules, spaced in rows) and use turbines with rotors about
+ * 70 to 77 m across on towers about 80 m tall. The garden shows a few rows
+ * and two scale-model turbines standing in for it.
+ */
 export const PLANT: PlantSpec = {
   siliconMwp: 3.6,
   perovskiteMwp: 0.6,
@@ -45,21 +53,38 @@ export const PLANT: PlantSpec = {
 
 /** Panel tilt and facing used for the farm: 15° toward the south. */
 const TILT_DEG = 15;
-/** Philippine grid emission factor, tCO2 per MWh (approximate). */
-export const GRID_EMISSION_FACTOR = 0.7;
+/** CO2 per MWh of grid generation the plant displaces: the Luzon–Visayas
+ *  simple operating margin, 0.7122 tCO2/MWh (DOE Philippines, 2015–2017
+ *  National Grid Emission Factor). */
+export const GRID_EMISSION_FACTOR = 0.71;
 
-const BATTERY_ONE_WAY_EFFICIENCY = Math.sqrt(0.9); // 90% round trip
+/** Round-trip efficiency of the battery: 85%, the representative value for
+ *  utility-scale lithium-ion storage (Cole & Frazier, 2019); the US fleet
+ *  averaged 82% in 2019 (EIA, 2021). */
+export const BATTERY_ROUND_TRIP = 0.85;
+const BATTERY_ONE_WAY_EFFICIENCY = Math.sqrt(BATTERY_ROUND_TRIP);
 const SOC_MIN = 0.1;
 const SOC_MAX = 0.95;
+/**
+ * Peak shaving: grid-connected, Auto covers only the part of the load above
+ * this level, so a battery far smaller than the evening's energy can still
+ * flatten its peak for the whole evening while the grid supplies the base.
+ * This is the usual job of a grid-tied community battery. In island mode
+ * there is no grid to supply the base, so Auto covers all it can.
+ */
+export const PEAK_SHAVE_FRACTION = 0.65;
 
 // --- solar -------------------------------------------------------------------
 
 /**
- * Irradiance on a panel tilted toward the south, from horizontal
- * irradiance: the direct part follows the angle between the sun and the
- * panel, the diffuse part (more of it under cloud) comes from the whole
- * sky. A simplified transposition, close enough to show why tilt and
- * orientation matter.
+ * Irradiance on a tilted panel, from horizontal irradiance: the direct part
+ * scales with the cosine of the angle between the sun and the panel, and
+ * the diffuse part (more of it under cloud) comes evenly from the visible
+ * sky, the isotropic model (Duffie & Beckman, 2013, ch. 2). The split
+ * between direct and diffuse is a simple function of cloud rather than a
+ * fitted correlation, and light reflected from the ground is left out (it
+ * matters little at 15° of tilt, more on a facade), so this shows why tilt
+ * and orientation matter rather than predicting a site.
  */
 export function planeOfArrayIrradiance(ghi: number, sunEl: number, sunAz: number, cloud: number, tiltDeg = TILT_DEG, facingAzDeg = 180): number {
   if (ghi <= 0 || sunEl <= 0) return 0;
@@ -74,8 +99,9 @@ export function planeOfArrayIrradiance(ghi: number, sunEl: number, sunAz: number
   return Math.max(0, beam + diffuse);
 }
 
-/** Cell temperature from ambient and irradiance (NOCT method, NOCT 45 °C),
- *  with wind cooling the panel a little. */
+/** Cell temperature from ambient and irradiance by the NOCT method,
+ *  T = Ta + (NOCT − 20) / 800 × G, with a NOCT of 45 °C (Duffie & Beckman,
+ *  2013, ch. 23), and a simple allowance for wind cooling the panel. */
 export function cellTemperature(ambient: number, poa: number, wind: number): number {
   return ambient + ((45 - 20) / 800) * poa * (1 - Math.min(0.3, wind * 0.02));
 }
@@ -85,15 +111,25 @@ export interface CellTech {
   /** Power change per °C above 25 °C. */
   tempCoeff: number;
 }
+/** Crystalline silicon loses about 0.3 to 0.45% of its power per °C;
+ *  0.35% is typical of today's modules (Dupré, Vaillon & Green, 2015). */
 export const SILICON: CellTech = { label: "Silicon", tempCoeff: -0.0035 };
+/** −0.17% per °C, measured between 25 and 85 °C and validated outdoors
+ *  (Jošt et al., 2020). */
 export const PEROVSKITE: CellTech = { label: "Perovskite", tempCoeff: -0.0017 };
 
-/** PV output in MW for a plant rating, plane-of-array irradiance, and cell
- *  temperature; `health` is the remaining fraction after degradation. */
-export function pvPower(mwp: number, poa: number, cellTemp: number, tech: CellTech, health = 1, soiling = 0.03): number {
+/** PVWatts' default system losses, 14% (soiling, shading, mismatch,
+ *  wiring, connections, light-induced degradation, nameplate, and
+ *  availability), and its nominal inverter efficiency, 96% (Dobos, 2014). */
+export const SYSTEM_LOSSES = 0.14;
+export const INVERTER_EFFICIENCY = 0.96;
+
+/** PV output in MW (AC) for a plant rating, plane-of-array irradiance, and
+ *  cell temperature; `health` is the remaining fraction after degradation.
+ *  Ratings are at standard test conditions, 1,000 W/m² and 25 °C. */
+export function pvPower(mwp: number, poa: number, cellTemp: number, tech: CellTech, health = 1): number {
   const derate = 1 + tech.tempCoeff * (cellTemp - 25);
-  const systemLosses = 0.86; // inverter, wiring, mismatch
-  return Math.max(0, mwp * (poa / 1000) * derate * systemLosses * (1 - soiling) * health);
+  return Math.max(0, mwp * (poa / 1000) * derate * (1 - SYSTEM_LOSSES) * INVERTER_EFFICIENCY * health);
 }
 
 // --- perovskite durability -----------------------------------------------------
@@ -106,10 +142,14 @@ export const ENCAPSULATION: Record<Encapsulation, { label: string; protection: n
 };
 
 /**
- * Fraction of output lost per hour of exposure. Moisture, heat, and light
- * are the known stressors of perovskite cells; this combines them in an
- * illustrative way (an unsealed cell in humid heat fades within days, a
- * glass-glass module over years). Not a lifetime prediction.
+ * Fraction of output lost per hour of exposure. Moisture, oxygen, heat,
+ * and light are the known stressors of perovskite cells (Boyd et al.,
+ * 2019), and moisture is the one encapsulation keeps out. The rates here
+ * are illustrative, set so the ordering matches the literature (an
+ * unsealed cell in humid heat fails within weeks; an edge-sealed one over
+ * months; a glass-glass module keeps about 97% after a year here), not
+ * fitted to measured modules. T80, the time to 80% of initial output, is
+ * the stability measure the ISOS consensus reports (Khenkin et al., 2020).
  */
 export function perovskiteDecayPerHour(humidity: number, cellTemp: number, poa: number, enc: Encapsulation): number {
   const moisture = Math.pow(Math.max(0, humidity - 30) / 70, 2) * 0.004;
@@ -120,11 +160,19 @@ export function perovskiteDecayPerHour(humidity: number, cellTemp: number, poa: 
 
 // --- wind ----------------------------------------------------------------------
 
-export const CUT_IN = 3;
+/** A 1.5 MW turbine's operating range: it starts making power at about
+ *  3.5 m/s, reaches its rating at 12 m/s, and shuts down when the
+ *  ten-minute average passes 25 m/s (GE 1.5 MW data). */
+export const CUT_IN = 3.5;
 export const RATED_SPEED = 12;
 export const CUT_OUT = 25;
 
-/** One turbine's output in MW at a hub-height wind speed. */
+/**
+ * One turbine's output in MW at a hub-height wind speed. The power carried
+ * by the wind is P = ½ρAv³ (Manwell, McGowan & Rogers, 2009), so between
+ * cut-in and rated speed the output follows the cube of the wind speed;
+ * above rated speed the blades pitch to hold the rating.
+ */
 export function turbinePower(ratedMw: number, wind: number): number {
   if (wind < CUT_IN || wind >= CUT_OUT) return 0;
   if (wind >= RATED_SPEED) return ratedMw;
@@ -134,7 +182,9 @@ export function turbinePower(ratedMw: number, wind: number): number {
 // --- load ------------------------------------------------------------------------
 
 /** Community load as a fraction of peak: a small morning rise, a midday
- *  plateau (school and clinic), and the evening peak when homes light up. */
+ *  plateau (school and clinic), and the evening peak when homes light up.
+ *  An illustrative shape for a small rural community, not a measured
+ *  feeder profile. */
 export function loadFraction(hour: number, temp = 28): number {
   const g = (mu: number, sigma: number) => Math.exp(-(((hour - mu) / sigma) ** 2) / 2);
   const base = 0.38 + 0.18 * g(7.5, 1.4) + 0.3 * g(13, 3) + 0.55 * g(19.5, 1.8);
@@ -258,9 +308,16 @@ export class Microgrid {
     const maxCharge = c.battery ? Math.min(this.spec.batteryMw, (Math.max(0, SOC_MAX - this.soc) * energy) / BATTERY_ONE_WAY_EFFICIENCY / Math.max(hours, 1e-6)) : 0;
     if (c.battery) {
       switch (c.batteryMode) {
-        case "auto":
-          batteryMw = net >= 0 ? -Math.min(net, maxCharge) : Math.min(-net, maxDischarge);
+        case "auto": {
+          if (net >= 0) {
+            batteryMw = -Math.min(net, maxCharge); // store the surplus
+          } else {
+            const threshold = c.gridConnected ? PEAK_SHAVE_FRACTION * this.spec.peakLoadMw : 0;
+            const aboveThreshold = Math.max(0, loadMw - Math.max(threshold, generation));
+            batteryMw = Math.min(c.gridConnected ? aboveThreshold : -net, maxDischarge);
+          }
           break;
+        }
         case "charge":
           batteryMw = -maxCharge;
           break;
@@ -317,6 +374,14 @@ export class Microgrid {
 
 // --- the perovskite lab (stations 1 to 3) --------------------------------------------
 
+// Layer options. Efficiencies are illustrative module-level values below
+// the best research cells (single-junction perovskite cells reach about
+// 27%; NREL chart). Bandgaps are typical for each composition. The
+// stability multipliers follow the literature's ordering (Boyd et al.,
+// 2019): methylammonium is volatile, so MAPbI₃ fades fastest; TiO₂ is
+// photocatalytic under UV, so SnO₂ lasts longer; doped Spiro-OMeTAD
+// absorbs moisture, while inorganic NiOₓ is the most robust. Higher means
+// faster fade. Cost indices are relative, for comparison only.
 export const ABSORBERS = {
   mapi: { label: "MAPbI₃ (1.60 eV)", efficiency: 0.205, stability: 1.6, cost: 1 },
   fac: { label: "FA–Cs mixed cation (1.55 eV)", efficiency: 0.235, stability: 0.8, cost: 1.1 },
@@ -337,7 +402,10 @@ export const MOUNTS = {
   shelter: { label: "Transit-shelter canopy, 5°", tilt: 5, facing: 180 },
 } as const;
 
-/** Clear-sky irradiance lost to humid tropical haze, on average. */
+/** Clear-sky irradiance lost to humid tropical haze and aerosols, on
+ *  average, which the Haurwitz clear-sky model leaves out. Calibrated so a
+ *  15° rooftop in Metro Manila yields close to the 1,402 kWh/kWp the Global
+ *  Solar Atlas gives there (DOE Philippines). */
 const TROPICAL_HAZE = 0.82;
 
 export interface LabDesign {
@@ -382,9 +450,9 @@ export function evaluateDesign(design: LabDesign, site: Site, wetSeasonShare = 0
   for (let month = 0; month < 12; month++) {
     const day = 15 + month * 30.4;
     const wet = month >= 5 && month <= 10;
-    // Typical monthly cloud cover, and the haze of a humid tropical sky,
-    // which the clear-sky model leaves out: together they bring a year to
-    // the 1,300 to 1,500 kWh per kWp usual for Philippine rooftops.
+    // Typical monthly cloud cover, and the haze of a humid tropical sky
+    // (TROPICAL_HAZE): together they bring a year close to the Global Solar
+    // Atlas figure for Philippine rooftops.
     const cloud = wet ? 0.55 + 0.3 * wetSeasonShare : 0.45;
     const humidity = wet ? 85 : 72;
     for (let hour = 0; hour < 24; hour++) {
@@ -393,7 +461,7 @@ export function evaluateDesign(design: LabDesign, site: Site, wetSeasonShare = 0
       const poa = planeOfArrayIrradiance(ghi, sun.elevation, sun.azimuth, cloud, m.tilt, m.facing);
       const temp = cellTemperature(ambientTemperature(hour + 0.5, site), poa, 3);
       // A month is about 30.4 of this sampled day.
-      yieldKwh += (poa / 1000) * (1 + PEROVSKITE.tempCoeff * (temp - 25)) * 0.86 * health * 30.4;
+      yieldKwh += (poa / 1000) * (1 + PEROVSKITE.tempCoeff * (temp - 25)) * (1 - SYSTEM_LOSSES) * INVERTER_EFFICIENCY * health * 30.4;
       health *= 1 - perovskiteDecayPerHour(humidity, temp, poa, design.encapsulation) * stability * 30.4;
     }
     monthlyHealth.push(Math.max(0, health));

@@ -8,9 +8,10 @@
  * lighting can follow it, and Seizora's solar simulation reads the same
  * numbers.
  *
- * Nothing in the base world uses it yet; the default world's sky is still
- * the fixed sunset in src/scene/SunsetSky.tsx. The weather is synthetic, a
- * learning model, not a forecast.
+ * The moving sky (skyState.ts, SkyDriver.tsx) runs on it in any world with
+ * a realtime sky, including the default world. The astronomy and radiation
+ * formulas are standard ones, cited where they're used; the weather itself
+ * is synthetic, a learning model, not a forecast.
  */
 
 const DEG = Math.PI / 180;
@@ -25,7 +26,8 @@ export interface Site {
   meanTemp: number;
 }
 
-/** Philippine sites. All share UTC+8. */
+/** Philippine sites. All share UTC+8. Mean temperatures are rounded annual
+ *  means for each city; the daily swing is a simple ±4 °C. */
 export const SITES: Record<string, Site> = {
   cebu: { label: "Cebu", lat: 10.31, lon: 123.89, meanTemp: 28 },
   manila: { label: "Metro Manila", lat: 14.6, lon: 120.98, meanTemp: 28 },
@@ -43,8 +45,10 @@ export interface SunPosition {
 
 /**
  * Sun position for a day of the year (1 to 365) and local clock time in
- * hours (0 to 24), from the standard declination and equation-of-time
- * approximations: accurate to well under a degree, plenty for a sky.
+ * hours (0 to 24), from Cooper's declination and the standard
+ * equation-of-time approximation (Duffie & Beckman, 2013, ch. 1): within
+ * about a degree of the true position, plenty for a sky and for the energy
+ * a panel receives.
  */
 export function sunPosition(dayOfYear: number, hour: number, site: Site): SunPosition {
   const b = (2 * Math.PI * (dayOfYear - 81)) / 364;
@@ -61,9 +65,9 @@ export function sunPosition(dayOfYear: number, hour: number, site: Site): SunPos
   return { elevation: elevation / DEG, azimuth };
 }
 
-/** Length of the lunar cycle, new moon to new moon, in days. */
+/** Length of the lunar cycle, new moon to new moon, in days (Meeus, 1998). */
 const SYNODIC_MONTH = 29.530588853;
-/** A known new moon: 6 January 2000, 18:14 UTC. */
+/** A known new moon: 6 January 2000, 18:14 UTC (Meeus, 1998). */
 const REFERENCE_NEW_MOON = Date.UTC(2000, 0, 6, 18, 14);
 
 export interface MoonPhase {
@@ -98,15 +102,21 @@ export function moonPosition(dayOfYear: number, hour: number, phase: number, sit
   return sunPosition(day, h, site);
 }
 
-/** Clear-sky global horizontal irradiance in W/m² (Haurwitz model). */
+/** Clear-sky global horizontal irradiance in W/m², the Haurwitz model,
+ *  1098 cos z · exp(−0.057 / cos z) (Haurwitz, 1945), which compares well
+ *  with more detailed clear-sky models for its simplicity (Reno, Hansen &
+ *  Stein, 2012). It has no humidity or aerosols, so it runs a little high
+ *  in a hazy tropical sky. */
 export function clearSkyGhi(elevationDeg: number): number {
   if (elevationDeg <= 0) return 0;
   const s = Math.sin(elevationDeg * DEG);
   return 1098 * s * Math.exp(-0.057 / s);
 }
 
-/** Irradiance reaching the ground under a cloud cover from 0 to 1
- *  (Kasten and Czeplak's cloud factor). */
+/** Irradiance reaching the ground under a cloud cover from 0 to 1:
+ *  G = G_clear · (1 − 0.75 · N^3.4), with N the cloud cover in eighths of
+ *  the sky divided by 8 (Kasten & Czeplak, 1980). Full overcast lets
+ *  through a quarter. */
 export function cloudyGhi(clearGhi: number, cloud: number): number {
   return clearGhi * (1 - 0.75 * Math.pow(clamp(cloud, 0, 1), 3.4));
 }
@@ -289,10 +299,13 @@ const WEATHER_BLOCK_HOURS = 3;
  * The weather a world shows at an instant when it follows a schedule
  * rather than a panel: chosen per three-hour block from a hash of the date,
  * so every visitor's browser arrives at the same weather with nothing sent
- * over the network. The odds follow the Philippine seasons: mostly fair
- * from December to May, and wetter in the southwest monsoon from June to
- * November. Typhoons are never scheduled; a world can still show one by
- * fixing its weather.
+ * over the network. The odds follow PAGASA's climate Type I, the most
+ * seasonal pattern in the Philippines: dry from December to May and wet
+ * from June to November, under the southwest monsoon. Other parts of the
+ * country are less seasonal (most of Cebu is Type III, wet from May to
+ * October and drier the rest of the year), so this is a simplification.
+ * Typhoons are never scheduled; a world can still show one by fixing its
+ * weather.
  */
 export function scheduledWeather(date: Date): WeatherType {
   const blockIndex = Math.floor(date.getTime() / (WEATHER_BLOCK_HOURS * 3600_000));

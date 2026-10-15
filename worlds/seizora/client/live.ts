@@ -5,7 +5,8 @@
 import { skyState } from "../../../src/sky/skyState";
 import { philippineTime, scheduledWeather, SITES, WeatherState, type WeatherType } from "../../../src/sky/weather";
 import type { WorldStateValue } from "../../../src/multiplayer/types";
-import { DEFAULT_CONTROLS, Microgrid, PLANT, type BatteryMode, type Controls, type Encapsulation, type Snapshot } from "../sim/energy";
+import { DEFAULT_CONTROLS, GRID_EMISSION_FACTOR, Microgrid, PLANT, type BatteryMode, type Controls, type Encapsulation, type Snapshot } from "../sim/energy";
+import { cloudyGhi } from "../../../src/sky/weather";
 
 /** Matches "site" in worlds/seizora/world/world.json. */
 export const SITE = SITES.cebu;
@@ -150,18 +151,20 @@ export function dayTotals(): DayTotals {
     exportedMwh: exported,
     unservedMwh: unserved,
     renewableShare: load > 0.01 ? Math.max(0, load - imported) / load : 0,
-    co2AvoidedT: generated * 0.7,
+    co2AvoidedT: generated * GRID_EMISSION_FACTOR,
   };
 }
 
 /** How fast a turbine's rotor turns, in revolutions per minute, for the
  *  power it's making: still when it makes none (calm, feathered, or its
- *  breaker open), faster as output rises. */
+ *  breaker open), and from about 10 to 20 rpm as output rises, the range of
+ *  a variable-speed 1.5 MW turbine (GE 1.5 MW data). The garden's models
+ *  turn at the full-size rate. */
 export function rotorRpm(): number {
   const s = live.now;
   if (!s || !live.controls.wind || s.turbinesFeathered || s.windMw <= 0) return 0;
   const fraction = s.windMw / (PLANT.turbines * PLANT.turbineMw);
-  return 7 + 13 * Math.cbrt(fraction);
+  return 10 + 10 * Math.cbrt(fraction);
 }
 
 /**
@@ -182,9 +185,17 @@ export function lessonNow(): string {
   if (s.batteryMw < -0.05 && solar > s.loadMw) return "Surplus sun: what the town can't use right now is charging the battery for the evening.";
   if (s.cellTemp > 50 && s.poa > 600)
     return `Hot panels: the cells are at ${s.cellTemp.toFixed(0)} °C. Silicon loses about 0.35% of its output per degree; perovskite about half that.`;
-  if (s.cloud > 0.7) return "Heavy cloud: only about a quarter of the sunlight gets through, and solar output falls with it.";
+  if (s.cloud > 0.7) {
+    // Kasten and Czeplak's cloud factor, the same one the sky uses.
+    const share = Math.round(cloudyGhi(100, s.cloud));
+    return `Heavy cloud: about ${share}% of the clear-sky sunlight gets through (a quarter under full overcast), and solar output falls with it.`;
+  }
   if (s.sunElevation < 15) return "Low sun: its light crosses more air and strikes the panels at a slant, so output is small.";
-  if (s.windMw > 1.5) return "Strong wind: wind power grows with the cube of its speed, so a little more wind means much more power.";
+  const windRating = PLANT.turbines * PLANT.turbineMw;
+  if (s.windMw > 0.5 * windRating && s.windMw < 0.98 * windRating)
+    return "Strong wind: the power in the wind grows with the cube of its speed, so a little more wind means much more power.";
+  if (s.windMw >= 0.98 * windRating)
+    return "Full wind power: past 12 m/s the turbines pitch their blades to hold their rating, so more wind adds nothing.";
   if (s.gridMw < -0.05) return "Exporting: the plant makes more than the town needs and sends the rest to the main grid.";
   return "A normal hour: sun, wind, and the battery share the load, and the main grid fills any gap.";
 }

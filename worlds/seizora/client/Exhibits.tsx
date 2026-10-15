@@ -435,7 +435,7 @@ export const BOARDS: BoardSpec[] = [
     art: "panels",
     info: "silicon",
     lines: [
-      "3.6 MW of silicon panels and a 0.6 MW perovskite pilot row (the back row, in brown).",
+      "3.6 MW of silicon and a 0.6 MW perovskite pilot (the brown back row). These rows stand in for a farm of about 4 to 5 hectares.",
       "Tilted 15° to the south to face the sun's path at this latitude.",
       "Panels lose output as they heat up, so a bright cool morning can beat a hot afternoon.",
     ],
@@ -449,9 +449,9 @@ export const BOARDS: BoardSpec[] = [
     art: "turbine",
     info: "wind",
     lines: [
-      "Two 1.5 MW turbines, 14 m to the hub. Their rotors turn with what they make.",
-      "Power rises with the cube of wind speed: double the wind, eight times the power.",
-      "They start at about 3 m/s, reach full power at 12 m/s, and stop above 25 m/s.",
+      "Scale models of two 1.5 MW turbines: real ones stand about 80 m to the hub, with 77 m rotors.",
+      "The power in the wind rises with the cube of its speed: double the wind, eight times the power.",
+      "They start at about 3.5 m/s, reach full power at 12 m/s, and stop above 25 m/s.",
     ],
     now: windNow,
     position: [0, 0, 36.5],
@@ -529,7 +529,7 @@ function drawBoard(ctx: CanvasRenderingContext2D, w: number, h: number, b: Board
   }
   ctx.fillStyle = "#6a7080";
   ctx.font = `400 20px ${FONT}`;
-  ctx.fillText("Click for more · A learning model: the plant is invented and the weather is synthetic.", 36, h - 34);
+  ctx.fillText("Click for more and sources · A learning model: the plant is invented and the weather is synthetic.", 36, h - 34);
 }
 
 function Board(b: BoardSpec) {

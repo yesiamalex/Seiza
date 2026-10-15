@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { SITES, WeatherState } from "../../../src/sky/weather";
+import { cloudyGhi, SITES, WeatherState } from "../../../src/sky/weather";
 import {
+  BATTERY_ROUND_TRIP,
   DEFAULT_CONTROLS,
+  GRID_EMISSION_FACTOR,
   evaluateDesign,
   loadFraction,
   Microgrid,
@@ -104,5 +106,65 @@ describe("perovskite durability", () => {
     expect(sealed.t80Months).toBeGreaterThan(bare.t80Months);
     expect(sealed.yieldKwhPerKwp).toBeGreaterThan(900);
     expect(sealed.yieldKwhPerKwp).toBeLessThan(2000);
+  });
+});
+
+// The numbers the cards, boards, and README quote, pinned to the model, so
+// an edit to one can't silently drift from the other or from its source.
+describe("cited figures", () => {
+  it("loses PVWatts' default 14% plus a 96% inverter: about 17% at standard test conditions", () => {
+    expect(pvPower(1, 1000, 25, SILICON)).toBeCloseTo(0.86 * 0.96, 6);
+  });
+
+  it("uses the DOE Luzon–Visayas operating margin and an 85% battery round trip", () => {
+    expect(GRID_EMISSION_FACTOR).toBeCloseTo(0.71, 2);
+    expect(BATTERY_ROUND_TRIP).toBe(0.85);
+  });
+
+  it("matches the turbine data: nothing below 3.5 m/s, full rating from 12, nothing from 25", () => {
+    expect(turbinePower(1.5, 3.4)).toBe(0);
+    expect(turbinePower(1.5, 12)).toBe(1.5);
+    expect(turbinePower(1.5, 24.9)).toBe(1.5);
+    expect(turbinePower(1.5, 25)).toBe(0);
+  });
+
+  it("lets through a quarter of the sunlight under full overcast (Kasten & Czeplak)", () => {
+    expect(cloudyGhi(1000, 1)).toBeCloseTo(250, 6);
+  });
+
+  it("gives a Metro Manila rooftop close to the Global Solar Atlas 1,402 kWh/kWp", () => {
+    const r = evaluateDesign({ absorber: "fac", etl: "sno2", htl: "ptaa", mount: "roof", encapsulation: "glass" }, SITES.manila);
+    expect(r.yieldKwhPerKwp).toBeGreaterThan(1402 * 0.92);
+    expect(r.yieldKwhPerKwp).toBeLessThan(1402 * 1.08);
+  });
+
+  it("shaves the evening peak on the grid: still discharging at 19:30, the peak", () => {
+    const grid = new Microgrid();
+    const weather = new WeatherState("clear");
+    runDay(weather, DEFAULT_CONTROLS, grid); // a day to fill the battery from its starting charge
+    const { snapshots } = runDay(weather, DEFAULT_CONTROLS, grid);
+    const peak = snapshots[Math.round(19.5 * 12)];
+    expect(peak.batteryMw).toBeGreaterThan(0.5);
+    expect(peak.gridMw).toBeGreaterThan(0); // the grid supplies the base
+  });
+
+  it("returns 85% of what it stores", () => {
+    const grid = new Microgrid();
+    grid.soc = 0.5;
+    const weather = new WeatherState("clear");
+    // Charge 1 MW for an hour at night (forced), then discharge 1 MWh worth.
+    const charge = { ...DEFAULT_CONTROLS, batteryMode: "charge" as const, silicon: false, perovskite: false, wind: false };
+    const before = grid.soc;
+    grid.spec = { ...grid.spec, batteryMw: 1 };
+    grid.step(60, 120, 1, SITES.cebu, weather, charge);
+    const stored = (grid.soc - before) * grid.spec.batteryMwh; // MWh in the cells
+    const discharge = { ...charge, batteryMode: "discharge" as const };
+    let delivered = 0;
+    while (grid.soc > before + 1e-9) {
+      const s = grid.step(1, 120, 2, SITES.cebu, weather, discharge);
+      delivered += s.batteryMw / 60;
+    }
+    expect(delivered / 1).toBeCloseTo(0.85, 2); // 1 MWh in from the bus, 0.85 MWh back
+    expect(stored).toBeGreaterThan(0);
   });
 });

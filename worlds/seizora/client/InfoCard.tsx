@@ -3,6 +3,7 @@
 import { showWorldOverlay } from "../../../src/worlds/WorldExtension";
 import { panelStyle, pillButtonStyle } from "../../../src/ui/styles";
 import { INFO, type InfoKey } from "../sim/info";
+import { REFERENCES } from "../sim/references";
 
 export function openInfo(key: InfoKey) {
   showWorldOverlay(<InfoCard infoKey={key} />);
@@ -38,6 +39,27 @@ function InfoCard({ infoKey }: { infoKey: InfoKey }) {
         {card.try && (
           <p style={{ margin: "10px 0 0", padding: "8px 10px", borderRadius: 8, background: "rgba(124,255,158,0.1)", border: "1px solid rgba(124,255,158,0.3)" }}>
             <strong>Try this:</strong> {card.try}
+          </p>
+        )}
+        {card.sources.length > 0 && (
+          <p style={{ margin: "10px 0 0", fontSize: 12, opacity: 0.75 }}>
+            <strong>Sources:</strong>{" "}
+            {card.sources.map((key, i) => {
+              const ref = REFERENCES[key];
+              return (
+                <span key={key}>
+                  {i > 0 && "; "}
+                  {ref.url ? (
+                    <a href={ref.url} target="_blank" rel="noopener noreferrer" title={ref.full} style={{ color: "inherit" }}>
+                      {ref.short}
+                    </a>
+                  ) : (
+                    <span title={ref.full}>{ref.short}</span>
+                  )}
+                </span>
+              );
+            })}
+            . Full list in Seizora's README.
           </p>
         )}
       </div>
