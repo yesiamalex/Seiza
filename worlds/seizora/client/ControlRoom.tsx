@@ -10,7 +10,7 @@ import { WEATHER } from "../../../src/sky/weather";
 import { PLANT, type Controls } from "../sim/energy";
 import type { InfoKey } from "../sim/info";
 import { openInfo } from "./InfoCard";
-import { FONT, fmt, hhmm, roundRect, standard, useCanvasTexture, useMerged, usePrismX, wrapText } from "./kit";
+import { FONT, fmt, GlowLines, hhmm, roundRect, standard, useCanvasTexture, useMerged, usePrismX, wrapText, type BoxSpec } from "./kit";
 import { dayTotals, KEYS, lessonNow, live, SITE } from "./live";
 
 export const COLORS = {
@@ -235,6 +235,8 @@ function drawDisplay(ctx: CanvasRenderingContext2D, w: number, h: number, room: 
   wrapText(ctx, lessonNow(), 100, ly + 30, w - 140, 32);
 }
 
+const DISPLAY_FRAME: BoxSpec = { size: [DISPLAY.width + 0.16, DISPLAY.height + 0.16, 0.06], at: [0, 0, -0.04] };
+
 function Display({ roomSky }: { roomSky: RoomSky | null }) {
   const anchor = useRef<THREE.Mesh>(null);
   const regions = useMemo<Region[]>(() => [], []);
@@ -244,7 +246,7 @@ function Display({ roomSky }: { roomSky: RoomSky | null }) {
     range: 28,
     deps: [roomSky],
   });
-  const frame = useMerged([{ size: [DISPLAY.width + 0.16, DISPLAY.height + 0.16, 0.06], at: [0, 0, -0.04] }]);
+  const frame = useMerged([DISPLAY_FRAME]);
   const frameMaterial = useMemo(() => standard("#1b1d22", 0.5, 0.3), []);
   const onClick = (event: ThreeEvent<MouseEvent>) => {
     event.stopPropagation();
@@ -257,6 +259,7 @@ function Display({ roomSky }: { roomSky: RoomSky | null }) {
   return (
     <group position={[DISPLAY.x, DISPLAY.y, DISPLAY.z]}>
       <mesh geometry={frame} material={frameMaterial} />
+      <GlowLines boxes={[DISPLAY_FRAME]} color="#5fd4ff" zone="classroom" thickness={0.025} />
       <mesh
         ref={anchor}
         onClick={onClick}
@@ -279,6 +282,11 @@ export const CONSOLE = { x: 3.4, z: -21.95, width: 3.0, depth: 0.9, front: 0.8, 
 /** The sloped top: its tilt toward the operator, and its length. */
 const TOP_TILT = Math.atan2(CONSOLE.back - CONSOLE.front, CONSOLE.depth);
 const TOP_LENGTH = Math.hypot(CONSOLE.depth, CONSOLE.back - CONSOLE.front);
+/** The console's outline: round its sloped top, and round its foot. */
+const CONSOLE_GLOW: BoxSpec[] = [
+  { size: [CONSOLE.width, 0, TOP_LENGTH], at: [0, (CONSOLE.front + CONSOLE.back) / 2, 0], rotation: [TOP_TILT, 0, 0] },
+  { size: [CONSOLE.width, 0, CONSOLE.depth], at: [0, 0.015, 0] },
+];
 const TOP_W = 1536;
 const TOP_H = Math.round((TOP_W * TOP_LENGTH) / CONSOLE.width);
 
@@ -440,6 +448,7 @@ function Console(props: ConsoleProps) {
   return (
     <group position={[CONSOLE.x, 0, CONSOLE.z]}>
       <mesh geometry={body} material={bodyMaterial} castShadow />
+      <GlowLines boxes={CONSOLE_GLOW} color="#5fd4ff" zone="classroom" thickness={0.022} />
       {/* The top, tilted toward the operator, who stands on the +Z side. */}
       <mesh
         position={[0, (CONSOLE.front + CONSOLE.back) / 2 + 0.004, 0]}

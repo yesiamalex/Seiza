@@ -475,6 +475,9 @@ The `Scene` component renders inside the 3D scene and gets:
   `breaker.wind`, values are booleans, numbers, or short strings, and a room
   holds at most 64 keys. Setting a value needs the editor password when the
   deployment has one.
+- `lights`: the room's light switches (`hall`, `classroom`, and `pond`, the
+  garden), read-only, so the world's own fittings can switch with the
+  room's lamps.
 
 It can also use `setWorldObstacles` from `src/scene/layout.ts` to make its
 furniture solid, `showWorldOverlay` to open a card in the HUD, and `skyState`

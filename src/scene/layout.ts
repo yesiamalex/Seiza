@@ -543,8 +543,8 @@ export function resolveObstacles(position: THREE.Vector3, radius = PLAYER_RADIUS
 function pushOutOf(obstacles: readonly Obstacle[], position: THREE.Vector3, radius: number): void {
   for (const box of obstacles) {
     if (box.disabled) continue; // an open door — nothing to bump into here right now
-    const sin = Math.sin(-box.rotationY);
-    const cos = Math.cos(-box.rotationY);
+    const sin = Math.sin(box.rotationY);
+    const cos = Math.cos(box.rotationY);
     const dx = position.x - box.x;
     const dz = position.z - box.z;
     // Into the box's own frame.

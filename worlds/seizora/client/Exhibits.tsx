@@ -1,14 +1,16 @@
 // The plant itself, built into the world: the solar array and its
 // perovskite pilot row, the battery, two wind turbines whose rotors turn
 // with their real output, the exploded perovskite cell in the classroom,
-// and an info board at each, drawn in code, with live numbers.
+// and an info board at each, drawn in code, with live numbers. Each has a
+// glow outline that switches with its room's lights (kit.tsx, GlowLines).
 import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
+import type { LightZone } from "../../../src/multiplayer/types";
 import { PLANT } from "../sim/energy";
 import type { InfoKey } from "../sim/info";
 import { openInfo } from "./InfoCard";
-import { Clickable, FONT, fmt, roundRect, standard, useCanvasTexture, useMerged, wrapText, type BoxSpec, type CylinderSpec } from "./kit";
+import { Clickable, FONT, fmt, GlowLines, roundRect, standard, useCanvasTexture, useMerged, wrapText, type BoxSpec, type CylinderSpec, type RingSpec } from "./kit";
 import { live, rotorRpm } from "./live";
 
 // --- where everything stands ----------------------------------------------------------
@@ -69,6 +71,13 @@ function solarParts() {
 }
 const SOLAR_PARTS = solarParts();
 
+/** Each row's outline: blue for silicon, amber for the perovskite row. */
+const rowOutline = (r: number): BoxSpec => ({ size: [ROW_WIDTH + 0.02, PANEL.t + 0.02, PANEL.l + 0.02], at: [0, PANEL.y, r * ROW_SPACING], rotation: [TILT, 0, 0] });
+const SOLAR_GLOW = {
+  silicon: [rowOutline(0), rowOutline(1), { size: [0.5, 0.7, 0.25], at: [ROW_WIDTH / 2 + 0.6, 0.47, ROW_SPACING] }] as BoxSpec[],
+  perovskite: [rowOutline(ROWS - 1)],
+};
+
 const materials = {
   silicon: standard("#0d1838", 0.25, 0.35),
   perovskite: standard("#3d1a10", 0.3, 0.25),
@@ -100,6 +109,8 @@ function SolarArray() {
       <mesh geometry={aluminium} material={materials.aluminium} castShadow />
       <mesh geometry={steel} material={materials.steel} castShadow />
       <mesh geometry={concrete} material={materials.concrete} receiveShadow />
+      <GlowLines boxes={SOLAR_GLOW.silicon} color="#5fa8ff" zone="pond" thickness={0.03} />
+      <GlowLines boxes={SOLAR_GLOW.perovskite} color="#ff9a52" zone="pond" thickness={0.03} />
     </group>
   );
 }
@@ -163,6 +174,7 @@ function Battery() {
         ))}
         <ChargeStrip />
       </Clickable>
+      <GlowLines boxes={[...BATTERY_PARTS.container, ...BATTERY_PARTS.green]} color="#b58cff" zone="pond" thickness={0.04} />
     </group>
   );
 }
@@ -188,6 +200,14 @@ function rotorParts(): { boxes: BoxSpec[]; cylinders: CylinderSpec[] } {
   return { boxes, cylinders: [{ radiusTop: 0.12, radiusBottom: 0.34, height: 0.7, at: [0, 0, -0.25], rotation: [-Math.PI / 2, 0, 0] }] };
 }
 const ROTOR = rotorParts();
+/** The nacelle's outline, a ring round the hub, and one round the footing. */
+const TURBINE_GLOW = {
+  boxes: NACELLE,
+  rings: [
+    { radius: 0.42, at: [0, HUB.y, HUB.z + 0.12] },
+    { radius: 1.32, at: [0, 0.3, 0], rotation: [Math.PI / 2, 0, 0] },
+  ] as RingSpec[],
+};
 
 function Turbine({ x, z, phase }: { x: number; z: number; phase: number }) {
   const tower = useMerged(NACELLE, TOWER);
@@ -209,6 +229,7 @@ function Turbine({ x, z, phase }: { x: number; z: number; phase: number }) {
       <mesh position={[0, HUB.y + 0.45, 1.25]} material={materials.warning}>
         <boxGeometry args={[0.1, 0.1, 0.1]} />
       </mesh>
+      <GlowLines boxes={TURBINE_GLOW.boxes} rings={TURBINE_GLOW.rings} color="#4dffd2" zone="pond" thickness={0.06} />
     </group>
   );
 }
@@ -226,6 +247,16 @@ const LAYERS: { name: string; color: string; t: number; opacity?: number }[] = [
   { name: "transparent electrode", color: "#8cccf2", t: 0.04, opacity: 0.75 },
   { name: "glass", color: "#c4e6f2", t: 0.08, opacity: 0.35 },
 ];
+
+/** The top of the stack's frame, above the pedestal. */
+const STACK_TOP = LAYERS.reduce((y, l) => y + l.t + 0.14, 1.05);
+const CELL_GLOW = {
+  boxes: [{ size: [0.9, STACK_TOP - 0.9, 0.9], at: [0, (0.9 + STACK_TOP) / 2, 0] }] as BoxSpec[],
+  rings: [
+    { radius: 0.555, at: [0, 0.9, 0], rotation: [Math.PI / 2, 0, 0] },
+    { radius: 0.605, at: [0, 0.02, 0], rotation: [Math.PI / 2, 0, 0] },
+  ] as RingSpec[],
+};
 
 function PerovskiteCell() {
   const pedestal = useMerged([], [{ radiusTop: 0.55, radiusBottom: 0.6, height: 0.9, at: [0, 0.45, 0], segments: 28 }]);
@@ -251,7 +282,7 @@ function PerovskiteCell() {
     y += l.t + 0.14;
     return { ...l, at, material: layerMaterials[i] };
   });
-  const postsHeight = y - 0.9;
+  const postsHeight = STACK_TOP - 0.9;
   const posts = useMerged(
     [[-0.42, -0.42], [0.42, -0.42], [-0.42, 0.42], [0.42, 0.42]].map(([x, z]) => ({ size: [0.02, postsHeight, 0.02], at: [x, 0.9 + postsHeight / 2, z] }) as BoxSpec)
   );
@@ -266,6 +297,7 @@ function PerovskiteCell() {
           </mesh>
         ))}
       </Clickable>
+      <GlowLines boxes={CELL_GLOW.boxes} rings={CELL_GLOW.rings} color="#ffa45c" zone="classroom" thickness={0.018} />
     </group>
   );
 }
@@ -374,6 +406,9 @@ const art: Record<string, Art> = {
 interface BoardSpec {
   title: string;
   color: string;
+  /** The outline's colour, and whose light switch it follows. */
+  glow: string;
+  zone: LightZone;
   lines: string[];
   art: keyof typeof art;
   info: InfoKey;
@@ -415,6 +450,8 @@ const welcomeNow = () => {
 export const BOARDS: BoardSpec[] = [
   {
     title: "Welcome to Seizora",
+    glow: "#ffb35c",
+    zone: "hall",
     color: "#e8913a",
     art: "sun",
     info: "sky",
@@ -431,6 +468,8 @@ export const BOARDS: BoardSpec[] = [
   },
   {
     title: "The solar farm",
+    glow: "#6fa8ff",
+    zone: "pond",
     color: "#3b7bff",
     art: "panels",
     info: "silicon",
@@ -445,6 +484,8 @@ export const BOARDS: BoardSpec[] = [
   },
   {
     title: "Wind turbines",
+    glow: "#45e8c0",
+    zone: "pond",
     color: "#1d9f80",
     art: "turbine",
     info: "wind",
@@ -459,6 +500,8 @@ export const BOARDS: BoardSpec[] = [
   },
   {
     title: "Battery storage",
+    glow: "#b58cff",
+    zone: "pond",
     color: "#8a5fe0",
     art: "battery",
     info: "battery",
@@ -473,6 +516,8 @@ export const BOARDS: BoardSpec[] = [
   },
   {
     title: "Inside a perovskite solar cell",
+    glow: "#ff8f5c",
+    zone: "classroom",
     color: "#a8492b",
     art: "layers",
     info: "layers",
@@ -488,8 +533,9 @@ export const BOARDS: BoardSpec[] = [
 ];
 
 const BOARD = { w: 2.4, h: 1.5, bottom: 0.85 };
+const BOARD_FACE: BoxSpec = { size: [BOARD.w + 0.12, BOARD.h + 0.12, 0.06], at: [0, BOARD.bottom + BOARD.h / 2, -0.04] };
 const BOARD_FRAME: BoxSpec[] = [
-  { size: [BOARD.w + 0.12, BOARD.h + 0.12, 0.06], at: [0, BOARD.bottom + BOARD.h / 2, -0.04] },
+  BOARD_FACE,
   { size: [0.09, BOARD.bottom + 0.2, 0.09], at: [-BOARD.w / 2 + 0.2, (BOARD.bottom + 0.2) / 2, -0.06] },
   { size: [0.09, BOARD.bottom + 0.2, 0.09], at: [BOARD.w / 2 - 0.2, (BOARD.bottom + 0.2) / 2, -0.06] },
 ];
@@ -545,6 +591,7 @@ function Board(b: BoardSpec) {
           <meshStandardMaterial map={texture} roughness={0.85} />
         </mesh>
       </Clickable>
+      <GlowLines boxes={[BOARD_FACE]} color={b.glow} zone={b.zone} thickness={0.022} />
     </group>
   );
 }
@@ -567,7 +614,7 @@ export function Exhibits() {
 
 /** Collision for the exhibits a visitor can walk up to. */
 export function exhibitObstacles() {
-  const boards = BOARDS.map((b) => ({ x: b.position[0], z: b.position[2], halfX: BOARD.w / 2, halfZ: 0.08, rotationY: b.rotationY }));
+  const boards = BOARDS.map((b) => ({ x: b.position[0], z: b.position[2], halfX: BOARD.w / 2 + 0.06, halfZ: 0.15, rotationY: b.rotationY }));
   const rows = [0, 1, 2].map((r) => ({
     x: SOLAR.x,
     z: SOLAR.z + r * ROW_SPACING,

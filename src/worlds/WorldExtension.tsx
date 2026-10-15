@@ -1,5 +1,5 @@
 import { Component, useEffect, useState, useSyncExternalStore, type ComponentType, type ReactNode } from "react";
-import type { RoomSky, WorldObject, WorldStateValue } from "../multiplayer/types";
+import type { LightZone, RoomSky, WorldObject, WorldStateValue } from "../multiplayer/types";
 
 /**
  * A world's own in-world code: exhibits, displays, and controls that only
@@ -23,6 +23,9 @@ export interface WorldSceneProps {
   setRoomSky: (sky: RoomSky | null) => void;
   worldState: Record<string, WorldStateValue>;
   setWorldState: (key: string, value: WorldStateValue) => void;
+  /** The room's light switches (hall, classroom, garden), so a world's own
+   *  fittings can switch with the room's lamps. Read-only. */
+  lights: Record<LightZone, boolean>;
 }
 
 export interface WorldModule {

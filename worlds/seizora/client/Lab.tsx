@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 import type { ThreeEvent } from "@react-three/fiber";
 import { ABSORBERS, ENCAPSULATION, ETLS, evaluateDesign, HTLS, MOUNTS, type LabDesign, type LabResult } from "../sim/energy";
 import { openInfo } from "./InfoCard";
-import { FONT, fmt, roundRect, standard, useCanvasTexture, useMerged, wrapText } from "./kit";
+import { FONT, fmt, GlowLines, roundRect, standard, useCanvasTexture, useMerged, wrapText, type BoxSpec } from "./kit";
 import { SITE } from "./live";
 
 export const LAB = { x: -5.6, z: -12.6, width: 2.4, depth: 0.8, height: 0.8 };
@@ -39,6 +39,11 @@ function verdict(r: LabResult, d: LabDesign): string {
 // --- the bench's display -------------------------------------------------------------------
 
 const SCREEN = { w: 1.9, h: 1.0, bottom: 0.92 };
+/** The bench top's outline and the screen housing's. */
+const LAB_GLOW: BoxSpec[] = [
+  { size: [LAB.width, 0.04, LAB.depth], at: [0, LAB.height - 0.02, 0] },
+  { size: [SCREEN.w + 0.1, SCREEN.h + 0.1, 0.05], at: [0, SCREEN.bottom + SCREEN.h / 2, -LAB.depth / 2 + 0.1] },
+];
 
 function drawResults(ctx: CanvasRenderingContext2D, w: number, h: number, d: LabDesign, r: LabResult) {
   ctx.fillStyle = "#101522";
@@ -169,6 +174,7 @@ export function LabBench() {
     // operator standing on the room side, looking toward the back wall.
     <group position={[LAB.x, 0, LAB.z]} rotation={[0, Math.PI, 0]}>
       <mesh geometry={frame} material={material} castShadow receiveShadow />
+      <GlowLines boxes={LAB_GLOW} color="#7cff9e" zone="classroom" thickness={0.018} />
       <mesh
         position={[0, SCREEN.bottom + SCREEN.h / 2, -LAB.depth / 2 + 0.13]}
         onClick={(event) => {

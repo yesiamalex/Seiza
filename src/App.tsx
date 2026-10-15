@@ -1075,6 +1075,7 @@ export default function App() {
               setRoomSky={setRoomSky}
               worldState={worldState}
               setWorldState={setWorldState}
+              lights={lights}
             />
           </group>
           <PlayerRig

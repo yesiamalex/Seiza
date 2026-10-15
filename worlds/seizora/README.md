@@ -61,6 +61,12 @@ Everything is in the world itself; there's no separate page to open.
 - **Info boards** by each exhibit, and a welcome board in the hall, each
   with a live line of what that part of the plant is doing now. Click any
   board or exhibit for its explanation card.
+- **Glow outlines** trace the boards, the solar rows, the battery, the
+  turbines' nacelles, hubs, and footings, the display, the console, the lab
+  bench, and the cell, so they're easy to find at night. They switch with
+  the room's lights: the garden switch for everything outside, the
+  classroom's for the control room and lab, and the hall's for the welcome
+  board.
 
 The plant runs in every visitor's browser on the exact time and weather the
 sky shows, with the switches shared through the room. On arrival it runs
@@ -133,6 +139,7 @@ world shows the sources it rests on, linked.
 ```
 worlds/seizora/
   world/world.json      The world: sky, spawn, avatars, and the starting objects
+  favicon.svg           Seizora's tab icon, copied over Seiza's in this build only
   client/               The world's own code, loaded by Seiza only for this world:
     live.ts             The plant, stepped every frame on the sky's time and weather
     ControlRoom.tsx     The display and the console

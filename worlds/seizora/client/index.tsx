@@ -9,6 +9,9 @@
 //   and the turbines turn with their real output (Exhibits.tsx).
 // - The perovskite lab bench lets each visitor design a cell (Lab.tsx).
 // Clicking any exhibit, board, or part of the display opens an info card.
+// Their glow outlines switch with the room's lights: the garden switch for
+// everything outside, the classroom's for the control room, lab, and cell,
+// and the hall's for the welcome board.
 import { useEffect, useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
 import type { WorldObject } from "../../../src/multiplayer/types";
@@ -29,9 +32,10 @@ function isRetired(object: WorldObject): boolean {
   return object.kind !== "model" && !!object.text?.includes("/seizora/");
 }
 
-export function Scene({ canEdit, connected, objects, removeObject, roomSky, setRoomSky, worldState, setWorldState }: WorldSceneProps) {
+export function Scene({ canEdit, connected, objects, removeObject, roomSky, setRoomSky, worldState, setWorldState, lights }: WorldSceneProps) {
   const controls = useMemo(() => controlsFrom(worldState), [worldState]);
   live.controls = controls;
+  live.lights = lights;
 
   useFrame((_, delta) => stepLive(delta));
 

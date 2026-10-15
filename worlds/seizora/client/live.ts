@@ -4,7 +4,7 @@
 // display, readout, and turbine reads from here, so nothing can disagree.
 import { skyState } from "../../../src/sky/skyState";
 import { philippineTime, scheduledWeather, SITES, WeatherState, type WeatherType } from "../../../src/sky/weather";
-import type { WorldStateValue } from "../../../src/multiplayer/types";
+import type { LightZone, WorldStateValue } from "../../../src/multiplayer/types";
 import { DEFAULT_CONTROLS, GRID_EMISSION_FACTOR, Microgrid, PLANT, type BatteryMode, type Controls, type Encapsulation, type Snapshot } from "../sim/energy";
 import { cloudyGhi } from "../../../src/sky/weather";
 
@@ -61,6 +61,8 @@ export const live = {
   controls: { ...DEFAULT_CONTROLS } as Controls,
   /** Whether the sky's time is moving (false while an editor holds it). */
   held: false,
+  /** The room's light switches, which the glow outlines follow. */
+  lights: { hall: true, classroom: true, pond: true } as Record<LightZone, boolean>,
 };
 
 let lastSimMs = 0;

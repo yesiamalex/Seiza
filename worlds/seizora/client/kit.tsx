@@ -1,9 +1,11 @@
 // Small building blocks for Seizora's in-world exhibits: live canvas
-// displays, merged static geometry, and clickable parts.
+// displays, merged static geometry, clickable parts, and glow outlines.
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import type { LightZone } from "../../../src/multiplayer/types";
+import { live } from "./live";
 
 // --- live canvas displays --------------------------------------------------------------
 
@@ -187,4 +189,78 @@ export function Clickable({ onClick, children, enabled = true }: { onClick: () =
       {children}
     </group>
   );
+}
+
+// --- glow outlines ---------------------------------------------------------------------
+
+export interface RingSpec {
+  radius: number;
+  at: [number, number, number];
+  /** Euler rotation; a ring lies in its XY plane, so [π/2, 0, 0] lays it flat. */
+  rotation?: [number, number, number];
+}
+
+/** The twelve edges of each box (turned about the box's own centre) and
+ *  any rings, as thin bars in one geometry. */
+export function glowGeometry(boxes: BoxSpec[], rings: RingSpec[] = [], thickness = 0.025): THREE.BufferGeometry {
+  const parts: THREE.BufferGeometry[] = [];
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const e = new THREE.Euler();
+  const one = new THREE.Vector3(1, 1, 1);
+  const t = thickness;
+  const bar = (size: [number, number, number], at: [number, number, number]) => {
+    const g = new THREE.BoxGeometry(...size);
+    g.translate(...at);
+    g.applyMatrix4(m);
+    parts.push(g);
+  };
+  for (const b of boxes) {
+    const [hx, hy, hz] = [b.size[0] / 2, b.size[1] / 2, b.size[2] / 2];
+    q.setFromEuler(e.set(...(b.rotation ?? [0, 0, 0])));
+    m.compose(new THREE.Vector3(...b.at), q, one);
+    for (const u of [-1, 1]) {
+      for (const v of [-1, 1]) {
+        bar([2 * hx + t, t, t], [0, u * hy, v * hz]);
+        if (hy * 2 > t) bar([t, 2 * hy + t, t], [u * hx, 0, v * hz]);
+        bar([t, t, 2 * hz + t], [u * hx, v * hy, 0]);
+      }
+    }
+  }
+  for (const r of rings) {
+    const g = new THREE.TorusGeometry(r.radius, t / 2, 4, 48);
+    q.setFromEuler(e.set(...(r.rotation ?? [0, 0, 0])));
+    g.applyMatrix4(m.compose(new THREE.Vector3(...r.at), q, one));
+    parts.push(g);
+  }
+  const merged = mergeGeometries(parts, false) ?? new THREE.BufferGeometry();
+  for (const p of parts) p.dispose();
+  return merged;
+}
+
+/** How bright a glow line stays with its room's lights switched off. */
+const GLOW_OFF = 0.06;
+const noRaycast = () => {};
+
+/**
+ * Cheap lit trim: thin unlit bars along the outlines of `boxes` and around
+ * `rings`, one draw call, switched with the room's lights in `zone` (the
+ * same switches as Seiza's own lamps). Not clickable, so they never get in
+ * the way of the exhibit underneath.
+ */
+export function GlowLines({ boxes = [], rings = [], color, zone, thickness }: { boxes?: BoxSpec[]; rings?: RingSpec[]; color: string; zone: LightZone; thickness?: number }) {
+  // The specs are module constants or fixed for the exhibit's lifetime.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const geometry = useMemo(() => glowGeometry(boxes, rings, thickness), []);
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  const base = useMemo(() => new THREE.Color(color), [color]);
+  const material = useMemo(() => new THREE.MeshBasicMaterial({ color: base, toneMapped: false }), [base]);
+  useEffect(() => () => material.dispose(), [material]);
+  const level = useRef(live.lights[zone] ? 1 : GLOW_OFF);
+  useFrame((_, delta) => {
+    const target = live.lights[zone] ? 1 : GLOW_OFF;
+    level.current += (target - level.current) * (1 - Math.exp(-delta / 0.12));
+    material.color.copy(base).multiplyScalar(level.current);
+  });
+  return <mesh geometry={geometry} material={material} raycast={noRaycast} />;
 }

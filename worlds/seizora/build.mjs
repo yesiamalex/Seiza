@@ -43,10 +43,12 @@ step("Building Seiza for the seizora world", () => {
   }
 });
 
-// 2. The world config, where Seiza's client looks for it.
+// 2. The world config, where Seiza's client looks for it, and the icon.
 step("Adding the world config", () => {
   mkdirSync(join(DIST, "worlds", WORLD_ID), { recursive: true });
   copyFileSync(join(HERE, "world", "world.json"), join(DIST, "worlds", WORLD_ID, "world.json"));
+  // Seizora's own tab icon, over Seiza's in this build's output only.
+  copyFileSync(join(HERE, "favicon.svg"), join(DIST, "favicon.svg"));
 });
 
 // 3. The avatar store's id, copied from the root config so both Workers
