@@ -193,6 +193,14 @@ export const OUTDOOR_BENCHES: BenchPlacement[] = [
   { position: [5.2, 0, 23.5], rotationY: 0.16 },
 ];
 
+/** The garden's two lampposts, in its front corners: clear of the benches,
+ *  the pond, and the doorway, and of the exhibits other worlds build in
+ *  the back half (Seizora's solar rows, battery, and boards). */
+export const GARDEN_LAMPS: [number, number][] = [
+  [-8.3, 20.6],
+  [8.3, 20.6],
+];
+
 export const CLASSROOM_ROWS = 3;
 export const CLASSROOM_COLUMNS = 4;
 // Wide enough that a person fits between the rows: a desk and its chair
@@ -420,6 +428,7 @@ export const OBSTACLES: Obstacle[] = [
   // The outdoor benches were never added here — only the indoor ones —
   // which is exactly why they had no collision at all.
   ...OUTDOOR_BENCHES.map((bench) => obstacle(bench.position[0], bench.position[2], BENCH_LENGTH / 2 + 0.05, 0.32, bench.rotationY)),
+  ...GARDEN_LAMPS.map(([x, z]) => obstacle(x, z, 0.2, 0.2)),
   // A desk and its chair are one obstacle, not two. As separate boxes the
   // gap between them is narrower than a person, so a walker got squeezed
   // back and forth between the pair instead of walking around them.

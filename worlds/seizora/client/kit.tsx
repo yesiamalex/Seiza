@@ -1,10 +1,12 @@
 // Small building blocks for Seizora's in-world exhibits: live canvas
-// displays, merged static geometry, clickable parts, and glow outlines.
+// displays, merged static geometry, clickable parts, glow outlines, and sign
+// lamps.
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { LightZone } from "../../../src/multiplayer/types";
+import { nightNeed as darkness, signWashTexture } from "../../../src/scene/roomLights";
 import { live } from "./live";
 
 // --- live canvas displays --------------------------------------------------------------
@@ -263,4 +265,42 @@ export function GlowLines({ boxes = [], rings = [], color, zone, thickness }: { 
     material.color.copy(base).multiplyScalar(level.current);
   });
   return <mesh geometry={geometry} material={material} raycast={noRaycast} />;
+}
+
+// --- sign lamps --------------------------------------------------------------------------
+
+/** Seiza's own sign wash (src/scene/roomLights.ts), shared with its text
+ *  boards. */
+export { signWashTexture };
+
+/**
+ * A sign lamp for `faces` (standard materials with signWashTexture() as
+ * their light map): turns their wash up at night while `zone`'s lights are
+ * on, and returns the material for the lamp's glowing strip.
+ */
+export function useSignLamp(zone: LightZone, faces: THREE.MeshStandardMaterial[], strength = 2.6) {
+  const strip = useMemo(() => new THREE.MeshBasicMaterial({ color: "#fff1d6", toneMapped: false }), []);
+  useEffect(() => () => strip.dispose(), [strip]);
+  const level = useRef(live.lights[zone] ? 1 : 0);
+  useFrame((_, delta) => {
+    level.current += ((live.lights[zone] ? 1 : 0) - level.current) * (1 - Math.exp(-delta / 0.12));
+    strip.color.setRGB(1, 0.945, 0.84).multiplyScalar(GLOW_OFF + (1 - GLOW_OFF) * level.current);
+    const wash = strength * level.current * darkness();
+    for (const face of faces) face.lightMapIntensity = wash;
+  });
+  return strip;
+}
+
+/**
+ * Lifts `materials` a little at night while `zone`'s lights are on, as if
+ * a lamp over them were on: their own colour, added as emission, so a dark
+ * exhibit doesn't read as a silhouette. No light involved.
+ */
+export function useNightLift(zone: LightZone, materials: THREE.MeshStandardMaterial[], amount = 0.3) {
+  const level = useRef(live.lights[zone] ? 1 : 0);
+  useFrame((_, delta) => {
+    level.current += ((live.lights[zone] ? 1 : 0) - level.current) * (1 - Math.exp(-delta / 0.12));
+    const lift = amount * level.current * darkness();
+    for (const m of materials) m.emissive.copy(m.color).multiplyScalar(lift);
+  });
 }

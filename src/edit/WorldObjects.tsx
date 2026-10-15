@@ -9,6 +9,7 @@ import { SeatPad } from "../scene/SeatPad";
 import { VideoPanel } from "../media/VideoPanel";
 import { createScreenPlaceholder, createTextTexture } from "./textTexture";
 import { setGizmoDragging } from "./gizmoState";
+import { lightZoneAt, nightNeed, roomLights, signWashTexture } from "../scene/roomLights";
 
 interface WorldObjectsProps {
   objects: Record<string, WorldObject>;
@@ -308,6 +309,21 @@ function TextSurfaceObject({ object }: { object: WorldObject }) {
     [object.text, flat, object.color]
   );
   useEffect(() => () => drawn?.texture.dispose(), [drawn]);
+  // Washed from the top as if by a lamp over it, while the room's lights are
+  // on at night, so the writing stays readable. A light map, not a light:
+  // it costs nothing to draw.
+  const face = useMemo(
+    () => new THREE.MeshStandardMaterial({ map: drawn?.texture ?? null, roughness: 0.85, lightMap: signWashTexture(), lightMapIntensity: 0 }),
+    [drawn]
+  );
+  useEffect(() => () => face.dispose(), [face]);
+  const zone = lightZoneAt(object.position[0], object.position[2]);
+  const wash = useRef(0);
+  useFrame((_, delta) => {
+    const target = (roomLights[zone] ? 2.2 : 0.25) * nightNeed();
+    wash.current += (target - wash.current) * (1 - Math.exp(-delta / 0.12));
+    face.lightMapIntensity = wash.current;
+  });
   if (!drawn) return null;
 
   const height = flat ? 0.6 : 1;
@@ -331,9 +347,8 @@ function TextSurfaceObject({ object }: { object: WorldObject }) {
           <meshStandardMaterial color="#ffffff" roughness={0.95} />
         </mesh>
       )}
-      <mesh position={[0, 0, 0.004]}>
+      <mesh position={[0, 0, 0.004]} material={face}>
         <planeGeometry args={[width, height]} />
-        <meshStandardMaterial map={drawn.texture} roughness={0.85} />
       </mesh>
     </group>
   );

@@ -10,7 +10,7 @@ import { WEATHER } from "../../../src/sky/weather";
 import { PLANT, type Controls } from "../sim/energy";
 import type { InfoKey } from "../sim/info";
 import { openInfo } from "./InfoCard";
-import { FONT, fmt, GlowLines, hhmm, roundRect, standard, useCanvasTexture, useMerged, usePrismX, wrapText, type BoxSpec } from "./kit";
+import { FONT, fmt, GlowLines, hhmm, roundRect, standard, useCanvasTexture, useMerged, usePrismX, useSignLamp, wrapText, type BoxSpec } from "./kit";
 import { dayTotals, KEYS, lessonNow, live, SITE } from "./live";
 
 export const COLORS = {
@@ -246,7 +246,9 @@ function Display({ roomSky }: { roomSky: RoomSky | null }) {
     range: 28,
     deps: [roomSky],
   });
-  const frame = useMerged([DISPLAY_FRAME]);
+  // The frame, and a sign lamp's hood over its top edge.
+  const frame = useMerged([DISPLAY_FRAME, { size: [DISPLAY.width + 0.2, 0.05, 0.22], at: [0, DISPLAY.height / 2 + 0.13, 0.08] }]);
+  const strip = useSignLamp("classroom", []);
   const frameMaterial = useMemo(() => standard("#1b1d22", 0.5, 0.3), []);
   const onClick = (event: ThreeEvent<MouseEvent>) => {
     event.stopPropagation();
@@ -260,6 +262,9 @@ function Display({ roomSky }: { roomSky: RoomSky | null }) {
     <group position={[DISPLAY.x, DISPLAY.y, DISPLAY.z]}>
       <mesh geometry={frame} material={frameMaterial} />
       <GlowLines boxes={[DISPLAY_FRAME]} color="#5fd4ff" zone="classroom" thickness={0.025} />
+      <mesh position={[0, DISPLAY.height / 2 + 0.1, 0.15]} material={strip}>
+        <boxGeometry args={[DISPLAY.width - 0.1, 0.015, 0.04]} />
+      </mesh>
       <mesh
         ref={anchor}
         onClick={onClick}

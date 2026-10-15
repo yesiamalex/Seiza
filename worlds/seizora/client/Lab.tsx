@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 import type { ThreeEvent } from "@react-three/fiber";
 import { ABSORBERS, ENCAPSULATION, ETLS, evaluateDesign, HTLS, MOUNTS, type LabDesign, type LabResult } from "../sim/energy";
 import { openInfo } from "./InfoCard";
-import { FONT, fmt, GlowLines, roundRect, standard, useCanvasTexture, useMerged, wrapText, type BoxSpec } from "./kit";
+import { FONT, fmt, GlowLines, roundRect, standard, useCanvasTexture, useMerged, useNightLift, wrapText, type BoxSpec } from "./kit";
 import { SITE } from "./live";
 
 export const LAB = { x: -5.6, z: -12.6, width: 2.4, depth: 0.8, height: 0.8 };
@@ -161,6 +161,7 @@ export function LabBench() {
     { size: [0.12, SCREEN.bottom - LAB.height, 0.08], at: [0, (SCREEN.bottom + LAB.height) / 2, -LAB.depth / 2 + 0.12] },
   ]);
   const material = useMemo(() => standard("#5a4636", 0.7, 0.05), []);
+  useNightLift("classroom", [material], 0.35);
   const column = (event: ThreeEvent<PointerEvent | MouseEvent>) => {
     if (!event.uv) return -1;
     const x = event.uv.x * TOP_W, y = (1 - event.uv.y) * TOP_H;

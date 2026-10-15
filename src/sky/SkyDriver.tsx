@@ -33,15 +33,25 @@ const DAY = {
   sunColor: new THREE.Color("#fff3e0"),
   sun: 1.2,
 };
-// Night stays readable: dim and blue, with the lamps doing the rest.
+// Night stays readable: dim and blue on a moonless night, with the lamps
+// doing the rest. The moon lifts it: a full moon high in a clear sky adds
+// a directional light from where it stands (with shadows) and brightens the
+// sky's fill, so a moonlit garden reads clearly; cloud takes most of that
+// away. No extra lights: the moon reuses the sun's, and the fill is the
+// same hemisphere and ambient lights.
 const NIGHT = {
-  hemiSky: new THREE.Color("#4a5784"),
-  hemiGround: new THREE.Color("#2e2636"),
-  hemi: 0.5,
+  hemiSky: new THREE.Color("#4f5c8c"),
+  hemiGround: new THREE.Color("#30283a"),
+  hemi: 0.6,
   ambientColor: new THREE.Color("#9aa6d6"),
-  ambient: 0.3,
-  moonColor: new THREE.Color("#a9bcff"),
-  moon: 0.22,
+  ambient: 0.34,
+  moonColor: new THREE.Color("#bccbff"),
+  /** The moon's directional light at full moon, high, clear sky. */
+  moon: 0.85,
+  /** What a full moon adds to the sky's fill. */
+  moonHemi: 0.35,
+  moonAmbient: 0.12,
+  moonSky: new THREE.Color("#8597cc"),
 };
 const OVERCAST_SKY = new THREE.Color("#c9ced6");
 
@@ -78,18 +88,27 @@ export function SkyDriver({ config, room = null }: { config: SkyConfig; room?: R
     }
     const { dayness, night, cloud, rain, sunVisible } = skyState;
     const lit = 1 - 0.3 * rain;
+    // How much moonlight there is, 0 to 1: the lit fraction of its disc
+    // (a crescent still gives a little), whether it's up, and the cloud.
+    const moonUp = THREE.MathUtils.smoothstep(skyState.moonElevation, -2, 6);
+    const moonlight = (0.1 + 0.9 * skyState.moonIllumination) * moonUp * (1 - 0.8 * cloud) * night;
 
     // Sunset to day by dayness, then toward night by night.
     if (hemi.current) {
       const h = hemi.current;
-      h.color.copy(SUNSET.hemiSky).lerp(DAY.hemiSky, dayness).lerp(OVERCAST_SKY, cloud * 0.5 * dayness).lerp(NIGHT.hemiSky, night);
+      h.color
+        .copy(SUNSET.hemiSky)
+        .lerp(DAY.hemiSky, dayness)
+        .lerp(OVERCAST_SKY, cloud * 0.5 * dayness)
+        .lerp(NIGHT.hemiSky, night)
+        .lerp(NIGHT.moonSky, moonlight * 0.6);
       h.groundColor.copy(SUNSET.hemiGround).lerp(DAY.hemiGround, dayness).lerp(NIGHT.hemiGround, night);
-      h.intensity = THREE.MathUtils.lerp(THREE.MathUtils.lerp(SUNSET.hemi, DAY.hemi, dayness), NIGHT.hemi, night) * lit;
+      h.intensity = (THREE.MathUtils.lerp(THREE.MathUtils.lerp(SUNSET.hemi, DAY.hemi, dayness), NIGHT.hemi, night) + NIGHT.moonHemi * moonlight) * lit;
     }
     if (ambient.current) {
       const a = ambient.current;
       a.color.copy(SUNSET.ambientColor).lerp(DAY.ambientColor, dayness).lerp(NIGHT.ambientColor, night);
-      a.intensity = THREE.MathUtils.lerp(THREE.MathUtils.lerp(SUNSET.ambient, DAY.ambient, dayness), NIGHT.ambient, night);
+      a.intensity = THREE.MathUtils.lerp(THREE.MathUtils.lerp(SUNSET.ambient, DAY.ambient, dayness), NIGHT.ambient, night) + NIGHT.moonAmbient * moonlight;
     }
     if (sun.current) {
       const s = sun.current;
@@ -101,8 +120,7 @@ export function SkyDriver({ config, room = null }: { config: SkyConfig; room?: R
         s.position.y = Math.max(s.position.y, 0.45);
         s.position.normalize().multiplyScalar(SUN_DISTANCE);
         s.color.copy(NIGHT.moonColor);
-        const moonUp = THREE.MathUtils.smoothstep(skyState.moonElevation, -2, 6);
-        s.intensity = NIGHT.moon * (0.3 + 0.7 * skyState.moonIllumination) * moonUp * (1 - 0.8 * cloud) * (night - 0.5) * 2;
+        s.intensity = NIGHT.moon * (moonlight / Math.max(night, 1e-3)) * (night - 0.5) * 2;
       } else {
         s.position.copy(skyState.sunDirection).multiplyScalar(SUN_DISTANCE);
         s.color.copy(SUNSET.sunColor).lerp(DAY.sunColor, dayness);

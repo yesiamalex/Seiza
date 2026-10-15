@@ -3,14 +3,30 @@
 // with their real output, the exploded perovskite cell in the classroom,
 // and an info board at each, drawn in code, with live numbers. Each has a
 // glow outline that switches with its room's lights (kit.tsx, GlowLines).
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { LightZone } from "../../../src/multiplayer/types";
 import { PLANT } from "../sim/energy";
 import type { InfoKey } from "../sim/info";
 import { openInfo } from "./InfoCard";
-import { Clickable, FONT, fmt, GlowLines, roundRect, standard, useCanvasTexture, useMerged, wrapText, type BoxSpec, type CylinderSpec, type RingSpec } from "./kit";
+import {
+  Clickable,
+  FONT,
+  fmt,
+  GlowLines,
+  roundRect,
+  signWashTexture,
+  standard,
+  useCanvasTexture,
+  useMerged,
+  useNightLift,
+  useSignLamp,
+  wrapText,
+  type BoxSpec,
+  type CylinderSpec,
+  type RingSpec,
+} from "./kit";
 import { live, rotorRpm } from "./live";
 
 // --- where everything stands ----------------------------------------------------------
@@ -224,7 +240,10 @@ function Turbine({ x, z, phase }: { x: number; z: number; phase: number }) {
     <group position={[x, 0, z]}>
       <Clickable onClick={() => openInfo("wind")}>
         <mesh geometry={tower} material={materials.white} castShadow />
-        <mesh ref={spin} geometry={rotor} material={materials.white} position={[0, HUB.y, HUB.z]} rotation={[0, 0, phase]} castShadow />
+        <mesh ref={spin} geometry={rotor} material={materials.white} position={[0, HUB.y, HUB.z]} rotation={[0, 0, phase]} castShadow>
+          {/* The blades' outlines turn with them. */}
+          <GlowLines boxes={ROTOR.boxes} color="#4dffd2" zone="pond" thickness={0.05} />
+        </mesh>
       </Clickable>
       <mesh position={[0, HUB.y + 0.45, 1.25]} material={materials.warning}>
         <boxGeometry args={[0.1, 0.1, 0.1]} />
@@ -267,6 +286,8 @@ function PerovskiteCell() {
       ),
     []
   );
+  const pedestalMaterial = useMemo(() => materials.wood.clone(), []);
+  useNightLift("classroom", [...layerMaterials, pedestalMaterial], 0.35);
   const fresh = useMemo(() => new THREE.Color("#33140b"), []);
   const degraded = useMemo(() => new THREE.Color("#c9a227"), []);
   useFrame(() => {
@@ -289,7 +310,7 @@ function PerovskiteCell() {
   return (
     <group position={[CELL.x, 0, CELL.z]}>
       <Clickable onClick={() => openInfo("layers")}>
-        <mesh geometry={pedestal} material={materials.wood} castShadow receiveShadow />
+        <mesh geometry={pedestal} material={pedestalMaterial} castShadow receiveShadow />
         <mesh geometry={posts} material={materials.aluminium} />
         {stack.map((l) => (
           <mesh key={l.name} position={[0, l.at, 0]} material={l.material} castShadow={!l.opacity}>
@@ -536,6 +557,8 @@ const BOARD = { w: 2.4, h: 1.5, bottom: 0.85 };
 const BOARD_FACE: BoxSpec = { size: [BOARD.w + 0.12, BOARD.h + 0.12, 0.06], at: [0, BOARD.bottom + BOARD.h / 2, -0.04] };
 const BOARD_FRAME: BoxSpec[] = [
   BOARD_FACE,
+  // The sign lamp's hood over the top edge; its lit strip is in Board.
+  { size: [BOARD.w + 0.16, 0.04, 0.2], at: [0, BOARD.bottom + BOARD.h + 0.095, 0.07] },
   { size: [0.09, BOARD.bottom + 0.2, 0.09], at: [-BOARD.w / 2 + 0.2, (BOARD.bottom + 0.2) / 2, -0.06] },
   { size: [0.09, BOARD.bottom + 0.2, 0.09], at: [BOARD.w / 2 - 0.2, (BOARD.bottom + 0.2) / 2, -0.06] },
 ];
@@ -582,21 +605,32 @@ function Board(b: BoardSpec) {
   const anchor = useRef<THREE.Mesh>(null);
   const texture = useCanvasTexture(1200, 750, (ctx, w, h) => drawBoard(ctx, w, h, b), { hz: 1, anchor, range: 16 });
   const frame = useMerged(BOARD_FRAME);
+  // The face, washed from the sign lamp along its top so it reads at night.
+  const face = useMemo(() => new THREE.MeshStandardMaterial({ map: texture, roughness: 0.85, lightMap: signWashTexture(), lightMapIntensity: 0 }), [texture]);
+  useEffect(() => () => face.dispose(), [face]);
+  const strip = useSignLamp(b.zone, [face]);
   return (
     <group position={b.position} rotation={[0, b.rotationY, 0]}>
       <Clickable onClick={() => openInfo(b.info)}>
         <mesh geometry={frame} material={materials.wood} castShadow />
-        <mesh ref={anchor} position={[0, BOARD.bottom + BOARD.h / 2, 0.002]}>
+        <mesh ref={anchor} position={[0, BOARD.bottom + BOARD.h / 2, 0.002]} material={face}>
           <planeGeometry args={[BOARD.w, BOARD.h]} />
-          <meshStandardMaterial map={texture} roughness={0.85} />
         </mesh>
       </Clickable>
+      {/* The sign lamp's strip, under its hood. */}
+      <mesh position={[0, BOARD.bottom + BOARD.h + 0.068, 0.13]} material={strip}>
+        <boxGeometry args={[BOARD.w - 0.1, 0.015, 0.04]} />
+      </mesh>
       <GlowLines boxes={[BOARD_FACE]} color={b.glow} zone={b.zone} thickness={0.022} />
     </group>
   );
 }
 
 export function Exhibits() {
+  // The garden's exhibits catch a little of the lamps at night, so the
+  // panels and the battery don't go black against the sky.
+  useNightLift("pond", [materials.silicon, materials.perovskite], 0.9);
+  useNightLift("pond", [materials.container, materials.green, materials.white, materials.steel], 0.22);
   return (
     <>
       <SolarArray />

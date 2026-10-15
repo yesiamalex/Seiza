@@ -66,7 +66,12 @@ Everything is in the world itself; there's no separate page to open.
   bench, and the cell, so they're easy to find at night. They switch with
   the room's lights: the garden switch for everything outside, the
   classroom's for the control room and lab, and the hall's for the welcome
-  board.
+  board. The turbine blades' outlines turn with the rotors.
+- **Sign lamps** over each board and the control display wash the board's
+  face from the top at night (a gradient light map, not a light), and the
+  panels, battery, turbines, lab bench, and cell catch a little of the
+  lamps, so everything reads after dark. All of it follows the same
+  switches and costs no lights.
 
 The plant runs in every visitor's browser on the exact time and weather the
 sky shows, with the switches shared through the room. On arrival it runs
@@ -139,7 +144,8 @@ world shows the sources it rests on, linked.
 ```
 worlds/seizora/
   world/world.json      The world: sky, spawn, avatars, and the starting objects
-  favicon.svg           Seizora's tab icon, copied over Seiza's in this build only
+  favicon.svg           Seizora's tab icon, copied over Seiza's in this build only,
+                        at its own URL so browsers don't keep showing Seiza's
   client/               The world's own code, loaded by Seiza only for this world:
     live.ts             The plant, stepped every frame on the sky's time and weather
     ControlRoom.tsx     The display and the console

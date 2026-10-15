@@ -15,6 +15,7 @@ import {
   type GestureDefinition,
 } from "./avatar/gestures";
 import type { Seat } from "./scene/layout";
+import { roomLights } from "./scene/roomLights";
 import type { VRM } from "@pixiv/three-vrm";
 import { useRoomSocket } from "./multiplayer/useRoomSocket";
 import { RemotePlayers } from "./multiplayer/RemotePlayers";
@@ -294,6 +295,8 @@ export default function App() {
     ),
     away
   );
+  // Fittings that read the switches every frame (text boards, world code).
+  Object.assign(roomLights, lights);
   selfIdRef.current = selfId;
 
   // Rebuild the walkable surface whenever the environment changes — on

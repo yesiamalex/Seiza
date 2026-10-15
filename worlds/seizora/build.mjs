@@ -47,8 +47,15 @@ step("Building Seiza for the seizora world", () => {
 step("Adding the world config", () => {
   mkdirSync(join(DIST, "worlds", WORLD_ID), { recursive: true });
   copyFileSync(join(HERE, "world", "world.json"), join(DIST, "worlds", WORLD_ID, "world.json"));
-  // Seizora's own tab icon, over Seiza's in this build's output only.
+  // Seizora's own tab icon, over Seiza's in this build's output only, at
+  // its own URL: browsers cache icons hard, so one at Seiza's URL keeps
+  // showing Seiza's in any browser that has seen it.
   copyFileSync(join(HERE, "favicon.svg"), join(DIST, "favicon.svg"));
+  const indexPath = join(DIST, "index.html");
+  const index = readFileSync(indexPath, "utf8");
+  const withIcon = index.replace(/href="\/favicon\.svg(\?[^"]*)?"/, 'href="/favicon.svg?v=seizora-1"');
+  if (withIcon === index) console.warn("[seizora] No favicon link found in index.html; the tab may show Seiza's icon.");
+  writeFileSync(indexPath, withIcon);
 });
 
 // 3. The avatar store's id, copied from the root config so both Workers

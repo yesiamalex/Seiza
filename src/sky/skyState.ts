@@ -84,16 +84,20 @@ const smoothstep = (a: number, b: number, x: number) => {
   return t * t * (3 - 2 * t);
 };
 
-/** Reads ?skyHour=, ?skyWeather=, and ?skyScale= from the page URL, for
- *  previewing a time or weather without changing world.json. */
-function urlOverrides(): { hour?: number; weather?: WeatherType; scale?: number } {
+/** Reads ?skyHour=, ?skyDate=, ?skyWeather=, and ?skyScale= from the page
+ *  URL, for previewing a time, a moon, or weather without changing
+ *  world.json. */
+function urlOverrides(): { hour?: number; date?: number; weather?: WeatherType; scale?: number } {
   if (typeof window === "undefined") return {};
   const q = new URLSearchParams(window.location.search);
   const hour = Number(q.get("skyHour"));
   const weather = q.get("skyWeather") as WeatherType | null;
   const scale = Number(q.get("skyScale"));
+  // A day (YYYY-MM-DD), at noon in the Philippines (UTC+8).
+  const date = Date.parse(`${q.get("skyDate")}T12:00:00+08:00`);
   return {
     hour: q.has("skyHour") && Number.isFinite(hour) ? hour : undefined,
+    date: q.has("skyDate") && Number.isFinite(date) ? date : undefined,
     weather: weather && weather in WEATHER ? weather : undefined,
     scale: Number.isFinite(scale) && scale > 0 ? scale : undefined,
   };
@@ -124,11 +128,14 @@ export class SkyClock {
     // A room sky decides the weather completely, "auto" included.
     this.fixedWeather = o.weather ?? (room ? roomWeather : configWeather);
 
-    // A preview hour starts today's clock at that Philippine hour. A room
-    // sky's time comes from roomSkyNow, shared with Seizora's control room.
-    this.room = o.hour === undefined ? room : null;
+    // A preview hour starts the clock at that Philippine hour, today or on
+    // the preview date. A room sky's time comes from roomSkyNow, shared
+    // with Seizora's control room.
+    const previewing = o.hour !== undefined || o.date !== undefined;
+    this.room = previewing ? null : room;
     this.startReal = now;
-    this.startSim = o.hour !== undefined ? atPhilippineHour(now, o.hour) : now;
+    const day = o.date ?? now;
+    this.startSim = o.hour !== undefined ? atPhilippineHour(day, o.hour) : day;
     this.scale = o.scale ?? config.timeScale ?? 1;
   }
 

@@ -3,6 +3,7 @@ import type * as THREE from "three";
 import * as THREE_RUNTIME from "three";
 import type { ThreeEvent } from "@react-three/fiber";
 import { useFrame } from "@react-three/fiber";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { getWorldMaterials, type WorldMaterials } from "./materials";
 import { Chair } from "./Chair";
 import { SeatPad } from "./SeatPad";
@@ -29,6 +30,7 @@ import {
   HALL,
   HALL_CENTRE,
   OUTDOOR,
+  GARDEN_LAMPS,
   OUTDOOR_BENCHES,
   POND_CENTER,
   POND_WATER_RADIUS,
@@ -72,6 +74,8 @@ const ALL_LIGHTS_ON = DEFAULT_LIGHTS;
 /** Each hall lantern's light. Four of them now, where two used to carry
  *  13 each, so each is dimmer and the hall is lit more evenly. */
 const LANTERN_INTENSITY = 8;
+/** Each garden lamppost's light. */
+const GARDEN_LAMP_INTENSITY = 9;
 
 /**
  * A lamp material for one zone: a clone of the shared lantern material, so
@@ -848,10 +852,13 @@ function OutdoorGarden({
   lit: boolean;
   onToggleLight?: (zone: LightZone, on: boolean) => void;
 }) {
+  const lamp = useZoneLampMaterial(m, lit);
   return (
     <group>
       {OUTDOOR_BENCHES.map((bench, i) => <Bench key={`outdoor-bench-${i}`} placement={bench} m={m} />)}
       <Pond lit={lit} />
+
+      <GardenLamps m={m} lamp={lamp} lit={lit} />
 
       {/* Switch for the pool lights, on the hall's outside wall beside the
           garden doorway, facing the pond. */}
@@ -934,6 +941,52 @@ function HallFurniture({ m, lit, onToggleLight }: { m: WorldMaterials; lit: bool
         [10.6, -2.4],
       ].map(([x, z]) => (
         <Planter key={`${x}-${z}`} position={[x, 0, z]} m={m} />
+      ))}
+    </group>
+  );
+}
+
+/**
+ * The garden's lampposts, in its front corners, on the garden switch. Real
+ * lights from the shared pool (LightPool.tsx), like the hall's lanterns, so
+ * they add no per-pixel lighting cost of their own; and every post's metal
+ * is one merged mesh and every lamp another, so both posts are two draw
+ * calls.
+ */
+function GardenLamps({ m, lamp, lit }: { m: WorldMaterials; lamp: THREE.Material; lit: boolean }) {
+  const { posts, lamps } = useMemo(() => {
+    const posts: THREE.BufferGeometry[] = [];
+    const lamps: THREE.BufferGeometry[] = [];
+    for (const [x, z] of GARDEN_LAMPS) {
+      posts.push(
+        new THREE_RUNTIME.BoxGeometry(0.36, 0.24, 0.36).translate(x, 0.12, z),
+        new THREE_RUNTIME.CylinderGeometry(0.05, 0.07, 2.96, 10).translate(x, 1.6, z),
+        new THREE_RUNTIME.BoxGeometry(0.32, 0.05, 0.32).translate(x, 3.03, z),
+        new THREE_RUNTIME.ConeGeometry(0.3, 0.2, 4).rotateY(Math.PI / 4).translate(x, 3.5, z)
+      );
+      lamps.push(new THREE_RUNTIME.BoxGeometry(0.26, 0.38, 0.26).translate(x, 3.24, z));
+    }
+    const merge = (parts: THREE.BufferGeometry[]) => {
+      // Cones and boxes differ in attributes only by index; drop it so all merge.
+      const merged = mergeGeometries(parts.map((g) => g.toNonIndexed()));
+      for (const g of parts) g.dispose();
+      return merged ?? new THREE_RUNTIME.BufferGeometry();
+    };
+    return { posts: merge(posts), lamps: merge(lamps) };
+  }, []);
+  useEffect(
+    () => () => {
+      posts.dispose();
+      lamps.dispose();
+    },
+    [posts, lamps]
+  );
+  return (
+    <group>
+      <mesh geometry={posts} material={m.metal} castShadow />
+      <mesh geometry={lamps} material={lamp} />
+      {GARDEN_LAMPS.map(([x, z]) => (
+        <PooledLight key={x} position={[x, 3.2, z]} intensity={lit ? GARDEN_LAMP_INTENSITY : 0} distance={16} color="#ffd2a0" />
       ))}
     </group>
   );

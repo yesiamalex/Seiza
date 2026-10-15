@@ -164,7 +164,8 @@ guarantee yet.
 
 - **A built-in world.** The default world has a hall with benches around a
   tatami platform, a corridor of shoe lockers, a classroom with desks facing a
-  chalkboard, and a garden with a pond. You can sit on every chair and bench.
+  chalkboard, and a garden with a pond and two lampposts. You can sit on
+  every chair and bench.
   The world, including its textures and sky, is generated in code, so no 3D
   assets are bundled and nothing is fetched from another CDN. You can add
   your own glTF scene through `world.json`.
@@ -448,7 +449,8 @@ The sky is set with `sky`:
   they no longer share a sky.
 
 To preview a time or weather without changing the file, add `?skyHour=18.5`,
-`?skyWeather=rain`, or `?skyScale=600` to the URL.
+`?skyWeather=rain`, or `?skyScale=600` to the URL. `?skyDate=2026-10-26`
+previews a day, and so its moon: with `?skyHour=21`, a full moon night.
 
 A deployment can also be a separate world with its own features, built from
 the same repository. `worlds/seizora/` is an example: a solar, wind, and
@@ -477,7 +479,9 @@ The `Scene` component renders inside the 3D scene and gets:
   deployment has one.
 - `lights`: the room's light switches (`hall`, `classroom`, and `pond`, the
   garden), read-only, so the world's own fittings can switch with the
-  room's lamps.
+  room's lamps. The same switches are in `roomLights`
+  (`src/scene/roomLights.ts`) for code that reads them every frame, with
+  `lightZoneAt` to find which switch lights a spot.
 
 It can also use `setWorldObstacles` from `src/scene/layout.ts` to make its
 furniture solid, `showWorldOverlay` to open a card in the HUD, and `skyState`
@@ -869,8 +873,12 @@ is exactly the still sunset, and the stars and violet night half take over
 as the sun sets. Above that angle the painted sunset hands over to the
 engine's daytime gradient, and cloud greys the sky and hides the stars. The
 lights follow the same path: the original sunset lights at that angle,
-brighter and whiter by day, and dim blue moonlight at night, with the lamps
-doing the rest. The moon is drawn in the same shader: a disc lit on the
+brighter and whiter by day, and dim blue at night, with the lamps doing the
+rest. The moon lifts the night: a full moon high in a clear sky turns the
+sun's light into moonlight from where the moon stands, with shadows, and
+brightens the sky's fill, so a moonlit garden reads clearly; a crescent
+gives a little, a new or set moon nothing, and cloud takes most of it away.
+It adds no lights: the moon reuses the sun's light and the same fill. The moon is drawn in the same shader: a disc lit on the
 side facing the sun, so its phase comes from the geometry, with a soft
 halo that grows with the phase and the dark. Moonlight comes from the
 moon, brighter when it's fuller, and goes when the moon sets. Low sun
@@ -904,8 +912,8 @@ from that moment and the speed. A world's own code can read and set it too
 A room sky works in a still-sunset world too: it turns the moving sky on for that room. It needs the editor
 password when the deployment has one, like the rest of Edit Mode. An
 uploaded skybox image still covers the sky, but the lights follow the room's
-time. The `?skyHour` and `?skyWeather` URL previews override it in your own
-browser only.
+time. The `?skyHour`, `?skyDate`, and `?skyWeather` URL previews override it in
+your own browser only.
 
 #### Seats
 
@@ -1266,7 +1274,13 @@ materials, textures drawn in code, and detail where people look.
   every pixel, near or far. The lamps share a pool of four lights, which are
   assigned each frame to the fixtures whose light reaches what the camera
   sees (`src/scene/LightPool.tsx`). Changes fade in, and a light stays on
-  briefly after leaving view, so looking away and back shows no change.
+  briefly after leaving view, so looking away and back shows no change. The
+  garden's lampposts are two more fixtures in the same pool, so they cost
+  no extra lighting; their metal is one merged mesh and their lamps another.
+- **Text boards are washed, not lit.** At night each text board and note
+  takes a gradient light map, bright at the top as if a lamp hung over it,
+  that follows its room's switch (`src/scene/roomLights.ts`). It costs no
+  light and no draw call, and keeps the writing readable after dark.
 
 ### Only update what changed
 
