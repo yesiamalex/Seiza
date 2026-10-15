@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Seizora Control Room</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        <span class="mark">☀︎</span>
+        <div>
+          <h1>Seizora Control Room</h1>
+          <p class="sub">Solar, wind, and storage microgrid · a learning model, not a forecast</p>
+        </div>
+      </div>
+      <nav class="tabs" role="tablist">
+        <button role="tab" aria-selected="true" data-tab="grid">Microgrid</button>
+        <button role="tab" aria-selected="false" data-tab="lab">Perovskite lab</button>
+      </nav>
+      <div class="clock">
+        <div id="clock-time">--:--</div>
+        <div id="clock-date" class="muted">--</div>
+      </div>
+    </header>
+
+    <main id="tab-grid">
+      <section class="panel sky-panel">
+        <canvas id="sky" width="640" height="300" aria-label="Sky over the plant"></canvas>
+        <div class="readouts">
+          <div><span class="k">Sun</span><span id="r-sun">-</span></div>
+          <div><span class="k">Irradiance</span><span id="r-ghi">-</span></div>
+          <div><span class="k">On panels</span><span id="r-poa">-</span></div>
+          <div><span class="k">Air / cells</span><span id="r-temp">-</span></div>
+          <div><span class="k">Wind</span><span id="r-wind">-</span></div>
+          <div><span class="k">Cloud / humidity</span><span id="r-cloud">-</span></div>
+        </div>
+      </section>
+
+      <section class="panel flow-panel">
+        <h2>Power now</h2>
+        <div class="flow">
+          <div class="node src" id="n-si"><span class="label">Silicon PV</span><span class="mw">0.00</span><span class="cap">3.6 MWp</span></div>
+          <div class="node src" id="n-pvk"><span class="label">Perovskite pilot</span><span class="mw">0.00</span><span class="cap">0.6 MWp · <span id="pvk-health">100%</span></span></div>
+          <div class="node src" id="n-wind"><span class="label">Wind, 2 turbines</span><span class="mw">0.00</span><span class="cap">3.0 MW</span></div>
+          <div class="bus"><span>13.8 kV bus</span></div>
+          <div class="node sink" id="n-load"><span class="label">Community load</span><span class="mw">0.00</span><span class="cap">peak 3.2 MW</span></div>
+          <div class="node mid" id="n-batt"><span class="label">Battery</span><span class="mw">0.00</span><span class="cap" id="batt-state">idle</span>
+            <div class="soc"><div class="soc-fill" id="soc-fill"></div><span id="soc-text">55%</span></div>
+          </div>
+          <div class="node mid" id="n-grid"><span class="label">Main grid</span><span class="mw">0.00</span><span class="cap" id="grid-state">connected</span></div>
+        </div>
+        <p class="muted small">MW, positive into the bus. Battery: discharging is positive. Grid: importing is positive.</p>
+      </section>
+
+      <section class="panel controls">
+        <h2>Controls</h2>
+        <div class="row">
+          <label class="seg">
+            <input type="radio" name="mode" value="live" checked /> <span>Live: follows the world's sky</span>
+          </label>
+          <label class="seg">
+            <input type="radio" name="mode" value="sim" /> <span>Simulate</span>
+          </label>
+        </div>
+        <div class="row sim-only">
+          <label>Hour <input type="range" id="hour" min="0" max="23.99" step="0.05" value="6" /></label>
+          <label>Day of year <input type="range" id="day" min="1" max="365" step="1" value="120" /></label>
+        </div>
+        <div class="row sim-only speeds" role="group" aria-label="Simulation speed">
+          <button data-speed="0">❚❚</button>
+          <button data-speed="1">1 min/s</button>
+          <button data-speed="10" class="on">10 min/s</button>
+          <button data-speed="60">1 h/s</button>
+          <button data-speed="360">6 h/s</button>
+        </div>
+        <div class="row sim-only weathers" role="group" aria-label="Weather"></div>
+        <div class="row">
+          <label>Site <select id="site"></select></label>
+          <label>Battery <select id="batt-mode">
+            <option value="auto">Auto: store surplus, cover shortfall</option>
+            <option value="charge">Force charge</option>
+            <option value="hold">Hold</option>
+            <option value="discharge">Force discharge</option>
+          </select></label>
+          <label>Perovskite seal <select id="encap">
+            <option value="glass">Glass-glass with edge seal</option>
+            <option value="edge">Edge seal only</option>
+            <option value="none">None (lab cell)</option>
+          </select></label>
+        </div>
+        <div class="row breakers" role="group" aria-label="Breakers">
+          <label class="breaker"><input type="checkbox" id="b-si" checked /><span>Silicon PV</span></label>
+          <label class="breaker"><input type="checkbox" id="b-pvk" checked /><span>Perovskite</span></label>
+          <label class="breaker"><input type="checkbox" id="b-wind" checked /><span>Wind</span></label>
+          <label class="breaker"><input type="checkbox" id="b-batt" checked /><span>Battery</span></label>
+          <label class="breaker"><input type="checkbox" id="b-grid" checked /><span>Grid tie</span></label>
+        </div>
+      </section>
+
+      <section class="panel chart-panel">
+        <h2>Last 24 hours</h2>
+        <canvas id="chart" width="900" height="240" aria-label="Generation and load over the last 24 hours"></canvas>
+        <div class="legend">
+          <span><i style="background: var(--si)"></i>Silicon</span>
+          <span><i style="background: var(--pvk)"></i>Perovskite</span>
+          <span><i style="background: var(--wind)"></i>Wind</span>
+          <span><i style="background: var(--batt)"></i>Battery out</span>
+          <span><i class="line"></i>Load</span>
+        </div>
+      </section>
+
+      <section class="panel totals">
+        <h2>Totals since start</h2>
+        <div class="tiles">
+          <div><span class="k">Generated</span><span id="t-gen">0</span></div>
+          <div><span class="k">Renewable share of load</span><span id="t-share">-</span></div>
+          <div><span class="k">CO₂ avoided</span><span id="t-co2">0</span></div>
+          <div><span class="k">Imported / exported</span><span id="t-grid">0</span></div>
+          <div><span class="k">Load not served</span><span id="t-unserved">0</span></div>
+        </div>
+      </section>
+
+      <section class="panel log-panel">
+        <h2>Event log</h2>
+        <ol id="log"></ol>
+      </section>
+    </main>
+
+    <main id="tab-lab" hidden>
+      <section class="panel lab-intro">
+        <h2>From the lab in Japan to a rooftop in the Philippines</h2>
+        <p>Build a perovskite cell layer by layer, test the design, then put it in Philippine sun, heat, and humidity. Values are illustrative: they show the trade-offs, not a specific product.</p>
+      </section>
+      <section class="panel lab-build">
+        <h2>1. Build the cell</h2>
+        <div class="stack" id="stack"></div>
+        <div class="row">
+          <label>Absorber <select id="l-absorber"></select></label>
+          <label>Electron transport <select id="l-etl"></select></label>
+          <label>Hole transport <select id="l-htl"></select></label>
+        </div>
+      </section>
+      <section class="panel lab-test">
+        <h2>2. Test the design</h2>
+        <div class="tiles">
+          <div><span class="k">Starting efficiency</span><span id="o-eff">-</span></div>
+          <div><span class="k">Cost index</span><span id="o-cost">-</span></div>
+          <div><span class="k">Time to 80% output</span><span id="o-t80">-</span></div>
+        </div>
+      </section>
+      <section class="panel lab-place">
+        <h2>3. Put it in Philippine conditions</h2>
+        <div class="row">
+          <label>Where <select id="l-mount"></select></label>
+          <label>Seal <select id="l-encap">
+            <option value="glass">Glass-glass with edge seal</option>
+            <option value="edge">Edge seal only</option>
+            <option value="none">None (lab cell)</option>
+          </select></label>
+          <label>Site <select id="l-site"></select></label>
+        </div>
+        <div class="tiles">
+          <div><span class="k">First-year yield</span><span id="o-yield">-</span></div>
+          <div><span class="k">Output after one year</span><span id="o-year">-</span></div>
+        </div>
+        <canvas id="fade" width="900" height="160" aria-label="Output over the first year"></canvas>
+        <p class="muted small">Moisture, oxygen, heat, and light are the known stressors of perovskite cells. Station 4, the local energy system, is the Microgrid tab, where the pilot row ages with the weather.</p>
+      </section>
+    </main>
+
+    <footer class="muted small">
+      Seizora, a Seiza world. The sky follows Seiza's shared weather engine; plant figures are a teaching model.
+    </footer>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

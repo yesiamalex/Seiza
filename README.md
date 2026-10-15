@@ -48,6 +48,9 @@ For the full guide, see [DOCS.md](DOCS.md).
   who joins.
 - **Choose your look.** Build an avatar in the designer, pick a preset, or
   upload your own VRM file.
+- **Watch the day go by.** The sky follows Philippine time and weather, from
+  a clear morning through rain to a starry night, and everyone in the room
+  sees the same sky.
 
 <table>
   <tr>
@@ -112,6 +115,8 @@ real-time room server. The **Deploy to Cloudflare** button does the same
 thing, after first copying the repository into your GitHub account.
 
 - Full setup, configuration, and world customization: [DOCS.md](DOCS.md)
+- A second world from the same repository, with its own features:
+  [Seizora](worlds/seizora/README.md), a solar, wind, and storage learning world
 - Hosting somewhere other than Cloudflare: [SELF-HOSTING.md](SELF-HOSTING.md)
 
 ## 🛡️ Who controls a room

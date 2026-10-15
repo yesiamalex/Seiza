@@ -168,6 +168,12 @@ guarantee yet.
   The world, including its textures and sky, is generated in code, so no 3D
   assets are bundled and nothing is fetched from another CDN. You can add
   your own glTF scene through `world.json`.
+- **A living sky.** The sky follows Philippine time: the sun rises and sets
+  where it really would, dusk passes through the golden hour and twilight
+  into a starry night, and the weather changes through the day, from clear
+  to cloudy to rain. Every visitor sees the same sky, because it's worked
+  out from the clock rather than sent over the network. A world can keep the
+  original still sunset instead; see [Sky and weather](#sky-and-weather).
 - **Movement.** Move with WASD or the arrow keys, run with Shift, and jump
   with Space. VR has thumbstick movement. Double-click the floor to walk
   there along a navigation mesh route. Drag to look around, as in FrameVR.
@@ -423,6 +429,28 @@ You don't need to change application code. For the full list of fields, see
 `public/worlds/default/README.md`. For example, you can turn off in-world
 editing with `editingEnabled: false`, or avatar uploads with
 `allowAvatarUpload: false`.
+
+The sky is set with `sky`:
+
+```json
+"sky": { "cycle": "realtime", "site": "manila", "weather": "auto" }
+```
+
+- `cycle`: `"realtime"` follows Philippine time; `"fixed"`, or leaving `sky`
+  out, keeps the original still sunset.
+- `site`: where the sun is: `"manila"`, `"cebu"`, `"davao"`, or `"baguio"`.
+- `weather`: `"auto"` follows a shared schedule; `"clear"`, `"partly"`,
+  `"overcast"`, `"rain"`, or `"typhoon"` holds that weather.
+- `timeScale`: speeds the clock up for demonstrations (60 makes an hour pass
+  in a minute). Each visitor's clock then starts from their own page load, so
+  they no longer share a sky.
+
+To preview a time or weather without changing the file, add `?skyHour=18.5`,
+`?skyWeather=rain`, or `?skyScale=600` to the URL.
+
+A deployment can also be a separate world with its own features, built from
+the same repository without changing Seiza's code. `worlds/seizora/` is an
+example: a solar, wind, and storage learning world. See its README.
 
 ### Uploads and storage limits
 
@@ -774,6 +802,38 @@ The sky is a custom shader (`SunsetSky.tsx`), not an image-based environment
 map. drei's `<Environment preset>` downloads an HDR file from another CDN,
 which a self-hosted deployment shouldn't depend on, and which would leave the
 room dark if that host were blocked.
+
+#### Sky and weather
+
+The sky shader paints a sunset on the sun's side of the dome and a starry
+night on the far side, blended across the whole sky so there is no seam. In
+a world with `"cycle": "realtime"`, `src/sky/` moves it:
+
+- **The engine** (`weather.ts`) is plain TypeScript with no DOM or 3D code.
+  It gives the sun's position for a Philippine site and time, clear-sky and
+  cloudy irradiance, a weather state that eases between types over about
+  25 simulated minutes, and sky colours that change continuously through
+  twilight and the golden hour. Other code can use it too: Seizora's solar
+  simulation reads the same numbers.
+- **The schedule** (`scheduledWeather`) picks the weather for each
+  three-hour block from a hash of the date, with fair weather more likely
+  from December to May and rain more likely from June to November. Every
+  browser computes the same weather, so nothing is synced. Typhoons are
+  never scheduled; a world can still fix one.
+- **The clock** (`skyState.ts`) recomputes twice a second and writes the
+  result to a module-level store. `SkyDriver.tsx` sets the lights and fog
+  from it each frame, the sky shader reads it, and `Outdoors.tsx` dims the
+  unlit ground and hills after dusk.
+
+The shader keeps the original painting where it was designed to be seen:
+at the original sun angle (about 7° above the horizon) and below, the sky
+is exactly the still sunset, and the stars and violet night half take over
+as the sun sets. Above that angle the painted sunset hands over to the
+engine's daytime gradient, and cloud greys the sky and hides the stars. The
+lights follow the same path: the original sunset lights at that angle,
+brighter and whiter by day, and dim blue moonlight at night, with the lamps
+doing the rest. A fixed-sky world renders the original sky and lights
+untouched.
 
 #### Seats
 
@@ -1222,12 +1282,16 @@ src/            Frontend (React Three Fiber, WebXR, VRM)
   scene/        Built-in world: floor plan (layout.ts), canvas-drawn
                 materials, lighting, outdoors (Outdoors.tsx), shared
                 furniture (Chair, SeatPad), and the deployer's scene overlay
+  sky/          Weather and sky engine, the shared clock, and the moving
+                sky's lights (SkyDriver)
   ui/           Join screen, avatar chooser and preview, HUD, shared styles
   interactions/ Gesture menu and practice mode
   xr/           Headset only: body tracking (body/) and wrist menu (hud/)
 worker/         Cloudflare Worker: static hosting, upload API (KV), and the
                 real-time room server (room.ts, a Durable Object)
 public/worlds/  Per-deployment world configuration
+worlds/         Separate worlds built from this repository without changing
+                Seiza's code (seizora/: a solar, wind, and storage world)
 public/animations/, public/gestures/
                 Built-in motion clips (generated) and custom gesture clips
 scripts/        Motion clip generator, KV setup, and asset fetching
