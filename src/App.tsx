@@ -1056,6 +1056,7 @@ export default function App() {
               // Placed objects cast shadows and can be dragged, so the
               // otherwise-frozen shadow map refreshes when they change.
               shadowRefreshKey={objects}
+              sky={world.sky}
             />
           </group>
           <PlayerRig

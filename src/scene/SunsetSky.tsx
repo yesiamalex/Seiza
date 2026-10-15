@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useFrame, useLoader } from "@react-three/fiber";
 import { TextureLoader } from "three";
 import * as THREE from "three";
+import { skyState } from "../sky/skyState";
 
 /**
  * The built-in sky: a single moment of twilight, held still.
@@ -76,6 +77,14 @@ const fragmentShader = /* glsl */ `
   uniform vec3 uStarCool;
   uniform vec3 uSunDirection;
   uniform float uTime;
+  // The moving sky (src/sky/skyState.ts). All four at their defaults
+  // (0, 0, 1, 0) leave the shader exactly the original still sunset.
+  uniform vec3 uDayZenith;
+  uniform vec3 uDayHorizon;
+  uniform float uDayness;
+  uniform float uNight;
+  uniform float uSunVisible;
+  uniform float uCloud;
   varying vec3 vDirection;
 
   // Cheap deterministic hash. No texture: the same star is in the same
@@ -149,6 +158,10 @@ const fragmentShader = /* glsl */ `
     // as evening rather than as a blue sky with an orange stripe.
     vec3 day = mix(uHorizon, uMid, smoothstep(0.0, 0.22, h));
     day = mix(day, uZenith, smoothstep(0.18, 0.75, h));
+    // Daytime: as the sun climbs past the original sunset, the painted
+    // sunset hands over to the weather engine's sky gradient.
+    vec3 daylit = mix(uDayHorizon, uDayZenith, smoothstep(0.0, 0.7, h));
+    day = mix(day, daylit, uDayness);
 
     // --- the night half --------------------------------------------------
     vec3 night = mix(uNightHorizon, uNightZenith, smoothstep(-0.05, 0.55, h));
@@ -164,6 +177,9 @@ const fragmentShader = /* glsl */ `
     // hugs the skyline, exactly as it does at real dusk, instead of
     // climbing the dome with the sun's azimuth.
     nightAmount = max(nightAmount, smoothstep(0.25, 0.85, h) * 0.85);
+    // In full day there is no night side; after dusk the whole dome turns
+    // to the night half, stars and all.
+    nightAmount = max(nightAmount * (1.0 - uDayness), uNight);
 
     vec3 sky = mix(day, night, nightAmount);
 
@@ -171,7 +187,7 @@ const fragmentShader = /* glsl */ `
     // Two scales so the field has depth instead of one uniform sprinkle.
     // Gated on nightAmount (none in the bright part) and on height (none
     // below the skyline, where the ground will cover them anyway).
-    float starVisibility = nightAmount * nightAmount * smoothstep(-0.01, 0.22, h);
+    float starVisibility = nightAmount * nightAmount * smoothstep(-0.01, 0.22, h) * (1.0 - 0.9 * uCloud);
     if (starVisibility > 0.001) {
       // Sparse on purpose: a sky with fewer stars, some of them bright,
       // reads as a night sky; a dense even field reads as noise.
@@ -188,11 +204,18 @@ const fragmentShader = /* glsl */ `
     // Brighter and warmer on the sun's side of the sky, fading round the
     // back. Added after the night blend so the glow still burns through
     // the near edge of the twilight band rather than being tinted by it.
-    sky += uGlow * (pow(toward, 6.0) * 0.55 + pow(toward, 48.0) * 0.6);
+    // By day the glow whitens and narrows: a high sun has no orange halo.
+    vec3 glow = mix(uGlow, vec3(1.0, 0.97, 0.9), uDayness);
+    sky += glow * (pow(toward, 6.0) * 0.55 * (1.0 - 0.6 * uDayness) + pow(toward, 48.0) * 0.6) * uSunVisible;
 
     // The sun itself: a hard-ish disc with a thin soft edge.
     float disc = smoothstep(0.9985, 0.9993, toward);
-    sky = mix(sky, uSun * 1.6, disc);
+    sky = mix(sky, uSun * 1.6, disc * uSunVisible);
+
+    // Cloud over the painted sunset and the night: greyer and dimmer. By
+    // day the engine's colours are already greyed for cloud.
+    float lum = dot(sky, vec3(0.299, 0.587, 0.114));
+    sky = mix(sky, vec3(lum) * 0.85, uCloud * 0.5 * (1.0 - uDayness));
 
     // Below the horizon only shows past the edge of the outdoor ground;
     // keep it dark and warm so it reads as land in shadow, not as sky.
@@ -207,11 +230,13 @@ const fragmentShader = /* glsl */ `
 interface SunsetSkyProps {
   /** Where the sun is, as a position; only its direction matters. */
   sunPosition: [number, number, number];
+  /** Follow the moving sky (skyState) instead of holding still. */
+  dynamic?: boolean;
   /** Must stay inside the camera's far plane (App.tsx sets it to 260). */
   radius?: number;
 }
 
-export function SunsetSky({ sunPosition, radius = 200 }: SunsetSkyProps) {
+export function SunsetSky({ sunPosition, dynamic = false, radius = 200 }: SunsetSkyProps) {
   const material = useMemo(
     () =>
       new THREE.ShaderMaterial({
@@ -230,6 +255,12 @@ export function SunsetSky({ sunPosition, radius = 200 }: SunsetSkyProps) {
           uStarCool: { value: new THREE.Color(STAR_COOL) },
           uSunDirection: { value: new THREE.Vector3(...sunPosition).normalize() },
           uTime: { value: 0 },
+          uDayZenith: { value: new THREE.Color() },
+          uDayHorizon: { value: new THREE.Color() },
+          uDayness: { value: 0 },
+          uNight: { value: 0 },
+          uSunVisible: { value: 1 },
+          uCloud: { value: 0 },
         },
         side: THREE.BackSide,
         // Drawn first and never occludes anything: it's the backdrop.
@@ -244,7 +275,17 @@ export function SunsetSky({ sunPosition, radius = 200 }: SunsetSkyProps) {
   // Drives the twinkle. One uniform write per frame; wrapped so float
   // precision on mobile GPUs never degrades over a long session.
   useFrame((_, delta) => {
-    material.uniforms.uTime.value = (material.uniforms.uTime.value + delta) % 3600;
+    const u = material.uniforms;
+    u.uTime.value = (u.uTime.value + delta) % 3600;
+    if (dynamic && skyState.active) {
+      u.uSunDirection.value.copy(skyState.sunDirection);
+      u.uDayZenith.value.copy(skyState.dayZenith);
+      u.uDayHorizon.value.copy(skyState.dayHorizon);
+      u.uDayness.value = skyState.dayness;
+      u.uNight.value = skyState.night;
+      u.uSunVisible.value = skyState.sunVisible;
+      u.uCloud.value = skyState.cloud;
+    }
   });
 
   return (
@@ -257,6 +298,8 @@ export function SunsetSky({ sunPosition, radius = 200 }: SunsetSkyProps) {
 
 /** The sunset's horizon colour, for fog that fades the treeline into it. */
 export const SUNSET_HORIZON_COLOR = HORIZON;
+/** The night sky's horizon colour, for fog after dusk. */
+export const NIGHT_HORIZON_COLOR = NIGHT_HORIZON;
 
 /** Displays an uploaded equirectangular panorama as the room's sky. */
 export function ImageSkybox({ url, radius = 200 }: { url: string; radius?: number }) {

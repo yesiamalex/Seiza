@@ -9,6 +9,8 @@ import { ImageSkybox, SunsetSky, SUNSET_HORIZON_COLOR } from "./SunsetSky";
 import { deriveObstaclesFromObject, OBSTACLES, setActiveObstacles } from "./layout";
 import type { Seat } from "./layout";
 import { LightPool } from "./LightPool";
+import { SkyDriver } from "../sky/SkyDriver";
+import type { SkyConfig } from "../sky/skyState";
 
 interface SceneProps {
   sceneUrl?: string;
@@ -31,6 +33,9 @@ interface SceneProps {
   onToggleLight?: (zone: LightZone, on: boolean) => void;
   /** Any value that changes when shadow-casting geometry changes. */
   shadowRefreshKey?: unknown;
+  /** The world's sky (world.json `sky`). Absent or "fixed" keeps the
+   *  original still sunset; "realtime" moves it (src/sky/). */
+  sky?: SkyConfig;
 }
 
 /** How often the frozen shadow map refreshes anyway, to pick up geometry
@@ -170,42 +175,52 @@ export const Scene = memo(function Scene({
   lights,
   onToggleLight,
   shadowRefreshKey,
+  sky,
 }: SceneProps) {
+  const moving = sky?.cycle === "realtime";
   return (
     <>
       <OnDemandShadows refreshKey={shadowRefreshKey} />
       {skyboxUrl ? (
-        <SceneLoadBoundary fallback={<SunsetSky sunPosition={SUN} />}>
-          <Suspense fallback={<SunsetSky sunPosition={SUN} />}>
+        <SceneLoadBoundary fallback={<SunsetSky sunPosition={SUN} dynamic={moving} />}>
+          <Suspense fallback={<SunsetSky sunPosition={SUN} dynamic={moving} />}>
             <ImageSkybox url={skyboxUrl} />
           </Suspense>
         </SceneLoadBoundary>
       ) : (
-        <SunsetSky sunPosition={SUN} />
+        <SunsetSky sunPosition={SUN} dynamic={moving} />
       )}
       <fog attach="fog" args={[SUNSET_HORIZON_COLOR, FOG_NEAR, FOG_FAR]} />
       <Outdoors />
       {/* Warm sky above, warmer bounce off the wooden floor below. A big
           share of the light comes from here rather than the sun, which is
           what keeps the shadows soft. */}
-      <hemisphereLight args={["#ffe3c2", "#d9b48a", 1.05]} />
-      <ambientLight intensity={0.42} color="#ffeada" />
-      <directionalLight
-        position={SUN}
-        intensity={0.95}
-        color="#ffcd96"
-        castShadow
-        // 1024 is plenty for a room this size and a quarter of the fill
-        // cost of 2048 on the frames where shadows do get re-rendered.
-        shadow-mapSize={[1024, 1024]}
-        shadow-bias={-0.0004}
-        shadow-camera-left={-30}
-        shadow-camera-right={30}
-        shadow-camera-top={30}
-        shadow-camera-bottom={-30}
-        shadow-camera-near={1}
-        shadow-camera-far={80}
-      />
+      {/* A moving sky brings its own lights, which follow the sun (see
+          SkyDriver); the fixed sunset keeps these. */}
+      {moving && sky ? (
+        <SkyDriver config={sky} />
+      ) : (
+        <>
+          <hemisphereLight args={["#ffe3c2", "#d9b48a", 1.05]} />
+          <ambientLight intensity={0.42} color="#ffeada" />
+          <directionalLight
+            position={SUN}
+            intensity={0.95}
+            color="#ffcd96"
+            castShadow
+            // 1024 is plenty for a room this size and a quarter of the fill
+            // cost of 2048 on the frames where shadows do get re-rendered.
+            shadow-mapSize={[1024, 1024]}
+            shadow-bias={-0.0004}
+            shadow-camera-left={-30}
+            shadow-camera-right={30}
+            shadow-camera-top={30}
+            shadow-camera-bottom={-30}
+            shadow-camera-near={1}
+            shadow-camera-far={80}
+          />
+        </>
+      )}
       {/* The lamps' shared point lights (see LightPool.tsx). */}
       <LightPool />
       <BaseEnvironment

@@ -1,6 +1,7 @@
 {
   "id": "default",
   "displayName": "Seiza — Default World",
+  "sky": { "cycle": "realtime", "site": "manila", "weather": "auto" },
   "spawnPoint": { "x": 0, "y": 0, "z": 10 },
   "defaultAvatarUrl": "",
   "maxOccupants": 16,

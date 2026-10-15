@@ -1,5 +1,7 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
+import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
+import { skyState } from "../sky/skyState";
 import { POND_CENTER, POND_WATER_RADIUS } from "./layout";
 
 /**
@@ -78,8 +80,30 @@ function makeGroundTexture(): THREE.Texture | null {
   return texture;
 }
 
+/** How dark the unlit ground and hills get in full night, and the cool
+ *  tint they take on: moonlit rather than black. */
+const NIGHT_BRIGHTNESS = 0.22;
+const NIGHT_TINT = new THREE.Color(0.75, 0.82, 1.0);
+
 export function Outdoors() {
   const ground = useMemo(makeGroundTexture, []);
+  const groundMaterial = useRef<THREE.MeshBasicMaterial>(null);
+  const hillMaterial = useRef<THREE.MeshBasicMaterial>(null);
+  const tint = useMemo(() => new THREE.Color(), []);
+
+  // The ground and hills are unlit, so with a moving sky (src/sky/) they
+  // follow it by hand: dimmer and cooler after dusk, a little greyer under
+  // cloud. With the fixed sunset skyState is inactive and their colours are
+  // never touched.
+  useFrame(() => {
+    if (!skyState.active) return;
+    const k = THREE.MathUtils.lerp(1, NIGHT_BRIGHTNESS, skyState.night) * (1 - 0.25 * skyState.cloud * (1 - skyState.night));
+    tint.setRGB(1, 1, 1).lerp(NIGHT_TINT, skyState.night).multiplyScalar(k);
+    if (groundMaterial.current) {
+      groundMaterial.current.color.set(ground ? "#ffffff" : "#8d9a5c").multiply(tint);
+    }
+    if (hillMaterial.current) hillMaterial.current.color.set("#6c6b58").multiply(tint);
+  });
 
   /**
    * The outer ground, with the pond cut out of it.
@@ -194,7 +218,7 @@ export function Outdoors() {
         position={[0, -0.06, 0]}
         userData={{ navIgnore: true }}
       >
-        <meshBasicMaterial map={ground ?? undefined} color={ground ? "#ffffff" : "#8d9a5c"} fog />
+        <meshBasicMaterial ref={groundMaterial} map={ground ?? undefined} color={ground ? "#ffffff" : "#8d9a5c"} fog />
       </mesh>
 
       {/* Distant hills, sunk into the ground so only their tops show. */}
@@ -204,7 +228,7 @@ export function Outdoors() {
         userData={{ navIgnore: true }}
       >
         <coneGeometry args={[1, 1, 7, 1]} />
-        <meshBasicMaterial color="#6c6b58" fog />
+        <meshBasicMaterial ref={hillMaterial} color="#6c6b58" fog />
       </instancedMesh>
 
       {/* Treeline. Six-sided cones: from inside a building, that is a tree. */}

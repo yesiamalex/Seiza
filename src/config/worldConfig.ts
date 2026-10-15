@@ -1,5 +1,6 @@
 import type { CustomGestureConfig } from "../avatar/gestures";
 import type { WorldObjectKind } from "../multiplayer/types";
+import type { SkyConfig } from "../sky/skyState";
 
 export interface WorldConfig {
   id: string;
@@ -23,6 +24,13 @@ export interface WorldConfig {
    * whatever is actually in the scene (src/nav/useNavMesh.ts).
    */
   environmentCollision?: boolean;
+  /**
+   * The sky. Leave it out for the original still sunset. With
+   * `{ "cycle": "realtime" }` the sun follows Philippine time and the
+   * weather follows a shared schedule, so every visitor sees the same sky
+   * (see src/sky/). Ignored while an uploaded skybox image is in use.
+   */
+  sky?: SkyConfig;
   spawnPoint: { x: number; y: number; z: number };
   /** Avatar a first-time visitor starts with: a .vrm URL, or "" to start
    *  from the built-in avatar designer's default look. */
