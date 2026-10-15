@@ -3,9 +3,9 @@
 import { useEffect, useState } from "react";
 import { showWorldOverlay } from "../../../src/worlds/WorldExtension";
 import { panelStyle, pillButtonStyle } from "../../../src/ui/styles";
-import { INFO, type InfoKey, type LiveContext } from "../sim/info";
+import { INFO, type InfoKey, type LiveContext, type Trend } from "../sim/info";
 import { REFERENCES } from "../sim/references";
-import { dayTotals, live } from "./live";
+import { dayTotals, live, rotorRpm, SAMPLE_MINUTES } from "./live";
 
 export function openInfo(key: InfoKey) {
   showWorldOverlay(<InfoCard infoKey={key} />);
@@ -25,6 +25,7 @@ function InfoCard({ infoKey }: { infoKey: InfoKey }) {
   const ctx = liveContext();
   const art = card.liveArt && ctx ? card.liveArt(ctx) : card.art;
   const stats = card.liveStats && ctx ? card.liveStats(ctx) : null;
+  const trend = card.liveTrend && ctx && ctx.history.length > 1 ? <Sparkline trend={card.liveTrend} live={ctx} /> : null;
   return (
     <div
       role="dialog"
@@ -54,6 +55,7 @@ function InfoCard({ infoKey }: { infoKey: InfoKey }) {
             ))}
           </div>
         )}
+        {trend}
         {card.body.map((paragraph) => (
           <p key={paragraph.slice(0, 24)} style={{ margin: "0 0 8px" }}>
             {paragraph}
@@ -101,5 +103,44 @@ function liveContext(): LiveContext | null {
     batteryMode: c.batteryMode,
     encapsulation: c.encapsulation,
     day: dayTotals(),
+    history: live.history,
+    sampleHours: SAMPLE_MINUTES / 60,
+    rpm: rotorRpm(),
   };
+}
+
+/** A reading over the last 24 hours: one small SVG line from the history
+ *  the plant already keeps (144 samples, nothing new stored), redrawn with
+ *  the card once a second. */
+function Sparkline({ trend, live: c }: { trend: Trend; live: LiveContext }) {
+  // The samples, then the live value, so the line ends where the readings are.
+  const values = [...c.history.map(trend.value), trend.value(c.now)];
+  const lo = trend.min ?? Math.min(...values);
+  let hi = trend.max ?? Math.max(...values);
+  if (hi - lo < 1e-9) hi = lo + 1;
+  const W = 300, H = 56;
+  const x = (i: number) => (i / (values.length - 1)) * W;
+  const y = (v: number) => H - 4 - ((v - lo) / (hi - lo)) * (H - 8);
+  const points = values.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  const digits = trend.digits ?? 2;
+  const latest = values[values.length - 1];
+  return (
+    <div style={{ margin: "0 0 10px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, opacity: 0.75, marginBottom: 2 }}>
+        <span>{trend.label}, last 24 h</span>
+        <span style={{ fontVariantNumeric: "tabular-nums" }}>
+          now {latest.toFixed(digits)}
+          {trend.unit === "%" ? "%" : ` ${trend.unit}`}
+        </span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none" style={{ display: "block", borderRadius: 6, background: "rgba(127,127,127,0.08)" }}>
+        {lo < 0 && hi > 0 && <line x1={0} x2={W} y1={y(0)} y2={y(0)} stroke="currentColor" strokeOpacity={0.3} strokeDasharray="3 3" />}
+        <polyline points={points} fill="none" stroke={trend.color} strokeWidth={2} vectorEffect="non-scaling-stroke" />
+      </svg>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, opacity: 0.6 }}>
+        <span>24 h ago</span>
+        <span>now</span>
+      </div>
+    </div>
+  );
 }

@@ -62,9 +62,9 @@ export const GRID_EMISSION_FACTOR = 0.71;
  *  utility-scale lithium-ion storage (Cole & Frazier, 2019); the US fleet
  *  averaged 82% in 2019 (EIA, 2021). */
 export const BATTERY_ROUND_TRIP = 0.85;
-const BATTERY_ONE_WAY_EFFICIENCY = Math.sqrt(BATTERY_ROUND_TRIP);
-const SOC_MIN = 0.1;
-const SOC_MAX = 0.95;
+export const BATTERY_ONE_WAY_EFFICIENCY = Math.sqrt(BATTERY_ROUND_TRIP);
+export const SOC_MIN = 0.1;
+export const SOC_MAX = 0.95;
 /**
  * Peak shaving: grid-connected, Auto covers only the part of the load above
  * this level, so a battery far smaller than the evening's energy can still

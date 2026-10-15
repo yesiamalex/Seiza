@@ -4,7 +4,20 @@
 // The illustrations are inline SVG, so nothing is downloaded. Every figure
 // in a card matches the model (sim/energy.ts, src/sky/weather.ts), and each
 // card lists the sources it rests on (sim/references.ts).
-import { CUT_IN, CUT_OUT, loadFraction, PEROVSKITE, PLANT, RATED_SPEED, SILICON, turbinePower, type Snapshot } from "./energy";
+import {
+  BATTERY_ONE_WAY_EFFICIENCY,
+  CUT_IN,
+  CUT_OUT,
+  loadFraction,
+  PEROVSKITE,
+  PLANT,
+  RATED_SPEED,
+  SILICON,
+  SOC_MAX,
+  SOC_MIN,
+  turbinePower,
+  type Snapshot,
+} from "./energy";
 import type { RefKey } from "./references";
 
 export type InfoKey = "sky" | "silicon" | "perovskite" | "wind" | "battery" | "grid" | "load" | "layers" | "degradation";
@@ -18,6 +31,24 @@ export interface LiveContext {
   batteryMode: string;
   encapsulation: string;
   day: { renewableShare: number; co2AvoidedT: number; unservedMwh: number };
+  /** The last 24 hours of plant time, oldest first, one sample per
+   *  `sampleHours`: what the plant already keeps for the big display. */
+  history: Snapshot[];
+  sampleHours: number;
+  /** The turbines' rotor speed now, in rpm. */
+  rpm: number;
+}
+
+/** A card's 24-hour mini chart: one value per sample of the history. */
+export interface Trend {
+  label: string;
+  value: (s: Snapshot) => number;
+  unit: string;
+  color: string;
+  /** A fixed scale; otherwise it fits the data. */
+  min?: number;
+  max?: number;
+  digits?: number;
 }
 
 /** One live reading on a card: a label and its value. */
@@ -31,6 +62,8 @@ export interface InfoCard {
   liveArt?: (live: LiveContext) => string;
   /** Live readings shown under the illustration, refreshed while open. */
   liveStats?: (live: LiveContext) => Stat[];
+  /** The last 24 hours of one reading, as a mini chart. */
+  liveTrend?: Trend;
   body: string[];
   try?: string;
   sources: RefKey[];
@@ -54,6 +87,19 @@ function batteryArt(soc: number, batteryMw: number): string {
 
 const mw = (v: number) => `${v.toFixed(2)} MW`;
 const pct = (v: number) => `${Math.round(v * 100)}%`;
+const mwh = (v: number) => `${v.toFixed(1)} MWh`;
+/** Energy over the history, in MWh, from a power reading in MW. */
+const energyOf = (c: LiveContext, f: (s: Snapshot) => number) => c.history.reduce((t, s) => t + f(s), 0) * c.sampleHours;
+const peakOf = (c: LiveContext, f: (s: Snapshot) => number) => c.history.reduce((m, s) => Math.max(m, f(s)), 0);
+/** Share of its rating a source averaged over the history. */
+const capacityFactor = (c: LiveContext, f: (s: Snapshot) => number, rating: number) =>
+  c.history.length ? energyOf(c, f) / (rating * c.history.length * c.sampleHours) : 0;
+const duration = (hours: number) => {
+  if (!Number.isFinite(hours) || hours > 48) return "over 2 days";
+  const minutes = Math.round(hours * 60);
+  return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
+};
+const healthLost = (c: LiveContext) => (c.history.length ? Math.max(0, c.history[0].perovskiteHealth - c.now.perovskiteHealth) : 0);
 /** Output lost to heat at this cell temperature, by the model's own
  *  temperature coefficient. */
 const heatLoss = (cellTemp: number, tech: typeof SILICON) => Math.max(0, -tech.tempCoeff * (cellTemp - 25));
@@ -129,6 +175,7 @@ export const INFO: Record<InfoKey, InfoCard> = {
       ["Cloud", pct(now.cloud)],
       ["Air", `${now.ambient.toFixed(0)} °C, ${now.humidity.toFixed(0)}% humid`],
     ],
+    liveTrend: { label: "Sunlight", value: (s) => s.ghi, unit: "W/m²", color: "#e8913a", min: 0, max: 1100, digits: 0 },
     try: "At the control room console, press 12:00 and then Rain, and watch the irradiance and the solar output fall together.",
     sources: ["duffie2013", "haurwitz1945", "reno2012", "kasten1980", "pagasa"],
   },
@@ -148,12 +195,15 @@ export const INFO: Record<InfoKey, InfoCard> = {
       "Panels lose about 0.35% of their output for every degree they run above 25 °C, and in Philippine sun they often run at 55 to 65 °C. That is why a cool, bright morning can beat a hot afternoon. Wiring, dust, and the inverter take roughly another 17%.",
       "This farm is 3.6 MW peak, tilted 15° toward the south; the rows in the garden stand in for it, since the real thing would cover about 4 hectares. Over a year, a well-placed panel in Metro Manila makes about 1,400 kWh for each kW of its rating.",
     ],
-    liveStats: ({ now }) => [
-      ["Output", `${mw(now.siliconMw)} of ${PLANT.siliconMwp}`],
-      ["On the panels", `${now.poa.toFixed(0)} W/m²`],
-      ["Cells", `${now.cellTemp.toFixed(0)} °C`],
-      ["Lost to heat", pct(heatLoss(now.cellTemp, SILICON))],
+    liveStats: (c) => [
+      ["Output", `${mw(c.now.siliconMw)} of ${PLANT.siliconMwp}`],
+      ["Last 24 h", mwh(energyOf(c, (s) => s.siliconMw))],
+      ["Peak, 24 h", mw(peakOf(c, (s) => s.siliconMw))],
+      ["Capacity factor", pct(capacityFactor(c, (s) => s.siliconMw, PLANT.siliconMwp))],
+      ["Cells", `${c.now.cellTemp.toFixed(0)} °C, ${c.now.poa.toFixed(0)} W/m²`],
+      ["Lost to heat", pct(heatLoss(c.now.cellTemp, SILICON))],
     ],
+    liveTrend: { label: "Silicon output", value: (s) => s.siliconMw, unit: "MW", color: "#3b7bff", min: 0, max: PLANT.siliconMwp },
     try: "Press 10:00 and then 14:00 with Clear weather, and compare the cell temperature and the output on the big display.",
     sources: ["dupre2015", "duffie2013", "dobos2014", "doeSolar"],
   },
@@ -173,12 +223,15 @@ export const INFO: Record<InfoKey, InfoCard> = {
       "Perovskites are crystals that absorb sunlight very strongly, so a layer thinner than a thousandth of a millimetre does the work of thick silicon. They can be printed at low temperature onto glass or flexible film, which is why Japan is developing lightweight, flexible perovskite panels for walls, roofs, and places silicon can't go, and plans about 20 GW of them by 2040.",
       "They also lose less to heat than silicon: about 0.17% per degree instead of 0.35%. Their weakness is durability: moisture, oxygen, heat, and light break them down. This pilot row loses a little output with every humid hour, depending on how well it is sealed.",
     ],
-    liveStats: ({ now, encapsulation }) => [
-      ["Output", `${mw(now.perovskiteMw)} of ${PLANT.perovskiteMwp}`],
-      ["Health", `${(now.perovskiteHealth * 100).toFixed(2)}%`],
-      ["Seal", encapsulation],
-      ["Lost to heat", pct(heatLoss(now.cellTemp, PEROVSKITE))],
+    liveStats: (c) => [
+      ["Output", `${mw(c.now.perovskiteMw)} of ${PLANT.perovskiteMwp}`],
+      ["Last 24 h", mwh(energyOf(c, (s) => s.perovskiteMw))],
+      ["Health", `${(c.now.perovskiteHealth * 100).toFixed(2)}%`],
+      ["Health lost, 24 h", `${(healthLost(c) * 100).toFixed(3)} points`],
+      ["Seal", c.encapsulation],
+      ["Lost to heat", pct(heatLoss(c.now.cellTemp, PEROVSKITE))],
     ],
+    liveTrend: { label: "Pilot row output", value: (s) => s.perovskiteMw, unit: "MW", color: "#a8492b", min: 0, max: PLANT.perovskiteMwp },
     try: "Set the seal to None, press Rain and Run 360×, and watch the pilot's health fall on the big display.",
     sources: ["green2014", "jost2020", "boyd2019", "meti2024"],
   },
@@ -186,11 +239,23 @@ export const INFO: Record<InfoKey, InfoCard> = {
     title: "Wind turbines",
     art: windArt(),
     liveArt: ({ now, windBreaker }) => windArt(now, !windBreaker),
-    liveStats: ({ now, windBreaker }) => [
-      ["Wind", `${now.windSpeed.toFixed(1)} m/s`],
-      ["Output", `${mw(now.windMw)} of ${WIND_RATED}`],
-      ["Rotors", !windBreaker ? "braked (breaker open)" : now.turbinesFeathered ? "feathered, past cut-out" : now.windMw > 0 ? "turning" : "idle, below cut-in"],
+    liveStats: (c) => [
+      ["Wind", `${c.now.windSpeed.toFixed(1)} m/s`],
+      ["Output", `${mw(c.now.windMw)} of ${WIND_RATED}`],
+      [
+        "Rotors",
+        !c.windBreaker
+          ? "braked (breaker open)"
+          : c.now.turbinesFeathered
+            ? "feathered, past cut-out"
+            : c.now.windMw > 0
+              ? `${c.rpm.toFixed(1)} rpm`
+              : "idle, below cut-in",
+      ],
+      ["Last 24 h", mwh(energyOf(c, (s) => s.windMw))],
+      ["Capacity factor", pct(capacityFactor(c, (s) => s.windMw, WIND_RATED))],
     ],
+    liveTrend: { label: "Wind output", value: (s) => s.windMw, unit: "MW", color: "#1d9f80", min: 0, max: WIND_RATED },
     body: [
       "The power carried by the wind rises with the cube of its speed: double the wind, eight times the power. A turbine makes nothing below about 3.5 m/s, follows that cube up to about 12 m/s, then turns its blades to hold its full rating; when the wind averages over 25 m/s it feathers them and brakes to protect itself.",
       "That is why a typhoon, for all its wind, produces nothing here. The two turbines are 1.5 MW each. The ones in the garden are scale models: a real 1.5 MW turbine has a rotor about 77 m across on a tower about 80 m tall, turning at 10 to 20 rpm.",
@@ -202,11 +267,26 @@ export const INFO: Record<InfoKey, InfoCard> = {
     title: "Battery storage",
     art: batteryArt(0.6, 0),
     liveArt: ({ now }) => batteryArt(now.soc, now.batteryMw),
-    liveStats: ({ now, batteryMode }) => [
-      ["Stored", `${(now.soc * PLANT.batteryMwh).toFixed(1)} of ${PLANT.batteryMwh} MWh`],
-      ["Power", now.batteryMw < -0.01 ? `charging ${mw(-now.batteryMw)}` : now.batteryMw > 0.01 ? `giving ${mw(now.batteryMw)}` : "idle"],
-      ["Mode", batteryMode],
-    ],
+    liveStats: (c) => {
+      const { now } = c;
+      const energy = PLANT.batteryMwh;
+      // At the current rate, by the model's own limits and one-way losses.
+      const eta =
+        now.batteryMw > 0.01
+          ? `lasts ${duration(((now.soc - SOC_MIN) * energy * BATTERY_ONE_WAY_EFFICIENCY) / now.batteryMw)}`
+          : now.batteryMw < -0.01
+            ? `full in ${duration(((SOC_MAX - now.soc) * energy) / (-now.batteryMw * BATTERY_ONE_WAY_EFFICIENCY))}`
+            : "holding";
+      return [
+        ["Stored", `${(now.soc * energy).toFixed(1)} of ${energy} MWh`],
+        ["Power", now.batteryMw < -0.01 ? `charging ${mw(-now.batteryMw)}` : now.batteryMw > 0.01 ? `giving ${mw(now.batteryMw)}` : "idle"],
+        ["At this rate", eta],
+        ["Taken in, 24 h", mwh(energyOf(c, (s) => Math.max(0, -s.batteryMw)))],
+        ["Given back, 24 h", mwh(energyOf(c, (s) => Math.max(0, s.batteryMw)))],
+        ["Mode", c.batteryMode],
+      ];
+    },
+    liveTrend: { label: "Charge", value: (s) => s.soc * 100, unit: "%", color: "#8a5fe0", min: 0, max: 100, digits: 0 },
     body: [
       "The battery holds 6 MWh and can charge or discharge at up to 3 MW. In Auto, it stores whatever the plant makes beyond the load. On the grid it saves that energy for the evening peak: it covers only the part of the load above about 2.1 MW, so its charge lasts through the evening while the main grid supplies the rest. Cut off from the grid, it covers all it can.",
       "About 15% of the energy is lost on the round trip (85% comes back, typical of large lithium-ion systems), and the battery is kept between 10% and 95% full to protect it.",
@@ -242,6 +322,7 @@ export const INFO: Record<InfoKey, InfoCard> = {
       ["Own share, 24 h", pct(day.renewableShare)],
       ["CO₂ avoided, 24 h", `${day.co2AvoidedT.toFixed(1)} t`],
     ],
+    liveTrend: { label: "From the grid (below the line: exported)", value: (s) => s.gridMw, unit: "MW", color: "#55607a" },
     try: "Press 00:00 and Rain, then open the Grid tie and Wind breakers.",
     sources: ["npc2025", "doeNgef"],
   },
@@ -249,11 +330,14 @@ export const INFO: Record<InfoKey, InfoCard> = {
     title: "The community load",
     art: loadArt(),
     liveArt: ({ now }) => loadArt(now),
-    liveStats: ({ now }) => {
+    liveStats: (c) => {
+      const { now } = c;
       const own = Math.max(0, now.loadMw - Math.max(0, now.gridMw) - now.unservedMw);
       return [
         ["Load now", `${mw(now.loadMw)} of ${PLANT.peakLoadMw} peak`],
-        ["From the plant", now.loadMw > 0 ? pct(own / now.loadMw) : "–"],
+        ["From the plant now", now.loadMw > 0 ? pct(own / now.loadMw) : "–"],
+        ["Used, 24 h", mwh(energyOf(c, (s) => s.loadMw))],
+        ["Peak, 24 h", mw(peakOf(c, (s) => s.loadMw))],
       ];
     },
     body: [
@@ -273,12 +357,14 @@ export const INFO: Record<InfoKey, InfoCard> = {
       "Light passes through the glass and the transparent electrode into the perovskite, where it frees electrons. The electron-transport layer carries electrons one way and the hole-transport layer carries the gaps they leave the other way, so the two flow out as current.",
       "Each choice of material trades efficiency, cost, and stability against each other. The best single-junction lab cells now reach about 27% efficiency, close to silicon's best; keeping that for years outdoors is the open problem.",
     ],
-    liveStats: ({ now, encapsulation }) => [
-      ["Pilot row health", `${(now.perovskiteHealth * 100).toFixed(2)}%`],
-      ["Humidity", `${now.humidity.toFixed(0)}%`],
-      ["Cells", `${now.cellTemp.toFixed(0)} °C`],
-      ["Seal", encapsulation],
+    liveStats: (c) => [
+      ["Pilot row health", `${(c.now.perovskiteHealth * 100).toFixed(2)}%`],
+      ["Lost, 24 h", `${(healthLost(c) * 100).toFixed(3)} points`],
+      ["Humidity", `${c.now.humidity.toFixed(0)}%`],
+      ["Cells", `${c.now.cellTemp.toFixed(0)} °C`],
+      ["Seal", c.encapsulation],
     ],
+    liveTrend: { label: "Pilot row health", value: (s) => s.perovskiteHealth * 100, unit: "%", color: "#a8492b", digits: 3 },
     sources: ["green2014", "nrelChart", "boyd2019"],
   },
   degradation: {
@@ -293,12 +379,14 @@ export const INFO: Record<InfoKey, InfoCard> = {
       "Humidity often above 80%, cell temperatures above 60 °C, and intense year-round sun are the three stressors perovskites handle worst. A design that lasts years in a dry, mild climate can fade within months here.",
       "Researchers compare stability by T80, the time a cell takes to fall to 80% of its starting output, under agreed test conditions. Before deploying perovskites in the Philippines, they would need testing under local conditions, with real sealed modules and measured weather. This lab shows the trade-offs; it does not predict a product's lifetime.",
     ],
-    liveStats: ({ now, encapsulation }) => [
-      ["Pilot row health", `${(now.perovskiteHealth * 100).toFixed(2)}%`],
-      ["Humidity", `${now.humidity.toFixed(0)}%`],
-      ["Cells", `${now.cellTemp.toFixed(0)} °C`],
-      ["Seal", encapsulation],
+    liveStats: (c) => [
+      ["Pilot row health", `${(c.now.perovskiteHealth * 100).toFixed(2)}%`],
+      ["Lost, 24 h", `${(healthLost(c) * 100).toFixed(3)} points`],
+      ["Humidity", `${c.now.humidity.toFixed(0)}%`],
+      ["Cells", `${c.now.cellTemp.toFixed(0)} °C`],
+      ["Seal", c.encapsulation],
     ],
+    liveTrend: { label: "Pilot row health", value: (s) => s.perovskiteHealth * 100, unit: "%", color: "#a8492b", digits: 3 },
     sources: ["boyd2019", "khenkin2020", "pagasa"],
   },
 };
