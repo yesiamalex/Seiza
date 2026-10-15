@@ -28,7 +28,9 @@ export interface WorldConfig {
    * The sky. Leave it out for the original still sunset. With
    * `{ "cycle": "realtime" }` the sun follows Philippine time and the
    * weather follows a shared schedule, so every visitor sees the same sky
-   * (see src/sky/). Ignored while an uploaded skybox image is in use.
+   * (see src/sky/). An uploaded skybox image covers the sky, though the
+   * lights still follow it. An editor can override it for one room from
+   * the edit panel (RoomSky in src/multiplayer/types.ts).
    */
   sky?: SkyConfig;
   spawnPoint: { x: number; y: number; z: number };

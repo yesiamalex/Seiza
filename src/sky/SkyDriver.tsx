@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { SkyClock, skyState, type SkyConfig } from "./skyState";
+import type { RoomSky } from "../multiplayer/types";
 import { NIGHT_HORIZON_COLOR, SUNSET_HORIZON_COLOR } from "../scene/SunsetSky";
 
 /** How often the clock recomputes the sky, in seconds of real time. The sun
@@ -48,8 +49,9 @@ const OVERCAST_SKY = new THREE.Color("#c9ced6");
  * and fog from it each frame. Renders the lights itself so a fixed-sky
  * world keeps Scene.tsx's original ones untouched.
  */
-export function SkyDriver({ config }: { config: SkyConfig }) {
-  const clock = useMemo(() => new SkyClock(config), [config]);
+export function SkyDriver({ config, room = null }: { config: SkyConfig; room?: RoomSky | null }) {
+  // A new room sky restarts the clock, so a change shows straight away.
+  const clock = useMemo(() => new SkyClock(config, room), [config, room]);
   const since = useRef(UPDATE_INTERVAL);
   const hemi = useRef<THREE.HemisphereLight>(null);
   const ambient = useRef<THREE.AmbientLight>(null);

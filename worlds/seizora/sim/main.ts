@@ -1,8 +1,9 @@
 // Seizora's control room: runs the microgrid (energy.ts) on Seiza's shared
 // weather engine and draws it. In Live mode it follows the same clock and
-// weather schedule as the world's sky, so the numbers here match the sky
-// visitors are standing under; Simulate mode lets a class scrub time,
-// speed it up, and call in weather.
+// weather schedule as the world's sky, including a time or weather an
+// editor has set for the room, so the numbers here match the sky visitors
+// are standing under; Simulate mode lets a class scrub time, speed it up,
+// and call in weather.
 import {
   philippineTime,
   scheduledWeather,
@@ -13,6 +14,8 @@ import {
   WeatherState,
   type WeatherType,
 } from "../../../src/sky/weather";
+import { roomSkyNow, roomSkySpeed, roomSkyWeather } from "../../../src/sky/roomSky";
+import type { RoomSky } from "../../../src/multiplayer/types";
 import {
   ABSORBERS,
   DEFAULT_CONTROLS,
@@ -34,6 +37,7 @@ const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySe
 // --- state -------------------------------------------------------------------
 
 const WORLD_SITE = "cebu"; // matches worlds/seizora/world/world.json
+const WORLD_ROOM = "seizora"; // the world's room id, its world.json id
 let mode: "live" | "sim" = "live";
 let siteKey = WORLD_SITE;
 let speed = 10; // simulated minutes per real second, in Simulate mode
@@ -41,7 +45,9 @@ let simDay = philippineTime(new Date()).dayOfYear;
 let simHour = 6;
 let simWeather: WeatherType = "clear";
 const controls: Controls = { ...DEFAULT_CONTROLS };
-let weather = new WeatherState(scheduledWeather(new Date()));
+/** The time and weather an editor set for the world's room, if any. */
+let roomSky: RoomSky | null = null;
+let weather = new WeatherState(liveWeather());
 let grid = new Microgrid();
 let simMinutes = 0;
 const history: Snapshot[] = [];
@@ -129,27 +135,75 @@ function reset() {
   grid = new Microgrid();
   history.length = 0;
   simMinutes = 0;
-  weather = new WeatherState(mode === "live" ? scheduledWeather(new Date()) : simWeather);
+  weather = new WeatherState(mode === "live" ? liveWeather() : simWeather);
 }
 
 // --- the clock -------------------------------------------------------------------
 
+/** The time the world's sky shows now: real time, or the room's own. */
+function liveDate(): Date {
+  return roomSky ? roomSkyNow(roomSky) : new Date();
+}
+
+function liveWeather(): WeatherType {
+  return roomSkyWeather(roomSky) ?? scheduledWeather(liveDate());
+}
+
 function currentTime(): { day: number; hour: number } {
   if (mode === "live") {
-    const t = philippineTime(new Date());
+    const t = philippineTime(liveDate());
     return { day: t.dayOfYear, hour: t.hour };
   }
   return { day: simDay, hour: simHour };
 }
+
+// Live mode asks the room server for the room's sky every so often, the
+// same setting the world's sky follows (see the edit panel's "Sky and
+// time"). Without an answer it keeps real time.
+const ROOM_SKY_POLL_MS = 15_000;
+const roomNote = $("#room-note");
+async function pollRoomSky() {
+  if (document.hidden) return;
+  try {
+    const res = await fetch(`/rooms/${encodeURIComponent(WORLD_ROOM)}/sky`, { cache: "no-store" });
+    if (!res.ok) return;
+    const next = ((await res.json()) as { roomSky?: RoomSky | null }).roomSky ?? null;
+    if (JSON.stringify(next) === JSON.stringify(roomSky)) return;
+    roomSky = next;
+    // The world's sky switches weather at once on a change; so do we.
+    if (mode === "live") weather = new WeatherState(liveWeather());
+    showRoomNote();
+  } catch {
+    // Offline or an older server: stay on real time.
+  }
+}
+function showRoomNote() {
+  roomNote.hidden = !roomSky;
+  if (!roomSky) return;
+  const fixed = roomSkyWeather(roomSky);
+  const time =
+    roomSky.mode === "fixed"
+      ? `held at ${hhmm(roomSky.hour ?? 12)}`
+      : roomSky.mode === "running"
+        ? `running at ${roomSky.scale ?? 1}× speed`
+        : "real time";
+  roomNote.textContent =
+    `An editor set the world's sky: ${time}, ${fixed ? WEATHER[fixed].label.toLowerCase() : "scheduled weather"}. ` +
+    "Live follows it. Reset it in the world's edit panel to return to real Philippine time.";
+}
+void pollRoomSky();
+setInterval(() => void pollRoomSky(), ROOM_SKY_POLL_MS);
+document.addEventListener("visibilitychange", () => void pollRoomSky());
 
 let lastFrame = performance.now();
 let accumulator = 0;
 function tick(now: number) {
   const dt = Math.min(0.25, (now - lastFrame) / 1000);
   lastFrame = now;
-  // Live: real time, one simulated minute per real minute, stepped a few
-  // times a second. Simulate: `speed` simulated minutes per real second.
-  const minutes = mode === "live" ? dt / 60 : dt * speed;
+  // Live: the world's clock, one simulated minute per real minute (or the
+  // room sky's speed), stepped a few times a second. Simulate: `speed`
+  // simulated minutes per real second.
+  const minutes = mode === "live" ? (dt / 60) * roomSkySpeed(roomSky) : dt * speed;
   accumulator += minutes;
   if (mode === "sim" && minutes > 0) {
     simHour += minutes / 60;
@@ -167,7 +221,7 @@ function tick(now: number) {
     const m = Math.min(stepSize || accumulator, accumulator);
     accumulator -= m;
     simMinutes += m;
-    weather.setType(mode === "live" ? scheduledWeather(new Date()) : simWeather);
+    weather.setType(mode === "live" ? liveWeather() : simWeather);
     weather.step(m, simMinutes);
     const { day, hour } = currentTime();
     const s = grid.step(m, day, hour, SITES[siteKey], weather, controls);
@@ -203,7 +257,7 @@ function setNode(id: string, mw: number, on: boolean) {
 
 function render(s: Snapshot) {
   $("#clock-time").textContent = hhmm(s.hour);
-  $("#clock-date").textContent = `${dateLabel(s.dayOfYear)} · ${SITES[siteKey].label} · ${WEATHER[weather.type].label}${mode === "live" ? " · live" : ""}`;
+  $("#clock-date").textContent = `${dateLabel(s.dayOfYear)} · ${SITES[siteKey].label} · ${WEATHER[weather.type].label}${mode === "live" ? (roomSky ? " · live · room sky" : " · live") : ""}`;
   $("#r-sun").textContent = s.sunElevation > 0 ? `${fmt(s.sunElevation, 0)}° up` : "below horizon";
   $("#r-ghi").textContent = `${fmt(s.ghi, 0)} W/m²`;
   $("#r-poa").textContent = `${fmt(s.poa, 0)} W/m²`;

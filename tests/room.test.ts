@@ -130,6 +130,37 @@ describe.skipIf(!built)("room server", () => {
     b.socket.close();
   });
 
+  it("shares a room sky, stamps its start time, and gives it to newcomers", async () => {
+    const room = freshRoom();
+    const a = await client(room, "A", ["batch"]);
+    const b = await client(room, "B", ["batch"]);
+    const before = Date.now();
+    a.send({ type: "setRoomSky", sky: { mode: "running", hour: 30.1, scale: 999, weather: "rain", setAt: 1 } });
+    const changed = await until(() => b.received.find((m) => m.type === "roomSkyChanged"));
+    const sky = changed.type === "roomSkyChanged" ? changed.sky : null;
+    // Hour wrapped into the day, an unknown speed back to real speed, and
+    // the client's own setAt replaced by the server's clock.
+    expect(sky).toMatchObject({ mode: "running", hour: 6.1, scale: 1, weather: "rain" });
+    expect(sky?.setAt).toBeGreaterThanOrEqual(before - 1000);
+
+    a.send({ type: "setRoomSky", sky: { mode: "fixed" } as never });
+    a.send({ type: "setRoomSky", sky: { mode: "fixed", hour: 18.5, weather: "snow" as never } });
+    const late = await client(room, "Late", ["batch"]);
+    const welcome = late.received.find((m) => m.type === "welcome");
+    // The malformed one (no hour) was ignored; an unknown weather is auto.
+    expect(welcome?.type === "welcome" && welcome.roomSky).toEqual({ mode: "fixed", hour: 18.5, weather: "auto" });
+
+    // The read-only view that Seizora's control room polls.
+    const view = await fetch(`http://${worker.address}:${worker.port}/rooms/${room}/sky`);
+    expect(await view.json()).toEqual({ roomSky: { mode: "fixed", hour: 18.5, weather: "auto" } });
+
+    a.send({ type: "setRoomSky", sky: null });
+    await until(() => late.received.find((m) => m.type === "roomSkyChanged" && m.sky === null));
+    a.socket.close();
+    b.socket.close();
+    late.socket.close();
+  });
+
   it("passes a voice 'busy' signal through untouched", async () => {
     const room = freshRoom();
     const a = await client(room, "A", ["batch"]);

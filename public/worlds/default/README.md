@@ -45,7 +45,7 @@ any:
 | `displayName` | Shown on the join screen and in the HUD. |
 | `sceneUrl` | Optional. A glTF environment that replaces the built-in rooms. |
 | `environmentCollision` | Optional. Set to `false` to stop `sceneUrl` environments from blocking movement. Defaults to `true`. |
-| `sky` | Optional. `{ "cycle": "realtime", "site", "weather", "timeScale"? }` moves the sky with Philippine time and a shared weather schedule; `"cycle": "fixed"`, or leaving it out, keeps the still sunset. See DOCS.md, "Sky and weather". |
+| `sky` | Optional. `{ "cycle": "realtime", "site", "weather", "timeScale"? }` moves the sky with Philippine time and a shared weather schedule; `"cycle": "fixed"`, or leaving it out, keeps the still sunset. Editors can override the time and weather for one room from the edit panel. See DOCS.md, "Sky and weather". |
 | `spawnPoint` | Where players appear, as `{ "x", "y", "z" }`. |
 | `defaultAvatarUrl` | A `.vrm` URL for first-time visitors, or `""` for the designer's default look. |
 | `defaultAvatars` | Optional `.vrm` presets: `[{ "label", "url", "author"?, "license"?, "licenseUrl"? }]`. The optional fields appear as a credit line. |

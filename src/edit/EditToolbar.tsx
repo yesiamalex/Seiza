@@ -3,6 +3,9 @@ import type { WorldObject } from "../multiplayer/types";
 import { optimizeVrmAvatar } from "../avatar/optimizeVrm";
 import { compressImage } from "./compressImage";
 import { editAuthHeaders } from "./editAuth";
+import { SkyControls } from "./SkyControls";
+import type { RoomSky } from "../multiplayer/types";
+import type { SkyConfig } from "../sky/skyState";
 import { BAR_LABEL_CLASS, barButtonActiveStyle, barButtonStyle, inputStyle, panelStyle, pillButtonActiveStyle, pillButtonStyle, popoverStyle } from "../ui/styles";
 import { ChairIcon, CloseIcon, EditIcon, MinimizeIcon, ScreenShareIcon, SignIcon, TextBoardIcon } from "../ui/icons";
 
@@ -46,6 +49,10 @@ interface EditToolbarProps {
   onSetEnvironment: (url: string | null) => void;
   skyboxUrl: string | null;
   onSetSkybox: (url: string | null) => void;
+  /** world.json's sky, which a cleared room sky goes back to. */
+  worldSky?: SkyConfig;
+  roomSky: RoomSky | null;
+  onSetRoomSky: (sky: RoomSky | null) => void;
   /** False while the panel is minimised: still in edit mode, with the
    *  world uncovered. */
   panelOpen: boolean;
@@ -83,6 +90,9 @@ export function EditToolbar({
   onSetEnvironment,
   skyboxUrl,
   onSetSkybox,
+  worldSky,
+  roomSky,
+  onSetRoomSky,
   panelOpen,
   onMinimize,
   onExit,
@@ -599,6 +609,13 @@ export function EditToolbar({
               + Model
             </button>
           </div>
+          <SkyControls
+            worldSky={worldSky}
+            roomSky={roomSky}
+            onSetRoomSky={onSetRoomSky}
+            connected={connected}
+            skyboxInUse={skyboxUrl !== null}
+          />
         </div>
       )}
     </div>

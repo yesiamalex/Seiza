@@ -1,4 +1,6 @@
 import * as THREE from "three";
+import type { RoomSky } from "../multiplayer/types";
+import { atPhilippineHour, roomSkyNow, roomSkyWeather } from "./roomSky";
 import {
   philippineTime,
   scheduledWeather,
@@ -83,33 +85,42 @@ function urlOverrides(): { hour?: number; weather?: WeatherType; scale?: number 
   };
 }
 
-/** Keeps skyState in step with a world's sky settings. */
+/**
+ * Keeps skyState in step with a world's sky settings, or with the room's
+ * own sky (set from the edit panel) when there is one. Priority: the
+ * ?sky… URL preview, then the room sky, then world.json.
+ */
 export class SkyClock {
   private site: Site;
   private weather: WeatherState | null = null;
   private lastSimMs = 0;
-  private readonly startReal = Date.now();
+  private readonly startReal: number;
   private readonly startSim: number;
   private readonly scale: number;
   private readonly fixedWeather: WeatherType | null;
+  /** The room sky driving the time, unless a URL preview hour overrides it. */
+  private readonly room: RoomSky | null;
 
-  constructor(private readonly config: SkyConfig) {
+  constructor(private readonly config: SkyConfig, room: RoomSky | null = null) {
     const o = urlOverrides();
+    const now = Date.now();
     this.site = SITES[config.site ?? "manila"] ?? SITES.manila;
+    const roomWeather = roomSkyWeather(room);
+    const configWeather = config.weather && config.weather !== "auto" ? config.weather : null;
+    // A room sky decides the weather completely, "auto" included.
+    this.fixedWeather = o.weather ?? (room ? roomWeather : configWeather);
+
+    // A preview hour starts today's clock at that Philippine hour. A room
+    // sky's time comes from roomSkyNow, shared with Seizora's control room.
+    this.room = o.hour === undefined ? room : null;
+    this.startReal = now;
+    this.startSim = o.hour !== undefined ? atPhilippineHour(now, o.hour) : now;
     this.scale = o.scale ?? config.timeScale ?? 1;
-    this.fixedWeather = o.weather ?? (config.weather && config.weather !== "auto" ? config.weather : null);
-    // A preview hour starts today's clock at that Philippine hour.
-    if (o.hour !== undefined) {
-      const now = new Date();
-      const { hour } = philippineTime(now);
-      this.startSim = now.getTime() + (o.hour - hour) * 3600_000;
-    } else {
-      this.startSim = Date.now();
-    }
   }
 
   /** The simulated instant now. */
   now(): Date {
+    if (this.room) return roomSkyNow(this.room);
     return new Date(this.startSim + (Date.now() - this.startReal) * this.scale);
   }
 

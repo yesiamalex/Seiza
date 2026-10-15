@@ -1,4 +1,4 @@
-import { Component, Suspense, memo, useEffect, type ReactNode } from "react";
+import { Component, Suspense, memo, useEffect, useMemo, type ReactNode } from "react";
 import type { LightZone } from "../multiplayer/types";
 import { useGLTF } from "@react-three/drei";
 import { useThree } from "@react-three/fiber";
@@ -11,6 +11,7 @@ import type { Seat } from "./layout";
 import { LightPool } from "./LightPool";
 import { SkyDriver } from "../sky/SkyDriver";
 import type { SkyConfig } from "../sky/skyState";
+import type { RoomSky } from "../multiplayer/types";
 
 interface SceneProps {
   sceneUrl?: string;
@@ -36,6 +37,9 @@ interface SceneProps {
   /** The world's sky (world.json `sky`). Absent or "fixed" keeps the
    *  original still sunset; "realtime" moves it (src/sky/). */
   sky?: SkyConfig;
+  /** The room's own sky from the edit panel. While set, the sky moves
+   *  even if the world's own sky is the still sunset. */
+  roomSky?: RoomSky | null;
 }
 
 /** How often the frozen shadow map refreshes anyway, to pick up geometry
@@ -176,8 +180,14 @@ export const Scene = memo(function Scene({
   onToggleLight,
   shadowRefreshKey,
   sky,
+  roomSky = null,
 }: SceneProps) {
-  const moving = sky?.cycle === "realtime";
+  const moving = sky?.cycle === "realtime" || roomSky !== null;
+  // A room sky over a still-sunset world still needs a site to put the sun.
+  const skyConfig = useMemo<SkyConfig>(
+    () => (sky?.cycle === "realtime" ? sky : { cycle: "realtime", site: sky?.site ?? "manila" }),
+    [sky]
+  );
   return (
     <>
       <OnDemandShadows refreshKey={shadowRefreshKey} />
@@ -197,8 +207,8 @@ export const Scene = memo(function Scene({
           what keeps the shadows soft. */}
       {/* A moving sky brings its own lights, which follow the sun (see
           SkyDriver); the fixed sunset keeps these. */}
-      {moving && sky ? (
-        <SkyDriver config={sky} />
+      {moving ? (
+        <SkyDriver config={skyConfig} room={roomSky} />
       ) : (
         <>
           <hemisphereLight args={["#ffe3c2", "#d9b48a", 1.05]} />

@@ -6,6 +6,9 @@ import {
   type ClientMessage,
   DEFAULT_LIGHTS,
   type LightZone,
+  type RoomSky,
+  ROOM_SKY_SCALES,
+  ROOM_SKY_WEATHER,
   type PlayerMedia,
   type PlayerMovement,
   type PlayerState,
@@ -23,6 +26,7 @@ import type { Env } from "./index";
 const OBJECTS_STORAGE_KEY = "objects";
 const ENVIRONMENT_STORAGE_KEY = "environmentUrl";
 const SKYBOX_STORAGE_KEY = "skyboxUrl";
+const ROOM_SKY_STORAGE_KEY = "roomSky";
 const LIGHTS_STORAGE_KEY = "lights";
 /** A switch can't be flicked faster than this per connection, so a held
  *  click or a script can't strobe the room for everyone. */
@@ -148,6 +152,8 @@ export class SeizaRoom extends DurableObject<Env> {
   objects = new Map<string, WorldObject>();
   environmentUrl: string | null = null;
   skyboxUrl: string | null = null;
+  /** Time-of-day and weather override from the edit panel (see RoomSky). */
+  roomSky: RoomSky | null = null;
   lights: Record<LightZone, boolean> = { ...DEFAULT_LIGHTS };
   /** Entry password for this room, or null when anyone can join. Unlike
    *  SEIZA_EDITOR_PASSWORD/SEIZA_ADMIN_KEY (Worker secrets, fixed at
@@ -186,12 +192,17 @@ export class SeizaRoom extends DurableObject<Env> {
       if (stored) for (const obj of stored) this.objects.set(obj.id, obj);
       this.environmentUrl = (await ctx.storage.get<string | null>(ENVIRONMENT_STORAGE_KEY)) ?? null;
       this.skyboxUrl = (await ctx.storage.get<string | null>(SKYBOX_STORAGE_KEY)) ?? null;
+      this.roomSky = (await ctx.storage.get<RoomSky | null>(ROOM_SKY_STORAGE_KEY)) ?? null;
       this.lights = { ...this.lights, ...((await ctx.storage.get<Record<LightZone, boolean>>(LIGHTS_STORAGE_KEY)) ?? {}) };
       this.roomPassword = (await ctx.storage.get<string | null>(ROOM_PASSWORD_STORAGE_KEY)) ?? null;
     });
   }
 
   async fetch(request: Request): Promise<Response> {
+    if (request.method === "GET" && new URL(request.url).pathname.endsWith("/sky")) {
+      await this.ready;
+      return Response.json({ roomSky: this.roomSky }, { headers: { "Cache-Control": "no-store" } });
+    }
     if (request.headers.get("Upgrade") !== "websocket") {
       return new Response("Expected a WebSocket upgrade", { status: 426 });
     }
@@ -280,6 +291,7 @@ export class SeizaRoom extends DurableObject<Env> {
           environmentUrl: this.environmentUrl,
           skyboxUrl: this.skyboxUrl,
           lights: this.lights,
+          roomSky: this.roomSky,
         };
         ws.send(JSON.stringify(welcome));
         this.broadcast({ type: "playerJoined", player }, attachment.connId);
@@ -589,6 +601,15 @@ export class SeizaRoom extends DurableObject<Env> {
         this.skyboxUrl = next;
         void this.ctx.storage.put(SKYBOX_STORAGE_KEY, next);
         this.broadcast({ type: "skyboxChanged", url: next });
+        break;
+      }
+      case "setRoomSky": {
+        if (this.editingRequiresAuth() && !attachment.isEditor) return;
+        const next = message.sky === null ? null : sanitizeRoomSky(message.sky, Date.now());
+        if (next === undefined) return; // malformed: ignore rather than guess
+        this.roomSky = next;
+        void this.ctx.storage.put(ROOM_SKY_STORAGE_KEY, next);
+        this.broadcast({ type: "roomSkyChanged", sky: next });
         break;
       }
       case "setLight": {
@@ -968,4 +989,24 @@ export function timingSafeEqual(a: unknown, b: string): boolean {
 
 function isFiniteInBounds(n: unknown): n is number {
   return typeof n === "number" && Number.isFinite(n) && Math.abs(n) <= BOUNDS_LIMIT;
+}
+
+/**
+ * Checks a room sky from a client. Returns null for "no override",
+ * undefined for anything malformed, and otherwise a clean copy. The server
+ * stamps `setAt` itself, so a running clock starts from one shared moment.
+ */
+export function sanitizeRoomSky(raw: unknown, now: number): RoomSky | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const input = raw as Record<string, unknown>;
+  const mode = input.mode;
+  if (mode !== "realtime" && mode !== "fixed" && mode !== "running") return undefined;
+  const weather = ROOM_SKY_WEATHER.includes(input.weather as never) ? (input.weather as RoomSky["weather"]) : "auto";
+  if (mode === "realtime") return { mode, weather };
+  if (typeof input.hour !== "number" || !Number.isFinite(input.hour)) return undefined;
+  // Wrapped into a day, to the minute.
+  const hour = Math.round((((input.hour % 24) + 24) % 24) * 60) / 60;
+  if (mode === "fixed") return { mode, hour, weather };
+  const scale = ROOM_SKY_SCALES.includes(input.scale as never) ? (input.scale as number) : 1;
+  return { mode, hour, scale, weather, setAt: now };
 }

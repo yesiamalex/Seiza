@@ -4,6 +4,7 @@ import type {
   ChatMessage,
   ClientMessage,
   LightZone,
+  RoomSky,
   PlayerMedia,
   PlayerState,
   Posture,
@@ -119,6 +120,10 @@ export interface MultiplayerState {
   skyboxUrl: string | null;
   setSkybox: (url: string | null) => void;
   /** Light-switch state per zone, shared by everyone in the room. */
+  /** The room's sky override from the edit panel, or null for the
+   *  world's own sky. */
+  roomSky: RoomSky | null;
+  setRoomSky: (sky: RoomSky | null) => void;
   lights: Record<LightZone, boolean>;
   setLight: (zone: LightZone, on: boolean) => void;
 }
@@ -186,6 +191,7 @@ export function useRoomSocket(
   const [roomFull, setRoomFull] = useState<number | null>(null);
   const [environmentUrl, setEnvironmentUrl] = useState<string | null>(null);
   const [skyboxUrl, setSkyboxUrl] = useState<string | null>(null);
+  const [roomSky, setRoomSkyState] = useState<RoomSky | null>(null);
   const [lights, setLights] = useState<Record<LightZone, boolean>>({ ...DEFAULT_LIGHTS });
   const onVoiceSignalRef = useRef(onVoiceSignal);
   onVoiceSignalRef.current = onVoiceSignal;
@@ -238,6 +244,9 @@ export function useRoomSocket(
   const setMedia = useCallback((media: PlayerMedia) => send({ type: "setMedia", media }), [send]);
   const setEnvironment = useCallback((url: string | null) => send({ type: "setEnvironment", url }), [send]);
   const setSkybox = useCallback((url: string | null) => send({ type: "setSkybox", url }), [send]);
+  // Not applied locally: the server stamps a running clock's start time,
+  // so everyone (this browser included) waits for roomSkyChanged.
+  const setRoomSky = useCallback((sky: RoomSky | null) => send({ type: "setRoomSky", sky }), [send]);
   // Flipped locally straight away so the switch feels instant; the
   // server's lightChanged broadcast (or the next welcome) settles it.
   const setLight = useCallback(
@@ -377,11 +386,15 @@ export function useRoomSocket(
             setEnvironmentUrl(msg.environmentUrl);
             // Older room servers predate skyboxes and omit the field.
             setSkyboxUrl(msg.skyboxUrl ?? null);
+            setRoomSkyState(msg.roomSky ?? null);
             setLights({ ...DEFAULT_LIGHTS, ...(msg.lights ?? {}) });
             break;
           }
           case "passwordRequired":
             setPasswordRequired(true);
+            break;
+          case "roomSkyChanged":
+            setRoomSkyState(msg.sky);
             break;
           case "skyboxChanged":
             setSkyboxUrl(msg.url);
@@ -584,6 +597,8 @@ export function useRoomSocket(
     setEnvironment,
     skyboxUrl,
     setSkybox,
+    roomSky,
+    setRoomSky,
     lights,
     setLight,
   };

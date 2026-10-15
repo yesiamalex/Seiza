@@ -260,6 +260,8 @@ export default function App() {
     setEnvironment,
     skyboxUrl,
     setSkybox,
+    roomSky,
+    setRoomSky,
     lights,
     setLight,
   } = useRoomSocket(
@@ -1057,6 +1059,7 @@ export default function App() {
               // otherwise-frozen shadow map refreshes when they change.
               shadowRefreshKey={objects}
               sky={world.sky}
+              roomSky={roomSky}
             />
           </group>
           <PlayerRig
@@ -1361,6 +1364,9 @@ export default function App() {
           onSetEnvironment={setEnvironment}
           skyboxUrl={skyboxUrl}
           onSetSkybox={setSkybox}
+          worldSky={world.sky}
+          roomSky={roomSky}
+          onSetRoomSky={setRoomSky}
         />
       </HUD>
       {showTouchControls && !webglLost && (

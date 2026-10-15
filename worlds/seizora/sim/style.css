@@ -98,6 +98,14 @@ select, input[type="range"] { font: inherit; color: var(--text); background: #0f
 .breaker { flex-direction: row; align-items: center; gap: 8px; background: #0f1528; border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; color: var(--text); cursor: pointer; }
 .breaker input { accent-color: #3ddc84; width: 16px; height: 16px; }
 body.live .sim-only { display: none; }
+body:not(.live) .room-note { display: none; }
+.room-note {
+  margin: 0;
+  padding: 6px 10px;
+  border-left: 3px solid var(--batt);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+}
 .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 8px; font-size: 12px; color: var(--muted); }
 .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
 .legend i.line { height: 2px; background: var(--load); vertical-align: 3px; }

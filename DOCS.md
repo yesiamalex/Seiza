@@ -173,7 +173,9 @@ guarantee yet.
   into a starry night, and the weather changes through the day, from clear
   to cloudy to rain. Every visitor sees the same sky, because it's worked
   out from the clock rather than sent over the network. A world can keep the
-  original still sunset instead; see [Sky and weather](#sky-and-weather).
+  original still sunset instead, and an editor can set a room's time and
+  weather from the bottom of the edit panel; see
+  [Sky and weather](#sky-and-weather).
 - **Movement.** Move with WASD or the arrow keys, run with Shift, and jump
   with Space. VR has thumbstick movement. Double-click the floor to walk
   there along a navigation mesh route. Drag to look around, as in FrameVR.
@@ -834,6 +836,33 @@ lights follow the same path: the original sunset lights at that angle,
 brighter and whiter by day, and dim blue moonlight at night, with the lamps
 doing the rest. A fixed-sky world renders the original sky and lights
 untouched.
+
+**Setting a room's sky.** The "Sky and time" section at the bottom of the
+edit panel overrides `world.json` for one room, for everyone in it:
+
+- **Sync with real time in the Philippines (PHT)**, on by default in a
+  realtime world, follows the real clock. While it's on, the time controls
+  are greyed out.
+- With sync off, **Hold** keeps the sky at the hour on the slider, and
+  **Run** starts the clock at that hour and runs it at 1× (real speed), 60×
+  (an hour a minute), or 360× (a day in four minutes).
+- **Weather** is either Auto, which follows the shared schedule, or one fixed
+  type. It works with or without sync.
+- **Reset to world default** clears the override and goes back to the sky in
+  `world.json`.
+
+The room server stores the setting with the room's other state and sends it
+to everyone who joins (`setRoomSky` and `roomSkyChanged` in
+`src/multiplayer/types.ts`). For a running clock the server records when it
+was set, in its own time, so every browser computes the same simulated hour
+from that moment and the speed. Pages outside the world can read the setting
+at `GET /rooms/<room id>/sky`; Seizora's control room uses it so its Live
+mode follows the same time and weather. A room sky works in a still-sunset
+world too: it turns the moving sky on for that room. It needs the editor
+password when the deployment has one, like the rest of Edit Mode. An
+uploaded skybox image still covers the sky, but the lights follow the room's
+time. The `?skyHour` and `?skyWeather` URL previews override it in your own
+browser only.
 
 #### Seats
 

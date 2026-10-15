@@ -183,6 +183,9 @@ export type ClientMessage =
   // cube-map cross (4:3 / 3:4). `null` restores the built-in sunset.
   // Editor-gated and URL-checked exactly like setEnvironment.
   | { type: "setSkybox"; url: string | null }
+  // Sets the room's time of day and weather for everyone, or clears it
+  // (null) to go back to the world's own sky. Editor-gated like setSkybox.
+  | { type: "setRoomSky"; sky: RoomSky | null }
   // Flips a room's lights for everyone. Not editor-gated: like writing on
   // a board, using a light switch is taking part, not restructuring.
   | { type: "setLight"; zone: LightZone; on: boolean }
@@ -265,9 +268,13 @@ export type ServerMessage =
       skyboxUrl: string | null;
       /** Light-switch state per zone. Older room servers omit it (all on). */
       lights?: Record<LightZone, boolean>;
+      /** The room's sky override, or null to use the world's own sky.
+       *  Older room servers omit it. */
+      roomSky?: RoomSky | null;
     }
   | { type: "environmentChanged"; url: string | null }
   | { type: "skyboxChanged"; url: string | null }
+  | { type: "roomSkyChanged"; sky: RoomSky | null }
   | { type: "lightChanged"; zone: LightZone; on: boolean }
   | { type: "roomFull"; maxOccupants: number }
   // Sent instead of welcome when this room has an entry password (see
@@ -323,3 +330,34 @@ export type LightZone = "hall" | "classroom" | "pond";
 export const LIGHT_ZONES: readonly LightZone[] = ["hall", "classroom", "pond"];
 /** Every light starts on, for a new room and for anything a stored state lacks. */
 export const DEFAULT_LIGHTS: Readonly<Record<LightZone, boolean>> = { hall: true, classroom: true, pond: true };
+
+/** Weather choices for a room sky. "auto" follows the shared schedule. */
+export const ROOM_SKY_WEATHER = ["auto", "clear", "partly", "overcast", "rain", "typhoon"] as const;
+export type RoomSkyWeather = (typeof ROOM_SKY_WEATHER)[number];
+
+/** Clock speeds a room sky can run at: real speed, an hour a minute, and
+ *  a day in four minutes. */
+export const ROOM_SKY_SCALES = [1, 60, 360] as const;
+
+/**
+ * A room's own sky, set from the edit panel and shared through the room
+ * server, so everyone in the room sees the same time and weather. It
+ * overrides the world's `sky` in world.json until it's cleared.
+ */
+export interface RoomSky {
+  /**
+   * - "realtime": follow the current time in the Philippines.
+   * - "fixed": hold the sky at `hour`.
+   * - "running": start at `hour` when it was set (`setAt`) and run at
+   *   `scale` times real speed.
+   */
+  mode: "realtime" | "fixed" | "running";
+  /** Philippine time of day, 0 to 24, for "fixed" and "running". */
+  hour?: number;
+  /** One of ROOM_SKY_SCALES, for "running". */
+  scale?: number;
+  weather?: RoomSkyWeather;
+  /** When a "running" sky was set, in server time (ms since 1970). Set by
+   *  the server, so every browser runs the clock from the same moment. */
+  setAt?: number;
+}
