@@ -473,6 +473,14 @@ export function getActiveObstacles(): readonly Obstacle[] {
   return activeObstacles;
 }
 
+/** Furniture a world's own code adds (see src/worlds/WorldExtension.tsx),
+ *  kept apart from the room's so neither replaces the other. */
+let worldObstacles: Obstacle[] = [];
+
+export function setWorldObstacles(next: Obstacle[]): void {
+  worldObstacles = next;
+}
+
 /**
  * Derives collision boxes from arbitrary loaded geometry.
  *
@@ -528,7 +536,12 @@ export function deriveObstaclesFromObject(root: THREE.Object3D): Obstacle[] {
  * resolve a box overlap without a physics engine.
  */
 export function resolveObstacles(position: THREE.Vector3, radius = PLAYER_RADIUS): void {
-  for (const box of activeObstacles) {
+  pushOutOf(activeObstacles, position, radius);
+  pushOutOf(worldObstacles, position, radius);
+}
+
+function pushOutOf(obstacles: readonly Obstacle[], position: THREE.Vector3, radius: number): void {
+  for (const box of obstacles) {
     if (box.disabled) continue; // an open door — nothing to bump into here right now
     const sin = Math.sin(-box.rotationY);
     const cos = Math.cos(-box.rotationY);

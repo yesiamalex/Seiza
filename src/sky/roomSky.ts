@@ -1,6 +1,6 @@
 // The time and weather a room sky (set from the edit panel) stands for.
 // Plain TypeScript with no DOM or 3D code, shared by the world's sky clock
-// (skyState.ts) and Seizora's control room, so the two always agree.
+// (skyState.ts) and the edit panel's Sky and time controls.
 import type { RoomSky } from "../multiplayer/types";
 import { philippineTime, type WeatherType } from "./weather";
 
@@ -20,12 +20,6 @@ export function roomSkyNow(room: RoomSky, now = Date.now()): Date {
     return new Date(atPhilippineHour(setAt, room.hour ?? 12) + (now - setAt) * (room.scale ?? 1));
   }
   return new Date(now);
-}
-
-/** Simulated minutes per real minute: 1 for real time and for a held
- *  sky (the plant keeps running at that hour), `scale` for a running one. */
-export function roomSkySpeed(room: RoomSky | null): number {
-  return room?.mode === "running" ? (room.scale ?? 1) : 1;
 }
 
 /** The weather a room sky fixes, or null when it follows the schedule. */

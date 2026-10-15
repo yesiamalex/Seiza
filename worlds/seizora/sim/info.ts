@@ -1,5 +1,6 @@
-// The control room's info cards: an illustration and a short explanation
-// for each part of the plant, written for visitors rather than engineers.
+// Seizora's info cards, opened by clicking an exhibit or a board: an
+// illustration and a short explanation for each part of the plant, written
+// for visitors rather than engineers.
 // The illustrations are inline SVG, so nothing is downloaded.
 
 export type InfoKey = "sky" | "silicon" | "perovskite" | "wind" | "battery" | "grid" | "load" | "layers" | "degradation";
@@ -29,7 +30,7 @@ export const INFO: Record<InfoKey, InfoCard> = {
       "Sunlight arriving on the ground is measured in watts per square metre. A clear tropical noon gives about 1,000 W/m²; a low sun gives far less, because its light crosses more atmosphere and strikes the ground at a slant.",
       "Clouds cut it further: full overcast lets through only about a quarter. The sky here follows the same weather engine as the world around you, so what you see overhead is what the panels are getting.",
     ],
-    try: "Switch to Simulate, call in rain at noon, and watch the irradiance and the solar output fall together.",
+    try: "At the control room console, press 12:00 and then Rain, and watch the irradiance and the solar output fall together.",
   },
   silicon: {
     title: "Silicon solar panels",
@@ -46,7 +47,7 @@ export const INFO: Record<InfoKey, InfoCard> = {
       "Most solar panels today are made of crystalline silicon. Light knocks electrons loose in the silicon, and the panel's built-in electric field pushes them out as current.",
       "Panels lose about 0.35% of their output for every degree they run above 25 °C, and in Philippine sun they often run at 55 to 65 °C. That is why a cool, bright morning can beat a hot afternoon. This farm is 3.6 MW peak, tilted 15° toward the south.",
     ],
-    try: "Compare the cell temperature with the output around 10:00 and 14:00 on a clear day.",
+    try: "Press 10:00 and then 14:00 with Clear weather, and compare the cell temperature and the output on the big display.",
   },
   perovskite: {
     title: "The perovskite pilot row",
@@ -64,7 +65,7 @@ export const INFO: Record<InfoKey, InfoCard> = {
       "Perovskites are crystals that absorb sunlight very strongly, so a layer thinner than a thousandth of a millimetre does the work of thick silicon. They can be printed at low temperature onto glass or flexible film, which is why Japan is developing lightweight, flexible perovskite panels for walls, roofs, and places silicon can't go.",
       "Their weakness is durability: moisture, oxygen, heat, and light break them down. This pilot row loses a little output with every humid hour, depending on how well it is sealed.",
     ],
-    try: "Set the seal to 'None', run a week of rain at 6 h/s, and watch the pilot's health fall.",
+    try: "Set the seal to None, press Rain and Run 360×, and watch the pilot's health fall on the big display.",
   },
   wind: {
     title: "Wind turbines",
@@ -78,7 +79,7 @@ export const INFO: Record<InfoKey, InfoCard> = {
       "A turbine's power rises with the cube of the wind speed: double the wind, eight times the power. Below about 3 m/s it doesn't turn; from about 12 m/s it gives its full rating; above 25 m/s it feathers its blades and brakes to protect itself.",
       "That is why a typhoon, for all its wind, produces nothing here. The two turbines are 1.5 MW each.",
     ],
-    try: "Call in a typhoon and watch the event log.",
+    try: "Press Typhoon on the console, then look out at the turbines in the garden.",
   },
   battery: {
     title: "Battery storage",
@@ -93,7 +94,7 @@ export const INFO: Record<InfoKey, InfoCard> = {
       "The battery holds 6 MWh and can charge or discharge at up to 3 MW. In Auto, it stores whatever the plant makes beyond the load, and spends it when generation falls short, which is mostly after sunset when homes light up.",
       "About a tenth of the energy is lost on the round trip, and the battery is kept between 10% and 95% full to protect it.",
     ],
-    try: "Open the grid tie at 17:00 on a clear day and see how long the battery carries the evening.",
+    try: "Press 18:00 and open the Grid tie breaker, and see how long the battery carries the evening.",
   },
   grid: {
     title: "The main grid and island mode",
@@ -105,7 +106,7 @@ export const INFO: Record<InfoKey, InfoCard> = {
       "Connected to the main grid, the plant exports its surplus and imports any shortfall, so the lights never go out. Island mode is a community running on its own, as it would after a typhoon cuts the lines.",
       "In island mode, whatever the plant and battery can't supply has to be shed. Many Philippine islands run on such microgrids, often with diesel as the backup.",
     ],
-    try: "Open the grid tie and switch off the wind on a rainy night.",
+    try: "Press 00:00 and Rain, then open the Grid tie and Wind breakers.",
   },
   load: {
     title: "The community load",

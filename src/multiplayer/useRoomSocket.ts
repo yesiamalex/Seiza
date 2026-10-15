@@ -5,6 +5,7 @@ import type {
   ClientMessage,
   LightZone,
   RoomSky,
+  WorldStateValue,
   PlayerMedia,
   PlayerState,
   Posture,
@@ -124,6 +125,9 @@ export interface MultiplayerState {
    *  world's own sky. */
   roomSky: RoomSky | null;
   setRoomSky: (sky: RoomSky | null) => void;
+  /** Shared world state, for a world's own code (WorldExtension). */
+  worldState: Record<string, WorldStateValue>;
+  setWorldState: (key: string, value: WorldStateValue) => void;
   lights: Record<LightZone, boolean>;
   setLight: (zone: LightZone, on: boolean) => void;
 }
@@ -192,6 +196,7 @@ export function useRoomSocket(
   const [environmentUrl, setEnvironmentUrl] = useState<string | null>(null);
   const [skyboxUrl, setSkyboxUrl] = useState<string | null>(null);
   const [roomSky, setRoomSkyState] = useState<RoomSky | null>(null);
+  const [worldState, setWorldStateMap] = useState<Record<string, WorldStateValue>>({});
   const [lights, setLights] = useState<Record<LightZone, boolean>>({ ...DEFAULT_LIGHTS });
   const onVoiceSignalRef = useRef(onVoiceSignal);
   onVoiceSignalRef.current = onVoiceSignal;
@@ -247,6 +252,7 @@ export function useRoomSocket(
   // Not applied locally: the server stamps a running clock's start time,
   // so everyone (this browser included) waits for roomSkyChanged.
   const setRoomSky = useCallback((sky: RoomSky | null) => send({ type: "setRoomSky", sky }), [send]);
+  const setWorldState = useCallback((key: string, value: WorldStateValue) => send({ type: "setWorldState", key, value }), [send]);
   // Flipped locally straight away so the switch feels instant; the
   // server's lightChanged broadcast (or the next welcome) settles it.
   const setLight = useCallback(
@@ -387,6 +393,7 @@ export function useRoomSocket(
             // Older room servers predate skyboxes and omit the field.
             setSkyboxUrl(msg.skyboxUrl ?? null);
             setRoomSkyState(msg.roomSky ?? null);
+            setWorldStateMap(msg.worldState ?? {});
             setLights({ ...DEFAULT_LIGHTS, ...(msg.lights ?? {}) });
             break;
           }
@@ -395,6 +402,9 @@ export function useRoomSocket(
             break;
           case "roomSkyChanged":
             setRoomSkyState(msg.sky);
+            break;
+          case "worldStateChanged":
+            setWorldStateMap((previous) => ({ ...previous, [msg.key]: msg.value }));
             break;
           case "skyboxChanged":
             setSkyboxUrl(msg.url);
@@ -599,6 +609,8 @@ export function useRoomSocket(
     setSkybox,
     roomSky,
     setRoomSky,
+    worldState,
+    setWorldState,
     lights,
     setLight,
   };

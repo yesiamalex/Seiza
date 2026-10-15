@@ -186,6 +186,10 @@ export type ClientMessage =
   // Sets the room's time of day and weather for everyone, or clears it
   // (null) to go back to the world's own sky. Editor-gated like setSkybox.
   | { type: "setRoomSky"; sky: RoomSky | null }
+  // Sets one value in the room's world state: shared switches and settings
+  // that a world's own code defines (see src/worlds/WorldExtension.tsx).
+  // Editor-gated like the rest of Edit Mode.
+  | { type: "setWorldState"; key: string; value: WorldStateValue }
   // Flips a room's lights for everyone. Not editor-gated: like writing on
   // a board, using a light switch is taking part, not restructuring.
   | { type: "setLight"; zone: LightZone; on: boolean }
@@ -271,10 +275,13 @@ export type ServerMessage =
       /** The room's sky override, or null to use the world's own sky.
        *  Older room servers omit it. */
       roomSky?: RoomSky | null;
+      /** Shared world state. Older room servers omit it. */
+      worldState?: Record<string, WorldStateValue>;
     }
   | { type: "environmentChanged"; url: string | null }
   | { type: "skyboxChanged"; url: string | null }
   | { type: "roomSkyChanged"; sky: RoomSky | null }
+  | { type: "worldStateChanged"; key: string; value: WorldStateValue }
   | { type: "lightChanged"; zone: LightZone; on: boolean }
   | { type: "roomFull"; maxOccupants: number }
   // Sent instead of welcome when this room has an entry password (see
@@ -361,3 +368,8 @@ export interface RoomSky {
    *  the server, so every browser runs the clock from the same moment. */
   setAt?: number;
 }
+
+/** A value in a room's world state: small and plain on purpose. */
+export type WorldStateValue = string | number | boolean;
+/** Limits the room server enforces on world state. */
+export const WORLD_STATE_LIMITS = { keys: 64, keyPattern: /^[a-z][a-zA-Z0-9.-]{0,47}$/, stringLength: 64 } as const;

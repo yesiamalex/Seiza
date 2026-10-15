@@ -7,6 +7,8 @@ import {
   DEFAULT_LIGHTS,
   type LightZone,
   type RoomSky,
+  type WorldStateValue,
+  WORLD_STATE_LIMITS,
   ROOM_SKY_SCALES,
   ROOM_SKY_WEATHER,
   type PlayerMedia,
@@ -27,6 +29,7 @@ const OBJECTS_STORAGE_KEY = "objects";
 const ENVIRONMENT_STORAGE_KEY = "environmentUrl";
 const SKYBOX_STORAGE_KEY = "skyboxUrl";
 const ROOM_SKY_STORAGE_KEY = "roomSky";
+const WORLD_STATE_STORAGE_KEY = "worldState";
 const LIGHTS_STORAGE_KEY = "lights";
 /** A switch can't be flicked faster than this per connection, so a held
  *  click or a script can't strobe the room for everyone. */
@@ -154,6 +157,8 @@ export class SeizaRoom extends DurableObject<Env> {
   skyboxUrl: string | null = null;
   /** Time-of-day and weather override from the edit panel (see RoomSky). */
   roomSky: RoomSky | null = null;
+  /** Shared switches and settings defined by a world's own code. */
+  worldState: Record<string, WorldStateValue> = {};
   lights: Record<LightZone, boolean> = { ...DEFAULT_LIGHTS };
   /** Entry password for this room, or null when anyone can join. Unlike
    *  SEIZA_EDITOR_PASSWORD/SEIZA_ADMIN_KEY (Worker secrets, fixed at
@@ -193,16 +198,13 @@ export class SeizaRoom extends DurableObject<Env> {
       this.environmentUrl = (await ctx.storage.get<string | null>(ENVIRONMENT_STORAGE_KEY)) ?? null;
       this.skyboxUrl = (await ctx.storage.get<string | null>(SKYBOX_STORAGE_KEY)) ?? null;
       this.roomSky = (await ctx.storage.get<RoomSky | null>(ROOM_SKY_STORAGE_KEY)) ?? null;
+      this.worldState = (await ctx.storage.get<Record<string, WorldStateValue>>(WORLD_STATE_STORAGE_KEY)) ?? {};
       this.lights = { ...this.lights, ...((await ctx.storage.get<Record<LightZone, boolean>>(LIGHTS_STORAGE_KEY)) ?? {}) };
       this.roomPassword = (await ctx.storage.get<string | null>(ROOM_PASSWORD_STORAGE_KEY)) ?? null;
     });
   }
 
   async fetch(request: Request): Promise<Response> {
-    if (request.method === "GET" && new URL(request.url).pathname.endsWith("/sky")) {
-      await this.ready;
-      return Response.json({ roomSky: this.roomSky }, { headers: { "Cache-Control": "no-store" } });
-    }
     if (request.headers.get("Upgrade") !== "websocket") {
       return new Response("Expected a WebSocket upgrade", { status: 426 });
     }
@@ -292,6 +294,7 @@ export class SeizaRoom extends DurableObject<Env> {
           skyboxUrl: this.skyboxUrl,
           lights: this.lights,
           roomSky: this.roomSky,
+          worldState: this.worldState,
         };
         ws.send(JSON.stringify(welcome));
         this.broadcast({ type: "playerJoined", player }, attachment.connId);
@@ -601,6 +604,22 @@ export class SeizaRoom extends DurableObject<Env> {
         this.skyboxUrl = next;
         void this.ctx.storage.put(SKYBOX_STORAGE_KEY, next);
         this.broadcast({ type: "skyboxChanged", url: next });
+        break;
+      }
+      case "setWorldState": {
+        if (this.editingRequiresAuth() && !attachment.isEditor) return;
+        const { key, value } = message;
+        if (typeof key !== "string" || !WORLD_STATE_LIMITS.keyPattern.test(key)) return;
+        const ok =
+          typeof value === "boolean" ||
+          (typeof value === "number" && Number.isFinite(value)) ||
+          (typeof value === "string" && value.length <= WORLD_STATE_LIMITS.stringLength);
+        if (!ok) return;
+        if (!(key in this.worldState) && Object.keys(this.worldState).length >= WORLD_STATE_LIMITS.keys) return;
+        if (this.worldState[key] === value) return;
+        this.worldState = { ...this.worldState, [key]: value };
+        void this.ctx.storage.put(WORLD_STATE_STORAGE_KEY, this.worldState);
+        this.broadcast({ type: "worldStateChanged", key, value });
         break;
       }
       case "setRoomSky": {

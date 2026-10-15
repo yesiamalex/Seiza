@@ -245,14 +245,6 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
-    // Read-only: the room's sky setting, for pages outside the world such
-    // as Seizora's control room. Holds nothing private.
-    const roomSkyMatch = url.pathname.match(/^\/rooms\/([^/]+)\/sky$/);
-    if (roomSkyMatch && request.method === "GET") {
-      const stub = env.ROOMS.get(env.ROOMS.idFromName(decodeURIComponent(roomSkyMatch[1])));
-      return stub.fetch(request);
-    }
-
     if (url.pathname.startsWith("/rooms/")) {
       return routeToRoom(request, url, env);
     }

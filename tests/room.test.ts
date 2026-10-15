@@ -150,12 +150,27 @@ describe.skipIf(!built)("room server", () => {
     // The malformed one (no hour) was ignored; an unknown weather is auto.
     expect(welcome?.type === "welcome" && welcome.roomSky).toEqual({ mode: "fixed", hour: 18.5, weather: "auto" });
 
-    // The read-only view that Seizora's control room polls.
-    const view = await fetch(`http://${worker.address}:${worker.port}/rooms/${room}/sky`);
-    expect(await view.json()).toEqual({ roomSky: { mode: "fixed", hour: 18.5, weather: "auto" } });
-
     a.send({ type: "setRoomSky", sky: null });
     await until(() => late.received.find((m) => m.type === "roomSkyChanged" && m.sky === null));
+    a.socket.close();
+    b.socket.close();
+    late.socket.close();
+  });
+
+  it("shares world state and checks it", async () => {
+    const room = freshRoom();
+    const a = await client(room, "A", ["batch"]);
+    const b = await client(room, "B", ["batch"]);
+    a.send({ type: "setWorldState", key: "breaker.wind", value: false });
+    const changed = await until(() => b.received.find((m) => m.type === "worldStateChanged"));
+    expect(changed).toEqual({ type: "worldStateChanged", key: "breaker.wind", value: false });
+    // Bad keys and oversized values are ignored.
+    a.send({ type: "setWorldState", key: "Bad Key!", value: 1 });
+    a.send({ type: "setWorldState", key: "note", value: "x".repeat(200) });
+    a.send({ type: "setWorldState", key: "battery.mode", value: "hold" });
+    const late = await client(room, "Late", ["batch"]);
+    const welcome = late.received.find((m) => m.type === "welcome");
+    expect(welcome?.type === "welcome" && welcome.worldState).toEqual({ "breaker.wind": false, "battery.mode": "hold" });
     a.socket.close();
     b.socket.close();
     late.socket.close();

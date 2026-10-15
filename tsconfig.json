@@ -16,6 +16,6 @@
     "noFallthroughCasesInSwitch": true,
     "types": ["vite/client"]
   },
-  "include": ["src"],
+  "include": ["src", "worlds"],
   "exclude": ["party", "scripts", "node_modules"]
 }

@@ -63,6 +63,7 @@ import { CameraViewToggle } from "./ui/CameraViewToggle";
 import { AvatarChooser } from "./ui/AvatarChooser";
 import { useMediaQuery, useWantsTouchControls } from "./ui/useMediaQuery";
 import { saveProfile } from "./profile/profileStore";
+import { WorldExtension, WorldOverlay } from "./worlds/WorldExtension";
 import { BAR_LABEL_CLASS, barButtonActiveStyle, barButtonStyle, inputStyle, panelStyle, pillButtonStyle, primaryButtonStyle } from "./ui/styles";
 import { CloseIcon, LockIcon, PersonIcon, VrHeadsetIcon } from "./ui/icons";
 import { isTextObjectKind, type PresentSource, type WorldObject, type WorldObjectKind } from "./multiplayer/types";
@@ -262,6 +263,8 @@ export default function App() {
     setSkybox,
     roomSky,
     setRoomSky,
+    worldState,
+    setWorldState,
     lights,
     setLight,
   } = useRoomSocket(
@@ -1061,6 +1064,18 @@ export default function App() {
               sky={world.sky}
               roomSky={roomSky}
             />
+            {/* The world's own exhibits and controls, if it ships any. */}
+            <WorldExtension
+              worldId={world.id}
+              canEdit={canEditWorld}
+              connected={connected}
+              objects={objects}
+              removeObject={removeObject}
+              roomSky={roomSky}
+              setRoomSky={setRoomSky}
+              worldState={worldState}
+              setWorldState={setWorldState}
+            />
           </group>
           <PlayerRig
             spawnPoint={[world.spawnPoint.x, world.spawnPoint.y, world.spawnPoint.z]}
@@ -1368,6 +1383,7 @@ export default function App() {
           roomSky={roomSky}
           onSetRoomSky={setRoomSky}
         />
+        <WorldOverlay />
       </HUD>
       {showTouchControls && !webglLost && (
         <TouchControls

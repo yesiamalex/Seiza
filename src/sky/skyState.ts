@@ -65,6 +65,11 @@ export const skyState = {
   moonIllumination: 0,
   /** How much of the moon shows: up, and not behind cloud. 0 to 1. */
   moonVisible: 0,
+  /** The simulated instant the sky shows, in ms since 1970. */
+  simMs: 0,
+  /** The live weather the sky is drawn from (wind, humidity, and all), so
+   *  a world's own simulation reads exactly what the sky shows. */
+  weatherState: null as WeatherState | null,
   /** Simulated Philippine time, for anything that wants to show it. */
   dayOfYear: 1,
   hour: 18,
@@ -167,6 +172,8 @@ export class SkyClock {
     skyState.weather = this.weather.type;
     skyState.dayZenith.setRGB(colors.top[0] / 255, colors.top[1] / 255, colors.top[2] / 255, THREE.SRGBColorSpace);
     skyState.dayHorizon.setRGB(colors.bottom[0] / 255, colors.bottom[1] / 255, colors.bottom[2] / 255, THREE.SRGBColorSpace);
+    skyState.simMs = simMs;
+    skyState.weatherState = this.weather;
     skyState.dayOfYear = dayOfYear;
     skyState.hour = hour;
   }

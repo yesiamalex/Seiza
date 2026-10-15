@@ -16,26 +16,7 @@
   ],
   "customGestures": [],
   "defaultObjects": [
-    { "kind": "model", "modelUrl": "/worlds/seizora/models/board-welcome.glb", "position": [-9, 0, 12], "rotationY": 2.23 },
-    { "kind": "screen", "position": [-11.5, 2.2, 7], "rotationY": 1.5708 },
-    {
-      "kind": "sign",
-      "position": [-11.55, 3.75, 7],
-      "rotationY": 1.5708,
-      "scale": 0.8,
-      "text": "Control room\nShare /seizora/ on this screen"
-    },
-
-    { "kind": "model", "modelUrl": "/worlds/seizora/models/solar-array.glb", "position": [-6.5, 0, 31] },
-    { "kind": "model", "modelUrl": "/worlds/seizora/models/board-solar.glb", "position": [-6.5, 0, 28.3], "rotationY": 3.1416 },
-    { "kind": "model", "modelUrl": "/worlds/seizora/models/battery-bank.glb", "position": [7.5, 0, 30], "rotationY": -1.5708 },
-    { "kind": "model", "modelUrl": "/worlds/seizora/models/board-battery.glb", "position": [5.6, 0, 25.6], "rotationY": 3.1416 },
-    { "kind": "model", "modelUrl": "/worlds/seizora/models/wind-turbine-west.glb", "position": [-7, 0, 45] },
-    { "kind": "model", "modelUrl": "/worlds/seizora/models/wind-turbine-east.glb", "position": [7, 0, 47] },
-    { "kind": "model", "modelUrl": "/worlds/seizora/models/board-wind.glb", "position": [0, 0, 36.5], "rotationY": 3.1416 },
-
-    { "kind": "model", "modelUrl": "/worlds/seizora/models/perovskite-cell.glb", "position": [6.6, 0, -12.2] },
-    { "kind": "model", "modelUrl": "/worlds/seizora/models/board-perovskite.glb", "position": [7.4, 0, -15.4], "rotationY": -1.5708 },
+    { "kind": "screen", "position": [-11.5, 2.2, 7.5], "rotationY": 1.5708 },
     {
       "kind": "text",
       "position": [-3.6, 0.78, -19.8],

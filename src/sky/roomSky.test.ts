@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { roomSkyNow, roomSkySpeed, roomSkyWeather } from "./roomSky";
+import { roomSkyNow, roomSkyWeather } from "./roomSky";
 import { philippineTime } from "./weather";
 
 const phtHour = (date: Date) => philippineTime(date).hour;
@@ -23,9 +23,6 @@ describe("room sky time", () => {
     expect(phtHour(roomSkyNow(running, T))).toBeCloseTo(6);
     // Two real minutes at 60x is two hours.
     expect(phtHour(roomSkyNow(running, T + 2 * 60_000))).toBeCloseTo(8);
-    expect(roomSkySpeed(running)).toBe(60);
-    expect(roomSkySpeed({ mode: "fixed", hour: 6 })).toBe(1);
-    expect(roomSkySpeed(null)).toBe(1);
   });
 
   it("fixes the weather only when one is chosen", () => {

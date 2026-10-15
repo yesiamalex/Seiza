@@ -451,8 +451,35 @@ To preview a time or weather without changing the file, add `?skyHour=18.5`,
 `?skyWeather=rain`, or `?skyScale=600` to the URL.
 
 A deployment can also be a separate world with its own features, built from
-the same repository without changing Seiza's code. `worlds/seizora/` is an
-example: a solar, wind, and storage learning world. See its README.
+the same repository. `worlds/seizora/` is an example: a solar, wind, and
+storage learning world. See its README, and [World code](#world-code) for
+how a world adds its own exhibits and controls.
+
+#### World code
+
+A world can ship its own in-world code in `worlds/<world id>/client/index.tsx`,
+exporting a `Scene` component. `src/worlds/WorldExtension.tsx` loads it as a
+separate chunk, and only when that world runs, so other worlds never download
+it. If it fails, the error is logged and the rest of the world keeps running.
+
+The `Scene` component renders inside the 3D scene and gets:
+
+- `canEdit`: whether this visitor may change shared things, by the same rule
+  as Edit Mode (anyone, unless the deployment set an editor password).
+- `objects` and `removeObject`: the room's placed objects.
+- `roomSky` and `setRoomSky`: the room's sky (see
+  [Sky and weather](#sky-and-weather)).
+- `worldState` and `setWorldState`: shared world state. These are switches
+  and settings that the world's code defines, stored by the room server and
+  shared with everyone in the room. Keys are short lowercase names such as
+  `breaker.wind`, values are booleans, numbers, or short strings, and a room
+  holds at most 64 keys. Setting a value needs the editor password when the
+  deployment has one.
+
+It can also use `setWorldObstacles` from `src/scene/layout.ts` to make its
+furniture solid, `showWorldOverlay` to open a card in the HUD, and `skyState`
+from `src/sky/skyState.ts` to read the exact time (`simMs`) and live weather
+(`weatherState`) the sky shows.
 
 ### Uploads and storage limits
 
@@ -869,10 +896,9 @@ The room server stores the setting with the room's other state and sends it
 to everyone who joins (`setRoomSky` and `roomSkyChanged` in
 `src/multiplayer/types.ts`). For a running clock the server records when it
 was set, in its own time, so every browser computes the same simulated hour
-from that moment and the speed. Pages outside the world can read the setting
-at `GET /rooms/<room id>/sky`; Seizora's control room uses it so its Live
-mode follows the same time and weather. A room sky works in a still-sunset
-world too: it turns the moving sky on for that room. It needs the editor
+from that moment and the speed. A world's own code can read and set it too
+(see [World code](#world-code)); Seizora's control room has buttons for it.
+A room sky works in a still-sunset world too: it turns the moving sky on for that room. It needs the editor
 password when the deployment has one, like the rest of Edit Mode. An
 uploaded skybox image still covers the sky, but the lights follow the room's
 time. The `?skyHour` and `?skyWeather` URL previews override it in your own
@@ -1328,13 +1354,15 @@ src/            Frontend (React Three Fiber, WebXR, VRM)
   sky/          Weather and sky engine, the shared clock, and the moving
                 sky's lights (SkyDriver)
   ui/           Join screen, avatar chooser and preview, HUD, shared styles
+  worlds/       Loads a world's own in-world code (WorldExtension.tsx)
   interactions/ Gesture menu and practice mode
   xr/           Headset only: body tracking (body/) and wrist menu (hud/)
 worker/         Cloudflare Worker: static hosting, upload API (KV), and the
                 real-time room server (room.ts, a Durable Object)
 public/worlds/  Per-deployment world configuration
-worlds/         Separate worlds built from this repository without changing
-                Seiza's code (seizora/: a solar, wind, and storage world)
+worlds/         Separate worlds built from this repository, each with
+                optional in-world code in client/ (seizora/: a solar,
+                wind, and storage world)
 public/animations/, public/gestures/
                 Built-in motion clips (generated) and custom gesture clips
 scripts/        Motion clip generator, KV setup, and asset fetching
