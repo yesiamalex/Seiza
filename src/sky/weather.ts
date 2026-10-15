@@ -61,6 +61,43 @@ export function sunPosition(dayOfYear: number, hour: number, site: Site): SunPos
   return { elevation: elevation / DEG, azimuth };
 }
 
+/** Length of the lunar cycle, new moon to new moon, in days. */
+const SYNODIC_MONTH = 29.530588853;
+/** A known new moon: 6 January 2000, 18:14 UTC. */
+const REFERENCE_NEW_MOON = Date.UTC(2000, 0, 6, 18, 14);
+
+export interface MoonPhase {
+  /** Days since the last new moon. */
+  age: number;
+  /** 0 at new moon, 0.5 at full, back to 1 at the next new moon. */
+  phase: number;
+  /** Fraction of the disc that is lit, 0 to 1. */
+  illumination: number;
+}
+
+/** The moon's phase on a date, from the mean lunar cycle: within about
+ *  half a day of the real phase. */
+export function moonPhase(date: Date): MoonPhase {
+  const days = (date.getTime() - REFERENCE_NEW_MOON) / 86400000;
+  const age = ((days % SYNODIC_MONTH) + SYNODIC_MONTH) % SYNODIC_MONTH;
+  const phase = age / SYNODIC_MONTH;
+  return { age, phase, illumination: (1 - Math.cos(2 * Math.PI * phase)) / 2 };
+}
+
+/**
+ * Where the moon is, approximately. The moon runs along the sun's path,
+ * behind it by its phase: a full moon is where the sun was twelve hours
+ * earlier (so it rises at sunset) and sits as low or high as the sun does
+ * half a year later. This ignores the tilt of the moon's orbit, so it can
+ * be several degrees off the real moon, which is fine for a sky. Its
+ * phase, rise, and set come out right.
+ */
+export function moonPosition(dayOfYear: number, hour: number, phase: number, site: Site): SunPosition {
+  const day = ((((dayOfYear - 1 + phase * 365.25) % 365) + 365) % 365) + 1;
+  const h = (((hour - phase * 24) % 24) + 24) % 24;
+  return sunPosition(day, h, site);
+}
+
 /** Clear-sky global horizontal irradiance in W/m² (Haurwitz model). */
 export function clearSkyGhi(elevationDeg: number): number {
   if (elevationDeg <= 0) return 0;

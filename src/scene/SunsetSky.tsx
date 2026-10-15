@@ -52,6 +52,7 @@ const NIGHT_ZENITH = "#080d2a";
 const NIGHT_HORIZON = "#4b2a66";
 const STAR_WARM = "#fff3dd";
 const STAR_COOL = "#bcd2ff";
+const MOON = "#dfe6f5";
 
 const vertexShader = /* glsl */ `
   varying vec3 vDirection;
@@ -85,7 +86,16 @@ const fragmentShader = /* glsl */ `
   uniform float uNight;
   uniform float uSunVisible;
   uniform float uCloud;
+  // The moon. uMoonVisible 0 (the default) leaves it out entirely.
+  uniform vec3 uMoonDirection;
+  uniform float uMoonVisible;
+  uniform float uMoonIllumination;
+  uniform vec3 uMoonColor;
   varying vec3 vDirection;
+
+  // The moon's angular radius, as a sine. Drawn about four times the real
+  // size, like the sun's disc, so it reads on a small screen.
+  const float MOON_SIN_R = 0.035;
 
   // Cheap deterministic hash. No texture: the same star is in the same
   // place on every client and on every frame, which is what a shared world
@@ -212,6 +222,29 @@ const fragmentShader = /* glsl */ `
     float disc = smoothstep(0.9985, 0.9993, toward);
     sky = mix(sky, uSun * 1.6, disc * uSunVisible);
 
+    // --- the moon --------------------------------------------------------
+    // A soft cool halo, stronger the fuller the moon and the darker the
+    // sky, then the disc, lit on the side facing the sun so its phase
+    // comes from the geometry. Skipped entirely while it's down.
+    if (uMoonVisible > 0.001) {
+      float m = dot(d, uMoonDirection);
+      float towardMoon = max(m, 0.0);
+      float haloStrength = uMoonVisible * uMoonIllumination * (0.25 + 0.75 * uNight);
+      sky += uMoonColor * (pow(towardMoon, 80.0) * 0.12 + pow(towardMoon, 900.0) * 0.3) * haloStrength;
+      float r = sqrt(max(0.0, 1.0 - m * m)) / MOON_SIN_R;
+      if (m > 0.0 && r < 1.0) {
+        vec3 o = (d - uMoonDirection * m) / MOON_SIN_R;
+        vec3 n = o - uMoonDirection * sqrt(1.0 - r * r);
+        float lit = smoothstep(-0.06, 0.06, dot(n, uSunDirection));
+        float edge = smoothstep(1.0, 0.86, r);
+        // The dark side hides the stars at night and vanishes by day; the
+        // lit side is pale by day and bright at night.
+        float cover = edge * uMoonVisible * mix(0.9 * uNight, 1.0 - 0.55 * uDayness, lit);
+        vec3 surface = mix(uMoonColor * 0.05, uMoonColor * 1.3, lit);
+        sky = mix(sky, surface, cover);
+      }
+    }
+
     // Cloud over the painted sunset and the night: greyer and dimmer. By
     // day the engine's colours are already greyed for cloud.
     float lum = dot(sky, vec3(0.299, 0.587, 0.114));
@@ -261,6 +294,10 @@ export function SunsetSky({ sunPosition, dynamic = false, radius = 200 }: Sunset
           uNight: { value: 0 },
           uSunVisible: { value: 1 },
           uCloud: { value: 0 },
+          uMoonDirection: { value: new THREE.Vector3(0, 1, 0) },
+          uMoonVisible: { value: 0 },
+          uMoonIllumination: { value: 0 },
+          uMoonColor: { value: new THREE.Color(MOON) },
         },
         side: THREE.BackSide,
         // Drawn first and never occludes anything: it's the backdrop.
@@ -285,6 +322,9 @@ export function SunsetSky({ sunPosition, dynamic = false, radius = 200 }: Sunset
       u.uNight.value = skyState.night;
       u.uSunVisible.value = skyState.sunVisible;
       u.uCloud.value = skyState.cloud;
+      u.uMoonDirection.value.copy(skyState.moonDirection);
+      u.uMoonVisible.value = skyState.moonVisible;
+      u.uMoonIllumination.value = skyState.moonIllumination;
     }
   });
 

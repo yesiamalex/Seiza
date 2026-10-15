@@ -25,7 +25,8 @@ estimates need measured equipment data and local weather records.
   24 hours, totals with CO₂ avoided, and an event log. Every part of the
   plant has an ⓘ pop-up with an illustration and an explanation.
   - **Live** follows the world's own clock and weather schedule, so the
-    numbers match the sky visitors are standing under. That includes a
+    numbers match the sky visitors are standing under, moon phase
+    included. That includes a
     time or weather an editor sets in the world's edit panel; a note under
     the mode switch says when one is set.
   - **Simulate** lets a class scrub the hour and the day, run time at up to

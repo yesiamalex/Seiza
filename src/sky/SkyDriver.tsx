@@ -5,10 +5,11 @@ import { SkyClock, skyState, type SkyConfig } from "./skyState";
 import type { RoomSky } from "../multiplayer/types";
 import { NIGHT_HORIZON_COLOR, SUNSET_HORIZON_COLOR } from "../scene/SunsetSky";
 
-/** How often the clock recomputes the sky, in seconds of real time. The sun
- *  moves a quarter of a degree a minute, so twice a second is plenty even
- *  for a sped-up demonstration. */
-const UPDATE_INTERVAL = 0.5;
+/** How often the clock recomputes the sky, in seconds of real time. Every
+ *  frame: it's a few dozen arithmetic operations, and a sped-up clock (a
+ *  room sky at 360x) visibly stepped the sun at twice a second. Shadows
+ *  still refresh on their own slow heartbeat (Scene.tsx), not per frame. */
+const UPDATE_INTERVAL = 0;
 /** Distance of the directional light from the origin, as in the fixed sky. */
 const SUN_DISTANCE = 37;
 
@@ -92,14 +93,16 @@ export function SkyDriver({ config, room = null }: { config: SkyConfig; room?: R
     }
     if (sun.current) {
       const s = sun.current;
-      // Moonlight comes from opposite the sun once it has set, kept high
-      // enough to light the garden rather than skim it.
+      // Moonlight comes from the moon once the sun has set, kept high
+      // enough to light the garden rather than skim it. Brighter the fuller
+      // the moon; gone while it's below the horizon.
       if (night > 0.5) {
-        s.position.copy(skyState.sunDirection).negate();
+        s.position.copy(skyState.moonDirection);
         s.position.y = Math.max(s.position.y, 0.45);
         s.position.normalize().multiplyScalar(SUN_DISTANCE);
         s.color.copy(NIGHT.moonColor);
-        s.intensity = NIGHT.moon * (1 - 0.8 * cloud) * (night - 0.5) * 2;
+        const moonUp = THREE.MathUtils.smoothstep(skyState.moonElevation, -2, 6);
+        s.intensity = NIGHT.moon * (0.3 + 0.7 * skyState.moonIllumination) * moonUp * (1 - 0.8 * cloud) * (night - 0.5) * 2;
       } else {
         s.position.copy(skyState.sunDirection).multiplyScalar(SUN_DISTANCE);
         s.color.copy(SUNSET.sunColor).lerp(DAY.sunColor, dayness);

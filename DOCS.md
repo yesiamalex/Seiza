@@ -822,8 +822,14 @@ a world with `"cycle": "realtime"`, `src/sky/` moves it:
   from December to May and rain more likely from June to November. Every
   browser computes the same weather, so nothing is synced. Typhoons are
   never scheduled; a world can still fix one.
-- **The clock** (`skyState.ts`) recomputes twice a second and writes the
-  result to a module-level store. `SkyDriver.tsx` sets the lights and fog
+- **The moon** (`moonPhase`, `moonPosition`) has its real phase, from the
+  mean lunar cycle, and runs along the sun's path behind it by that phase,
+  so a full moon rises at sunset and a crescent follows the sun down. It
+  ignores the tilt of the moon's orbit, so its position can be several
+  degrees off the real moon.
+- **The clock** (`skyState.ts`) recomputes every frame, which is a few
+  dozen arithmetic operations, so the sun moves smoothly even on a sped-up
+  clock. It writes the result to a module-level store. `SkyDriver.tsx` sets the lights and fog
   from it each frame, the sky shader reads it, and `Outdoors.tsx` dims the
   unlit ground and hills after dusk.
 
@@ -834,8 +840,16 @@ as the sun sets. Above that angle the painted sunset hands over to the
 engine's daytime gradient, and cloud greys the sky and hides the stars. The
 lights follow the same path: the original sunset lights at that angle,
 brighter and whiter by day, and dim blue moonlight at night, with the lamps
-doing the rest. A fixed-sky world renders the original sky and lights
-untouched.
+doing the rest. The moon is drawn in the same shader: a disc lit on the
+side facing the sun, so its phase comes from the geometry, with a soft
+halo that grows with the phase and the dark. Moonlight comes from the
+moon, brighter when it's fuller, and goes when the moon sets. Low sun
+through the windows of the hall and the classroom is one pooled light per
+window wall (`WindowSun.tsx`): west in the afternoon, east in the morning,
+and gone at night, under cloud, or with the sun high. Shadows still
+refresh on their two-second heartbeat rather than every frame. A
+fixed-sky world renders the original sky and lights untouched, apart from
+the hall's west windows, which now share the classroom's sunset glow.
 
 **Setting a room's sky.** The "Sky and time" section at the bottom of the
 edit panel overrides `world.json` for one room, for everyone in it:

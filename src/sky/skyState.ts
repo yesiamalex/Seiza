@@ -2,6 +2,8 @@ import * as THREE from "three";
 import type { RoomSky } from "../multiplayer/types";
 import { atPhilippineHour, roomSkyNow, roomSkyWeather } from "./roomSky";
 import {
+  moonPhase,
+  moonPosition,
   philippineTime,
   scheduledWeather,
   SITES,
@@ -56,6 +58,13 @@ export const skyState = {
   /** Engine sky colours, linear, for the day half of the sky. */
   dayZenith: new THREE.Color(),
   dayHorizon: new THREE.Color(),
+  /** Toward the moon, which follows the sun by its phase (weather.ts). */
+  moonDirection: new THREE.Vector3(34, 20, -14).normalize(),
+  moonElevation: -90,
+  /** Fraction of the moon's disc that is lit, 0 (new) to 1 (full). */
+  moonIllumination: 0,
+  /** How much of the moon shows: up, and not behind cloud. 0 to 1. */
+  moonVisible: 0,
   /** Simulated Philippine time, for anything that wants to show it. */
   dayOfYear: 1,
   hour: 18,
@@ -138,6 +147,8 @@ export class SkyClock {
 
     const { dayOfYear, hour } = philippineTime(date);
     const sun = sunPosition(dayOfYear, hour, this.site);
+    const phase = moonPhase(date);
+    const moon = moonPosition(dayOfYear, hour, phase.phase, this.site);
     const cloud = this.weather.effectiveCloud();
     const colors = skyColors(sun.elevation, cloud, this.weather.rain);
 
@@ -147,6 +158,10 @@ export class SkyClock {
     skyState.dayness = smoothstep(ORIGINAL_SUN_ELEVATION, 30, sun.elevation);
     skyState.night = smoothstep(-1, -12, sun.elevation);
     skyState.sunVisible = smoothstep(-3, 1, sun.elevation) * (1 - 0.85 * cloud);
+    skyState.moonDirection.set(...sunDirection(moon));
+    skyState.moonElevation = moon.elevation;
+    skyState.moonIllumination = phase.illumination;
+    skyState.moonVisible = smoothstep(-2, 2, moon.elevation) * (1 - 0.9 * cloud);
     skyState.cloud = cloud;
     skyState.rain = this.weather.rain;
     skyState.weather = this.weather.type;

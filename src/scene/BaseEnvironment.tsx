@@ -10,6 +10,7 @@ import { Pond } from "./Pond";
 import { DateCalendar, WallClock } from "./ClassroomClock";
 import { LightSwitch } from "./LightSwitch";
 import { PooledLight } from "./LightPool";
+import { WindowSun } from "./WindowSun";
 import { DEFAULT_LIGHTS, type LightZone } from "../multiplayer/types";
 import { playDoorSlide, playDoorSwing } from "../audio/sfx";
 import {
@@ -403,6 +404,8 @@ function HallShell({ m }: { m: WorldMaterials }) {
       {HALL_WINDOW_Z.map((z) => (
         <Window key={`e-${z}`} position={[HALL.maxX - 0.2, HALL_WINDOW_CENTER_Y, z]} rotationY={-Math.PI / 2} width={HALL_WINDOW_WIDTH} height={HALL_WINDOW_HEIGHT} m={m} />
       ))}
+      {/* Low sun through those windows, as in the classroom. */}
+      <WindowSun west={[HALL.minX + 4.2, 2.1, 7.5]} east={[HALL.maxX - 4.2, 2.1, 7.5]} />
 
       {/* The hall's two doorway gaps are cut the full height of the wall,
           so above each door header there was a hole straight through to
@@ -1115,12 +1118,7 @@ function ClassroomShell({ m, lit, onToggleLight }: { m: WorldMaterials; lit: boo
           <PooledLight position={[0, -0.2, 0]} intensity={lit ? 5.5 : 0} distance={17} color="#ffeccd" />
         </group>
       ))}
-      {/* The glow of a low sun coming through the window wall. It used to
-          sit 1.2m off that wall, so with inverse-square falloff the plaster
-          beside it took the full brightness and blew out to white. Moved
-          into the room and dimmed: the windows still wash the floor warm,
-          but nothing near them clips. */}
-      <PooledLight position={[CLASSROOM.minX + 4.2, 2.1, -17]} intensity={5} distance={19} color="#ffbe86" />
+      <WindowSun west={[CLASSROOM.minX + 4.2, 2.1, -17]} east={[CLASSROOM.maxX - 4.2, 2.1, -17]} />
     </group>
   );
 }

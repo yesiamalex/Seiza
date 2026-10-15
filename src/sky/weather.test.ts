@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clearSkyGhi, cloudyGhi, SITES, skyColors, sunPosition, WeatherState } from "./weather";
+import { clearSkyGhi, cloudyGhi, moonPhase, moonPosition, SITES, skyColors, sunPosition, WeatherState } from "./weather";
 
 describe("sunPosition", () => {
   it("puts the sun high near local noon and below the horizon at midnight in Cebu", () => {
@@ -70,5 +70,23 @@ describe("skyColors", () => {
     const cloudy = skyColors(45, 1);
     const saturation = (c: number[]) => Math.max(...c) - Math.min(...c);
     expect(saturation(cloudy.top)).toBeLessThan(saturation(clear.top));
+  });
+});
+
+describe("moon", () => {
+  it("is full and new on known dates", () => {
+    // The total lunar eclipse of 3 March 2026, and the annular solar
+    // eclipse of 17 February 2026.
+    expect(moonPhase(new Date(Date.UTC(2026, 2, 3, 11, 38))).illumination).toBeGreaterThan(0.99);
+    expect(moonPhase(new Date(Date.UTC(2026, 1, 17, 12, 1))).illumination).toBeLessThan(0.01);
+  });
+
+  it("rises in the east around sunset when full", () => {
+    const moon = moonPosition(62, 18.5, 0.5, SITES.cebu);
+    expect(Math.abs(moon.elevation)).toBeLessThan(15);
+    expect(moon.azimuth).toBeGreaterThan(60);
+    expect(moon.azimuth).toBeLessThan(120);
+    // And is high around midnight.
+    expect(moonPosition(62, 0.2, 0.5, SITES.cebu).elevation).toBeGreaterThan(60);
   });
 });

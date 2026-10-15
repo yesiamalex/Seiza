@@ -5,6 +5,8 @@
 // are standing under; Simulate mode lets a class scrub time, speed it up,
 // and call in weather.
 import {
+  moonPhase,
+  moonPosition,
   philippineTime,
   scheduledWeather,
   SITES,
@@ -303,6 +305,28 @@ function render(s: Snapshot) {
 const skyCanvas = $<HTMLCanvasElement>("#sky");
 const skyCtx = skyCanvas.getContext("2d")!;
 const rainDrops = Array.from({ length: 140 }, () => ({ x: Math.random(), y: Math.random(), v: 0.6 + Math.random() * 0.6 }));
+/** A moon disc showing its phase: a lit half on the sun's side, then an
+ *  ellipse that widens the lit part past half (gibbous) or eats into it
+ *  (crescent). */
+function drawMoonDisc(x: number, y: number, r: number, phase: number, alpha: number) {
+  const waxing = phase < 0.5;
+  const k = Math.cos(2 * Math.PI * phase);
+  const lit = `rgba(232,238,250,${alpha})`;
+  const dark = `rgba(40,46,70,${alpha * 0.85})`;
+  skyCtx.fillStyle = dark;
+  skyCtx.beginPath();
+  skyCtx.arc(x, y, r, 0, Math.PI * 2);
+  skyCtx.fill();
+  skyCtx.fillStyle = lit;
+  skyCtx.beginPath();
+  skyCtx.arc(x, y, r, -Math.PI / 2, Math.PI / 2, !waxing);
+  skyCtx.fill();
+  skyCtx.fillStyle = k < 0 ? lit : dark;
+  skyCtx.beginPath();
+  skyCtx.ellipse(x, y, r * Math.abs(k), r, 0, 0, Math.PI * 2);
+  skyCtx.fill();
+}
+
 function drawSky(s: Snapshot) {
   const { width: w, height: h } = skyCanvas;
   const colors = skyColors(s.sunElevation, s.cloud, s.rain);
@@ -334,6 +358,23 @@ function drawSky(s: Snapshot) {
     glow.addColorStop(1, "rgba(255,200,120,0)");
     skyCtx.fillStyle = glow;
     skyCtx.fillRect(x - 50, y - 50, 100, 100);
+  }
+
+  // The moon, from the same engine as the world's: its phase lit on the
+  // sun's side (right while waxing, as seen from the Philippines).
+  const when = new Date(Date.UTC(new Date().getUTCFullYear(), 0, s.dayOfYear) + (s.hour - 8) * 3600_000);
+  const phase = moonPhase(when);
+  const moon = moonPosition(s.dayOfYear, s.hour, phase.phase, SITES[siteKey]);
+  if (moon.elevation > -2 && phase.illumination > 0.02) {
+    const x = ((moon.azimuth - 60) / 240) * w;
+    const y = h * 0.78 - (Math.max(-2, moon.elevation) / 90) * h * 0.72;
+    const show = (1 - colors.daylight * 0.6) * (1 - s.cloud * 0.85);
+    const halo = skyCtx.createRadialGradient(x, y, 4, x, y, 34);
+    halo.addColorStop(0, `rgba(220,230,255,${0.35 * phase.illumination * show})`);
+    halo.addColorStop(1, "rgba(220,230,255,0)");
+    skyCtx.fillStyle = halo;
+    skyCtx.fillRect(x - 36, y - 36, 72, 72);
+    drawMoonDisc(x, y, 8, phase.phase, show);
   }
 
   // Cloud bank.
