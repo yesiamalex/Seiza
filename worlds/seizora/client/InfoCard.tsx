@@ -1,9 +1,11 @@
 // The card that opens over the world when you click an exhibit or a board:
 // an illustration, a short explanation, and something to try.
+import { useEffect, useState } from "react";
 import { showWorldOverlay } from "../../../src/worlds/WorldExtension";
 import { panelStyle, pillButtonStyle } from "../../../src/ui/styles";
 import { INFO, type InfoKey } from "../sim/info";
 import { REFERENCES } from "../sim/references";
+import { live } from "./live";
 
 export function openInfo(key: InfoKey) {
   showWorldOverlay(<InfoCard infoKey={key} />);
@@ -12,6 +14,14 @@ export function openInfo(key: InfoKey) {
 function InfoCard({ infoKey }: { infoKey: InfoKey }) {
   const card = INFO[infoKey];
   const close = () => showWorldOverlay(null);
+  // A card with a live illustration redraws it once a second while open.
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (!card.liveArt) return;
+    const id = setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, [card]);
+  const art = card.liveArt && live.now ? card.liveArt(live.now) : card.art;
   return (
     <div
       role="dialog"
@@ -30,7 +40,7 @@ function InfoCard({ infoKey }: { infoKey: InfoKey }) {
           </button>
         </div>
         {/* Our own static SVG from sim/info.ts, never user content. */}
-        <div style={{ borderRadius: 8, overflow: "hidden", marginBottom: 10 }} dangerouslySetInnerHTML={{ __html: card.art }} />
+        <div style={{ borderRadius: 8, overflow: "hidden", marginBottom: 10 }} dangerouslySetInnerHTML={{ __html: art }} />
         {card.body.map((paragraph) => (
           <p key={paragraph.slice(0, 24)} style={{ margin: "0 0 8px" }}>
             {paragraph}

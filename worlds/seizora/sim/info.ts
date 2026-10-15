@@ -11,12 +11,29 @@ export type InfoKey = "sky" | "silicon" | "perovskite" | "wind" | "battery" | "g
 export interface InfoCard {
   title: string;
   art: string;
+  /** The illustration drawn from the plant's live state, when it has one;
+   *  `art` is shown until the plant has started. */
+  liveArt?: (battery: { soc: number; batteryMw: number }) => string;
   body: string[];
   try?: string;
   sources: RefKey[];
 }
 
 const svg = (inner: string) => `<svg viewBox="0 0 320 200" xmlns="http://www.w3.org/2000/svg" role="img">${inner}</svg>`;
+
+/** The battery, filled to its charge, with what it's doing. */
+function batteryArt(soc: number, batteryMw: number): string {
+  const fill = Math.max(0, Math.min(1, soc)) * 184;
+  const state = batteryMw < -0.01 ? `charging at ${(-batteryMw).toFixed(2)} MW` : batteryMw > 0.01 ? `discharging at ${batteryMw.toFixed(2)} MW` : "idle";
+  return svg(`
+      <rect width="320" height="200" fill="#efeaf8"/>
+      <rect x="60" y="50" width="200" height="100" rx="10" fill="#fff" stroke="#7d55e8" stroke-width="4"/>
+      <rect x="260" y="85" width="12" height="30" fill="#7d55e8"/>
+      <rect x="68" y="58" width="${fill.toFixed(1)}" height="84" rx="6" fill="#b78cff"/>
+      <text x="160" y="106" font-size="22" font-weight="700" text-anchor="middle" fill="#3a2780">${Math.round(soc * 100)}%</text>
+      <text x="160" y="40" font-size="12" text-anchor="middle" fill="#5a3bb0">${state}</text>
+      <text x="60" y="175" font-size="11">stores the midday surplus for the evening peak</text>`);
+}
 
 export const INFO: Record<InfoKey, InfoCard> = {
   sky: {
@@ -92,13 +109,8 @@ export const INFO: Record<InfoKey, InfoCard> = {
   },
   battery: {
     title: "Battery storage",
-    art: svg(`
-      <rect width="320" height="200" fill="#efeaf8"/>
-      <rect x="60" y="50" width="200" height="100" rx="10" fill="#fff" stroke="#7d55e8" stroke-width="4"/>
-      <rect x="260" y="85" width="12" height="30" fill="#7d55e8"/>
-      <rect x="68" y="58" width="120" height="84" rx="6" fill="#b78cff"/>
-      <text x="200" y="104" font-size="16" fill="#5a3bb0">60%</text>
-      <text x="60" y="175" font-size="11">stores the midday surplus for the evening peak</text>`),
+    art: batteryArt(0.6, 0),
+    liveArt: ({ soc, batteryMw }) => batteryArt(soc, batteryMw),
     body: [
       "The battery holds 6 MWh and can charge or discharge at up to 3 MW. In Auto, it stores whatever the plant makes beyond the load. On the grid it saves that energy for the evening peak: it covers only the part of the load above about 2.1 MW, so its charge lasts through the evening while the main grid supplies the rest. Cut off from the grid, it covers all it can.",
       "About 15% of the energy is lost on the round trip (85% comes back, typical of large lithium-ion systems), and the battery is kept between 10% and 95% full to protect it.",

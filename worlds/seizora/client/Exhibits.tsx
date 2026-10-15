@@ -403,8 +403,21 @@ const art: Record<string, Art> = {
     ctx.stroke();
     ctx.fillStyle = "#4b3a73";
     ctx.fillRect(bx + bw, by + bh * 0.3, 16, bh * 0.4);
-    ctx.fillStyle = "#8a5fe0";
-    for (let i = 0; i < 4; i++) ctx.fillRect(bx + 14 + i * ((bw - 28) / 4), by + 14, (bw - 28) / 4 - 10, bh - 28);
+    // Four cells, filled to the battery's live charge.
+    const soc = live.now?.soc ?? 0.6;
+    const cell = (bw - 28) / 4;
+    for (let i = 0; i < 4; i++) {
+      const filled = THREE.MathUtils.clamp(soc * 4 - i, 0, 1);
+      ctx.fillStyle = "#ddd0f7";
+      ctx.fillRect(bx + 14 + i * cell, by + 14, cell - 10, bh - 28);
+      ctx.fillStyle = "#8a5fe0";
+      ctx.fillRect(bx + 14 + i * cell, by + 14, (cell - 10) * filled, bh - 28);
+    }
+    ctx.fillStyle = "#4b3a73";
+    ctx.font = `700 40px ${FONT}`;
+    ctx.textAlign = "center";
+    ctx.fillText(`${Math.round(soc * 100)}%`, x + w / 2, by + bh + 56);
+    ctx.textAlign = "left";
   },
   layers: (ctx, x, y, w, h) => {
     ctx.fillStyle = "#f4ece6";
