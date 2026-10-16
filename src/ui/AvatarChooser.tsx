@@ -13,6 +13,7 @@ import {
 } from "../profile/profileStore";
 import { AvatarPicker } from "./AvatarPicker";
 import { AvatarPreview } from "./AvatarPreview";
+import { AvaturnNotice, AvaturnSteps } from "./AvaturnSteps";
 import { ACCENT_COLOR, pillButtonActiveStyle, pillButtonStyle, primaryButtonStyle } from "./styles";
 
 // KV's real ceiling is 25 MiB per value, so this is a hard block. Keep in
@@ -86,7 +87,7 @@ export function initialAvatarChoice(world: WorldConfig): StoredAvatarChoice {
   return world.defaultAvatarUrl ? { kind: "preset", url: world.defaultAvatarUrl } : { kind: "designer", spec: DEFAULT_AVATAR_SPEC };
 }
 
-type Tab = "design" | "presets" | "upload";
+type Tab = "design" | "presets" | "upload" | "avaturn";
 
 interface AvatarChooserProps {
   world: WorldConfig;
@@ -116,6 +117,9 @@ interface Pending {
  * - Presets: the deployment's own .vrm files (world.json defaultAvatars).
  * - Upload VRM: your own file, optimized when that helps, uploaded to this
  *   deployment so others can load it, and kept locally when remembered.
+ * - Avaturn: a realistic avatar made from selfies on Avaturn's free site,
+ *   dropped in as its .glb and converted to an optimized VRM here, then
+ *   uploaded the same way (see AvaturnSteps.tsx).
  */
 export function AvatarChooser({ world, value, onChange, rememberLocally, onStagedPreview }: AvatarChooserProps) {
   const presets = world.defaultAvatars ?? [];
@@ -144,6 +148,7 @@ export function AvatarChooser({ world, value, onChange, rememberLocally, onStage
     { id: "design", label: "Design" },
     ...(presets.length ? [{ id: "presets" as const, label: "Presets" }] : []),
     ...(allowUpload ? [{ id: "upload" as const, label: "Upload VRM" }] : []),
+    ...(allowUpload ? [{ id: "avaturn" as const, label: "Avaturn" }] : []),
   ];
 
   // In the world, whatever you wear is what everyone in the room sees,
@@ -311,8 +316,11 @@ export function AvatarChooser({ world, value, onChange, rememberLocally, onStage
         </div>
       )}
 
-      {tab === "upload" && allowUpload && (
+      {(tab === "upload" || tab === "avaturn") && allowUpload && (
         <UploadPanel
+          // Its own panel per tab, so a file picked in one isn't carried to the other.
+          key={tab}
+          source={tab === "avaturn" ? "avaturn" : "vrm"}
           worldId={world.id}
           current={value.kind === "upload" ? value : null}
           previewing={pending?.choice.kind === "upload"}
@@ -332,6 +340,7 @@ export function AvatarChooser({ world, value, onChange, rememberLocally, onStage
 }
 
 function UploadPanel({
+  source = "vrm",
   worldId,
   current,
   previewing,
@@ -340,6 +349,8 @@ function UploadPanel({
   onUploaded,
   onRestore,
 }: {
+  /** "avaturn": takes an Avaturn .glb and converts it to a VRM on pick. */
+  source?: "vrm" | "avaturn";
   worldId: string;
   current: Extract<StoredAvatarChoice, { kind: "upload" }> | null;
   /** The previous upload is the look being previewed above. */
@@ -370,7 +381,8 @@ function UploadPanel({
     };
   }, [worldId, current]);
   // Only offered while you're wearing something else.
-  const offerPrevious = previous && !file && !(current && current.fileName === previous.fileName);
+  const offerPrevious = source === "vrm" && previous && !file && !(current && current.fileName === previous.fileName);
+  const avaturn = source === "avaturn";
   const onStagedPreviewRef = useRef(onStagedPreview);
   onStagedPreviewRef.current = onStagedPreview;
 
@@ -397,6 +409,7 @@ function UploadPanel({
     setRightsConfirmed(false);
     if (inputRef.current) inputRef.current.value = "";
     if (!picked) return setFile(null);
+    if (avaturn) return void convertPicked(picked);
     if (!picked.name.toLowerCase().endsWith(".vrm")) {
       setFile(null);
       return setError("Choose a .vrm file.");
@@ -413,13 +426,50 @@ function UploadPanel({
     setFile(picked);
   }
 
+  /** An Avaturn .glb becomes an optimized VRM straight away, so the
+   *  preview shows exactly what will be uploaded. */
+  async function convertPicked(picked: File) {
+    if (!picked.name.toLowerCase().endsWith(".glb")) {
+      setFile(null);
+      return setError("Choose the .glb file you downloaded from Avaturn.");
+    }
+    if (picked.size > PICK_TIME_CEILING_BYTES) {
+      setFile(null);
+      return setError(`That file is too large (max ${formatMB(PICK_TIME_CEILING_BYTES)}).`);
+    }
+    setBusy(true);
+    setFile(null);
+    setStatus("Converting to VRM and shrinking it…");
+    try {
+      // Loaded only here, so nobody else downloads the converter.
+      const { convertGlbToVrm } = await import("../avatar/import/glbToVrm");
+      const name = picked.name.replace(/\.glb$/i, "") || "Avaturn avatar";
+      const result = await convertGlbToVrm(picked, { name });
+      setFile(new File([result.blob], `${name}.vrm`, { type: "model/gltf-binary" }));
+      setStatus(`Converted to VRM: ${formatMB(result.originalBytes)} down to ${formatMB(result.vrmBytes)}.`);
+      if (result.notes.length > 0) setWarning(result.notes.join(" "));
+    } catch (err) {
+      setStatus(null);
+      // The converter's own errors are written for the uploader; anything
+      // else is a library's message, which wouldn't help them.
+      setError(
+        err instanceof Error && err.name === "AvatarImportError"
+          ? err.message
+          : "That file couldn't be converted. Make sure it's the .glb you exported from Avaturn."
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function upload() {
     if (!file || !rightsConfirmed) return;
     setBusy(true);
     setError(null);
     try {
       let blob: Blob = file;
-      if (optimize) {
+      // A converted Avaturn file is already optimized.
+      if (optimize && !avaturn) {
         setStatus("Optimizing…");
         const result = await optimizeVrmAvatar(file);
         blob = result.blob;
@@ -460,7 +510,8 @@ function UploadPanel({
   }
 
   return (
-    <div key="upload" className="seiza-tabpanel" role="tabpanel" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+    <div key={source} className="seiza-tabpanel" role="tabpanel" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {avaturn && <AvaturnSteps />}
       {current && !file && (
         <small style={{ opacity: 0.75 }}>
           Current: <strong>{current.fileName}</strong>
@@ -498,8 +549,15 @@ function UploadPanel({
         }}
       >
         <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, opacity: 0.85 }}>
-          Drop a .vrm here or browse
-          <input ref={inputRef} type="file" accept=".vrm" disabled={busy} onChange={(e) => pick(e.target.files?.[0] ?? null)} style={{ fontSize: 12, maxWidth: "100%" }} />
+          {avaturn ? "Drop your Avaturn .glb here or browse" : "Drop a .vrm here or browse"}
+          <input
+            ref={inputRef}
+            type="file"
+            accept={avaturn ? ".glb" : ".vrm"}
+            disabled={busy}
+            onChange={(e) => pick(e.target.files?.[0] ?? null)}
+            style={{ fontSize: 12, maxWidth: "100%" }}
+          />
         </label>
       </div>
 
@@ -507,13 +565,19 @@ function UploadPanel({
 
       {file && (
         <>
-          <label style={{ display: "flex", gap: 6, alignItems: "flex-start", fontSize: 12, opacity: 0.85 }}>
-            <input type="checkbox" checked={optimize} onChange={(e) => setOptimize(e.target.checked)} disabled={busy} />
-            <span>Optimize file size first (skipped automatically when it wouldn't help)</span>
-          </label>
+          {!avaturn && (
+            <label style={{ display: "flex", gap: 6, alignItems: "flex-start", fontSize: 12, opacity: 0.85 }}>
+              <input type="checkbox" checked={optimize} onChange={(e) => setOptimize(e.target.checked)} disabled={busy} />
+              <span>Optimize file size first (skipped automatically when it wouldn't help)</span>
+            </label>
+          )}
           <label style={{ display: "flex", gap: 6, alignItems: "flex-start", fontSize: 12, opacity: 0.85 }}>
             <input type="checkbox" checked={rightsConfirmed} onChange={(e) => setRightsConfirmed(e.target.checked)} disabled={busy} />
-            <span>I have the rights to use and share this avatar. Everyone in this room will see it, and this deployment does not license-check uploads.</span>
+            <span>
+              {avaturn
+                ? "This avatar is of me, or of someone who agreed to it being shown here. Everyone in this room will see it."
+                : "I have the rights to use and share this avatar. Everyone in this room will see it, and this deployment does not license-check uploads."}
+            </span>
           </label>
           <button type="button" style={{ ...primaryButtonStyle, padding: "9px 14px", fontSize: 13, opacity: rightsConfirmed && !busy ? 1 : 0.55 }} disabled={!rightsConfirmed || busy} onClick={() => void upload()}>
             {busy ? "Working…" : "Upload and use"}
@@ -524,8 +588,13 @@ function UploadPanel({
       {warning && <small style={{ color: "#f2c14e" }}>{warning}</small>}
       {status && <small style={{ opacity: 0.7 }}>{status}</small>}
       {error && <small style={{ color: "#ff8a80" }}>{error}</small>}
-      <small style={{ opacity: 0.55 }}>VRM 0.x and 1.0 both work. Gestures retarget onto the VRM humanoid rig automatically.</small>
+      {avaturn ? (
+        <AvaturnNotice />
+      ) : (
+        <small style={{ opacity: 0.55 }}>VRM 0.x and 1.0 both work. Gestures retarget onto the VRM humanoid rig automatically.</small>
+      )}
 
+      {!avaturn && (
       <div style={{ borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: 8, display: "flex", flexDirection: "column", gap: 5 }}>
         <small style={{ opacity: 0.75 }}>
           Don't have one?{" "}
@@ -551,6 +620,7 @@ function UploadPanel({
           liability for infringing ones. Not legal advice — if this is going somewhere commercial, get some.
         </small>
       </div>
+      )}
     </div>
   );
 }

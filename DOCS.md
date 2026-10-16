@@ -233,7 +233,7 @@ guarantee yet.
 - **Text chat.** A room-wide chat panel, relayed through the room server. Chat
   isn't saved between connections.
 - **Name tags** above every player, highlighted while that player speaks.
-- **Three ways to choose an avatar**, on the join screen and in the in-world
+- **Four ways to choose an avatar**, on the join screen and in the in-world
   Avatar menu (`C`), each with a rotatable 3D preview:
   - **Design:** a built-in designer for skin, hair, eyes, clothing,
     accessories, height, and build, with presets such as businessman,
@@ -247,6 +247,13 @@ guarantee yet.
     [glTF-Transform](https://github.com/donmccurdy/glTF-Transform) shrinks
     oversized textures, and skips itself when it wouldn't help (see
     `src/avatar/optimizeVrm.ts`).
+  - **Avaturn:** a realistic avatar made from a few selfies on
+    [Avaturn](https://avaturn.me)'s free site and downloaded as a `.glb`.
+    Dropping it in converts it to an optimized VRM 1.0 in the browser
+    (`src/avatar/import/`), previews it, and uploads it like any other VRM.
+    Avaturn's embeddable editor needs a paid plan, so Seiza links to the site
+    instead of embedding it, and nothing of Avaturn's runs in Seiza. Avaturn
+    avatars have no facial expressions, so they don't blink or smile.
 
   Changing your avatar in the world updates it for everyone without
   reconnecting.
@@ -1323,6 +1330,15 @@ graphics memory.
 - **Uploaded VRMs are optimized before upload** (`src/avatar/optimizeVrm.ts`)
   when that's safe. Textures are shrunk, and the result is only used if every
   VRM extension survived; otherwise the original file is kept.
+- **Avaturn avatars are converted and shrunk in one pass**
+  (`src/avatar/import/glbToVrm.ts`). Its bone names are mapped to VRM's
+  humanoid bones, the animation clip baked into the file is dropped (Seiza
+  has its own), each vertex keeps its four strongest bone weights (all
+  three.js uses), stored as bytes, and textures are re-encoded with the
+  browser's own encoder: colour up to 1024 px, detail maps up to 512 px,
+  opaque ones as JPEG and transparent ones (hair) as WebP. The optimizing
+  happens before the VRM data is added, so nothing can strip it. A typical
+  export goes from about 4.5 MB to 2.5 MB.
 - **Bundled preset avatars are shrunk at build time** by
   `scripts/fetch-assets.mjs`. It reduces their textures by editing the file
   directly, and leaves all VRM data unchanged. This roughly halves each VRoid
