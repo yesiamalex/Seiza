@@ -94,6 +94,32 @@ const AVATAR_CHANGE_MIN_INTERVAL_MS = 1500;
 // (see src/avatar/designer/avatarSpec.ts). Real specs are a few hundred
 // characters; the cap only bounds abuse. Receivers re-validate every field.
 const DESIGNER_AVATAR_URL = /^seiza-avatar:v1:[A-Za-z0-9_-]{1,1200}$/;
+/** No real message comes near this (a full board's text is 600
+ *  characters, an SDP offer a few KB). Anything bigger is dropped unread. */
+const MAX_MESSAGE_CHARS = 64 * 1024;
+/** Signalling payloads (SDP and ICE) are a few KB at most. */
+const MAX_SIGNAL_CHARS = 32 * 1024;
+/** Room password guesses per connection before it's closed. */
+const MAX_ROOM_AUTH_ATTEMPTS = 5;
+/**
+ * Failed password guesses (room, editor, or admin) allowed from one IP
+ * address per window, across all its connections. The per-connection
+ * limits alone could be dodged by reconnecting. Generous, because a whole
+ * class can share one school IP and someone may mistype.
+ */
+const MAX_AUTH_FAILURES_PER_IP = 30;
+const AUTH_FAILURE_WINDOW_MS = 15 * 60 * 1000;
+/** Sockets a room accepts in all, joined or not, beyond its occupants. */
+const SPARE_CONNECTIONS = 8;
+/** Object adds, moves, and removes per connection: a steady rate and a
+ *  burst. A person dragging and placing things never comes close. */
+const EDIT_RATE = { perSecond: 10, burst: 40 };
+/** Signalling messages per connection: ICE candidates arrive in bursts
+ *  when a call starts, one burst per peer. */
+const SIGNAL_RATE = { perSecond: 60, burst: 300 };
+/** A colour as the editor and world.json write it. */
+const HEX_COLOR = /^#[0-9a-f]{3,8}$/i;
+const DEFAULT_OBJECT_COLOR = "#cccccc";
 
 interface ConnectionAttachment {
   connId: string;
@@ -118,6 +144,9 @@ interface ConnectionAttachment {
   /** The page-load session this connection joined with (see "join" in
    *  types.ts). Kept on the server only. */
   session?: string;
+  /** The connecting IP, for the per-IP password-guess limit. Server only. */
+  ip?: string;
+  roomAuthAttempts?: number;
 }
 
 /** A page-load session ID: a UUID in practice; anything else is ignored. */
@@ -183,6 +212,11 @@ export class SeizaRoom extends DurableObject<Env> {
   private pendingMovement = new Map<string, PlayerMovement>();
   private movementTimer: ReturnType<typeof setTimeout> | null = null;
   private lastPositionPersist = new Map<string, number>();
+  /** Token buckets for rate limits, per connection, in memory like
+   *  lastTrackingAt: losing one to hibernation only refills it. */
+  private buckets = new Map<string, { tokens: number; at: number }>();
+  /** Failed password guesses per IP (see MAX_AUTH_FAILURES_PER_IP). */
+  private authFailures = new Map<string, { count: number; windowStart: number }>();
   private ready: Promise<void>;
 
   constructor(ctx: DurableObjectState, env: Env) {
@@ -210,17 +244,24 @@ export class SeizaRoom extends DurableObject<Env> {
     }
     await this.ready;
 
+    // Sockets that never join still cost memory, so a room takes only a
+    // few more than it has room for.
+    if (this.ctx.getWebSockets().length >= this.maxOccupants() + SPARE_CONNECTIONS) {
+      return new Response("Room is busy", { status: 503 });
+    }
+
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
     const connId = crypto.randomUUID();
-    server.serializeAttachment({ connId, player: null } satisfies ConnectionAttachment);
+    const ip = request.headers.get("cf-connecting-ip") ?? undefined;
+    server.serializeAttachment({ connId, player: null, ip } satisfies ConnectionAttachment);
     this.ctx.acceptWebSocket(server);
     return new Response(null, { status: 101, webSocket: client });
   }
 
   async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer) {
     await this.ready;
-    if (typeof raw !== "string") return;
+    if (typeof raw !== "string" || raw.length > MAX_MESSAGE_CHARS) return;
     const attachment = this.att(ws);
     if (!attachment) return; // shouldn't happen — fetch() always attaches before accepting
 
@@ -233,7 +274,10 @@ export class SeizaRoom extends DurableObject<Env> {
 
     switch (message.type) {
       case "join": {
-        const maxOccupants = Math.max(1, Number.parseInt(this.env.SEIZA_MAX_OCCUPANTS ?? "16", 10) || 16);
+        // A connection joins once. A second join used to rebuild its state
+        // from scratch, which also reset its password-guess counters.
+        if (attachment.player) return;
+        const maxOccupants = this.maxOccupants();
         if (this.listPlayers().length >= maxOccupants) {
           ws.send(JSON.stringify({ type: "roomFull", maxOccupants } satisfies ServerMessage));
           ws.close(1008, "Room is full");
@@ -246,9 +290,21 @@ export class SeizaRoom extends DurableObject<Env> {
         // "passwordRequired"'s doc comment in types.ts for the retry
         // shape (client just resends `join` with the password filled in,
         // same as authEditor/authAdmin's retry pattern).
-        if (this.roomPassword && !timingSafeEqual(message.roomPassword ?? "", this.roomPassword)) {
-          ws.send(JSON.stringify({ type: "passwordRequired" } satisfies ServerMessage));
-          return;
+        if (this.roomPassword) {
+          // A first join usually comes without a password; only an actual
+          // guess counts against the limits.
+          const guessed = typeof message.roomPassword === "string" && message.roomPassword.length > 0;
+          const granted = guessed && !this.ipLockedOut(attachment) && timingSafeEqual(message.roomPassword, this.roomPassword);
+          if (!granted) {
+            if (guessed) {
+              attachment.roomAuthAttempts = (attachment.roomAuthAttempts ?? 0) + 1;
+              this.recordAuthFailure(attachment);
+              this.save(ws, attachment);
+            }
+            ws.send(JSON.stringify({ type: "passwordRequired" } satisfies ServerMessage));
+            if ((attachment.roomAuthAttempts ?? 0) >= MAX_ROOM_AUTH_ATTEMPTS) ws.close(1008, "Too many password attempts");
+            return;
+          }
         }
         // Same reasoning as validateNewObject below: the ClientMessage
         // type is a compile-time assertion about a JSON.parse result, not
@@ -256,8 +312,9 @@ export class SeizaRoom extends DurableObject<Env> {
         // "make every other client's browser fetch an arbitrary URL"
         // hole that objectAdd already guards against.
         const displayName = sanitizeDisplayName(message.displayName);
-        const avatarUrl = sanitizeAssetUrl(message.avatarUrl, { allowEmpty: true });
-        if (avatarUrl === null) return;
+        // An avatar this room won't pass on becomes the default one,
+        // rather than keeping the person out.
+        const avatarUrl = sanitizeAvatarUrl(message.avatarUrl, this.avatarOrigins()) ?? "";
         const player: PlayerState = {
           id: attachment.connId,
           displayName,
@@ -276,7 +333,7 @@ export class SeizaRoom extends DurableObject<Env> {
         // rather than leaving a frozen copy until that socket times out.
         if (session) this.dropOtherSessionConnections(ws, session);
         this.save(ws, {
-          connId: attachment.connId,
+          ...attachment,
           player,
           batch: caps.includes("batch"),
           ...(session ? { session } : {}),
@@ -398,7 +455,7 @@ export class SeizaRoom extends DurableObject<Env> {
       }
       case "setAvatar": {
         if (!attachment.player) return;
-        const avatarUrl = sanitizeAssetUrl(message.avatarUrl, { allowEmpty: true });
+        const avatarUrl = sanitizeAvatarUrl(message.avatarUrl, this.avatarOrigins());
         if (avatarUrl === null || avatarUrl === attachment.player.avatarUrl) return;
         const now = Date.now();
         if (attachment.lastAvatarChangeAt && now - attachment.lastAvatarChangeAt < AVATAR_CHANGE_MIN_INTERVAL_MS) return;
@@ -418,11 +475,12 @@ export class SeizaRoom extends DurableObject<Env> {
           break;
         }
         const attempts = attachment.authAttempts ?? 0;
-        if (attempts >= MAX_AUTH_ATTEMPTS) {
+        if (attempts >= MAX_AUTH_ATTEMPTS || this.ipLockedOut(attachment)) {
           ws.send(JSON.stringify({ type: "editorAuthResult", granted: false } satisfies ServerMessage));
           break;
         }
         const granted = timingSafeEqual(message.password, required);
+        if (!granted) this.recordAuthFailure(attachment);
         attachment.isEditor = granted || attachment.isEditor;
         attachment.authAttempts = granted ? attempts : attempts + 1;
         this.save(ws, attachment);
@@ -444,11 +502,12 @@ export class SeizaRoom extends DurableObject<Env> {
           break;
         }
         const attempts = attachment.adminAuthAttempts ?? 0;
-        if (attempts >= MAX_ADMIN_AUTH_ATTEMPTS) {
+        if (attempts >= MAX_ADMIN_AUTH_ATTEMPTS || this.ipLockedOut(attachment)) {
           ws.send(JSON.stringify({ type: "adminAuthResult", granted: false } satisfies ServerMessage));
           break;
         }
         const granted = timingSafeEqual(message.key, required);
+        if (!granted) this.recordAuthFailure(attachment);
         if (granted) {
           attachment.isAdmin = true;
           attachment.isEditor = true; // admin implies editor — see editingRequiresAuth's call sites
@@ -468,6 +527,7 @@ export class SeizaRoom extends DurableObject<Env> {
         // questions — they're "don't let one client wedge the room for
         // everyone."
         if (this.editingRequiresAuth() && !attachment.isEditor) return;
+        if (!this.allow(attachment.connId, "edit", EDIT_RATE)) return;
         if (this.objects.size >= MAX_OBJECTS) return;
         const validated = validateNewObject(message.object);
         if (!validated) return;
@@ -479,6 +539,7 @@ export class SeizaRoom extends DurableObject<Env> {
       }
       case "objectMove": {
         if (this.editingRequiresAuth() && !attachment.isEditor) return;
+        if (!this.allow(attachment.connId, "edit", EDIT_RATE)) return;
         const object = this.objects.get(message.id);
         if (!object) return;
         // Same NaN/Infinity concern as "state" above — and this one is
@@ -499,6 +560,7 @@ export class SeizaRoom extends DurableObject<Env> {
       }
       case "objectRemove": {
         if (this.editingRequiresAuth() && !attachment.isEditor) return;
+        if (!this.allow(attachment.connId, "edit", EDIT_RATE)) return;
         if (!this.objects.delete(message.id)) return;
         this.persistObjects();
         this.broadcast({ type: "objectRemoved", id: message.id });
@@ -649,7 +711,11 @@ export class SeizaRoom extends DurableObject<Env> {
         const now = Date.now();
         if (attachment.lastChatAt && now - attachment.lastChatAt < CHAT_MIN_INTERVAL_MS) return;
         if (typeof message.text !== "string") return;
-        const text = message.text.trim().slice(0, 500);
+        // One line of plain text: no control characters, and none of the
+        // direction overrides that can make a message display as
+        // something other than what was typed. It's only ever shown as
+        // text, never run, so there are no commands to smuggle.
+        const text = stripUnsafeCharacters(message.text, { newlines: false }).trim().slice(0, 500);
         if (!text) return;
         attachment.lastChatAt = now;
         this.save(ws, attachment);
@@ -662,10 +728,22 @@ export class SeizaRoom extends DurableObject<Env> {
         break;
       }
       case "voiceSignal": {
-        // Pure relay for WebRTC mesh signaling — see src/media/useRealtimeMedia.ts.
-        // This server never looks at `data`, just forwards it to the named peer.
+        // A relay for WebRTC signalling (see src/media/useRealtimeMedia.ts):
+        // the server doesn't read `data`, but it does decide who may send
+        // what to whom. Only a joined player, only to another joined
+        // player, at a bounded rate and size.
+        if (!attachment.player || message.to === attachment.connId) return;
+        if (typeof message.data !== "object" || message.data === null) return;
+        if (!this.allow(attachment.connId, "signal", SIGNAL_RATE)) return;
         const target = this.findConnection(message.to);
-        target?.send(JSON.stringify({ type: "voiceSignal", from: attachment.connId, data: message.data } satisfies ServerMessage));
+        if (!target || !this.att(target)?.player) return;
+        const json = JSON.stringify({ type: "voiceSignal", from: attachment.connId, data: message.data } satisfies ServerMessage);
+        if (json.length > MAX_SIGNAL_CHARS) return;
+        try {
+          target.send(json);
+        } catch {
+          // The target is closing.
+        }
         break;
       }
       case "adminKick": {
@@ -715,6 +793,8 @@ export class SeizaRoom extends DurableObject<Env> {
       this.lastTrackingAt.delete(attachment.connId);
       this.lastPositionPersist.delete(attachment.connId);
       this.pendingMovement.delete(attachment.connId);
+      this.buckets.delete(`edit:${attachment.connId}`);
+      this.buckets.delete(`signal:${attachment.connId}`);
     }
     this.attachments.delete(ws);
   }
@@ -771,6 +851,48 @@ export class SeizaRoom extends DurableObject<Env> {
    *  setEnvironment/setSkybox case checks this alongside isEditor. */
   private editingRequiresAuth(): boolean {
     return !!(this.env.SEIZA_EDITOR_PASSWORD || this.env.SEIZA_ADMIN_KEY);
+  }
+
+  private maxOccupants(): number {
+    return Math.max(1, Number.parseInt(this.env.SEIZA_MAX_OCCUPANTS ?? "16", 10) || 16);
+  }
+
+  /** Outside origins avatars may be loaded from (SEIZA_AVATAR_ORIGINS). */
+  private avatarOrigins(): Set<string> {
+    return new Set(
+      (this.env.SEIZA_AVATAR_ORIGINS ?? "")
+        .split(",")
+        .map((origin) => origin.trim().replace(/\/+$/, ""))
+        .filter(Boolean)
+    );
+  }
+
+  /** A token bucket: true if this action is allowed now, and spends it. */
+  private allow(connId: string, kind: string, rate: { perSecond: number; burst: number }): boolean {
+    const key = `${kind}:${connId}`;
+    const now = Date.now();
+    const bucket = this.buckets.get(key) ?? { tokens: rate.burst, at: now };
+    bucket.tokens = Math.min(rate.burst, bucket.tokens + ((now - bucket.at) / 1000) * rate.perSecond);
+    bucket.at = now;
+    const allowed = bucket.tokens >= 1;
+    if (allowed) bucket.tokens -= 1;
+    this.buckets.set(key, bucket);
+    return allowed;
+  }
+
+  private ipLockedOut(attachment: ConnectionAttachment): boolean {
+    if (!attachment.ip) return false;
+    const entry = this.authFailures.get(attachment.ip);
+    if (!entry || Date.now() - entry.windowStart > AUTH_FAILURE_WINDOW_MS) return false;
+    return entry.count >= MAX_AUTH_FAILURES_PER_IP;
+  }
+
+  private recordAuthFailure(attachment: ConnectionAttachment) {
+    if (!attachment.ip) return;
+    const now = Date.now();
+    const entry = this.authFailures.get(attachment.ip);
+    if (!entry || now - entry.windowStart > AUTH_FAILURE_WINDOW_MS) this.authFailures.set(attachment.ip, { count: 1, windowStart: now });
+    else entry.count += 1;
   }
 
   private listPlayers(): PlayerState[] {    return this.ctx
@@ -867,7 +989,9 @@ function validateNewObject(input: unknown): Omit<WorldObject, "id" | "ownerId"> 
   if (typeof obj.kind !== "string" || !VALID_OBJECT_KINDS.has(obj.kind)) return null;
   const kind = obj.kind as WorldObjectKind;
 
-  if (typeof obj.color !== "string" || obj.color.length === 0 || obj.color.length > 32) return null;
+  // Only ever a hex colour; anything else becomes a plain grey rather than
+  // losing the object.
+  const color = typeof obj.color === "string" && HEX_COLOR.test(obj.color) ? obj.color : DEFAULT_OBJECT_COLOR;
 
   if (!Array.isArray(obj.position) || obj.position.length !== 3 || !obj.position.every(isFiniteInBounds)) return null;
   const position = obj.position as [number, number, number];
@@ -905,7 +1029,7 @@ function validateNewObject(input: unknown): Omit<WorldObject, "id" | "ownerId"> 
   // through objectPresent, which checks it's actually free.
   const presenterId = kind === "screen" ? null : undefined;
 
-  return { kind, modelUrl, src, color: obj.color, position, rotationY: obj.rotationY, pitch, scale, text, presenterId };
+  return { kind, modelUrl, src, color, position, rotationY: obj.rotationY, pitch, scale, text, presenterId };
 }
 
 /**
@@ -915,12 +1039,29 @@ function validateNewObject(input: unknown): Omit<WorldObject, "id" | "ownerId"> 
  */
 function sanitizeText(input: unknown): string {
   if (typeof input !== "string") return "";
+  return stripUnsafeCharacters(input, { newlines: true }).slice(0, MAX_OBJECT_TEXT_LENGTH);
+}
+
+/**
+ * Keeps printable text (any language) and drops what can break or disguise
+ * it: control characters, and the Unicode direction overrides and isolates
+ * (U+202A to U+202E, U+2066 to U+2069) that can make text display in a
+ * different order from what was typed, the classic way to fake a link or
+ * a name. Newlines stay only where they're allowed.
+ */
+export function stripUnsafeCharacters(input: string, { newlines }: { newlines: boolean }): string {
   let cleaned = "";
   for (const ch of input) {
     const code = ch.codePointAt(0) ?? 0;
-    if (ch === "\n" || (code >= 0x20 && code !== 0x7f)) cleaned += ch;
+    if (ch === "\n") {
+      if (newlines) cleaned += ch;
+      continue;
+    }
+    if (code < 0x20 || (code >= 0x7f && code < 0xa0)) continue;
+    if ((code >= 0x202a && code <= 0x202e) || (code >= 0x2066 && code <= 0x2069)) continue;
+    cleaned += ch;
   }
-  return cleaned.slice(0, MAX_OBJECT_TEXT_LENGTH);
+  return cleaned;
 }
 
 /** Stream ids are opaque browser-generated strings; anything else is dropped. */
@@ -958,30 +1099,80 @@ function sanitizeMedia(input: unknown): PlayerMedia | null {
  * (which looks same-origin but isn't). Any connected client can make
  * every other client's browser fetch whatever this returns.
  */
-function sanitizeAssetUrl(input: unknown, { allowEmpty }: { allowEmpty: boolean }): string | null {
+export function sanitizeAssetUrl(input: unknown, { allowEmpty }: { allowEmpty: boolean }): string | null {
   if (typeof input !== "string") return null;
   const url = input.trim();
   if (url.length === 0) return allowEmpty ? "" : null;
   if (url.length > MAX_URL_LENGTH) return null;
   if (url.startsWith("seiza-avatar:")) return DESIGNER_AVATAR_URL.test(url) ? url : null;
+  // Browsers read a backslash as a slash, so "/\\host" is really "//host".
+  if (url.includes("\\")) return null;
   if (url.startsWith("//")) return null; // protocol-relative → cross-origin
   if (url.startsWith("/")) return url; // same-origin path
-  if (/^https?:\/\//i.test(url)) return url;
-  return null;
+  return safeOutsideUrl(url) ? url : null;
+}
+
+/**
+ * Whether every visitor's browser may be pointed at this outside address:
+ * https only (the site is https, so http would be blocked anyway), no
+ * user:password part, and nothing on a local network. A room member's
+ * pasted link mustn't make everyone's browser poke at their own router or
+ * an office intranet.
+ */
+function safeOutsideUrl(url: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== "https:" || parsed.username || parsed.password) return false;
+  return !isPrivateHost(parsed.hostname);
+}
+
+/** Localhost, local-network names, and private, loopback, link-local, or
+ *  other reserved IP addresses. URL() has already normalized odd IPv4
+ *  spellings (2130706433, 0x7f.1) to dotted form. */
+export function isPrivateHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/\.$/, "");
+  if (host === "localhost" || /\.(localhost|local|internal|lan|home\.arpa)$/.test(host)) return true;
+  if (host.startsWith("[") || host.includes(":")) return true; // IPv6 literals: none are needed
+  const ip = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
+  if (!ip) return false;
+  const [a, b] = [Number(ip[1]), Number(ip[2])];
+  return (
+    a === 0 || a === 10 || a === 127 || a >= 224 ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 100 && b >= 64 && b <= 127)
+  );
+}
+
+/**
+ * An avatar URL every visitor's browser will fetch, from anyone who joins,
+ * not just editors. So outside addresses are refused unless the deployment
+ * lists their origin in SEIZA_AVATAR_ORIGINS: otherwise any visitor could
+ * point their avatar at their own server and log the IP address of
+ * everyone in the room. This deployment's own files, uploads, and designer
+ * avatars are always fine. Returns null for a URL to refuse.
+ */
+export function sanitizeAvatarUrl(input: unknown, allowedOrigins: Set<string>): string | null {
+  const url = sanitizeAssetUrl(input, { allowEmpty: true });
+  if (url === null || url === "" || url.startsWith("/") || url.startsWith("seiza-avatar:")) return url;
+  try {
+    return allowedOrigins.has(new URL(url).origin) ? url : null;
+  } catch {
+    return null;
+  }
 }
 
 function sanitizeDisplayName(input: unknown): string {
   if (typeof input !== "string") return "guest";
-  // Strip control characters (including newlines) so a name can't break
-  // up the chat/nameplate rendering or smuggle terminal escapes into a
-  // deployer's logs.
-  let cleaned = "";
-  for (const ch of input) {
-    const code = ch.codePointAt(0) ?? 0;
-    // Drop C0 controls and DEL; everything printable (incl. non-Latin) stays.
-    if (code >= 0x20 && code !== 0x7f) cleaned += ch;
-  }
-  cleaned = cleaned.trim().slice(0, MAX_DISPLAY_NAME_LENGTH);
+  // Strip control characters (including newlines) and direction overrides
+  // so a name can't break up the chat/nameplate rendering, pose as someone
+  // else, or smuggle terminal escapes into a deployer's logs.
+  const cleaned = stripUnsafeCharacters(input, { newlines: false }).trim().slice(0, MAX_DISPLAY_NAME_LENGTH);
   return cleaned.length > 0 ? cleaned : "guest";
 }
 

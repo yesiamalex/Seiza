@@ -243,9 +243,8 @@ guarantee yet.
   - **Presets:** the deployment's own `.vrm` files, listed in `world.json`.
     The default world includes four CC0 VRoid Studio samples.
   - **Upload VRM:** your own VRM 0.x or 1.0 file, stored in the deployer's KV
-    namespace for 30 days. An optional pass with
-    [glTF-Transform](https://github.com/donmccurdy/glTF-Transform) shrinks
-    oversized textures, and skips itself when it wouldn't help (see
+    namespace for 30 days. An optional pass shrinks its textures first,
+    typically halving a VRoid export, without touching any VRM data (see
     `src/avatar/optimizeVrm.ts`).
   - **Avaturn:** a realistic avatar made from a few selfies on
     [Avaturn](https://avaturn.me)'s free site and downloaded as a `.glb`.
@@ -658,6 +657,14 @@ npx wrangler secret put SEIZA_ADMIN_KEY         # protects editing and enables
 
 For local development, put the same values in a `.dev.vars` file (ignored by
 Git), for example `SEIZA_ADMIN_KEY=your-key`.
+
+Avatars from outside addresses are refused unless their origin is listed in
+the `SEIZA_AVATAR_ORIGINS` variable (comma-separated, for example
+`https://models.example.org`). This deployment's own files, uploads, and
+designer avatars always work. Any visitor can choose an avatar, and one
+hosted on a server they control would let them log the IP address of
+everyone in the room. See [SECURITY.md](SECURITY.md) for this and the rest
+of what's protected.
 
 For details, including which secret to use and why they work differently,
 see [ADMIN.md](ADMIN.md). For the limits of the brute-force protection, see
@@ -1327,9 +1334,13 @@ graphics memory.
 - **Designed avatars are settings, not files.** Other players receive a short
   text description (`seiza-avatar:v1:…`), and each viewer builds the model
   locally in a few milliseconds. Nothing is downloaded.
-- **Uploaded VRMs are optimized before upload** (`src/avatar/optimizeVrm.ts`)
-  when that's safe. Textures are shrunk, and the result is only used if every
-  VRM extension survived; otherwise the original file is kept.
+- **Uploaded VRMs are optimized before upload** (`src/avatar/optimizeVrm.ts`).
+  Only the texture bytes inside the file change; the VRM data is left
+  byte-for-byte, and that's checked before the result is used. Colour
+  textures become WebP at up to 1024 px. Textures that hold data rather
+  than colour (normal maps, MToon's shading and outline masks) stay lossless
+  PNG and are only resized. A VRoid sample goes from 9.0 MB to 4.8 MB. The
+  editor's `.glb` model uploads use the same pass.
 - **Avaturn avatars are converted and shrunk in one pass**
   (`src/avatar/import/glbToVrm.ts`). Its bone names are mapped to VRM's
   humanoid bones, the animation clip baked into the file is dropped (Seiza

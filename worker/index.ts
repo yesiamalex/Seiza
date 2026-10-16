@@ -18,6 +18,7 @@
 // @cloudflare/workers-types, and sanity-check API shapes against
 // current Cloudflare docs before relying on this in production.
 
+import { AVATAR_LIMITS, checkGlb, checkGltfJson, imageSize, MAX_IMAGE_SIDE, MODEL_LIMITS } from "./uploadChecks";
 import { SeizaRoom, timingSafeEqual } from "./room";
 
 export interface Env {
@@ -37,6 +38,12 @@ export interface Env {
   SEIZA_ADMIN_KEY?: string;
   /** Maximum simultaneous joined players for the deployed world. */
   SEIZA_MAX_OCCUPANTS?: string;
+  /** Outside origins (like https://models.example.org) that avatars may be
+   *  loaded from, comma-separated. Avatars from this deployment's own files
+   *  and uploads always work; an outside URL any visitor could set would
+   *  let them log everyone else's IP address, so it's refused unless its
+   *  origin is listed here. */
+  SEIZA_AVATAR_ORIGINS?: string;
   /** Optional pair for minting short-lived Cloudflare Realtime TURN
    *  credentials (see handleTurnCredentials below, and DOCS.md's
    *  "Voice and video across networks" for why this exists at all:
@@ -102,6 +109,18 @@ async function handleTurnCredentials(request: Request, env: Env): Promise<Respon
     });
   }
 
+  // A browser says which site a request came from. Only this site's own
+  // pages may mint relay credentials, so another website can't spend the
+  // deployer's TURN allowance through its visitors. (A script can leave
+  // the header out; the rate limit below covers that.)
+  const site = request.headers.get("sec-fetch-site");
+  if (site && site !== "same-origin") {
+    return new Response(JSON.stringify({ iceServers: [] }), {
+      status: 403,
+      headers: { "content-type": "application/json", "cache-control": "no-store" },
+    });
+  }
+
   const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
   if (isTurnRateLimited(ip)) {
     // Empty list, not an error status the client would retry on: the
@@ -151,6 +170,17 @@ async function handleTurnCredentials(request: Request, env: Env): Promise<Respon
 }
 
 export { SeizaRoom };
+
+/**
+ * Headers for every file someone uploaded, on top of its fixed content
+ * type. nosniff stops a browser guessing a different type from the bytes,
+ * and the sandbox policy means that even a file opened directly in a tab
+ * can't run scripts or load anything as this site.
+ */
+const UPLOADED_FILE_HEADERS = {
+  "x-content-type-options": "nosniff",
+  "content-security-policy": "default-src 'none'; sandbox",
+};
 
 interface AvatarMetadata {
   contentType: string;
@@ -314,6 +344,10 @@ async function handleUpload(request: Request, env: Env): Promise<Response> {
   if (!isGlb) {
     return jsonError("Not a valid .vrm file (missing glTF-binary header).", 400);
   }
+  // Everyone in the room downloads this, so what's inside is checked too:
+  // no outside links, and no texture or mesh big enough to crash a tab.
+  const checked = checkGlb(buffer, AVATAR_LIMITS);
+  if (!checked.ok) return jsonError(checked.reason, 400);
 
   const key = `${crypto.randomUUID()}.vrm`;
   await env.AVATARS.put(key, buffer, {
@@ -355,10 +389,13 @@ async function handleGetAvatar(request: Request, key: string, env: Env): Promise
 
   const response = new Response(value, {
     headers: {
-      "content-type": metadata?.contentType ?? "model/gltf-binary",
+      // Always the type it was stored as: nothing else is ever stored here.
+      "content-type": "model/gltf-binary",
       "cache-control": "public, max-age=31536000, immutable",
+      ...UPLOADED_FILE_HEADERS,
     },
   });
+  void metadata;
   await cache.put(cacheKey, response.clone());
   return withoutBody(response);
 }
@@ -395,6 +432,12 @@ async function handleAssetUpload(request: Request, env: Env): Promise<Response> 
     }
     const type = detectImageType(buffer);
     if (!type) return jsonError("Only PNG, JPEG, WebP and GIF images are accepted.", 400);
+    // A small file can unpack into a huge picture that freezes every
+    // visitor's tab, so the size in pixels is checked too.
+    const size = imageSize(new Uint8Array(buffer));
+    if (size && Math.max(size[0], size[1]) > MAX_IMAGE_SIDE) {
+      return jsonError(`This image is ${size[0]}×${size[1]} pixels, over the ${MAX_IMAGE_SIDE} limit.`, 400);
+    }
     return storeAsset(request, env, buffer, type.extension, type.contentType, name);
   }
 
@@ -405,6 +448,8 @@ async function handleAssetUpload(request: Request, env: Env): Promise<Response> 
   if (extension === "glb") {
     const header = new Uint8Array(buffer.slice(0, 4));
     if (!GLTF_MAGIC.every((byte, i) => header[i] === byte)) return jsonError("This .glb file is missing the glTF binary header.", 400);
+    const checked = checkGlb(buffer, MODEL_LIMITS);
+    if (!checked.ok) return jsonError(checked.reason, 400);
   } else {
     try {
       const text = new TextDecoder().decode(buffer);
@@ -414,10 +459,8 @@ async function handleAssetUpload(request: Request, env: Env): Promise<Response> 
         images?: Array<{ uri?: unknown }>;
       };
       if (json.asset?.version !== "2.0") return jsonError("Only glTF 2.0 .gltf files are accepted.", 400);
-      const externalReferences = [...(json.buffers ?? []), ...(json.images ?? [])].some(
-        (entry) => typeof entry.uri === "string" && !entry.uri.startsWith("data:")
-      );
-      if (externalReferences) return jsonError("This .gltf references external files. Upload a self-contained .gltf or a bundled .glb.", 400);
+      const checked = checkGltfJson(json, null, MODEL_LIMITS);
+      if (!checked.ok) return jsonError(checked.reason, 400);
     } catch {
       return jsonError("This .gltf file is not valid JSON.", 400);
     }
@@ -524,8 +567,8 @@ async function handleGetAsset(request: Request, key: string, env: Env): Promise<
       "content-type": metadata?.contentType ?? (key.endsWith(".glb") ? "model/gltf-binary" : "model/gltf+json"),
       // Stored bytes are sniffed on upload, but a stale metadata record
       // shouldn't let a stored file be interpreted as something else.
-      "x-content-type-options": "nosniff",
       "cache-control": "public, max-age=31536000, immutable",
+      ...UPLOADED_FILE_HEADERS,
     },
   });
   await cache.put(request, response.clone());

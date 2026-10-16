@@ -449,6 +449,7 @@ function UploadPanel({
       setStatus(`Converted to VRM: ${formatMB(result.originalBytes)} down to ${formatMB(result.vrmBytes)}.`);
       if (result.notes.length > 0) setWarning(result.notes.join(" "));
     } catch (err) {
+      console.warn("Avaturn conversion failed:", err);
       setStatus(null);
       // The converter's own errors are written for the uploader; anything
       // else is a library's message, which wouldn't help them.
@@ -468,12 +469,16 @@ function UploadPanel({
     setError(null);
     try {
       let blob: Blob = file;
+      // Said again when it's done, so the result isn't lost behind
+      // "Checking" and "Uploading".
+      let optimized = "";
       // A converted Avaturn file is already optimized.
       if (optimize && !avaturn) {
         setStatus("Optimizing…");
         const result = await optimizeVrmAvatar(file);
         blob = result.blob;
-        setStatus(result.applied ? `Optimized ${formatMB(result.originalBytes)} to ${formatMB(result.optimizedBytes)}.` : (result.reason ?? null));
+        optimized = result.applied ? ` Optimized from ${formatMB(result.originalBytes)} to ${formatMB(result.optimizedBytes)}.` : ` ${result.reason ?? ""}`;
+        setStatus(optimized.trim() || null);
       }
       if (blob.size > HARD_MAX_AVATAR_BYTES) {
         throw new Error(`Still too large after optimization (max ${formatMB(HARD_MAX_AVATAR_BYTES)}, a Cloudflare KV limit).`);
@@ -499,7 +504,7 @@ function UploadPanel({
         url,
         localUrl: URL.createObjectURL(blob),
       });
-      setStatus(`Using ${file.name}.`);
+      setStatus(`Using ${file.name}.${optimized}`);
       setFile(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed.");

@@ -7,13 +7,16 @@
 // and VRM's is one of them (see optimizeVrm.ts), so the optimizing happens
 // first, on the plain glTF, and the VRM description is written into the
 // finished file's JSON afterwards, without going back through it.
-import type { Document, Node } from "@gltf-transform/core";
+//
+// Only @gltf-transform/core is used, not /functions: one of the latter's
+// dependencies (ndarray) compiles code with new Function as it loads, which
+// the site's Content-Security-Policy rightly forbids.
+import type { Accessor, Document, Node, Texture } from "@gltf-transform/core";
+import { AvatarImportError, readGlb, writeGlb, type GltfJson } from "./glbContainer";
 import { REQUIRED_VRM_BONES, vrmBoneFor } from "./humanoidBones";
 
-export class AvatarImportError extends Error {
-  // Kept by name, so the UI can tell these apart after a dynamic import.
-  override name = "AvatarImportError";
-}
+export { AvatarImportError, readGlb, writeGlb };
+
 
 export interface GlbToVrmResult {
   blob: Blob;
@@ -45,7 +48,7 @@ export async function convertGlbToVrm(file: Blob, options: GlbToVrmOptions): Pro
     throw new AvatarImportError("This file is already a VRM. Rename it to .vrm and upload it as is.");
   }
 
-  const [{ WebIO }, { prune, dedup }] = await Promise.all([import("@gltf-transform/core"), import("@gltf-transform/functions")]);
+  const { WebIO } = await import("@gltf-transform/core");
   const io = new WebIO();
   const document = await io.readBinary(input);
   const notes: string[] = [];
@@ -60,9 +63,12 @@ export async function convertGlbToVrm(file: Blob, options: GlbToVrmOptions): Pro
   standUp(document, bones, notes);
 
   // Seiza brings its own motions, so a clip baked into the file is only weight.
-  for (const animation of document.getRoot().listAnimations()) animation.dispose();
+  for (const animation of document.getRoot().listAnimations()) {
+    const data = animation.listSamplers().flatMap((sampler) => [sampler.getInput(), sampler.getOutput()]).filter((a): a is Accessor => a !== null);
+    animation.dispose();
+    for (const accessor of data) disposeIfUnused(accessor);
+  }
   simplifySkinWeights(document);
-  await document.transform(prune(), dedup());
   if (options.compressTextures !== false) await shrinkTextures(document);
 
   const optimized = await io.writeBinary(document);
@@ -166,8 +172,14 @@ function simplifySkinWeights(document: Document) {
       prim.setAttribute("WEIGHTS_0", document.createAccessor().setType("VEC4").setArray(outWeights).setNormalized(true).setBuffer(buffer));
       if (joints1) prim.setAttribute("JOINTS_1", null);
       if (weights1) prim.setAttribute("WEIGHTS_1", null);
+      for (const old of [joints0, weights0, joints1, weights1]) if (old) disposeIfUnused(old);
     }
   }
+}
+
+/** Removes an accessor nothing uses any more, so it isn't written out. */
+function disposeIfUnused(accessor: Accessor) {
+  if (accessor.listParents().every((parent) => parent.propertyType === "Root")) accessor.dispose();
 }
 
 // --- textures --------------------------------------------------------------------------------
@@ -184,13 +196,20 @@ function simplifySkinWeights(document: Document) {
  * only), its browser fallback wrote files larger than Avaturn's JPEGs.
  */
 async function shrinkTextures(document: Document) {
-  const [{ listTextureSlots }, { EXTTextureWebP }] = await Promise.all([import("@gltf-transform/functions"), import("@gltf-transform/extensions")]);
+  const { EXTTextureWebP } = await import("@gltf-transform/extensions");
+  // Colour textures are the ones people look at; the rest are data.
+  const colorTextures = new Set<Texture>();
+  for (const material of document.getRoot().listMaterials()) {
+    const base = material.getBaseColorTexture(), emissive = material.getEmissiveTexture();
+    if (base) colorTextures.add(base);
+    if (emissive) colorTextures.add(emissive);
+  }
   let webpUsed = false;
   for (const texture of document.getRoot().listTextures()) {
     const image = texture.getImage();
     const mime = texture.getMimeType();
     if (!image || !/^image\/(png|jpeg|webp)$/.test(mime)) continue;
-    const color = listTextureSlots(texture).some((slot) => /baseColor|emissive/.test(slot));
+    const color = colorTextures.has(texture);
     const max = color ? COLOR_TEXTURE_SIZE : DETAIL_TEXTURE_SIZE;
     // No colour management: normal and roughness maps are data, not colour.
     const bitmap = await createImageBitmap(new Blob([image as Uint8Array<ArrayBuffer>], { type: mime }), {
@@ -229,13 +248,6 @@ function hasTransparency(pixels: Uint8ClampedArray): boolean {
 
 // --- the VRM description -------------------------------------------------------------------
 
-interface GltfJson {
-  nodes?: { name?: string; mesh?: number }[];
-  skins?: { joints: number[] }[];
-  extensionsUsed?: string[];
-  extensions?: Record<string, unknown>;
-  [key: string]: unknown;
-}
 
 /** Writes VRMC_vrm into a finished GLB's JSON: who it is, which node is
  *  which bone, and how first person should treat its meshes. */
@@ -287,56 +299,4 @@ export function addVrmExtension(glb: Uint8Array, bones: Map<string, Node>, name:
   };
   json.extensionsUsed = [...new Set([...(json.extensionsUsed ?? []), "VRMC_vrm"])];
   return writeGlb(json, bin);
-}
-
-// --- GLB containers ------------------------------------------------------------------------
-
-const GLB_MAGIC = 0x46546c67; // "glTF"
-const CHUNK_JSON = 0x4e4f534a;
-const CHUNK_BIN = 0x004e4942;
-
-export function readGlb(bytes: Uint8Array): { json: GltfJson; bin: Uint8Array | null } {
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  if (bytes.byteLength < 20 || view.getUint32(0, true) !== GLB_MAGIC) {
-    throw new AvatarImportError("That isn't a .glb file. Export the avatar as GLB (binary glTF).");
-  }
-  let offset = 12;
-  let json: GltfJson | null = null;
-  let bin: Uint8Array | null = null;
-  while (offset + 8 <= bytes.byteLength) {
-    const length = view.getUint32(offset, true);
-    const type = view.getUint32(offset + 4, true);
-    const data = bytes.subarray(offset + 8, offset + 8 + length);
-    if (type === CHUNK_JSON) json = JSON.parse(new TextDecoder().decode(data)) as GltfJson;
-    else if (type === CHUNK_BIN) bin = data;
-    offset += 8 + length;
-  }
-  if (!json) throw new AvatarImportError("That .glb has no model description inside. It may be damaged; export it again.");
-  return { json, bin };
-}
-
-export function writeGlb(json: GltfJson, bin: Uint8Array | null): Uint8Array<ArrayBuffer> {
-  const pad = (n: number) => (4 - (n % 4)) % 4;
-  let jsonBytes = new TextEncoder().encode(JSON.stringify(json));
-  // The JSON chunk is padded with spaces, the binary one with zeros.
-  const jsonPadded = new Uint8Array(jsonBytes.byteLength + pad(jsonBytes.byteLength)).fill(0x20);
-  jsonPadded.set(jsonBytes);
-  jsonBytes = jsonPadded;
-  const binLength = bin ? bin.byteLength + pad(bin.byteLength) : 0;
-  const total = 12 + 8 + jsonBytes.byteLength + (bin ? 8 + binLength : 0);
-  const out = new Uint8Array(total);
-  const view = new DataView(out.buffer);
-  view.setUint32(0, GLB_MAGIC, true);
-  view.setUint32(4, 2, true);
-  view.setUint32(8, total, true);
-  view.setUint32(12, jsonBytes.byteLength, true);
-  view.setUint32(16, CHUNK_JSON, true);
-  out.set(jsonBytes, 20);
-  if (bin) {
-    const at = 20 + jsonBytes.byteLength;
-    view.setUint32(at, binLength, true);
-    view.setUint32(at + 4, CHUNK_BIN, true);
-    out.set(bin, at + 8);
-  }
-  return out;
 }

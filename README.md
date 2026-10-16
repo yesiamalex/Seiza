@@ -118,6 +118,7 @@ thing, after first copying the repository into your GitHub account.
 - A second world from the same repository, with its own features:
   [Seizora](worlds/seizora/README.md), a solar, wind, and storage learning world
 - Hosting somewhere other than Cloudflare: [SELF-HOSTING.md](SELF-HOSTING.md)
+- What's protected, and a checklist for deployers: [SECURITY.md](SECURITY.md)
 
 ## 🛡️ Who controls a room
 
@@ -156,6 +157,7 @@ moderation, see [Known limitations](DOCS.md#known-limitations) in DOCS.md.
 | [DOCS.md](DOCS.md) | Deployment, configuration, world customization, how it works, and known limitations |
 | [ADMIN.md](ADMIN.md) | Moderation: admin keys, room passwords, and what a host can and can't do |
 | [SELF-HOSTING.md](SELF-HOSTING.md) | Running Seiza somewhere other than Cloudflare |
+| [SECURITY.md](SECURITY.md) | What's protected, the deployer checklist, and known limits |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute, the CLA, and the documentation style guide |
 | [THIRD_PARTY_ASSETS.md](THIRD_PARTY_ASSETS.md) | Asset licenses, including uploaded avatars |
 

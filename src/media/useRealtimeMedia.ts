@@ -574,7 +574,10 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
 
   const handleSignal = useCallback(
     (from: string, raw: unknown) => {
-      const data = raw as { kind: "sdp" | "ice" | "busy"; description?: RTCSessionDescriptionInit; candidate?: RTCIceCandidateInit };
+      // Another browser wrote this, so its shape is checked before use: a
+      // malformed or oversized signal is dropped, not trusted.
+      const data = parseSignal(raw);
+      if (!data) return;
       if (data.kind === "busy") {
         // They're over budget and we didn't make their cut: leave it a
         // while rather than retrying at once.
@@ -616,7 +619,9 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
             applySendCaps(peer);
           } else if (data.kind === "ice" && data.candidate) {
             if (!connection.remoteDescription) {
-              peer.pendingCandidates.push(data.candidate);
+              // Bounded, so a peer can't fill memory with candidates for an
+              // offer it never sends.
+              if (peer.pendingCandidates.length < MAX_PENDING_CANDIDATES) peer.pendingCandidates.push(data.candidate);
               return;
             }
             try {
@@ -944,4 +949,41 @@ function rmsLevel(analyser: AnalyserNode): number {
     sumSquares += normalized * normalized;
   }
   return Math.sqrt(sumSquares / data.length);
+}
+
+/** ICE candidates kept for a peer before its offer arrives. A real call
+ *  gathers a handful per network interface. */
+const MAX_PENDING_CANDIDATES = 64;
+/** A real SDP offer or answer is a few KB. */
+const MAX_SDP_CHARS = 24 * 1024;
+
+type Signal =
+  | { kind: "busy" }
+  | { kind: "sdp"; description: RTCSessionDescriptionInit }
+  | { kind: "ice"; candidate: RTCIceCandidateInit };
+
+/** A signal from another browser, checked, or null to ignore it. */
+function parseSignal(raw: unknown): Signal | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const data = raw as Record<string, unknown>;
+  if (data.kind === "busy") return { kind: "busy" };
+  if (data.kind === "sdp") {
+    const d = data.description as Record<string, unknown> | undefined;
+    if (!d || (d.type !== "offer" && d.type !== "answer") || typeof d.sdp !== "string" || d.sdp.length > MAX_SDP_CHARS) return null;
+    return { kind: "sdp", description: { type: d.type, sdp: d.sdp } };
+  }
+  if (data.kind === "ice") {
+    const c = data.candidate as Record<string, unknown> | undefined;
+    if (!c || typeof c.candidate !== "string" || c.candidate.length > 1024) return null;
+    return {
+      kind: "ice",
+      candidate: {
+        candidate: c.candidate,
+        sdpMid: typeof c.sdpMid === "string" ? c.sdpMid : null,
+        sdpMLineIndex: typeof c.sdpMLineIndex === "number" ? c.sdpMLineIndex : null,
+        usernameFragment: typeof c.usernameFragment === "string" ? c.usernameFragment : null,
+      },
+    };
+  }
+  return null;
 }

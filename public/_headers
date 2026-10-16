@@ -1,0 +1,21 @@
+# Security headers for every page and file this site serves (Cloudflare
+# Workers static assets read this file; it isn't served itself). The
+# Worker's own responses (uploads, TURN) set theirs in worker/index.ts.
+#
+# Content-Security-Policy, in short: the app's code only comes from this
+# site, nothing can be framed inside it, and it can't be framed by another
+# site (clickjacking). Images, video, and models may come from any https
+# address, because placing a model or video by URL is an editor feature.
+# 'wasm-unsafe-eval' lets the navigation mesh's WebAssembly compile; it
+# doesn't allow eval() of JavaScript. Inline styles are allowed because
+# React writes style attributes.
+#
+# To let a learning platform (Moodle, Canvas) embed Seiza in an iframe, add
+# its address to frame-ancestors and drop X-Frame-Options.
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; connect-src 'self' data: blob: https: wss:; worker-src 'self' blob:; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-src 'none'; frame-ancestors 'self'
+  X-Frame-Options: SAMEORIGIN
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(self), microphone=(self), display-capture=(self), xr-spatial-tracking=(self), fullscreen=(self), autoplay=(self), geolocation=(), payment=(), usb=(), serial=(), bluetooth=(), hid=(), midi=()
+  Cross-Origin-Opener-Policy: same-origin
