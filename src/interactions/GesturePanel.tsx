@@ -3,6 +3,7 @@ import type { GestureDefinition } from "../avatar/gestures";
 import { useExclusiveMenu } from "../ui/exclusiveMenu";
 import { BAR_LABEL_CLASS, barButtonActiveStyle, barButtonStyle, panelStyle, pillButtonActiveStyle, pillButtonStyle, popoverStyle } from "../ui/styles";
 import { WaveIcon } from "../ui/icons";
+import type { TogetherGesture } from "../multiplayer/types";
 
 interface GesturePanelProps {
   gestures: GestureDefinition[];
@@ -15,6 +16,17 @@ interface GesturePanelProps {
   activePosture: string | null;
   /** Show number-key hints (desktop). */
   showShortcuts: boolean;
+  /** Together gestures (handshake, high five, hug): who's near enough to
+   *  ask, and whether others may ask you. Null when the world has none. */
+  together?: {
+    gestures: { name: TogetherGesture; label: string }[];
+    nearby: { id: string; name: string }[];
+    allow: boolean;
+    onAllowChange: (allow: boolean) => void;
+    /** Your own request is waiting for an answer. */
+    waiting: boolean;
+    onAsk: (peer: string, gesture: TogetherGesture) => void;
+  } | null;
 }
 
 /**
@@ -33,6 +45,7 @@ export function GesturePanel({
   onReleaseGesture,
   activePosture,
   showShortcuts,
+  together = null,
 }: GesturePanelProps) {
   const [open, setOpen] = useState(false);
   useExclusiveMenu("gestures", open, () => setOpen(false));
@@ -133,6 +146,38 @@ export function GesturePanel({
             <p style={{ margin: 0 }}>This deployment has turned off every gesture.</p>
           ) : (
             <>
+              {together && (
+                <Section title="Together">
+                  {together.nearby.length === 0 ? (
+                    <small style={{ opacity: 0.7, lineHeight: 1.4 }}>
+                      Stand near someone to ask for a handshake, high five, or hug. It only happens if they say yes.
+                    </small>
+                  ) : (
+                    together.nearby.slice(0, 3).map((person) => (
+                      <div key={person.id} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        <span style={{ fontSize: 12, opacity: 0.85 }}>Ask {person.name} for</span>
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                          {together.gestures.map((g) => (
+                            <button
+                              key={g.name}
+                              type="button"
+                              disabled={together.waiting}
+                              style={{ ...pillButtonStyle, padding: "7px 12px", fontSize: 12, opacity: together.waiting ? 0.5 : 1 }}
+                              onClick={() => together.onAsk(person.id, g.name)}
+                            >
+                              {g.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                  <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}>
+                    <input type="checkbox" checked={together.allow} onChange={(e) => together.onAllowChange(e.target.checked)} />
+                    Others may ask me
+                  </label>
+                </Section>
+              )}
               {builtin.length > 0 && (
                 <Section title="Built-in">
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{builtin.map(renderButton)}</div>

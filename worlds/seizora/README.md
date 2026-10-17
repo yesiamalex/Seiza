@@ -75,6 +75,10 @@ Everything is in the world itself; there's no separate page to open.
   lamps, so everything reads after dark. All of it follows the same
   switches and costs no lights.
 
+Like every Seiza world, visitors can also ask each other for a handshake,
+high five, or hug from the Gestures menu, which plays only if the other
+person says yes (Seiza's together gestures; see DOCS.md).
+
 The plant runs in every visitor's browser on the exact time and weather the
 sky shows, with the switches shared through the room. On arrival it runs
 the previous 24 hours first, so everyone sees the same battery charge and

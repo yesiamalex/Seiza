@@ -9,6 +9,9 @@ import {
   type RoomSky,
   type WorldStateValue,
   WORLD_STATE_LIMITS,
+  isTogetherGesture,
+  TOGETHER,
+  type TogetherGesture,
   ROOM_SKY_SCALES,
   ROOM_SKY_WEATHER,
   type PlayerMedia,
@@ -84,6 +87,9 @@ const MAX_URL_LENGTH = 2000;
 // against world.json — so it only checks the shape, which keeps anything
 // odd out of every other client's state.
 const GESTURE_NAME = /^[a-z0-9][a-z0-9_-]{0,31}$/;
+/** Together-gesture messages (ask, answer, cancel) per connection. A
+ *  person asking and answering by hand never comes close. */
+const TOGETHER_RATE = { perSecond: 2, burst: 8 };
 const GESTURE_MIN_INTERVAL_MS = 250;
 // Roughly 70 degrees each way — past this a neck stops being a neck.
 const MAX_HEAD_PITCH = 1.22;
@@ -221,6 +227,17 @@ export class SeizaRoom extends DurableObject<Env> {
   /** Token buckets for rate limits, per connection, in memory like
    *  lastTrackingAt: losing one to hibernation only refills it. */
   private buckets = new Map<string, { tokens: number; at: number }>();
+  // Together gestures (see TOGETHER in src/multiplayer/types.ts). In memory
+  // only: a request lives for seconds, and one lost when the room sleeps
+  // simply expires.
+  /** Open requests by id. */
+  private togetherPending = new Map<string, { from: string; to: string; gesture: TogetherGesture; expires: number }>();
+  /** "to|from": when `from` may next ask `to`, after a no or no answer. */
+  private togetherQuiet = new Map<string, number>();
+  /** "to|from": when `from` recently asked `to`, for the per-window cap. */
+  private togetherAsked = new Map<string, number[]>();
+  /** Who may play which together gesture, until when: set by a yes. */
+  private togetherGrants = new Map<string, { gesture: TogetherGesture; until: number }>();
   /** Failed password guesses per IP (see MAX_AUTH_FAILURES_PER_IP). */
   private authFailures = new Map<string, { count: number; windowStart: number }>();
   private ready: Promise<void>;
@@ -421,6 +438,14 @@ export class SeizaRoom extends DurableObject<Env> {
         if (!attachment.player) return;
         const gesture = message.gesture;
         if (gesture !== null && (typeof gesture !== "string" || !GESTURE_NAME.test(gesture))) return;
+        // A together gesture only plays for someone who has just agreed to
+        // it with someone else, once. Without this a modified client could
+        // send "hug" at anyone; the menu hiding it would mean nothing.
+        if (isTogetherGesture(gesture)) {
+          const grant = this.togetherGrants.get(attachment.connId);
+          if (!grant || grant.gesture !== gesture || grant.until < Date.now()) return;
+          this.togetherGrants.delete(attachment.connId);
+        }
         const player = attachment.player;
         if (gesture !== null) {
           const now = Date.now();
@@ -759,6 +784,69 @@ export class SeizaRoom extends DurableObject<Env> {
         }
         break;
       }
+      case "togetherAsk": {
+        if (!attachment.player || !this.allow(attachment.connId, "together", TOGETHER_RATE)) return;
+        const { to, gesture } = message;
+        if (typeof to !== "string" || to === attachment.connId || !isTogetherGesture(gesture)) return;
+        const target = this.findConnection(to);
+        const targetPlayer = target ? this.att(target)?.player : null;
+        if (!target || !targetPlayer) return;
+        const now = Date.now();
+        this.sweepTogether(now);
+        const id = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
+        const unavailable = () => this.sendTo(ws, { type: "togetherClosed", id, reason: "unavailable" });
+        // One open request at a time per asker.
+        for (const request of this.togetherPending.values()) if (request.from === attachment.connId) return unavailable();
+        // Close enough to reach, by the positions the server holds.
+        const [ax, , az] = attachment.player.position;
+        const [bx, , bz] = targetPlayer.position;
+        if (Math.hypot(ax - bx, az - bz) > TOGETHER.serverReach) return unavailable();
+        // Not again right after a no, and not too often.
+        const pair = `${to}|${attachment.connId}`;
+        if ((this.togetherQuiet.get(pair) ?? 0) > now) return unavailable();
+        const recent = (this.togetherAsked.get(pair) ?? []).filter((t) => now - t < TOGETHER.windowSeconds * 1000);
+        if (recent.length >= TOGETHER.perWindow) return unavailable();
+        recent.push(now);
+        this.togetherAsked.set(pair, recent);
+        this.togetherPending.set(id, { from: attachment.connId, to, gesture, expires: now + TOGETHER.requestSeconds * 1000 });
+        this.sendTo(ws, { type: "togetherSent", id, to, gesture });
+        this.sendTo(target, { type: "togetherAsked", id, from: attachment.connId, gesture });
+        break;
+      }
+      case "togetherAnswer": {
+        if (!attachment.player || !this.allow(attachment.connId, "together", TOGETHER_RATE)) return;
+        const request = typeof message.id === "string" ? this.togetherPending.get(message.id) : undefined;
+        if (!request || request.to !== attachment.connId) return;
+        this.togetherPending.delete(message.id);
+        const asker = this.findConnection(request.from);
+        const now = Date.now();
+        if (request.expires < now) {
+          this.togetherQuiet.set(`${request.to}|${request.from}`, now + TOGETHER.quietSeconds * 1000);
+          if (asker) this.sendTo(asker, { type: "togetherClosed", id: message.id, reason: "expired" });
+          this.sendTo(ws, { type: "togetherClosed", id: message.id, reason: "expired" });
+          return;
+        }
+        if (message.accept === true && asker && this.att(asker)?.player) {
+          const until = now + TOGETHER.grantSeconds * 1000;
+          this.togetherGrants.set(request.from, { gesture: request.gesture, until });
+          this.togetherGrants.set(request.to, { gesture: request.gesture, until });
+          this.sendTo(asker, { type: "togetherStart", id: message.id, gesture: request.gesture, partner: request.to });
+          this.sendTo(ws, { type: "togetherStart", id: message.id, gesture: request.gesture, partner: request.from });
+          return;
+        }
+        this.togetherQuiet.set(`${request.to}|${request.from}`, now + TOGETHER.quietSeconds * 1000);
+        if (asker) this.sendTo(asker, { type: "togetherClosed", id: message.id, reason: message.unavailable ? "unavailable" : "declined" });
+        break;
+      }
+      case "togetherCancel": {
+        if (!attachment.player) return;
+        const request = typeof message.id === "string" ? this.togetherPending.get(message.id) : undefined;
+        if (!request || request.from !== attachment.connId) return;
+        this.togetherPending.delete(message.id);
+        const target = this.findConnection(request.to);
+        if (target) this.sendTo(target, { type: "togetherClosed", id: message.id, reason: "cancelled" });
+        break;
+      }
       case "adminKick": {
         if (!attachment.isAdmin) return;
         const target = this.findConnection(message.targetId);
@@ -826,6 +914,14 @@ export class SeizaRoom extends DurableObject<Env> {
         this.broadcast({ type: "objectUpdated", object });
       }
     }
+    // Close any together requests they were part of.
+    for (const [id, request] of this.togetherPending) {
+      if (request.from !== connId && request.to !== connId) continue;
+      this.togetherPending.delete(id);
+      const other = this.findConnection(request.from === connId ? request.to : request.from);
+      if (other) this.sendTo(other, { type: "togetherClosed", id, reason: "cancelled" });
+    }
+    this.togetherGrants.delete(connId);
     this.broadcast({ type: "playerLeft", id: connId });
   }
 
@@ -912,6 +1008,32 @@ export class SeizaRoom extends DurableObject<Env> {
       .getWebSockets()
       .map((ws) => (this.att(ws))?.player)
       .filter((p): p is PlayerState => !!p);
+  }
+
+  /** Sends one message to one connection, ignoring one that's closing. */
+  private sendTo(ws: WebSocket, message: ServerMessage) {
+    try {
+      ws.send(JSON.stringify(message));
+    } catch {
+      // The connection is closing.
+    }
+  }
+
+  /** Drops expired together requests and stale limits, telling the asker
+   *  that an unanswered request lapsed (no answer means no). */
+  private sweepTogether(now: number) {
+    for (const [id, request] of this.togetherPending) {
+      if (request.expires >= now) continue;
+      this.togetherPending.delete(id);
+      this.togetherQuiet.set(`${request.to}|${request.from}`, now + TOGETHER.quietSeconds * 1000);
+      const asker = this.findConnection(request.from);
+      if (asker) this.sendTo(asker, { type: "togetherClosed", id, reason: "expired" });
+    }
+    for (const [pair, until] of this.togetherQuiet) if (until < now) this.togetherQuiet.delete(pair);
+    for (const [pair, times] of this.togetherAsked) {
+      if (times.every((t) => now - t >= TOGETHER.windowSeconds * 1000)) this.togetherAsked.delete(pair);
+    }
+    for (const [connId, grant] of this.togetherGrants) if (grant.until < now) this.togetherGrants.delete(connId);
   }
 
   private findConnection(connId: string): WebSocket | undefined {

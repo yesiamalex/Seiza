@@ -28,6 +28,7 @@ const PAGE_SESSION_ID =
     ? crypto.randomUUID()
     : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 import { trackingStore } from "../xr/body/trackingStore";
+import { receiveTogether } from "../interactions/together";
 
 // The production Worker serves both the app and the Durable Object route, so
 // same-origin is the reliable default. Set VITE_SEIZA_ROOM_HOST only when the
@@ -368,6 +369,8 @@ export function useRoomSocket(
           console.warn("Ignoring malformed room message from the server.");
           return;
         }
+        // Together gestures keep their own small store (src/interactions/together.ts).
+        if (receiveTogether(msg)) return;
         switch (msg.type) {
           case "welcome": {
             setRoomFull(null);

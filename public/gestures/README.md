@@ -42,6 +42,14 @@ which the app reads each clip's name, label, duration, and full-body flag.
 | `9` | `gassho` | Gasshō (thanks) | Upper | One-shot |
 | `0` | `raisehand` | Raise hand (hold) | Upper | Hold |
 | None | `sit` | Sit | Full | Hold, hidden |
+| None | `handshake` | Handshake | Upper | One-shot, hidden, together |
+| None | `highfive` | High five | Upper | One-shot, hidden, together |
+| None | `hug` | Hug | Upper | One-shot, hidden, together |
+
+The three **together** gestures are played by two people at once, and only
+after the other person says yes; the room server refuses them otherwise.
+They're asked for from the Together section of the Gestures menu, not played
+from the menu like the rest. See "Together gestures" in DOCS.md.
 
 Upper-body gestures play on top of walking, so you can wave while you move.
 Full-body gestures also control the legs, and replace walking while they

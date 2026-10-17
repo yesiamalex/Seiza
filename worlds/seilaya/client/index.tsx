@@ -10,8 +10,9 @@
 //   interactive stations on harassment and bystander action.
 // - A code of conduct to agree to on a first visit.
 //
-// The together gestures are Seilaya's own clips (scripts/generate-gestures.mjs),
-// listed in world.json as hidden, so they only ever play after a yes.
+// The handshake, high five, and hug are Seiza's own (every world has them,
+// with consent enforced by the room server); Seilaya adds its rules on top
+// (safety.ts) and shows requests in a headset (Xr.tsx).
 import { useEffect, useRef } from "react";
 import { setWorldObstacles } from "../../../src/scene/layout";
 import { showWorldOverlay, type WorldSceneProps } from "../../../src/worlds/WorldExtension";

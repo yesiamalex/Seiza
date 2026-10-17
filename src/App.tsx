@@ -17,6 +17,18 @@ import {
 import type { Seat } from "./scene/layout";
 import { roomLights } from "./scene/roomLights";
 import { setPlayerFilter, usePlayerFilter } from "./multiplayer/playerFilter";
+import {
+  answerTogether,
+  askTogether,
+  nearbyPeople,
+  onTogetherStart,
+  setAllowRequests,
+  setTogetherConnection,
+  TOGETHER_LABELS,
+  useTogether,
+} from "./interactions/together";
+import { TogetherPrompt } from "./interactions/TogetherPrompt";
+import { TOGETHER_GESTURES } from "./multiplayer/types";
 import type { VRM } from "@pixiv/three-vrm";
 import { useRoomSocket } from "./multiplayer/useRoomSocket";
 import { RemotePlayers } from "./multiplayer/RemotePlayers";
@@ -985,6 +997,28 @@ export default function App() {
     [editMode, navMesh, standUp]
   );
 
+  const playersForNames = useRef(players);
+  playersForNames.current = players;
+  const nameOfPlayer = useCallback((id: string) => playersForNames.current[id]?.displayName ?? "Someone", []);
+  // Together gestures (src/interactions/together.ts): the store reaches the
+  // room server through `send`; on a mutual yes, turn to the partner and play.
+  useEffect(() => setTogetherConnection(send, nameOfPlayer), [send, nameOfPlayer]);
+  const requestGestureRef = useRef(requestGesture);
+  requestGestureRef.current = requestGesture;
+  useEffect(
+    () =>
+      onTogetherStart(({ gesture, partner }) => {
+        const other = playersForNames.current[partner];
+        if (other) faceToward(other.position[0], other.position[2]);
+        requestGestureRef.current(gesture);
+      }),
+    [faceToward]
+  );
+  const together = useTogether();
+  const togetherGestures = TOGETHER_GESTURES.filter((name) => gestures.some((g) => g.name === name));
+  const nearby = togetherGestures.length ? nearbyPeople(players, selfId, positionRef.current) : [];
+  const waitingRequest = together.incoming[0] ?? null;
+
   if (worldError) return <CenteredMessage text={`Couldn't load world: ${worldError.message}`} />;
   if (!world) return <CenteredMessage text="Loading world…" />;
   if (roomFull) return <CenteredMessage text={`This world is currently full (${roomFull} people). Please try again later.`} />;
@@ -1044,6 +1078,13 @@ export default function App() {
     standUp: seat || posture ? standUp : null,
     chat: messages.slice(-3).map((m) => ({ id: m.id, name: m.senderName, text: m.text })),
     onExit: () => void xrStore.getState().session?.end(),
+    request: waitingRequest
+      ? {
+          text: `${nameOfPlayer(waitingRequest.peer)} would like ${TOGETHER_LABELS[waitingRequest.gesture].ask}`,
+          accept: () => answerTogether(waitingRequest.id, true),
+          decline: () => answerTogether(waitingRequest.id, false),
+        }
+      : null,
   };
 
   return (
@@ -1368,6 +1409,18 @@ export default function App() {
           onReleaseGesture={releaseGesture}
           activePosture={posture?.name ?? null}
           showShortcuts={hasHoverPointer}
+          together={
+            togetherGestures.length
+              ? {
+                  gestures: togetherGestures.map((name) => ({ name, label: TOGETHER_LABELS[name].label })),
+                  nearby: nearby.map((p) => ({ id: p.id, name: p.displayName })),
+                  allow: together.allow,
+                  onAllowChange: setAllowRequests,
+                  waiting: !!together.outgoing,
+                  onAsk: askTogether,
+                }
+              : null
+          }
         />
         <div className="seiza-bar-divider" aria-hidden />
         <ChatPanel
@@ -1426,6 +1479,7 @@ export default function App() {
           not inside it: on a phone the HUD's controls fold into a drawer,
           which hid every world card until the drawer was opened. */}
       <WorldOverlay />
+      <TogetherPrompt nameOf={nameOfPlayer} />
       {showTouchControls && !webglLost && (
         <TouchControls
           inputRef={touchInputRef}

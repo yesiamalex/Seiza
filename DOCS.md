@@ -230,6 +230,12 @@ guarantee yet.
   returns to the deployment's `world.json` scene, or to the built-in world.
   Environment uploads use the same permissions and validation as other
   uploads.
+- **Together gestures, with consent.** Stand within 2.5 m of someone and ask
+  them, from the Gestures menu, for a handshake, a high five, or a hug. They
+  get a prompt (in a headset, in the wrist menu); only a yes starts it, both
+  turn to face each other, and both avatars play it. No answer within 20
+  seconds means no. The room server enforces this rather than trusting the
+  clients; see [Together gestures](#together-gestures).
 - **Text chat.** A room-wide chat panel, relayed through the room server. Chat
   isn't saved between connections.
 - **Name tags** above every player, highlighted while that player speaks.
@@ -503,6 +509,11 @@ the example), it also gets:
 - `faceToward(x, z)`: turns this visitor toward a point without moving them
   or leaving a seat. Does nothing in a headset, where only the player turns
   their own view.
+- Together gestures (`src/interactions/together.ts`): `setTogetherPolicy` to
+  turn requests away under the world's own rules, `onTogetherStart` to react
+  when one starts, and `askTogether`, `answerTogether`, and `useTogether` to
+  build the world's own interface for them. See
+  [Together gestures](#together-gestures).
 - `sendWorldMessage(to, data)` and `onWorldMessage(handler)` (exported from
   `WorldExtension.tsx`): small private messages between two visitors. They
   travel on the room's existing peer-to-peer relay, the one WebRTC
@@ -1235,8 +1246,9 @@ adds a new gesture. The gesture menu lists built-in and custom gestures
 separately. For details and authoring tips, see `public/gestures/README.md`.
 
 Add `"hidden": true` to keep a gesture out of the menu and number keys, for
-a clip only a world's own code plays (Seilaya's handshake, high five, and
-hug play only after the other person agrees; see `worlds/seilaya/`).
+a clip only a world's own code plays (with `playGesture`; see
+[World code](#world-code)). Seiza's own together gestures are hidden the
+same way, since they only play after the other person agrees.
 
 #### Gesture sync
 
@@ -1254,6 +1266,50 @@ Sitting is a separate `posture` field on each player, not a gesture, because
 a gesture ends and a posture has to last longer. When sitting was a gesture,
 a seated player who waved stood up on everyone else's screen as soon as the
 wave finished.
+
+#### Together gestures
+
+`handshake`, `highfive`, and `hug` are built-in clips played by two people at
+once, and only when both agree. They're hidden from the gesture menu and the
+number keys: playing one alone at someone is exactly what consent rules out.
+
+The flow, between two clients and the room server (`worker/room.ts`), with the
+rules in `TOGETHER` (`src/multiplayer/types.ts`):
+
+1. A asks: `togetherAsk { to, gesture }`. The server checks both have joined,
+   that they stand within 3.5 m by the positions it holds (the menu offers
+   people within 2.5 m), that A has no other open request, that B didn't
+   just turn A down (30 seconds), and that A hasn't asked B more than 4 times
+   in 2 minutes. If any check fails, A only hears `unavailable`. Otherwise A
+   gets `togetherSent { id }` and B gets `togetherAsked { id, from, gesture }`.
+2. B's client turns the request away without a prompt (answering
+   `unavailable`) if B blocked A, has turned requests off, or the world's own
+   rules say so. Otherwise B sees "A would like a hug" with Yes and No thanks.
+3. B answers `togetherAnswer { id, accept }`. Only B can answer A's request.
+   On a no (or no answer within 20 seconds), A hears so and can't ask again
+   for 30 seconds. On a yes, both get `togetherStart { gesture, partner }`,
+   and the server lets each of them play that one gesture, once, within 8
+   seconds.
+4. Each client turns toward its partner (on a flat screen; never in a
+   headset) and plays the gesture through the ordinary gesture message.
+
+The server refuses any together gesture from a player without that fresh
+grant, so a modified client can't send a hug at anyone. Requests live in the
+room's memory only; one lost when a room sleeps simply expires.
+
+On the client, `src/interactions/together.ts` holds requests, prompts, and
+the "Others may ask me" setting (kept on the device);
+`src/interactions/TogetherPrompt.tsx` shows the prompt above the control bar
+(at the top on a phone); the Gestures menu has a Together section listing
+people in reach; and in a headset the request appears at the top of the
+wrist menu. A world's own code can add rules with `setTogetherPolicy` (turn
+requests away without a prompt) and react with `onTogetherStart`. Seilaya
+does both: requests are turned away while you've stepped out or a
+facilitator has paused them, and your partner stays visible through your
+personal space while the gesture plays.
+
+A world that narrows its built-in gestures with `enabledGestures` can leave
+these out; the Together section then doesn't appear.
 
 ### Local profile storage
 

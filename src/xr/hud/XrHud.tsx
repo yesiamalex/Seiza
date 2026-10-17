@@ -66,6 +66,7 @@ function signatureOf(model: XrHudModel): string {
     model.crouch?.active ?? null,
     model.standUp != null,
     model.chat.map((m) => m.id),
+    model.request?.text ?? null,
   ]);
 }
 

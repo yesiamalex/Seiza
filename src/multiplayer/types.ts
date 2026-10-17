@@ -240,7 +240,14 @@ export type ClientMessage =
   // Opaque WebRTC signaling payload (SDP offer/answer or ICE candidate),
   // relayed peer-to-peer through the room server. The server never
   // inspects `data` — it just forwards it to the connection named `to`.
-  | { type: "voiceSignal"; to: string; data: unknown };
+  | { type: "voiceSignal"; to: string; data: unknown }
+  // Together gestures (handshake, high five, hug) need the other person's
+  // yes, and the server keeps the score: see TOGETHER below. Ask someone
+  // near you; answer a request made to you (`unavailable` declines without
+  // saying so: blocked, not taking requests); or withdraw your own.
+  | { type: "togetherAsk"; to: string; gesture: TogetherGesture }
+  | { type: "togetherAnswer"; id: string; accept: boolean; unavailable?: boolean }
+  | { type: "togetherCancel"; id: string };
 
 export type ServerMessage =
   | {
@@ -330,7 +337,18 @@ export type ServerMessage =
   // avatar directly, consistent with every player always being the sole
   // authority over their own position.
   | { type: "gatherRequest"; position: [number, number, number] }
-  | { type: "voiceSignal"; from: string; data: unknown };
+  | { type: "voiceSignal"; from: string; data: unknown }
+  // Your request went out (its id lets you withdraw it).
+  | { type: "togetherSent"; id: string; to: string; gesture: TogetherGesture }
+  // Someone near you asks for a together gesture.
+  | { type: "togetherAsked"; id: string; from: string; gesture: TogetherGesture }
+  // A request ended without a yes. `unavailable` covers everything the
+  // asker isn't told apart: blocked, not taking requests, asking too often,
+  // too far away. `declined` is a plain "no thanks".
+  | { type: "togetherClosed"; id: string; reason: "declined" | "unavailable" | "expired" | "cancelled" }
+  // Both said yes: each side now plays the gesture, facing `partner`. The
+  // server lets each of the two play that one gesture once, for a moment.
+  | { type: "togetherStart"; id: string; gesture: TogetherGesture; partner: string };
 
 /** Places with a light switch in the built-in world. */
 export type LightZone = "hall" | "classroom" | "pond";
@@ -373,3 +391,31 @@ export interface RoomSky {
 export type WorldStateValue = string | number | boolean;
 /** Limits the room server enforces on world state. */
 export const WORLD_STATE_LIMITS = { keys: 64, keyPattern: /^[a-z][a-zA-Z0-9.-]{0,47}$/, stringLength: 64 } as const;
+
+/**
+ * Together gestures: played by two people at once, and only when both
+ * agree. One person asks someone nearby; the other gets a prompt; only a
+ * yes starts it, and no answer within `requestSeconds` is a no. The room
+ * server enforces all of this, not just the clients: it refuses any of
+ * these gestures from a player it hasn't just seen agree to it, checks the
+ * two are within `reach`, and limits how often anyone can ask the same
+ * person (`perWindow` per `windowSeconds`, and nothing for `quietSeconds`
+ * after a no or no answer). The clips are built in but hidden from the
+ * gesture menu, since playing one alone at someone is what consent rules
+ * out.
+ */
+export const TOGETHER_GESTURES = ["handshake", "highfive", "hug"] as const;
+export type TogetherGesture = (typeof TOGETHER_GESTURES)[number];
+export const isTogetherGesture = (v: unknown): v is TogetherGesture => (TOGETHER_GESTURES as readonly unknown[]).includes(v);
+export const TOGETHER = {
+  /** Asking needs the two within this many metres (the server allows a
+   *  little more than the menu offers, for movement while asking). */
+  reach: 2.5,
+  serverReach: 3.5,
+  requestSeconds: 20,
+  quietSeconds: 30,
+  perWindow: 4,
+  windowSeconds: 120,
+  /** How long after a yes each of the two may start the gesture. */
+  grantSeconds: 8,
+} as const;

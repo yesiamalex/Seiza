@@ -32,6 +32,9 @@ export interface XrHudModel {
   standUp: (() => void) | null;
   chat: { id: string; name: string; text: string }[];
   onExit: () => void;
+  /** Someone's request for a together gesture ("Bea would like a hug"),
+   *  answered here in a headset, or null. */
+  request?: { text: string; accept: () => void; decline: () => void } | null;
 }
 
 export interface HudButton {
@@ -175,6 +178,17 @@ export function layoutHud(model: XrHudModel): HudLayout {
     onPress: model.onExit,
   });
   y += ROW + GAP * 2;
+
+  // ---- a request waiting for an answer: first, so it's seen ----
+  if (model.request) {
+    const request = model.request;
+    texts.push({ text: request.text, x: PAD, y: y + ROW * 0.55, size: 15 * SCALE, color: TEXT, weight: 600, maxWidth: inner });
+    y += ROW * 0.9;
+    const w = (inner - GAP) / 2;
+    buttons.push({ id: "together:yes", label: "Yes", x: PAD, y, w, h: ROW, hold: false, active: true, disabled: false, onPress: request.accept });
+    buttons.push({ id: "together:no", label: "No thanks", x: PAD + w + GAP, y, w, h: ROW, hold: false, active: false, disabled: false, onPress: request.decline });
+    y += ROW + GAP * 2;
+  }
 
   // ---- voice and standing up ----
   const rowItems: Omit<HudButton, "x" | "y" | "w" | "h">[] = [];

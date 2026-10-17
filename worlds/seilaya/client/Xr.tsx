@@ -18,10 +18,10 @@ import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import { useXR } from "@react-three/xr";
 import * as THREE from "three";
 import { trackingStore } from "../../../src/xr/body/trackingStore";
+import { answerTogether, getTogether, setAllowRequests, useTogether } from "../../../src/interactions/together";
 import { BYSTANDER, CARDS, HELP_CONTACTS, QUIZ } from "./info";
 import { REFERENCES } from "./references";
 import {
-  answer,
   ask,
   block,
   BUBBLE_CHOICES,
@@ -286,6 +286,9 @@ function XrPanel({ widthM, paint, signature, placement }: { widthM: number; pain
 
 function XrPanels() {
   const s = useSafety();
+  // Requests are Seiza's (src/interactions/together.ts); shown here too,
+  // since the flat prompt isn't visible in a headset.
+  const t = useTogether();
   // Everything the panels show, so they redraw only when it changes.
   const room = roomSettings();
   const people = others();
@@ -295,8 +298,9 @@ function XrPanels() {
     s.nearby,
     s.inRefuge,
     [...s.pronouns],
-    s.incoming.map((r) => r.id),
-    s.outgoing?.id ?? null,
+    t.incoming.map((r) => r.id),
+    t.outgoing?.id ?? null,
+    t.allow,
     s.notices.map((n) => n.id),
     s.panelOpen,
     s.card,
@@ -308,11 +312,11 @@ function XrPanels() {
   const card: CardKey | null = gate ? "conduct" : s.card;
   return (
     <>
-      <XrPanel widthM={0.16} placement="dock" signature={`dock:${s.incoming.length}:${s.panelOpen}:${s.inRefuge}`} paint={paintDock} />
+      <XrPanel widthM={0.16} placement="dock" signature={`dock:${t.incoming.length}:${s.panelOpen}:${s.inRefuge}`} paint={paintDock} />
       {s.panelOpen && !card && <XrPanel widthM={0.62} placement="front" signature={base} paint={paintSafety} />}
-      {s.incoming[0] && !s.inRefuge && !card && <XrPanel widthM={0.5} placement="low-front" signature={base} paint={paintPrompt} />}
+      {t.incoming[0] && !s.inRefuge && !card && <XrPanel widthM={0.5} placement="low-front" signature={base} paint={paintPrompt} />}
       {s.inRefuge && !card && !s.panelOpen && <XrPanel widthM={0.55} placement="low-front" signature={base} paint={paintRefuge} />}
-      {s.notices.length > 0 && !card && !s.panelOpen && !s.incoming[0] && <XrPanel widthM={0.5} placement="low-front" signature={base} paint={paintNotices} />}
+      {s.notices.length > 0 && !card && !s.panelOpen && !t.incoming[0] && <XrPanel widthM={0.5} placement="low-front" signature={base} paint={paintNotices} />}
       {card && <XrCard card={card} gate={gate} signature={base} />}
     </>
   );
@@ -324,7 +328,7 @@ const togglePanel = () => {
 };
 
 const paintDock: Paint = (p) => {
-  p.row([{ label: state.incoming.length ? "Safety  •" : "Safety", active: state.panelOpen, onPress: togglePanel }], 96);
+  p.row([{ label: getTogether().incoming.length ? "Safety  •" : "Safety", active: state.panelOpen, onPress: togglePanel }], 96);
 };
 
 const paintSafety: Paint = (p) => {
@@ -343,8 +347,8 @@ const paintSafety: Paint = (p) => {
   );
   p.heading("Handshakes, high fives, hugs");
   p.row([
-    { label: "Others may ask me", active: state.settings.requests === "everyone", onPress: () => updateSettings({ requests: "everyone" }) },
-    { label: "No requests", active: state.settings.requests === "nobody", onPress: () => updateSettings({ requests: "nobody" }) },
+    { label: "Others may ask me", active: getTogether().allow, onPress: () => setAllowRequests(true) },
+    { label: "No requests", active: !getTogether().allow, onPress: () => setAllowRequests(false) },
   ]);
   if (room.paused) p.text("The facilitator has paused requests for now.", 26, "rgba(255,255,255,0.6)");
   else if (state.nearby.length === 0) p.text(`Stand within ${REACH} m of someone to ask them.`, 26, "rgba(255,255,255,0.6)");
@@ -378,13 +382,13 @@ const paintSafety: Paint = (p) => {
 };
 
 const paintPrompt: Paint = (p) => {
-  const request = state.incoming[0];
+  const request = getTogether().incoming[0];
   if (!request) return;
   const label = TOGETHER.find((t) => t.name === request.gesture)?.ask ?? "that";
   p.text(`${nameOf(request.peer)} would like ${label}.`, 36, "#fff", 600);
   p.row([
-    { label: "Yes", primary: true, onPress: () => answer(request.id, true) },
-    { label: "No thanks", onPress: () => answer(request.id, false) },
+    { label: "Yes", primary: true, onPress: () => answerTogether(request.id, true) },
+    { label: "No thanks", onPress: () => answerTogether(request.id, false) },
   ], 84);
   p.text("No answer means no.", 24, "rgba(255,255,255,0.55)");
 };

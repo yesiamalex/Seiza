@@ -5,15 +5,14 @@
 // showWorldOverlay, re-rendering from the safety store (safety.ts).
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { ACCENT_COLOR, panelStyle, pillButtonActiveStyle, pillButtonStyle, primaryButtonStyle } from "../../../src/ui/styles";
+import { setAllowRequests, useTogether } from "../../../src/interactions/together";
 import { BYSTANDER, CARDS, HELP_CONTACTS, QUIZ } from "./info";
 import { REFERENCES } from "./references";
 import {
-  answer,
   ask,
   block,
   BUBBLE_CHOICES,
   cannotAsk,
-  cancelRequest,
   cleanNotice,
   isFacilitator,
   nameOf,
@@ -21,7 +20,6 @@ import {
   others,
   PRONOUNS,
   REACH,
-  REQUEST_SECONDS,
   returnFromRefuge,
   ROOM_KEYS,
   roomSettings,
@@ -83,8 +81,7 @@ export function SeilayaHud() {
       <SafetyButton />
       {s.panelOpen && <SafetyPanel />}
       {s.inRefuge ? <RefugeBanner /> : <RoomNotice />}
-      {s.incoming[0] && !s.inRefuge && <IncomingPrompt />}
-      {s.outgoing && <OutgoingStatus />}
+      {/* Requests and their prompts are Seiza's own (TogetherPrompt). */}
       <Notices />
       {!s.settings.agreed ? <CardModal card="conduct" gate /> : s.card && <CardModal card={s.card} />}
     </>
@@ -104,6 +101,7 @@ function ShieldIcon() {
 
 function SafetyButton() {
   const s = useSafety();
+  const t = useTogether();
   const toggle = () => {
     state.panelOpen = !state.panelOpen;
     openCard(state.card);
@@ -118,7 +116,7 @@ function SafetyButton() {
       style={fixed({ top: 72, left: 16, ...(s.panelOpen ? pillButtonActiveStyle : { ...pillButtonStyle, background: "rgba(18,18,22,0.72)" }) })}
     >
       <ShieldIcon /> Safety
-      {s.incoming.length > 0 && <span style={{ width: 8, height: 8, borderRadius: 4, background: "#ffb36b" }} aria-label="A request is waiting" />}
+      {t.incoming.length > 0 && <span style={{ width: 8, height: 8, borderRadius: 4, background: "#ffb36b" }} aria-label="A request is waiting" />}
     </button>
   );
 }
@@ -127,6 +125,7 @@ function SafetyPanel() {
   const s = useSafety();
   const people = others();
   const room = roomSettings();
+  const t = useTogether();
   return (
     <div
       role="dialog"
@@ -190,10 +189,10 @@ function SafetyPanel() {
       <div style={section}>
         <h3 style={heading}>Handshakes, high fives, hugs</h3>
         <div style={{ display: "flex", gap: 6 }}>
-          <button type="button" style={chip(s.settings.requests === "everyone")} onClick={() => updateSettings({ requests: "everyone" })}>
+          <button type="button" style={chip(t.allow)} onClick={() => setAllowRequests(true)}>
             Others may ask me
           </button>
-          <button type="button" style={chip(s.settings.requests === "nobody")} onClick={() => updateSettings({ requests: "nobody" })}>
+          <button type="button" style={chip(!t.allow)} onClick={() => setAllowRequests(false)}>
             No requests
           </button>
         </div>
@@ -342,12 +341,13 @@ function FacilitatorSection() {
 /** The facilitator's notice, shown to everyone until they clear it. */
 function RoomNotice() {
   const s = useSafety();
+  const t = useTogether();
   const notice = roomSettings().notice;
   const [hidden, setHidden] = useState<string | null>(null);
   // While the panel is open it shows the notice itself (and on a phone
   // this banner would cover the panel's header).
   // A request on screen takes the spot first.
-  if (!notice || hidden === notice || s.panelOpen || s.incoming[0] || s.outgoing) return null;
+  if (!notice || hidden === notice || s.panelOpen || t.incoming[0] || t.outgoing) return null;
   return (
     <div role="status" className="sl-banner" style={fixed({ ...panelStyle, top: 72, left: "50%", transform: "translateX(-50%)", maxWidth: "min(420px, calc(100vw - 160px))", display: "flex", gap: 10, alignItems: "center", padding: "8px 12px" })}>
       <span style={{ fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: ACCENT_COLOR }}>Facilitator</span>
@@ -360,48 +360,6 @@ function RoomNotice() {
 }
 
 // --- requests, the refuge banner, and notices ---------------------------------------------------
-
-function IncomingPrompt() {
-  const s = useSafety();
-  const request = s.incoming[0];
-  const label = TOGETHER.find((t) => t.name === request.gesture)?.ask ?? "that";
-  return (
-    <div role="alertdialog" aria-label="A request" className="sl-bottom" style={fixed({ ...panelStyle, left: "50%", transform: "translateX(-50%)", width: "min(360px, calc(100vw - 32px))", display: "flex", flexDirection: "column", gap: 8 })}>
-      <span style={{ fontSize: 14 }}>
-        <strong>{nameOf(request.peer)}</strong> would like {label}.
-      </span>
-      <div style={{ display: "flex", gap: 8 }}>
-        <button type="button" style={{ ...primaryButtonStyle, flex: 1, padding: "8px 12px" }} onClick={() => answer(request.id, true)}>
-          Yes
-        </button>
-        <button type="button" style={{ ...pillButtonStyle, flex: 1, justifyContent: "center" }} onClick={() => answer(request.id, false)}>
-          No thanks
-        </button>
-      </div>
-      <div style={{ height: 3, borderRadius: 2, background: "rgba(255,255,255,0.12)", overflow: "hidden" }}>
-        <div key={request.id} style={{ height: "100%", background: ACCENT_COLOR, animation: `seilaya-drain ${REQUEST_SECONDS}s linear forwards` }} />
-      </div>
-      <span style={{ ...small, fontSize: 11 }}>No answer means no. You can turn off requests under Safety.</span>
-      <style>{`@keyframes seilaya-drain { from { width: 100%; } to { width: 0%; } }`}</style>
-    </div>
-  );
-}
-
-function OutgoingStatus() {
-  const s = useSafety();
-  if (!s.outgoing) return null;
-  const label = TOGETHER.find((t) => t.name === s.outgoing!.gesture)?.ask ?? "that";
-  return (
-    <div className="sl-bottom" style={fixed({ ...panelStyle, left: "50%", transform: "translateX(-50%)", display: "flex", gap: 10, alignItems: "center", padding: "8px 12px", maxWidth: "calc(100vw - 32px)" })}>
-      <span>
-        Asking {nameOf(s.outgoing.peer)} for {label}…
-      </span>
-      <button type="button" style={{ ...pillButtonStyle, padding: "5px 10px", fontSize: 12 }} onClick={cancelRequest}>
-        Cancel
-      </button>
-    </div>
-  );
-}
 
 function RefugeBanner() {
   return (
@@ -422,9 +380,10 @@ function RefugeBanner() {
 
 function Notices() {
   const s = useSafety();
+  const t = useTogether();
   if (s.notices.length === 0) return null;
   return (
-    <div role="status" aria-live="polite" className="sl-notices" style={fixed({ bottom: s.incoming[0] || s.outgoing ? 250 : 104, left: "50%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", gap: 6, alignItems: "center", pointerEvents: "none", width: "min(420px, calc(100vw - 32px))" })}>
+    <div role="status" aria-live="polite" className="sl-notices" style={fixed({ bottom: t.incoming[0] || t.outgoing || t.notices.length ? 250 : 104, left: "50%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", gap: 6, alignItems: "center", pointerEvents: "none", width: "min(420px, calc(100vw - 32px))" })}>
       {s.notices.map((n) => (
         <div key={n.id} style={{ ...panelStyle, padding: "8px 12px", textAlign: "center" }}>
           {n.text}

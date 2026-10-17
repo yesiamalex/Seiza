@@ -42,6 +42,9 @@ For the full guide, see [DOCS.md](DOCS.md).
   changes to match. If you kneel in seiza for a minute, your avatar nods off,
   and then its legs fall asleep. You can turn this off in the Avatar menu for
   meetings.
+- **Ask for a handshake, high five, or hug.** Stand near someone and ask from
+  the Gestures menu. It only happens if they say yes; no answer means no, and
+  you can turn requests off.
 - **Chat by text** if you prefer not to talk.
 - **Rearrange the room** in Edit Mode, including replacing the whole
   environment with your own 3D model. Your changes stay for the next person
@@ -68,6 +71,14 @@ For the full guide, see [DOCS.md](DOCS.md).
   <tr>
     <td align="center"><sub>Design your own avatar in the browser</sub></td>
     <td align="center"><sub>Or bring a full VRM, like this fan-made model<sup>*</sup></sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/media/together-consent.gif" alt="Bea asks for a hug; a prompt reads 'Bea would like a hug' with Yes and No thanks. After Yes, the two turn to face each other and hug."></td>
+    <td width="50%"><img src="docs/media/together-menu.jpg" alt="The Gestures menu, with a Together section offering a handshake, high five, or hug to a nearby person, and an 'Others may ask me' switch."></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>A hug, only after a yes</sub></td>
+    <td align="center"><sub>Ask someone nearby from the Gestures menu</sub></td>
   </tr>
 </table>
 

@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { getTogether, receiveTogether, setAllowRequests, setTogetherConnection } from "../../../src/interactions/together";
+import type { ClientMessage } from "../../../src/multiplayer/types";
 import { deliverWorldMessage } from "../../../src/worlds/WorldExtension";
-import { answer, ask, block, cleanPronouns, onPlayersChanged, setApi, startListening, state, stepOut, updateSettings } from "./safety";
+import { ask, block, cleanPronouns, onPlayersChanged, setApi, startListening, state, stepOut, stopListening } from "./safety";
 
 const player = (id: string, x: number) => ({ id, displayName: id.toUpperCase(), position: [x, 0, 0] as [number, number, number] });
 
 function setup() {
-  const sent: { to: string; data: Record<string, unknown> }[] = [];
+  const sent: ClientMessage[] = [];
+  setTogetherConnection((m) => sent.push(m), (id) => id);
   const api = {
     selfId: "me",
     players: { me: player("me", 0), amy: player("amy", 1), ben: player("ben", 8) } as never,
@@ -16,75 +19,75 @@ function setup() {
     canEdit: false,
     worldState: {} as Record<string, unknown>,
     setWorldState: vi.fn(),
-    sendWorldMessage: (to: string, data: unknown) => sent.push({ to, data: data as Record<string, unknown> }),
+    sendWorldMessage: vi.fn(),
     setPlayerFilter: vi.fn(),
   };
   setApi(api);
+  stopListening();
   startListening();
   return { api, sent };
 }
 
-describe("consent", () => {
+const askedBy = (from: string, id: string) => receiveTogether({ type: "togetherAsked", id, from, gesture: "hug" });
+const lastAnswer = (sent: ClientMessage[]) => sent.filter((m) => m.type === "togetherAnswer").pop();
+
+describe("Seilaya's say over together gestures", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     state.blocked.clear();
-    state.incoming = [];
-    state.outgoing = null;
     state.inRefuge = false;
     state.nearby = ["amy"];
-    state.settings = { ...state.settings, requests: "everyone" };
+    setAllowRequests(true);
+    getTogether().incoming = [];
+    getTogether().outgoing = null;
   });
 
-  it("only plays a gesture after the other person says yes", () => {
+  it("prompts normally", () => {
+    setup();
+    askedBy("amy", "a1");
+    expect(getTogether().incoming).toHaveLength(1);
+  });
+
+  it("turns requests away while stepped out, or while a facilitator has paused them", () => {
     const { api, sent } = setup();
-    deliverWorldMessage("amy", { ns: "seilaya/1", t: "req", id: "r1", g: "hug" });
-    expect(state.incoming).toHaveLength(1);
-    expect(api.playGesture).not.toHaveBeenCalled();
-    answer("r1", true);
-    expect(sent[sent.length - 1]).toMatchObject({ to: "amy", data: { t: "ok", id: "r1" } });
-    expect(api.playGesture).toHaveBeenCalledWith("hug");
+    onPlayersChanged();
+    stepOut();
+    askedBy("amy", "a2");
+    expect(lastAnswer(sent)).toMatchObject({ id: "a2", unavailable: true });
+    state.inRefuge = false;
+    api.worldState["seilaya.paused"] = true;
+    askedBy("amy", "a3");
+    expect(lastAnswer(sent)).toMatchObject({ id: "a3", unavailable: true });
+    expect(getTogether().incoming).toHaveLength(0);
   });
 
-  it("turns requests away without a prompt when they're off, or from someone blocked", () => {
+  it("turns away a waiting request when its asker is blocked", () => {
     const { sent } = setup();
-    updateSettings({ requests: "nobody" });
-    deliverWorldMessage("amy", { ns: "seilaya/1", t: "req", id: "r2", g: "handshake" });
-    expect(state.incoming).toHaveLength(0);
-    expect(sent[sent.length - 1]).toMatchObject({ to: "amy", data: { t: "busy" } });
-    updateSettings({ requests: "everyone" });
+    askedBy("amy", "a4");
     block("amy");
-    deliverWorldMessage("amy", { ns: "seilaya/1", t: "req", id: "r3", g: "handshake" });
-    expect(state.incoming).toHaveLength(0);
+    expect(getTogether().incoming).toHaveLength(0);
+    expect(lastAnswer(sent)).toMatchObject({ id: "a4", accept: false, unavailable: true });
   });
 
-  it("asks only people within reach, and plays on their yes", () => {
-    const { api, sent } = setup();
+  it("asks only people within reach", () => {
+    const { sent } = setup();
     ask("ben", "highfive"); // 8 m away
-    expect(state.outgoing).toBeNull();
+    expect(sent.some((m) => m.type === "togetherAsk")).toBe(false);
     ask("amy", "highfive");
-    const id = state.outgoing!.id;
-    expect(sent[sent.length - 1]).toMatchObject({ to: "amy", data: { t: "req", g: "highfive" } });
-    deliverWorldMessage("amy", { ns: "seilaya/1", t: "ok", id });
-    expect(api.playGesture).toHaveBeenCalledWith("highfive");
-    expect(state.outgoing).toBeNull();
+    expect(sent.find((m) => m.type === "togetherAsk")).toMatchObject({ to: "amy", gesture: "highfive" });
   });
 
-  it("lets a request lapse: no answer means no", () => {
-    setup();
-    deliverWorldMessage("amy", { ns: "seilaya/1", t: "req", id: "r4", g: "hug" });
-    vi.advanceTimersByTime(21_000);
-    expect(state.incoming).toHaveLength(0);
-  });
-
-  it("ignores anything that isn't a Seilaya message", () => {
-    setup();
-    deliverWorldMessage("amy", { t: "req", id: "x", g: "hug" });
-    deliverWorldMessage("amy", { ns: "seilaya/1", t: "req", id: "y", g: "kiss" });
-    expect(state.incoming).toHaveLength(0);
+  it("keeps the partner visible through personal space while the gesture plays", () => {
+    const { api } = setup();
+    state.inBubble.add("amy");
+    receiveTogether({ type: "togetherStart", id: "x", gesture: "hug", partner: "amy" });
+    const filter = api.setPlayerFilter.mock.calls[api.setPlayerFilter.mock.calls.length - 1][0] as { hidden: string[] };
+    expect(filter.hidden).not.toContain("amy");
+    state.inBubble.clear();
   });
 });
 
-describe("refuge and filter", () => {
+describe("refuge", () => {
   it("blocks everyone while stepped out", () => {
     const { api } = setup();
     onPlayersChanged();
@@ -92,6 +95,7 @@ describe("refuge and filter", () => {
     expect(api.warp).toHaveBeenCalled();
     const last = api.setPlayerFilter.mock.calls[api.setPlayerFilter.mock.calls.length - 1][0] as { blocked: string[] };
     expect(new Set(last.blocked)).toEqual(new Set(["amy", "ben"]));
+    state.inRefuge = false;
   });
 });
 
@@ -103,46 +107,15 @@ describe("pronouns", () => {
     expect(cleanPronouns(42)).toBe("");
   });
 
-  it("drops a free-text tag that arrives from another visitor", () => {
+  it("drops a free-text tag that arrives from another visitor, and ignores strangers", () => {
+    vi.useFakeTimers();
     setup();
     deliverWorldMessage("amy", { ns: "seilaya/1", t: "pron", p: "something rude" });
+    deliverWorldMessage("ghost", { ns: "seilaya/1", t: "pron", p: "she/her" });
     expect(state.pronouns.has("amy")).toBe(false);
-  });
-});
-
-describe("limits on what arrives", () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-    state.incoming = [];
-    state.blocked.clear();
-    state.inRefuge = false;
-    state.settings = { ...state.settings, requests: "everyone" };
-  });
-
-  it("turns away a person who asks again right after a no", () => {
-    const { sent } = setup();
-    deliverWorldMessage("ben", { ns: "seilaya/1", t: "req", id: "q1", g: "hug" });
-    answer("q1", false);
-    deliverWorldMessage("ben", { ns: "seilaya/1", t: "req", id: "q2", g: "hug" });
-    expect(state.incoming).toHaveLength(0);
-    expect(sent[sent.length - 1]).toMatchObject({ to: "ben", data: { t: "busy", id: "q2" } });
-    vi.advanceTimersByTime(31_000);
-    deliverWorldMessage("ben", { ns: "seilaya/1", t: "req", id: "q3", g: "hug" });
-    expect(state.incoming).toHaveLength(1);
-  });
-
-  it("ignores messages from someone not in the room, and badly formed ids", () => {
-    setup();
-    deliverWorldMessage("ghost", { ns: "seilaya/1", t: "req", id: "g1", g: "hug" });
-    deliverWorldMessage("amy", { ns: "seilaya/1", t: "req", id: "<b>bad</b>", g: "hug" });
-    expect(state.incoming).toHaveLength(0);
-  });
-
-  it("turns everything away while a facilitator has paused requests", () => {
-    const { api } = setup();
-    api.worldState["seilaya.paused"] = true;
-    deliverWorldMessage("amy", { ns: "seilaya/1", t: "req", id: "p1", g: "hug" });
-    expect(state.incoming).toHaveLength(0);
-    delete api.worldState["seilaya.paused"];
+    expect(state.pronouns.has("ghost")).toBe(false);
+    vi.advanceTimersByTime(2_100); // one pronoun update per sender every two seconds
+    deliverWorldMessage("amy", { ns: "seilaya/1", t: "pron", p: "she/her" });
+    expect(state.pronouns.get("amy")).toBe("she/her");
   });
 });

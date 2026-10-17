@@ -13,6 +13,23 @@ It is also the setting for the gender-focused study *Safe for All?* (UPOU
 Research Grant, KASARIAN agenda): its safety features are the ones that
 study asks learners about.
 
+<table>
+  <tr>
+    <td width="50%"><img src="../../docs/media/seilaya-safety.jpg" alt="The Safety panel in the hall: personal space choices, a nearby person to ask for a handshake, high five, or hug, and a Block button beside them, with her pronouns shown."></td>
+    <td width="50%"><img src="../../docs/media/seilaya-classroom.jpg" alt="The classroom: a 'Gender in numbers' screen with bar charts at the front, and a board on the Safe Spaces Act on the side wall."></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Your safety tools</sub></td>
+    <td align="center"><sub>Learning stations in the classroom</sub></td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="../../docs/media/seilaya-garden.jpg" alt="The garden at night: the SOGIESC board, and the Kanlungan refuge mat ringed with small lanterns."></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><sub>The garden at night: the SOGIESC board and Kanlungan, the refuge</sub></td>
+  </tr>
+</table>
+
 ## What's in it
 
 ### Safety tools, for every visitor
@@ -26,8 +43,12 @@ Under the **Safety** button at the top left:
   ask them for a handshake, a high five, or a hug. They get a prompt; the
   gesture plays on both avatars only if they accept. No answer within 20
   seconds means no, and after a "no" you can't ask the same person again
-  for 30 seconds. You can turn off requests entirely. The gestures are
-  hidden from Seiza's gesture menu, so they can't be played without a yes.
+  for 30 seconds. You can turn off requests entirely. These are Seiza's own
+  together gestures, in every world, with consent enforced by the room
+  server (see DOCS.md, "Together gestures"). Seilaya adds its own rules on
+  top: requests are turned away without a prompt from someone you blocked,
+  while you're in Kanlungan, or while a facilitator has paused them, and
+  your partner stays visible through your personal space while it plays.
 - **Block.** Hides someone from you for this visit: their avatar, name,
   voice, chat messages, and chat bubbles. They aren't told, and their
   requests are turned away without a prompt.
@@ -84,14 +105,13 @@ blocks last for the visit. Requests and pronouns go only to the person
 concerned, as private messages the room server relays without reading.
 
 These are not direct messages: nobody can type anything to one person.
-Every private message is one of a few fixed shapes (a request naming one of
-three gestures; yes, no, or "not available"; a pronoun from the list), and
-each is checked on arrival. Limits are enforced by the person being asked,
-so a modified client can't get around them: four requests per person per
-two minutes, nothing for 30 seconds after a no (or no answer), at most
-three waiting at once, and pronoun updates at most every two seconds. The
-room server separately caps every world message at 1 KB, a burst of 20,
-and 4 a second.
+Requests go through Seiza's room server, which only accepts one of three
+gestures, checks distance, and limits how often anyone can ask (four times
+per person per two minutes, nothing for 30 seconds after a no or no answer).
+The only private message Seilaya sends itself is a pronoun from the fixed
+list, checked on arrival and accepted at most every two seconds per sender;
+the room server caps every world message at 1 KB, a burst of 20, and 4 a
+second.
 
 ### Learning stations
 
@@ -116,12 +136,10 @@ are part of feeling safe.
 
 ```
 worlds/seilaya/
-  world/world.json          The world: sky, spawn, avatars, and the three hidden together gestures
-  gestures/*.vrma           The together gestures, generated
-  scripts/generate-gestures.mjs   Generates them (a fork of Seiza's motion generator's helpers)
+  world/world.json          The world: sky, spawn, and avatars
   client/                   The world's own code, loaded by Seiza only for this world:
     index.tsx               The Scene: wires everything up
-    safety.ts               Settings, blocks, refuge, pronouns, and the consent protocol
+    safety.ts               Settings, blocks, refuge, pronouns, and Seilaya's rules for together gestures
     Social.tsx              Personal space checks, the boundary ring, pronoun tags
     Hud.tsx                 The Safety panel, prompts, banners, and cards (flat screen and phone)
     Xr.tsx                  The same, as panels in the world, for headsets
@@ -129,7 +147,7 @@ worlds/seilaya/
     info.ts                 Every card's text, the quiz, and the bystander scenario
     references.ts           The sources
     kit.tsx                 Canvas boards and clickable parts (forked from Seizora's)
-    safety.test.ts          Tests for the consent protocol, the refuge, and pronouns
+    safety.test.ts          Tests for Seilaya's request rules, the refuge, and pronouns
   favicon.svg               Seilaya's tab icon
   build.mjs                 Builds the deployment into dist/
   wrangler.jsonc            Seilaya's own Worker
@@ -142,17 +160,15 @@ and all of Seilaya's own logic stays here:
 - the players, this visitor's position, a way to play a gesture, to move
   this visitor, and to turn them to face someone;
 - private messages between two visitors, carried on the room's existing
-  relay with no server change;
+  relay, with tight size and rate limits;
 - a per-viewer filter for who this visitor sees and hears
   (`src/multiplayer/playerFilter.ts`), which Seiza applies to avatars, name
   tags, voice, chat, and bubbles;
 - `hidden` on a world's custom gestures, so they stay out of the menu.
 
-To regenerate the gestures after editing them:
-
-```bash
-node worlds/seilaya/scripts/generate-gestures.mjs
-```
+The handshake, high five, and hug began here and moved into Seiza itself,
+so every world has them; their clips are generated with Seiza's other
+gestures (`scripts/generate-motions.mjs`).
 
 ### For a school's own deployment
 

@@ -158,5 +158,35 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
     "hold": true,
     "hidden": true,
     "ground": "seat"
+  },
+  {
+    "name": "handshake",
+    "label": "Handshake",
+    "url": "/gestures/builtin/handshake.vrma?v=e1c61a9f",
+    "duration": 2.88,
+    "fullBody": false,
+    "hold": false,
+    "hidden": true,
+    "ground": "none"
+  },
+  {
+    "name": "highfive",
+    "label": "High five",
+    "url": "/gestures/builtin/highfive.vrma?v=45caece8",
+    "duration": 1.68,
+    "fullBody": false,
+    "hold": false,
+    "hidden": true,
+    "ground": "none"
+  },
+  {
+    "name": "hug",
+    "label": "Hug",
+    "url": "/gestures/builtin/hug.vrma?v=af82e7e8",
+    "duration": 3.48,
+    "fullBody": false,
+    "hold": false,
+    "hidden": true,
+    "ground": "none"
   }
 ];

@@ -1,6 +1,6 @@
 // Builds the Seilaya deployment into dist/: Seiza's own client and Worker,
-// with the world switched to "seilaya", plus Seilaya's world config, its
-// together gestures, and its icon. Seilaya's safety tools and learning
+// with the world switched to "seilaya", plus Seilaya's world config and its
+// icon. Seilaya's safety tools and learning
 // stations are code in worlds/seilaya/client/, which Seiza's client loads
 // through its world extension hook, so they're part of the client build.
 //
@@ -10,7 +10,7 @@
 // The default world's files are never touched: building Seiza afterwards
 // (npm run build) overwrites dist/ with the default world again.
 import { execSync } from "node:child_process";
-import { copyFileSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -47,12 +47,6 @@ step("Building Seiza for the seilaya world", () => {
 step("Adding the world config", () => {
   mkdirSync(join(DIST, "worlds", WORLD_ID), { recursive: true });
   copyFileSync(join(HERE, "world", "world.json"), join(DIST, "worlds", WORLD_ID, "world.json"));
-  // The together gestures (scripts/generate-gestures.mjs), where world.json
-  // points: /worlds/seilaya/gestures/<name>.vrma.
-  mkdirSync(join(DIST, "worlds", WORLD_ID, "gestures"), { recursive: true });
-  for (const name of readdirSync(join(HERE, "gestures"))) {
-    if (name.endsWith(".vrma")) copyFileSync(join(HERE, "gestures", name), join(DIST, "worlds", WORLD_ID, "gestures", name));
-  }
   // Seilaya's own tab icon, over Seiza's in this build's output only, at
   // its own URL: browsers cache icons hard, so one at Seiza's URL keeps
   // showing Seiza's in any browser that has seen it.

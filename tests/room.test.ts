@@ -233,6 +233,91 @@ describe.skipIf(!built)("room server", () => {
     b.socket.close();
   });
 
+  describe("together gestures", () => {
+    const gesturesOf = (c: { received: ServerMessage[] }, name: string) =>
+      c.received.filter((m) => m.type === "playerGesture" && m.gesture === name).length;
+
+    it("refuses a hug nobody agreed to", async () => {
+      const room = freshRoom();
+      const a = await client(room, "A", ["batch"]);
+      const b = await client(room, "B", ["batch"]);
+      a.send({ type: "gesture", gesture: "hug" });
+      a.send({ type: "gesture", gesture: "wave" }); // an ordinary gesture still plays
+      await until(() => b.received.find((m) => m.type === "playerGesture" && m.gesture === "wave"));
+      expect(gesturesOf(b, "hug")).toBe(0);
+      a.socket.close();
+      b.socket.close();
+    });
+
+    it("plays once, for both, after a yes", async () => {
+      const room = freshRoom();
+      const a = await client(room, "A", ["batch"]);
+      const b = await client(room, "B", ["batch"]);
+      a.send({ type: "togetherAsk", to: b.selfId, gesture: "hug" });
+      const sent = await until(() => a.received.find((m) => m.type === "togetherSent"));
+      const asked = await until(() => b.received.find((m) => m.type === "togetherAsked"));
+      expect(asked.type === "togetherAsked" && asked.from).toBe(a.selfId);
+      expect(sent.type === "togetherSent" && asked.type === "togetherAsked" && sent.id === asked.id).toBe(true);
+      b.send({ type: "togetherAnswer", id: asked.type === "togetherAsked" ? asked.id : "", accept: true });
+      await until(() => a.received.find((m) => m.type === "togetherStart"));
+      await until(() => b.received.find((m) => m.type === "togetherStart"));
+      a.send({ type: "gesture", gesture: "hug" });
+      await until(() => b.received.find((m) => m.type === "playerGesture" && m.gesture === "hug"));
+      // The yes covered one hug, not a standing licence.
+      await sleep(300);
+      a.send({ type: "gesture", gesture: "hug" });
+      await sleep(400);
+      expect(gesturesOf(b, "hug")).toBe(1);
+      a.socket.close();
+      b.socket.close();
+    });
+
+    it("turns away someone out of reach, without telling them why", async () => {
+      const room = freshRoom();
+      const a = await client(room, "A", ["batch"]);
+      const b = await client(room, "B", ["batch"]);
+      b.send({ type: "state", position: [10, 0, 0], rotationY: 0 });
+      await sleep(400);
+      a.send({ type: "togetherAsk", to: b.selfId, gesture: "handshake" });
+      const closed = await until(() => a.received.find((m) => m.type === "togetherClosed"));
+      expect(closed.type === "togetherClosed" && closed.reason).toBe("unavailable");
+      expect(b.received.some((m) => m.type === "togetherAsked")).toBe(false);
+      a.socket.close();
+      b.socket.close();
+    });
+
+    it("won't let someone ask again right after a no", async () => {
+      const room = freshRoom();
+      const a = await client(room, "A", ["batch"]);
+      const b = await client(room, "B", ["batch"]);
+      a.send({ type: "togetherAsk", to: b.selfId, gesture: "highfive" });
+      const asked = await until(() => b.received.find((m) => m.type === "togetherAsked"));
+      b.send({ type: "togetherAnswer", id: asked.type === "togetherAsked" ? asked.id : "", accept: false });
+      const closed = await until(() => a.received.find((m) => m.type === "togetherClosed"));
+      expect(closed.type === "togetherClosed" && closed.reason).toBe("declined");
+      a.send({ type: "togetherAsk", to: b.selfId, gesture: "highfive" });
+      await until(() => a.received.filter((m) => m.type === "togetherClosed").length === 2 || undefined);
+      expect(b.received.filter((m) => m.type === "togetherAsked").length).toBe(1);
+      a.socket.close();
+      b.socket.close();
+    });
+
+    it("only lets the person asked answer", async () => {
+      const room = freshRoom();
+      const a = await client(room, "A", ["batch"]);
+      const b = await client(room, "B", ["batch"]);
+      const c = await client(room, "C", ["batch"]);
+      a.send({ type: "togetherAsk", to: b.selfId, gesture: "hug" });
+      const asked = await until(() => b.received.find((m) => m.type === "togetherAsked"));
+      c.send({ type: "togetherAnswer", id: asked.type === "togetherAsked" ? asked.id : "", accept: true });
+      await sleep(400);
+      expect(a.received.some((m) => m.type === "togetherStart")).toBe(false);
+      a.socket.close();
+      b.socket.close();
+      c.socket.close();
+    });
+  });
+
   it("ignores a second join on the same connection", async () => {
     const room = freshRoom();
     const watcher = await client(room, "Watcher", ["batch"]);

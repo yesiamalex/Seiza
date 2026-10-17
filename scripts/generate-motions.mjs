@@ -438,6 +438,55 @@ const palmsTogether = (close) => blendPose(CLAP_OPEN, CLAP_CLOSED, close);
  */
 const CROUCH_LEG_BLEND = 2;
 
+// ---------------------------------------------------------------------------
+// Together gestures: a handshake, a high five, and a hug. Each is played by
+// two people at once, and only after both agree (TOGETHER in
+// src/multiplayer/types.ts; the room server enforces it). Hidden from the
+// menu, since playing one alone at someone is what consent rules out.
+// First written for the Seilaya world, then moved here so every world has
+// them. Upper body only, so the legs keep standing (or walking) underneath.
+// ---------------------------------------------------------------------------
+
+/** The right hand only: a left-hand shape, mirrored, without the left. */
+const rightHandOnly = (shape) => Object.fromEntries(Object.entries(mirror(leftHand(shape))).filter(([bone]) => bone.startsWith("right")));
+/** Fingers wrapped loosely round another hand, thumb up. */
+const GRIP = { thumb: 0.15, index: 0.45, middle: 0.5, ring: 0.55, little: 0.6, spread: -2 };
+
+/** Right hand out at waist height, palm in, toward the body's midline
+ *  where a handshake meets. Close to the point gesture's checked arm.
+ *  `pump` moves the hand a few degrees up (positive) or down. */
+const shake = (pump) => ({
+  rightUpperArm: { z: 64, x: -40 - pump, y: 20 },
+  rightLowerArm: { y: 26 },
+  rightHand: { z: pump * 0.5 },
+  ...rightHandOnly(GRIP),
+  spine: { x: 3 },
+  head: { x: 4 },
+});
+
+/** Right hand raised up and forward, palm out. `reach` stretches it
+ *  toward the other person for the slap. */
+const highFive = (reach) => ({
+  rightUpperArm: { z: -42, y: 50 + 16 * reach },
+  rightLowerArm: { x: -90, y: 28 - 18 * reach },
+  ...rightHandOnly(FLAT),
+  spine: { y: -4 * reach, x: 2 },
+  head: { x: -2 },
+});
+
+/** Both arms forward and round, as if around someone. `squeeze` closes
+ *  them; `sway` rocks the upper body a little. */
+const hug = (squeeze, sway = 0) => ({
+  ...mirror({
+    leftUpperArm: { z: -24 - 4 * squeeze, y: -56 - 10 * squeeze },
+    leftLowerArm: { y: -52 - 18 * squeeze },
+    ...leftHand(RELAXED),
+  }),
+  spine: { x: 6 + 2 * squeeze, y: sway },
+  upperChest: { x: 4 },
+  head: { x: 6, z: 6 },
+});
+
 const GESTURES = [
   {
     name: "wave",
@@ -909,6 +958,53 @@ const GESTURES = [
           _hips: [0, -0.33, 0],
         },
       },
+    ],
+  },
+  {
+    name: "handshake",
+    label: "Handshake",
+    fullBody: false,
+    hidden: true,
+    fingers: true,
+    keys: [
+      { t: 0, pose: {} },
+      { t: 0.5, pose: shake(0) },
+      { t: 0.75, pose: shake(-6) },
+      { t: 1.0, pose: shake(4) },
+      { t: 1.25, pose: shake(-6) },
+      { t: 1.5, pose: shake(3) },
+      { t: 1.8, pose: shake(0) },
+      { t: 2.4, pose: {} },
+    ],
+  },
+  {
+    name: "highfive",
+    label: "High five",
+    fullBody: false,
+    hidden: true,
+    fingers: true,
+    keys: [
+      { t: 0, pose: {} },
+      { t: 0.45, pose: highFive(0) },
+      { t: 0.62, pose: highFive(1) },
+      { t: 0.8, pose: highFive(0.2) },
+      { t: 1.4, pose: {} },
+    ],
+  },
+  {
+    name: "hug",
+    label: "Hug",
+    fullBody: false,
+    hidden: true,
+    fingers: true,
+    keys: [
+      { t: 0, pose: {} },
+      { t: 0.6, pose: hug(0) },
+      { t: 1.0, pose: hug(1) },
+      { t: 1.5, pose: hug(1, 4) },
+      { t: 2.0, pose: hug(1, -4) },
+      { t: 2.3, pose: hug(0.6) },
+      { t: 2.9, pose: {} },
     ],
   },
 ];
