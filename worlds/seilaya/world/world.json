@@ -1,0 +1,25 @@
+{
+  "id": "seilaya",
+  "displayName": "Seilaya — Safe Spaces Lab",
+  "sky": { "cycle": "realtime", "site": "manila", "weather": "auto" },
+  "spawnPoint": { "x": 0, "y": 0, "z": 10 },
+  "defaultAvatarUrl": "",
+  "maxOccupants": 16,
+  "voiceEnabled": true,
+  "editingEnabled": true,
+  "allowAvatarUpload": true,
+  "defaultAvatars": [
+    { "label": "Fumiriya", "url": "/avatars/vroid/sakurada-fumiriya.vrm", "author": "pixiv Inc. (VRoid Studio sample)", "license": "CC0 1.0", "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/" },
+    { "label": "Shino", "url": "/avatars/vroid/sendagaya-shino.vrm", "author": "pixiv Inc. (VRoid Studio sample)", "license": "CC0 1.0", "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/" },
+    { "label": "Sample A", "url": "/avatars/vroid/sample-female.vrm", "author": "pixiv Inc. (VRoid Studio sample)", "license": "CC0 1.0", "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/" },
+    { "label": "Sample B", "url": "/avatars/vroid/sample-male.vrm", "author": "pixiv Inc. (VRoid Studio sample)", "license": "CC0 1.0", "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/" }
+  ],
+  "customGestures": [
+    { "name": "handshake", "label": "Handshake", "url": "/worlds/seilaya/gestures/handshake.vrma", "hidden": true, "expression": "happy" },
+    { "name": "highfive", "label": "High five", "url": "/worlds/seilaya/gestures/highfive.vrma", "hidden": true, "expression": "happy" },
+    { "name": "hug", "label": "Hug", "url": "/worlds/seilaya/gestures/hug.vrma", "hidden": true, "expression": "relaxed" }
+  ],
+  "defaultObjects": [
+    { "kind": "screen", "position": [-11.5, 2.2, 7.5], "rotationY": 1.5708 }
+  ]
+}

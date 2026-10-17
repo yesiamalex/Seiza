@@ -1,0 +1,51 @@
+<!--
+  Seilaya's mark: a person inside a soft ring, the personal boundary every
+  visitor can set, against Seiza's own twilight-into-starfield (the same
+  gradient stops and stars as public/favicon.svg), so the worlds read as one
+  family in a row of tabs. build.mjs copies this over dist/favicon.svg in
+  Seilaya's build only.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Seilaya">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#070c26"/>
+      <stop offset="42%" stop-color="#1b1546"/>
+      <stop offset="72%" stop-color="#4b2a66"/>
+      <stop offset="92%" stop-color="#a85570"/>
+      <stop offset="100%" stop-color="#e8823f"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="70%" stop-color="#f3d9a4" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#f3d9a4" stop-opacity="0.28"/>
+    </radialGradient>
+    <clipPath id="frame">
+      <rect width="64" height="64" rx="15"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#frame)">
+    <rect width="64" height="64" fill="url(#sky)"/>
+    <g fill="#ffffff">
+      <circle cx="9"  cy="8"  r="0.9" opacity="0.95"/>
+      <circle cx="21" cy="5"  r="0.6" opacity="0.7"/>
+      <circle cx="44" cy="6"  r="0.85" opacity="0.9"/>
+      <circle cx="55" cy="11" r="0.7" opacity="0.8"/>
+      <circle cx="6"  cy="20" r="0.55" opacity="0.6"/>
+      <circle cx="58" cy="26" r="0.6" opacity="0.55"/>
+    </g>
+
+    <!-- The boundary: a glowing ring. -->
+    <circle cx="32" cy="36" r="21" fill="url(#glow)"/>
+    <circle cx="32" cy="36" r="19.5" fill="none" stroke="#f3d9a4" stroke-width="2.2" opacity="0.9"/>
+
+    <!-- The person, warm white with a gold rim, like Seiza's figure. -->
+    <g stroke="#f3d9a4" stroke-width="2" stroke-linejoin="round" fill="#f3d9a4" opacity="0.95">
+      <circle cx="32" cy="27.5" r="6"/>
+      <path d="M21.5 49 C21.5 41, 26 36.5, 32 36.5 C38 36.5, 42.5 41, 42.5 49 Z"/>
+    </g>
+    <g fill="#fbf3e4">
+      <circle cx="32" cy="27.5" r="6"/>
+      <path d="M21.5 49 C21.5 41, 26 36.5, 32 36.5 C38 36.5, 42.5 41, 42.5 49 Z"/>
+    </g>
+  </g>
+</svg>

@@ -179,6 +179,11 @@ interface PlayerRigProps {
    *  each time rather than being a no-op on an unchanged ref value. */
   warpTargetRef?: MutableRefObject<THREE.Vector3 | null>;
   onWarped?: () => void;
+  /** A heading (yaw, radians) to turn the player to on the next frame,
+   *  without moving them or leaving a seat; cleared once applied. Ignored
+   *  in a headset: turning someone's view for them there makes people
+   *  sick, so they turn themselves. */
+  faceYawRef?: MutableRefObject<number | null>;
   /** Your own avatar. Always drawn: in first person its head is hidden from
    *  the camera instead (SelfView), so you can look down at your body. */
   children?: ReactNode;
@@ -231,6 +236,7 @@ export function PlayerRig({
   onStandUp,
   warpTargetRef,
   onWarped,
+  faceYawRef,
   children,
   outsideOnly,
 }: PlayerRigProps) {
@@ -616,6 +622,21 @@ export function PlayerRig({
       previousSitAnchorRef.current = null;
       seatedExitRef.current = false;
       onWarpedRef.current?.();
+    }
+
+    // A turn asked for by a world's own code (faceToward): the look
+    // direction and the avatar both swing to it, pitch kept. Not in a
+    // headset (see faceYawRef).
+    if (faceYawRef && faceYawRef.current !== null) {
+      const yaw = faceYawRef.current;
+      faceYawRef.current = null;
+      if (!isPresenting) {
+        const vcam = virtualCameraRef.current!;
+        const euler = new THREE.Euler().setFromQuaternion(vcam.quaternion, "YXZ");
+        euler.y = yaw;
+        vcam.quaternion.setFromEuler(euler);
+        avatarYawRef.current = yaw;
+      }
     }
 
     if (isPresenting) {

@@ -459,9 +459,11 @@ To preview a time or weather without changing the file, add `?skyHour=18.5`,
 previews a day, and so its moon: with `?skyHour=21`, a full moon night.
 
 A deployment can also be a separate world with its own features, built from
-the same repository. `worlds/seizora/` is an example: a solar, wind, and
-storage learning world. See its README, and [World code](#world-code) for
-how a world adds its own exhibits and controls.
+the same repository. `worlds/seizora/` is one example: a solar, wind, and
+storage learning world. `worlds/seilaya/` is another: a safe spaces lab with
+consent-based gestures, personal space, blocking, and a refuge. See their
+READMEs, and [World code](#world-code) for how a world adds its own
+exhibits and controls.
 
 #### World code
 
@@ -488,6 +490,33 @@ The `Scene` component renders inside the 3D scene and gets:
   room's lamps. The same switches are in `roomLights`
   (`src/scene/roomLights.ts`) for code that reads them every frame, with
   `lightZoneAt` to find which switch lights a spot.
+
+For worlds with social features of their own (Seilaya's safety tools are
+the example), it also gets:
+
+- `selfId` and `players`: this visitor's id and everyone in the room,
+  read-only, and `getSelfPosition()` for where this visitor is right now.
+- `playGesture(name)`: plays a gesture on this visitor's avatar for
+  everyone, including a custom gesture marked `"hidden": true` in
+  world.json, which the gesture menu doesn't offer.
+- `warp(position)`: moves this visitor.
+- `faceToward(x, z)`: turns this visitor toward a point without moving them
+  or leaving a seat. Does nothing in a headset, where only the player turns
+  their own view.
+- `sendWorldMessage(to, data)` and `onWorldMessage(handler)` (exported from
+  `WorldExtension.tsx`): small private messages between two visitors. They
+  travel on the room's existing peer-to-peer relay, the one WebRTC
+  signalling uses, as `{ world: ... }`. The server forwards them without
+  reading them, but only between joined players, only as plain objects, at
+  most 1 KB each, and at most a burst of 20 then 4 a second per sender. The
+  receiving client drops them unread unless the world's code is listening
+  (so in Seiza's default world and Seizora they go nowhere), and a world
+  must check every field itself, since another browser wrote it.
+- `setPlayerFilter({ hidden, blocked })`: who this visitor doesn't see
+  (hidden: avatar, name tag, bubble, camera) or neither sees nor hears
+  (blocked: also voice, chat messages, and bubbles). It changes only this
+  visitor's own view, is never sent anywhere, and lasts until the world
+  changes it (`src/multiplayer/playerFilter.ts`).
 
 It can also use `setWorldObstacles` from `src/scene/layout.ts` to make its
 furniture solid, `showWorldOverlay` to open a card in the HUD, and `skyState`
@@ -1205,6 +1234,10 @@ A custom gesture with a built-in gesture's name replaces it. Any other name
 adds a new gesture. The gesture menu lists built-in and custom gestures
 separately. For details and authoring tips, see `public/gestures/README.md`.
 
+Add `"hidden": true` to keep a gesture out of the menu and number keys, for
+a clip only a world's own code plays (Seilaya's handshake, high five, and
+hug play only after the other person agrees; see `worlds/seilaya/`).
+
 #### Gesture sync
 
 A client sends only a gesture's name. The server checks the name's format,
@@ -1406,7 +1439,7 @@ worker/         Cloudflare Worker: static hosting, upload API (KV), and the
 public/worlds/  Per-deployment world configuration
 worlds/         Separate worlds built from this repository, each with
                 optional in-world code in client/ (seizora/: a solar,
-                wind, and storage world)
+                wind, and storage world; seilaya/: a safe spaces lab)
 public/animations/, public/gestures/
                 Built-in motion clips (generated) and custom gesture clips
 scripts/        Motion clip generator, KV setup, and asset fetching

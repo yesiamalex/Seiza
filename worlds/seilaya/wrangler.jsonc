@@ -1,0 +1,28 @@
+{
+  // Seilaya's own Worker: the same code as Seiza's (worker/index.ts), its
+  // own name, URL, and room server. Paths are relative to this file.
+  // Build first with `node worlds/seilaya/build.mjs`, then deploy with
+  // `npx wrangler deploy --config worlds/seilaya/wrangler.jsonc`.
+  "name": "seilaya",
+  "compatibility_date": "2026-01-01",
+  "main": "../../worker/index.ts",
+  "assets": {
+    "directory": "../../dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "ROOMS", "class_name": "SeizaRoom" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SeizaRoom"] }],
+  "kv_namespaces": [
+    // Shared with Seiza's own deployment: build.mjs copies the id from the
+    // root wrangler.jsonc. Give this its own namespace id to keep Seilaya's
+    // uploaded avatars and assets apart.
+    { "binding": "AVATARS", "id": "REPLACE_WITH_KV_NAMESPACE_ID" }
+  ],
+  "vars": {
+    "SEIZA_WORLD_ID": "seilaya",
+    "SEIZA_MAX_OCCUPANTS": "16"
+  }
+}

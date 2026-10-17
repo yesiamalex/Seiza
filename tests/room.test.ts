@@ -213,6 +213,26 @@ describe.skipIf(!built)("room server", () => {
     b.socket.close();
   });
 
+  it("keeps a world's private messages small, structured, and slow", async () => {
+    const room = freshRoom();
+    const a = await client(room, "A", ["batch"]);
+    const b = await client(room, "B", ["batch"]);
+    const world = (data: unknown) => a.send({ type: "voiceSignal", to: b.selfId, data: { world: data } as never });
+    world("a plain string"); // not an object
+    world(["an", "array"]);
+    world({ ns: "x", padding: "x".repeat(2_000) }); // over 1 KB, though far under the signalling limit
+    await sleep(400);
+    expect(b.received.some((m) => m.type === "voiceSignal")).toBe(false);
+    // A burst is capped well below signalling's: 20 at once, then 4 a second.
+    for (let i = 0; i < 60; i++) world({ ns: "x", i });
+    await sleep(500);
+    const delivered = b.received.filter((m) => m.type === "voiceSignal").length;
+    expect(delivered).toBeGreaterThan(0);
+    expect(delivered).toBeLessThanOrEqual(24);
+    a.socket.close();
+    b.socket.close();
+  });
+
   it("ignores a second join on the same connection", async () => {
     const room = freshRoom();
     const watcher = await client(room, "Watcher", ["batch"]);

@@ -12,6 +12,7 @@ import { ChatBubble } from "../chat/ChatBubble";
 import { CameraBadge } from "../media/CameraBadge";
 import { NameTag } from "./NameTag";
 import { avatarUpdateEvery } from "./avatarDetail";
+import { isPlayerHidden } from "./playerFilter";
 import type { PlayerState } from "./types";
 
 interface RemotePlayersProps {
@@ -159,6 +160,7 @@ function RemotePlayerAvatar({
   const smoothed = useRef<THREE.Vector3 | null>(null);
   const yaw = useRef(player.rotationY);
   const layerWeightsRef = useRef<AnimatorLayerWeights>({ gesture: 0, posture: 0 });
+  const tooClose = useRef(false);
 
   useFrame((state, delta) => {
     const group = groupRef.current;
@@ -192,8 +194,11 @@ function RemotePlayerAvatar({
     const dx = camera.x - group.position.x;
     const dz = camera.z - group.position.z;
     const distance = Math.hypot(dx, dz);
-    const threshold = group.visible ? AVATAR_HIDE_DISTANCE : AVATAR_SHOW_DISTANCE;
-    group.visible = distance > threshold;
+    const threshold = tooClose.current ? AVATAR_SHOW_DISTANCE : AVATAR_HIDE_DISTANCE;
+    tooClose.current = distance <= threshold;
+    // A player this viewer has hidden or blocked (playerFilter.ts) isn't
+    // drawn at all: avatar, name tag, chat bubble, and camera.
+    group.visible = !tooClose.current && !isPlayerHidden(target.id);
   });
 
   // AvatarAnimator only plays when the sequence number changes, so a

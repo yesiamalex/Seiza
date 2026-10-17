@@ -11,6 +11,7 @@ import {
 import { AvatarPreview } from "./AvatarPreview";
 import { AvatarChooser, avatarUrlForChoice, initialAvatarChoice, type AvatarSelection } from "./AvatarChooser";
 import { ACCENT_COLOR, inputStyle, primaryButtonStyle } from "./styles";
+import { Credit } from "./Credit";
 
 export interface JoinedIdentity extends AvatarSelection {
   displayName: string;
@@ -198,6 +199,7 @@ export function JoinScreen({ world, onJoin }: JoinScreenProps) {
           <button type="submit" style={{ ...primaryButtonStyle, opacity: canSubmit ? 1 : 0.6 }} disabled={!canSubmit}>
             {joining ? "Joining…" : "Enter world"}
           </button>
+          <Credit />
         </div>
       </form>
     </div>

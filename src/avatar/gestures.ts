@@ -35,6 +35,9 @@ export interface CustomGestureConfig {
   ground?: GroundContact;
   /** Face to wear while this gesture plays. See FACE_EXPRESSIONS. */
   expression?: string;
+  /** Kept out of the gesture menu and number keys, for a clip a world's
+   *  own code plays (Seilaya's consent gestures, after both people agree). */
+  hidden?: boolean;
 }
 
 /**
@@ -176,7 +179,7 @@ export function buildGestureRegistry(options: {
       // A custom clip replacing a hidden built-in (`sit`) stays hidden, so
       // a deployment can supply its own sitting pose without it showing up
       // in the menu as a gesture.
-      hidden: BUILTIN_GESTURES.some((g) => g.name === custom.name && g.hidden),
+      hidden: custom.hidden === true || BUILTIN_GESTURES.some((g) => g.name === custom.name && g.hidden),
       // A replacement clip inherits the built-in's contact by default, so a
       // deployment swapping in its own sitting pose still lands on the chair.
       ground:

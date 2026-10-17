@@ -16,6 +16,7 @@ import {
 } from "./avatar/gestures";
 import type { Seat } from "./scene/layout";
 import { roomLights } from "./scene/roomLights";
+import { setPlayerFilter, usePlayerFilter } from "./multiplayer/playerFilter";
 import type { VRM } from "@pixiv/three-vrm";
 import { useRoomSocket } from "./multiplayer/useRoomSocket";
 import { RemotePlayers } from "./multiplayer/RemotePlayers";
@@ -64,7 +65,7 @@ import { CameraViewToggle } from "./ui/CameraViewToggle";
 import { AvatarChooser } from "./ui/AvatarChooser";
 import { useMediaQuery, useWantsTouchControls } from "./ui/useMediaQuery";
 import { saveProfile } from "./profile/profileStore";
-import { WorldExtension, WorldOverlay } from "./worlds/WorldExtension";
+import { deliverWorldMessage, unwrapWorldMessage, WorldExtension, WorldOverlay, wrapWorldMessage } from "./worlds/WorldExtension";
 import { BAR_LABEL_CLASS, barButtonActiveStyle, barButtonStyle, inputStyle, panelStyle, pillButtonStyle, primaryButtonStyle } from "./ui/styles";
 import { CloseIcon, LockIcon, PersonIcon, VrHeadsetIcon } from "./ui/icons";
 import { isTextObjectKind, type PresentSource, type WorldObject, type WorldObjectKind } from "./multiplayer/types";
@@ -216,6 +217,18 @@ export default function App() {
     warpTargetRef.current = target;
     positionRef.current = [target.x, target.y, target.z];
   };
+  // For a world's own code (WorldExtension): stable, so its effects don't rerun.
+  const warpTo = useCallback((p: [number, number, number]) => {
+    warpTargetRef.current = new THREE.Vector3(p[0], p[1], p[2]);
+    positionRef.current = [p[0], p[1], p[2]];
+  }, []);
+  const getSelfPosition = useCallback(() => positionRef.current, []);
+  const faceYawRef = useRef<number | null>(null);
+  // Avatars face -Z at yaw 0 (facingVector in layout.ts).
+  const faceToward = useCallback((x: number, z: number) => {
+    const [px, , pz] = positionRef.current;
+    if (Math.hypot(x - px, z - pz) > 1e-3) faceYawRef.current = Math.atan2(-(x - px), -(z - pz));
+  }, []);
   // Read by the gather handler, which is created before selfId exists.
   const selfIdRef = useRef<string | null>(null);
   const roomId = world && joined ? world.id : "";
@@ -309,7 +322,19 @@ export default function App() {
 
   const sendSignal = useCallback((to: string, data: unknown) => send({ type: "voiceSignal", to, data }), [send]);
   const media = useRealtimeMedia({ selfId, players, sendSignal });
-  voiceSignalHandlerRef.current = media.handleSignal;
+  // The relay also carries a world's own private messages (WorldExtension).
+  voiceSignalHandlerRef.current = (from, data) => {
+    const world = unwrapWorldMessage(data);
+    if (world) deliverWorldMessage(from, world.data);
+    else media.handleSignal(from, data);
+  };
+  const sendWorldMessage = useCallback((to: string, data: unknown) => sendSignal(to, wrapWorldMessage(data)), [sendSignal]);
+  const filter = usePlayerFilter();
+  // Chat from someone this viewer blocked doesn't show (playerFilter.ts).
+  const shownMessages = useMemo(
+    () => (filter.blocked.size ? messages.filter((m) => !filter.blocked.has(m.senderId)) : messages),
+    [messages, filter]
+  );
   forceMuteHandlerRef.current = media.forceMute;
 
   // Tell the room which of our streams is which, so receivers can put each
@@ -848,11 +873,11 @@ export default function App() {
     const latest: Record<string, { id: string; text: string }> = {};
     // Newest wins: the log is chronological, so a later message simply
     // overwrites the entry for that sender.
-    for (const message of messages) {
+    for (const message of shownMessages) {
       latest[message.senderId] = { id: message.id, text: message.text };
     }
     return latest;
-  }, [messages]);
+  }, [shownMessages]);
 
   const resolveScreenStream = useCallback(
     (object: WorldObject) => {
@@ -1079,6 +1104,14 @@ export default function App() {
               worldState={worldState}
               setWorldState={setWorldState}
               lights={lights}
+              selfId={selfId}
+              players={players}
+              getSelfPosition={getSelfPosition}
+              playGesture={requestGesture}
+              warp={warpTo}
+              faceToward={faceToward}
+              sendWorldMessage={sendWorldMessage}
+              setPlayerFilter={setPlayerFilter}
             />
           </group>
           <PlayerRig
@@ -1101,6 +1134,7 @@ export default function App() {
             // Without these two, admin "teleport to" and "gather everyone"
             // set a warp target nothing ever read, so both did nothing.
             warpTargetRef={warpTargetRef}
+            faceYawRef={faceYawRef}
             onWarped={standUp}
             outsideOnly={
               <>
@@ -1339,7 +1373,7 @@ export default function App() {
         <ChatPanel
           open={chatOpen}
           onToggle={() => setChatOpen((v) => !v)}
-          messages={messages}
+          messages={shownMessages}
           selfId={selfId}
           onSend={sendChat}
           connected={connected}
@@ -1387,8 +1421,11 @@ export default function App() {
           roomSky={roomSky}
           onSetRoomSky={setRoomSky}
         />
-        <WorldOverlay />
       </HUD>
+      {/* A world's own cards and controls (WorldExtension). Beside the HUD,
+          not inside it: on a phone the HUD's controls fold into a drawer,
+          which hid every world card until the drawer was opened. */}
+      <WorldOverlay />
       {showTouchControls && !webglLost && (
         <TouchControls
           inputRef={touchInputRef}

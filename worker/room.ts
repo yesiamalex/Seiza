@@ -99,6 +99,12 @@ const DESIGNER_AVATAR_URL = /^seiza-avatar:v1:[A-Za-z0-9_-]{1,1200}$/;
 const MAX_MESSAGE_CHARS = 64 * 1024;
 /** Signalling payloads (SDP and ICE) are a few KB at most. */
 const MAX_SIGNAL_CHARS = 32 * 1024;
+/** A world's own private messages (`{ world: ... }` on the signalling
+ *  relay; see src/worlds/WorldExtension.tsx) are small and structured, a
+ *  consent request or a choice from a list, so they get a far tighter size
+ *  and rate than signalling. */
+const MAX_WORLD_MESSAGE_CHARS = 1024;
+const WORLD_MESSAGE_RATE = { perSecond: 4, burst: 20 };
 /** Room password guesses per connection before it's closed. */
 const MAX_ROOM_AUTH_ATTEMPTS = 5;
 /**
@@ -733,12 +739,19 @@ export class SeizaRoom extends DurableObject<Env> {
         // what to whom. Only a joined player, only to another joined
         // player, at a bounded rate and size.
         if (!attachment.player || message.to === attachment.connId) return;
-        if (typeof message.data !== "object" || message.data === null) return;
-        if (!this.allow(attachment.connId, "signal", SIGNAL_RATE)) return;
+        if (typeof message.data !== "object" || message.data === null || Array.isArray(message.data)) return;
+        // A world message is told apart by the same test the receiving
+        // client uses, so it can't pass as signalling to dodge its limits.
+        const world = "world" in message.data;
+        if (world) {
+          const payload = (message.data as { world: unknown }).world;
+          if (typeof payload !== "object" || payload === null || Array.isArray(payload)) return;
+          if (!this.allow(attachment.connId, "world", WORLD_MESSAGE_RATE)) return;
+        } else if (!this.allow(attachment.connId, "signal", SIGNAL_RATE)) return;
         const target = this.findConnection(message.to);
         if (!target || !this.att(target)?.player) return;
         const json = JSON.stringify({ type: "voiceSignal", from: attachment.connId, data: message.data } satisfies ServerMessage);
-        if (json.length > MAX_SIGNAL_CHARS) return;
+        if (json.length > (world ? MAX_WORLD_MESSAGE_CHARS : MAX_SIGNAL_CHARS)) return;
         try {
           target.send(json);
         } catch {

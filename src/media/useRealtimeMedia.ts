@@ -7,6 +7,7 @@ import {
   VOICE_MAX_BITRATE,
 } from "./meshPolicy";
 import type { PlayerMedia, PlayerState } from "../multiplayer/types";
+import { isPlayerBlocked } from "../multiplayer/playerFilter";
 
 // On unless a deployer explicitly turns it off. The per-world switch is
 // `voiceEnabled` in world.json (see App.tsx); this env var is the
@@ -893,7 +894,8 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
           const dy = player.position[1] - localPosition[1];
           const dz = player.position[2] - localPosition[2];
           const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-          const volume = Math.max(0, 1 - distance / VOICE_FALLOFF_DISTANCE);
+          // Silent for someone this viewer has blocked (playerFilter.ts).
+          const volume = isPlayerBlocked(peerId) ? 0 : Math.max(0, 1 - distance / VOICE_FALLOFF_DISTANCE);
           for (const audio of peer.audio.values()) {
             audio.gain.gain.setTargetAtTime(volume, audio.gain.context.currentTime, 0.1);
           }

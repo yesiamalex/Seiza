@@ -1,5 +1,5 @@
 import { Component, useEffect, useState, useSyncExternalStore, type ComponentType, type ReactNode } from "react";
-import type { LightZone, RoomSky, WorldObject, WorldStateValue } from "../multiplayer/types";
+import type { LightZone, PlayerState, RoomSky, WorldObject, WorldStateValue } from "../multiplayer/types";
 
 /**
  * A world's own in-world code: exhibits, displays, and controls that only
@@ -10,7 +10,11 @@ import type { LightZone, RoomSky, WorldObject, WorldStateValue } from "../multip
  * What a world's code gets is deliberately small: the room's objects and
  * sky, the shared world state (switches and settings every visitor sees,
  * stored by the room server), whether this visitor may change things, and
- * a place in the HUD to show a card (showWorldOverlay).
+ * a place in the HUD to show a card (showWorldOverlay). For worlds with
+ * their own social features (Seilaya's consent gestures and safety tools),
+ * it also gets the players, its own gestures to play, a way to move this
+ * visitor, private messages between visitors, and a per-viewer filter for
+ * who this visitor sees and hears.
  */
 export interface WorldSceneProps {
   /** Whether this visitor may change shared things: the same rule as Edit
@@ -26,6 +30,26 @@ export interface WorldSceneProps {
   /** The room's light switches (hall, classroom, garden), so a world's own
    *  fittings can switch with the room's lamps. Read-only. */
   lights: Record<LightZone, boolean>;
+  /** This visitor's id, or null before joining. */
+  selfId: string | null;
+  /** Everyone in the room, this visitor included. Read-only. */
+  players: Record<string, PlayerState>;
+  /** Where this visitor is now (read it when needed; it changes every frame). */
+  getSelfPosition: () => [number, number, number];
+  /** Plays a gesture on this visitor's avatar, for everyone, by name: a
+   *  built-in or one from world.json's customGestures (hidden ones too). */
+  playGesture: (name: string) => void;
+  /** Moves this visitor to a spot. */
+  warp: (position: [number, number, number]) => void;
+  /** Turns this visitor to face a point on the floor, without moving them.
+   *  Does nothing in a headset, where only the player turns their view. */
+  faceToward: (x: number, z: number) => void;
+  /** A small private message to one other visitor, relayed by the room
+   *  server without reading it. Arrives through onWorldMessage. */
+  sendWorldMessage: (to: string, data: unknown) => void;
+  /** Who this visitor doesn't see (hidden) or neither sees nor hears
+   *  (blocked), for this visit only. See src/multiplayer/playerFilter.ts. */
+  setPlayerFilter: (filter: { hidden?: Iterable<string>; blocked?: Iterable<string> } | null) => void;
 }
 
 export interface WorldModule {
@@ -96,4 +120,58 @@ export function WorldOverlay() {
     () => overlay
   );
   return <>{node}</>;
+}
+
+// --- private messages between visitors -----------------------------------------
+
+type WorldMessageHandler = (from: string, data: unknown) => void;
+const messageHandlers = new Set<WorldMessageHandler>();
+
+/** Receives the world messages other visitors send this one. Returns the
+ *  unsubscribe function. */
+export function onWorldMessage(handler: WorldMessageHandler): () => void {
+  messageHandlers.add(handler);
+  return () => messageHandlers.delete(handler);
+}
+
+/** The most a world message may be, as JSON. The room server drops
+ *  anything bigger (worker/room.ts); checked here too, since a message
+ *  comes from another browser and is never trusted. */
+const MAX_WORLD_MESSAGE_CHARS = 1024;
+
+/**
+ * App's side: hands a world message to the world's code. A world without
+ * its own code listening (Seiza's default world, Seizora) drops every one
+ * unread, so nothing another visitor sends this way is ever shown. A
+ * world that listens gets only small plain objects, and must still check
+ * every field: another browser wrote them.
+ */
+export function deliverWorldMessage(from: string, data: unknown) {
+  if (messageHandlers.size === 0) return;
+  if (typeof data !== "object" || data === null || Array.isArray(data)) return;
+  let size = 0;
+  try {
+    size = JSON.stringify(data).length;
+  } catch {
+    return;
+  }
+  if (size > MAX_WORLD_MESSAGE_CHARS) return;
+  for (const handler of messageHandlers) {
+    try {
+      handler(from, data);
+    } catch (error) {
+      console.warn("[seiza] A world message handler failed.", error);
+    }
+  }
+}
+
+/** World messages travel on the room's existing peer-to-peer relay (the
+ *  one WebRTC signalling uses), wrapped so they can't be mistaken for
+ *  signalling: `{ world: data }`. */
+export function wrapWorldMessage(data: unknown) {
+  return { world: data };
+}
+
+export function unwrapWorldMessage(data: unknown): { data: unknown } | null {
+  return typeof data === "object" && data !== null && "world" in data ? { data: (data as { world: unknown }).world } : null;
 }

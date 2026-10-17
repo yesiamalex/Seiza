@@ -3,6 +3,7 @@ import { useExclusiveMenu } from "./exclusiveMenu";
 import { useDismissOnOutside } from "./useDismissOnOutside";
 import { CloseIcon } from "./icons";
 import { ACCENT_COLOR, panelStyle, pillButtonStyle, primaryButtonStyle } from "./styles";
+import { Credit } from "./Credit";
 
 const SEEN_KEY = "seiza:controls-guide-seen";
 
@@ -227,6 +228,7 @@ export function ControlsGuide({ open, onClose, touch }: ControlsGuideProps) {
       <small style={{ opacity: 0.55, textAlign: "center", marginTop: -4 }}>
         Press ? or the ? button to see this again.
       </small>
+      <Credit />
     </div>
   );
 }
