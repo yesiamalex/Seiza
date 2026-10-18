@@ -98,6 +98,11 @@ const xrStore = createXRStore({
   meshDetection: false,
   planeDetection: false,
   domOverlay: false,
+  // Gaze and screen taps are handled by Seiza's own gaze selection
+  // (src/xr/hud/gaze.ts), which catches every way a phone viewer reports a
+  // tap; the library's would press buttons a second time.
+  gaze: false,
+  screenInput: false,
   ...(xrEmulateGaze ? { emulate: { type: "metaQuest3" as const, stereoEnabled: true, syntheticEnvironment: false } } : {}),
 });
 if (xrEmulateGaze) {

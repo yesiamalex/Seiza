@@ -4,6 +4,8 @@ import { useXR } from "@react-three/xr";
 import * as THREE from "three";
 import { trackingStore } from "../body/trackingStore";
 import { hitTest, layoutHud, type HudButton, type XrHudModel } from "./hudPanel";
+import { gazeMode, LazyYaw, registerGazeTarget } from "./gaze";
+import { GazeCursor } from "./GazeCursor";
 
 export type { XrHudModel } from "./hudPanel";
 
@@ -32,6 +34,9 @@ const GAZE_BUTTON_WIDTH = 0.11;
 const GAZE_BUTTON_DISTANCE = 0.62;
 const GAZE_BUTTON_DROP = 0.3;
 const GAZE_BUTTON_SIDE = 0.16;
+/** Gaze mode opens the menu this far below eye level: high enough that it
+ *  clears the Menu button beneath it. */
+const GAZE_PIN_DROP = 0.0;
 
 const up = new THREE.Vector3(0, 1, 0);
 const palm = new THREE.Vector3();
@@ -50,10 +55,12 @@ const flatForward = new THREE.Vector3();
  * pull the trigger (or pinch).
  *
  * A phone in a Cardboard-style viewer has no controllers and no hand
- * tracking, only gaze: look at something and tap the screen. For those
- * sessions (no tracked input at all) there's a small Menu button low in
- * view that follows you; look at it and tap to open the menu in front of
- * you, and again to close it. The first-time hint says so instead.
+ * tracking, only gaze: look at something and tap the screen, or keep
+ * looking (gaze.ts, GazeCursor.tsx). For those sessions (no tracked input
+ * at all) there's a small Menu button low in view; it stays put while you
+ * look around a little, so you can look at it, and catches up when you
+ * turn away. Select it to open the menu in front of you, and again to
+ * close it. The first-time hint says so instead.
  *
  * Mounts nothing outside a session. Everything it shows and does comes in
  * through `model` (see XrHudModel), so this module knows nothing about
@@ -99,7 +106,10 @@ function XrHudPanel({ model, session }: { model: XrHudModel; session: XRSession 
   const [gaze, setGaze] = useState(false);
   const gazeRef = useRef(false);
   const gazeButtonRef = useRef<THREE.Mesh>(null);
-  const gazeButtonPlacedRef = useRef(false);
+  const gazeYaw = useMemo(() => new LazyYaw(), []);
+  /** A hold button (raise hand) pressed by gaze stays held until selected
+   *  again, since a gaze can't keep a button held down. */
+  const gazeHeldRef = useRef<HudButton | null>(null);
 
   // Buttons call through to whatever the model is *now*, not to the one
   // the layout was built from, so a re-layout only has to happen when
@@ -154,19 +164,63 @@ function XrHudPanel({ model, session }: { model: XrHudModel; session: XRSession 
 
   /** Opens the menu pinned in front of you, or closes it: gaze mode's
    *  button, and the X button on a controller. */
-  const placePinned = (panel: THREE.Object3D, head: THREE.Vector3, headQuaternion: THREE.Quaternion) => {
+  const placePinned = (panel: THREE.Object3D, head: THREE.Vector3, headQuaternion: THREE.Quaternion, drop = PIN_DROP) => {
     flatForward.set(0, 0, -1).applyQuaternion(headQuaternion).setY(0);
     if (flatForward.lengthSq() < 1e-6) flatForward.set(0, 0, -1);
     flatForward.normalize();
-    panel.position.copy(head).addScaledVector(flatForward, PIN_DISTANCE).addScaledVector(up, -PIN_DROP);
+    panel.position.copy(head).addScaledVector(flatForward, PIN_DISTANCE).addScaledVector(up, -drop);
     panel.lookAt(head);
   };
   const toggleFromGaze = () => {
     const world = trackingStore.getLocalWorld();
     const panel = panelRef.current;
     pinnedRef.current = !pinnedRef.current;
-    if (pinnedRef.current && world && panel) placePinned(panel, world.head.position, world.head.quaternion);
+    // At eye level, above the Menu button, so the menu never covers the
+    // button that closes it (with gaze, whatever is nearest under the
+    // centre of view is what gets selected).
+    if (pinnedRef.current && world && panel) placePinned(panel, world.head.position, world.head.quaternion, GAZE_PIN_DROP);
   };
+
+  // Gaze targets (gaze.ts): the Menu button, and the menu's own buttons.
+  const layoutRef = useRef(layout);
+  layoutRef.current = layout;
+  const toggleRef = useRef(toggleFromGaze);
+  toggleRef.current = toggleFromGaze;
+  useEffect(() => () => void (gazeMode.active = false), []);
+  useEffect(() => {
+    const button = gazeButtonRef.current;
+    const panel = panelRef.current;
+    if (!button || !panel) return;
+    const buttonAt = (uv: THREE.Vector2) => {
+      const l = layoutRef.current;
+      const hit = hitTest(l, uv.x * l.width, (1 - uv.y) * l.height);
+      return hit && !hit.disabled ? hit : null;
+    };
+    const offButton = registerGazeTarget(button, { keyAt: () => "menu", select: () => toggleRef.current() });
+    const offPanel = registerGazeTarget(panel, {
+      keyAt: (uv) => (openRef.current ? (buttonAt(uv)?.id ?? null) : null),
+      select: (uv) => {
+        if (!openRef.current) return;
+        const hit = buttonAt(uv);
+        if (!hit) return;
+        if (!hit.hold) {
+          hit.onPress();
+          return;
+        }
+        const held = gazeHeldRef.current;
+        held?.onRelease?.();
+        gazeHeldRef.current = null;
+        if (held?.id !== hit.id) {
+          hit.onPress();
+          gazeHeldRef.current = hit;
+        }
+      },
+    });
+    return () => {
+      offButton();
+      offPanel();
+    };
+  }, []);
 
   // A held button must be let go if the panel goes away under the
   // pointer, or a raised hand would stay up with nothing left to release
@@ -197,13 +251,17 @@ function XrHudPanel({ model, session }: { model: XrHudModel; session: XRSession 
       gazeRef.current = !tracked;
       setGaze(!tracked);
     }
+    gazeMode.active = gazeRef.current;
     const gazeButton = gazeButtonRef.current;
     if (gazeButton) {
       gazeButton.visible = gazeRef.current;
       if (gazeRef.current) {
+        // Anchored to a yaw that only follows once you've turned well away
+        // (LazyYaw), so you can turn your head to look at the button.
         flatForward.set(0, 0, -1).applyQuaternion(world.head.quaternion).setY(0);
         if (flatForward.lengthSq() < 1e-6) flatForward.set(0, 0, -1);
-        flatForward.normalize();
+        const yaw = gazeYaw.update(Math.atan2(-flatForward.x, -flatForward.z), delta);
+        flatForward.set(-Math.sin(yaw), 0, -Math.cos(yaw));
         // Right of forward, in the floor plane.
         toHead.set(-flatForward.z, 0, flatForward.x);
         const goal = palm
@@ -211,9 +269,9 @@ function XrHudPanel({ model, session }: { model: XrHudModel; session: XRSession 
           .addScaledVector(flatForward, GAZE_BUTTON_DISTANCE)
           .addScaledVector(toHead, GAZE_BUTTON_SIDE)
           .addScaledVector(up, -GAZE_BUTTON_DROP);
-        if (!gazeButtonPlacedRef.current) gazeButton.position.copy(goal);
-        else gazeButton.position.lerp(goal, 1 - Math.exp(-8 * delta));
-        gazeButtonPlacedRef.current = true;
+        // Follows walking at once (it's anchored to you, just not to where
+        // you look); the lazy yaw does the gliding.
+        gazeButton.position.copy(goal);
         gazeButton.lookAt(head);
       }
     }
@@ -356,6 +414,7 @@ function XrHudPanel({ model, session }: { model: XrHudModel; session: XRSession 
         <planeGeometry args={[1, 1]} />
         <meshBasicMaterial map={hint} transparent depthTest={false} depthWrite={false} toneMapped={false} />
       </mesh>
+      <GazeCursor session={session} />
       {/* Gaze mode's Menu button (see the comment at the top). */}
       <mesh
         ref={gazeButtonRef}

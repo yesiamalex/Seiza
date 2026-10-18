@@ -89,7 +89,8 @@ panels in the world (`client/Xr.tsx`): a small Safety chip low on the left
 of your view opens the safety panel; requests appear in front of you with
 Yes and No thanks; and station cards, the quiz, and the bystander scenario
 open in front of you. Point with a controller (or hand) and press the
-trigger (or pinch); in a phone viewer, look at a button and tap the screen. Panels stay put until you turn well away, then drift
+trigger (or pinch); in a phone viewer, look at a button and tap the screen,
+or keep looking while the ring fills (Seiza's gaze selection). Panels stay put until you turn well away, then drift
 back. To check them without a headset, add `?seilayaXrPreview` to the URL.
 
 When a together gesture starts, both people turn to face each other on a

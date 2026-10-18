@@ -18,6 +18,7 @@ import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import { useXR } from "@react-three/xr";
 import * as THREE from "three";
 import { trackingStore } from "../../../src/xr/body/trackingStore";
+import { LazyYaw, registerGazeTarget } from "../../../src/xr/hud/gaze";
 import { answerTogether, getTogether, setAllowRequests, useTogether } from "../../../src/interactions/together";
 import { BYSTANDER, CARDS, HELP_CONTACTS, QUIZ } from "./info";
 import { REFERENCES } from "./references";
@@ -261,6 +262,7 @@ function XrPanel({
   }, [signature, canvas, texture, widthM]);
 
   const goal = useMemo(() => new THREE.Vector3(), []);
+  const dockYaw = useMemo(() => new LazyYaw(), []);
   const forward = useMemo(() => new THREE.Vector3(), []);
   const side = useMemo(() => new THREE.Vector3(), []);
   useFrame(({ camera }, delta) => {
@@ -275,31 +277,58 @@ function XrPanel({
     if (forward.lengthSq() < 1e-6) forward.set(0, 0, -1);
     forward.normalize();
     if (placement === "dock") {
-      // Low on the left, always following, a glance away.
+      // Low on the left, a glance away. Anchored to a yaw that only
+      // follows once you've turned well away (Seiza's LazyYaw), so in a
+      // phone viewer you can turn your head to look at it and select it.
+      const yaw = dockYaw.update(Math.atan2(-forward.x, -forward.z), delta);
+      forward.set(-Math.sin(yaw), 0, -Math.cos(yaw));
       side.set(forward.z, 0, -forward.x); // left of forward
       goal.copy(head).addScaledVector(forward, 0.5).addScaledVector(side, 0.28);
       goal.y -= 0.36;
     } else {
       goal.copy(head).addScaledVector(forward, placement === "front" ? 0.75 : 0.6);
       goal.y -= placement === "front" ? 0.08 : 0.2;
+      // A tall panel is raised so its bottom edge stays above the Safety
+      // and Menu buttons low in view: with gaze, whatever is nearest under
+      // the centre of view is selected, so a panel covering them would
+      // make them (and the buttons beneath them) unreachable.
+      const heightM = (widthM * layout.current.height) / canvasWidth;
+      goal.y += Math.max(0, heightM / 2 - (placement === "front" ? 0.2 : 0.1));
     }
     if (!placed.current) {
       m.position.copy(goal);
       placed.current = true;
-    } else if (placement === "dock" || m.position.distanceTo(goal) > 0.45) {
-      // Dock: follows closely. Others: stay put until you've turned well
-      // away, then glide back in front.
-      m.position.lerp(goal, 1 - Math.exp(-delta * (placement === "dock" ? 8 : 2.5)));
+    } else if (placement === "dock") {
+      m.position.copy(goal);
+    } else if (m.position.distanceTo(goal) > 0.45) {
+      // Stay put until you've turned well away, then glide back in front.
+      m.position.lerp(goal, 1 - Math.exp(-delta * 2.5));
     }
     m.lookAt(head);
   });
 
   const toCanvas = (event: ThreeEvent<PointerEvent>) => (event.uv ? { x: event.uv.x * canvasWidth, y: (1 - event.uv.y) * layout.current.height } : null);
+  const buttonAt = (x: number, y: number) =>
+    layout.current.buttons.find((b) => !b.disabled && x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) ?? null;
   const hit = (event: ThreeEvent<PointerEvent>) => {
     const point = toCanvas(event);
-    if (!point) return null;
-    return layout.current.buttons.find((b) => !b.disabled && point.x >= b.x && point.x <= b.x + b.w && point.y >= b.y && point.y <= b.y + b.h) ?? null;
+    return point ? buttonAt(point.x, point.y) : null;
   };
+  // Selectable by gaze too, in a phone viewer (Seiza's gaze.ts). Buttons
+  // are told apart by position, since labels can repeat across rows.
+  useEffect(() => {
+    const m = mesh.current;
+    if (!m) return;
+    const at = (uv: THREE.Vector2) => buttonAt(uv.x * canvasWidth, (1 - uv.y) * layout.current.height);
+    return registerGazeTarget(m, {
+      keyAt: (uv) => {
+        const b = at(uv);
+        return b ? `${b.x},${b.y}` : null;
+      },
+      select: (uv) => at(uv)?.onPress(),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <mesh

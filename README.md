@@ -100,7 +100,7 @@ For the full guide, see [DOCS.md](DOCS.md).
 The same link works on a phone, a laptop, or a VR headset. In a headset, your
 avatar follows your head and hands, and turning your left palm toward you
 opens a menu for voice and gestures (in a phone viewer, look at Menu and
-tap).
+tap, or keep looking).
 
 ## 🔒 Why run it yourself
 

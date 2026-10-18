@@ -828,9 +828,10 @@ You see your own body and hands, but not the inside of your own head. The
 same self-view works in flat-screen first person (see `src/xr/body/SelfView.tsx`).
 In a headset your avatar is drawn a few centimetres behind your eyes (its
 eyes sit in front of its neck, and your feet are placed under the headset),
-so looking down shows your chest and feet rather than the tops of your
-shoulders, and the near clipping plane is 4 cm, so it never slices through
-your own collar.
+and further back the more steeply you look down, so looking down shows your
+chest, legs, and feet rather than the tops of your shoulders or the folded
+neck; the near clipping plane is 4 cm, so it never slices through your own
+collar.
 
 How it works:
 
@@ -863,10 +864,16 @@ headset gets its own menu (`src/xr/hud/`):
 - **Pin it:** on a controller, press **X** to pin it in the air in front of
   you, and press **X** again to put it back.
 - **In a phone viewer** (Cardboard-style, no controllers or hands): a small
-  **Menu** button floats low on the right of your view. Look at it and tap
-  the screen to open the menu in front of you; look at any button and tap
-  to press it; tap **Menu** (now **Close**) again to put it away. The
-  first-time hint says so instead of the palm gesture.
+  **Menu** button sits low on the right of your view. A dot in the centre of
+  your view shows where you're looking. Look at a button, then tap the
+  screen (or press the viewer's button), or just keep looking while a ring
+  fills, for viewers with no button at all. **Menu** opens the menu at eye
+  level, above it; select it again (now **Close**) to put it away. The Menu
+  button stays put while you look around a little, so you can look at it,
+  and catches up when you turn away. After a press, the ring waits until
+  you move your head, so a menu opening under your gaze doesn't press
+  whatever appears there (`src/xr/hud/gaze.ts`, `GazeCursor.tsx`). Worlds'
+  own panels can opt in with `registerGazeTarget`, as Seilaya's do.
 
 The menu has voice controls (enable, mute, and unmute), every menu gesture
 plus seiza and crouch (hold-type gestures are held), **Stand up** when

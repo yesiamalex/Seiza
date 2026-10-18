@@ -42,6 +42,14 @@ const SELF_VIEW_NEAR = 0.04;
  *  down showed the tops of both shoulders with the folded neck between
  *  them. Shifted back, you look down your front at your chest and feet. */
 const VR_BODY_MARGIN = 0.05;
+/** And further back, up to this much, the more steeply you look down:
+ *  looking nearly straight down, a phone viewer's wide view takes in the
+ *  folded neck below and behind your eyes. The body slides back from a
+ *  35° downward look until 80°, so that point stays out of view and you
+ *  see your chest, legs, and feet. */
+const VR_LOOK_DOWN_EXTRA = 0.16;
+const LOOK_DOWN_FROM = Math.sin((35 * Math.PI) / 180);
+const LOOK_DOWN_TO = Math.sin((80 * Math.PI) / 180);
 
 /**
  * Lets you see your own body in first person, on a screen or in VR, with
@@ -78,6 +86,8 @@ export function SelfView({ vrm, firstPerson }: { vrm: VRM | null; firstPerson: b
     () => ({
       parentQuat: new THREE.Quaternion(),
       back: new THREE.Vector3(),
+      look: new THREE.Vector3(),
+      lookDown: 0,
       restQuat: new THREE.Quaternion(),
       eye: new THREE.Vector3(),
       turn: new THREE.Quaternion(),
@@ -174,7 +184,12 @@ export function SelfView({ vrm, firstPerson }: { vrm: VRM | null; firstPerson: b
     // In a headset, line the avatar's eyes up with yours (see
     // VR_BODY_MARGIN). Only this copy: what others see is untouched.
     if (presenting) {
-      const behind = rig.eyeOffset.dot(rig.modelForward) * fitRef.current + VR_BODY_MARGIN;
+      const world = trackingStore.getLocalWorld();
+      const down = world ? -scratch.look.set(0, 0, -1).applyQuaternion(world.head.quaternion).y : 0;
+      const goal = THREE.MathUtils.smoothstep(down, LOOK_DOWN_FROM, LOOK_DOWN_TO);
+      // Eased a little, so the body doesn't snap under you.
+      scratch.lookDown += (goal - scratch.lookDown) * (1 - Math.exp(-10 * Math.min(delta, 0.1)));
+      const behind = rig.eyeOffset.dot(rig.modelForward) * fitRef.current + VR_BODY_MARGIN + VR_LOOK_DOWN_EXTRA * scratch.lookDown;
       const back = scratch.back.copy(rig.modelForward).applyQuaternion(vrm.scene.quaternion).multiplyScalar(-behind);
       vrm.scene.position.x = back.x;
       vrm.scene.position.z = back.z;
