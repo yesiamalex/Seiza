@@ -57,8 +57,10 @@ export interface CustomGestureConfig {
  *   "none"  — ordinary clip, the avatar stands on its own feet.
  *   "floor" — the legs rest on the ground (kneeling, seiza, sitting down).
  *   "seat"  — the hips rest on a chair or bench at SEAT_HEIGHT.
+ *   "body"  — whatever part of the body is lowest rests on the surface
+ *             (lying down on a bed).
  */
-export type GroundContact = "none" | "floor" | "seat";
+export type GroundContact = "none" | "floor" | "seat" | "body";
 
 export interface GestureDefinition {
   name: string;
@@ -119,6 +121,9 @@ const BUILTIN_GESTURE_EXPRESSIONS: Record<string, string> = {
   gassho: "relaxed",
   seiza: "relaxed",
   sit: "relaxed",
+  // Eyes eased shut: lying in a bed reads as asleep (the same "sleep"
+  // face seiza dozes off with; see useFacialExpressions).
+  lie: "sleep",
   shrug: "sad",
   // Narrowed eyes and a slight set to the mouth: concentrating and
   // keeping quiet, which is what a crouch is for.
@@ -219,6 +224,10 @@ export function isValidGestureName(name: unknown): name is string {
 /** The clip a seated avatar holds. Named `sit` so a deployment can replace
  *  it through `customGestures` like any other gesture. */
 export const SIT_GESTURE_NAME = "sit";
+
+/** The clip held lying on a bed (a seat whose pose is `lie`). Hidden like
+ *  `sit`, and replaceable the same way. */
+export const LIE_GESTURE_NAME = "lie";
 
 /** The low, slow stance. A held upper-body clip, so it layers over
  *  walking rather than replacing it (see scripts/generate-motions.mjs). */

@@ -460,8 +460,11 @@ const FIST = { thumb: 0.9, index: 1, middle: 1, ring: 1, little: 1, spread: -2 }
  * pushes it out for the bump; `recoil` pulls it back a touch after.
  */
 const fistBump = (reach, recoil = 0) => ({
-  rightUpperArm: { z: 60, x: -50 - 18 * reach + 10 * recoil, y: 22 },
-  rightLowerArm: { y: 70 - 52 * reach + 20 * recoil },
+  // At reach 1 the knuckles meet a partner's on the midline between two
+  // people DUET_SPACING apart (solved against this skeleton; see
+  // "Together gestures" in DOCS.md). Lower reach holds the fist closer.
+  rightUpperArm: { z: 96, x: -10 - 12 * reach + 6 * recoil, y: 12 },
+  rightLowerArm: { x: 32, y: 110 - 34 * reach + 15 * recoil },
   rightHand: { z: 4 },
   ...rightHandOnly(FIST),
   spine: { x: 2 + 3 * reach, y: -5 * reach },
@@ -475,8 +478,10 @@ const fistBump = (reach, recoil = 0) => ({
  * the chest; `open` is the release.
  */
 const dap = (pull, open = 0) => ({
-  rightUpperArm: { z: 58, x: -46 + 14 * pull, y: 24 },
-  rightLowerArm: { y: 96 + 16 * pull - 40 * open },
+  // At pull 1 the hands clasp on the midline at chest height, forearm up
+  // (solved like the fist bump). Lower pull is the reach in; `open` lets go.
+  rightUpperArm: { z: 99, x: -6 - 10 * pull, y: 18 },
+  rightLowerArm: { x: 34, y: 112 - 24 * pull - 35 * open },
   rightHand: { x: -10, z: -6 },
   ...rightHandOnly(open > 0.5 ? FLAT : GRIP),
   spine: { x: 3 + 4 * pull, y: -6 * pull },
@@ -487,8 +492,10 @@ const dap = (pull, open = 0) => ({
  *  where a handshake meets. Close to the point gesture's checked arm.
  *  `pump` moves the hand a few degrees up (positive) or down. */
 const shake = (pump) => ({
-  rightUpperArm: { z: 64, x: -40 - pump, y: 20 },
-  rightLowerArm: { y: 26 },
+  // Palms meet on the midline at waist height (solved like the fist bump);
+  // `pump` moves the hand a few degrees up (positive) or down.
+  rightUpperArm: { z: 94, x: -19 - 0.6 * pump, y: 19 },
+  rightLowerArm: { x: 46, y: 35 + 0.5 * pump },
   rightHand: { z: pump * 0.5 },
   ...rightHandOnly(GRIP),
   spine: { x: 3 },
@@ -498,8 +505,10 @@ const shake = (pump) => ({
 /** Right hand raised up and forward, palm out. `reach` stretches it
  *  toward the other person for the slap. */
 const highFive = (reach) => ({
-  rightUpperArm: { z: -42, y: 50 + 16 * reach },
-  rightLowerArm: { x: -90, y: 28 - 18 * reach },
+  // At reach 1 the palms meet on the midline above the head (solved like
+  // the fist bump); lower reach is the hand raised beside the head.
+  rightUpperArm: { z: -60, y: 52 + 14 * reach, x: 7 * reach },
+  rightLowerArm: { x: -95, y: 80 - 14 * reach },
   ...rightHandOnly(FLAT),
   spine: { y: -4 * reach, x: 2 },
   head: { x: -2 },
@@ -508,13 +517,16 @@ const highFive = (reach) => ({
 /** Both arms forward and round, as if around someone. `squeeze` closes
  *  them; `sway` rocks the upper body a little. */
 const hug = (squeeze, sway = 0) => ({
+  // Partners stand closer for a hug (TOGETHER_SPACING.hug). Arms round the
+  // partner's sides, then the hands toward their back as it squeezes
+  // (solved like the fist bump, elbows kept out round the partner).
   ...mirror({
-    leftUpperArm: { z: -24 - 4 * squeeze, y: -56 - 10 * squeeze },
-    leftLowerArm: { y: -52 - 18 * squeeze },
+    leftUpperArm: { x: 6 - 10 * squeeze, y: -64 - 15 * squeeze, z: -26 + squeeze },
+    leftLowerArm: { x: -8 + 32 * squeeze, y: -41 + 17 * squeeze },
     ...leftHand(RELAXED),
   }),
-  spine: { x: 6 + 2 * squeeze, y: sway },
-  upperChest: { x: 4 },
+  spine: { x: 10, y: sway },
+  upperChest: { x: 5 },
   head: { x: 6, z: 6 },
 });
 
@@ -1096,6 +1108,78 @@ const GESTURES = [
     ],
   },
   {
+    // Lying on your back, as in a bed: triggered by a seat whose pose is
+    // `lie` (the tent's sleeping bag) and held until the player gets up.
+    // Down onto the knees, back onto the seat, then back flat, so it never
+    // looks like the body tipping over stiff. The hips stay where they
+    // are: the head ends up behind the starting spot and the feet ahead.
+    name: "lie",
+    label: "Lie down",
+    fullBody: true,
+    hold: true,
+    hidden: true,
+    fingers: true,
+    // Whatever part of the body is lowest rests on the surface: the toes
+    // while kneeling, the seat while sitting back, then the back, the head,
+    // and the heels lying flat (see AvatarAnimator).
+    ground: "body",
+    keys: [
+      { t: 0, pose: {} },
+      {
+        t: 0.5,
+        pose: {
+          spine: { x: 22 },
+          ...mirror({
+            leftUpperLeg: { x: -95, z: 4 },
+            leftLowerLeg: { x: 120 },
+            leftFoot: { x: 20 },
+            leftUpperArm: { z: -72, x: -20 },
+            leftLowerArm: { y: -20 },
+          }),
+          _hips: [0, -0.5, 0],
+        },
+      },
+      {
+        t: 1.05,
+        pose: {
+          hips: { x: -18 },
+          spine: { x: 6 },
+          ...mirror({
+            leftUpperLeg: { x: -68, z: 5 },
+            leftLowerLeg: { x: 30 },
+            leftFoot: { x: 10 },
+            // Hands back on the ground, taking the weight on the way down.
+            leftUpperArm: { z: -62, x: 30 },
+            leftLowerArm: { y: -10 },
+          }),
+          _hips: [0, -0.8, 0],
+        },
+      },
+      {
+        t: 1.7,
+        pose: {
+          hips: { x: -90 },
+          spine: { x: 3 },
+          chest: { x: 2 },
+          // Chin a little toward the chest, as on a pillow.
+          neck: { x: 6 },
+          head: { x: 10 },
+          ...mirror({
+            // Legs long with the knees soft and the feet fallen outward.
+            leftUpperLeg: { x: -4, z: 4, y: 6 },
+            leftLowerLeg: { x: 8 },
+            leftFoot: { x: 30, y: 8 },
+            // Arms down by the sides, elbows soft, hands resting by the hips.
+            leftUpperArm: { z: -76, x: 4 },
+            leftLowerArm: { y: -14 },
+            ...leftHand(RELAXED),
+          }),
+          _hips: [0, -0.84, 0],
+        },
+      },
+    ],
+  },
+  {
     name: "dance",
     label: "Dance",
     fullBody: true,
@@ -1393,9 +1477,10 @@ export interface BuiltinGesture {
    * leg proportions, so a baked height that grounds one body leaves another
    * hovering or sunk. "floor" drops the avatar until whatever is lowest
    * (shins, feet) rests on the ground; "seat" lifts the hips to the height
-   * of the seat they're sitting on. See AvatarAnimator.
+   * of the seat they're sitting on; "body" is "floor" for any part of the
+   * body, for lying down. See AvatarAnimator.
    */
-  ground: "none" | "floor" | "seat";
+  ground: "none" | "floor" | "seat" | "body";
   /** Loops while held (a dance), instead of stopping on its last frame. */
   loop: boolean;
 }

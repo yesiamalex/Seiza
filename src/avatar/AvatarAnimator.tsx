@@ -104,6 +104,16 @@ const FLOOR_CONTACT_BONES: VRMHumanBoneName[] = [
   "leftFoot", "rightFoot",
   "leftLowerLeg", "rightLowerLeg",
 ];
+/** For a pose lying down ("body"), every part that can rest on the
+ *  surface, with its distance from the joint to the skin at reference
+ *  scale: the back and the back of the head are well behind their joints. */
+const BODY_CONTACT_BONES: [VRMHumanBoneName, number][] = [
+  ...FLOOR_CONTACT_BONES.map((name): [VRMHumanBoneName, number] => [name, 0.05]),
+  ["hips", 0.11],
+  ["spine", 0.11],
+  ["chest", 0.11],
+  ["head", 0.1],
+];
 /** Hips height of the skeleton the built-in clips were authored against. */
 const REFERENCE_HIPS_HEIGHT = 0.95;
 /** Distance from a shin or ankle joint to the skin, at reference scale. */
@@ -869,6 +879,17 @@ export function AvatarAnimator({
           lowest = Math.min(lowest, node.matrixWorld.elements[13] - base);
         }
         if (Number.isFinite(lowest)) error = LIMB_RADIUS * scale - lowest;
+      } else if (state.groundMode === "body") {
+        // The same, over the whole body: kneeling, then sitting back, then
+        // lying flat on the back.
+        let lowestSkin = Infinity;
+        for (const [name, radius] of BODY_CONTACT_BONES) {
+          const node = vrm.humanoid.getRawBoneNode(name);
+          if (!node) continue;
+          node.updateWorldMatrix(true, false);
+          lowestSkin = Math.min(lowestSkin, node.matrixWorld.elements[13] - base - radius * scale);
+        }
+        if (Number.isFinite(lowestSkin)) error = -lowestSkin;
       } else if (state.groundMode === "seat") {
         const hips = vrm.humanoid.getRawBoneNode("hips");
         if (hips) {

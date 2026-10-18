@@ -7,7 +7,7 @@ import { SkyControls } from "./SkyControls";
 import type { RoomSky } from "../multiplayer/types";
 import type { SkyConfig } from "../sky/skyState";
 import { BAR_LABEL_CLASS, barButtonActiveStyle, barButtonStyle, inputStyle, panelStyle, pillButtonActiveStyle, pillButtonStyle, popoverStyle } from "../ui/styles";
-import { ChairIcon, CloseIcon, EditIcon, MinimizeIcon, ScreenShareIcon, SignIcon, TextBoardIcon } from "../ui/icons";
+import { BedIcon, ChairIcon, CloseIcon, EditIcon, MinimizeIcon, ScreenShareIcon, SignIcon, TextBoardIcon } from "../ui/icons";
 
 interface EditToolbarProps {
   enabled: boolean;
@@ -430,10 +430,13 @@ export function EditToolbar({
             >
               <ChairIcon /> Chair
             </button>
+            <button style={pillButtonStyle} disabled={!connected} onClick={() => onSpawn("bed")} title="A bed anyone can lie down on">
+              <BedIcon /> Bed
+            </button>
           </div>
           <small style={{ opacity: 0.7 }}>
             Leave edit mode to use them: click a board or note to write on it, a screen to present on it, a chair to
-            sit on it.
+            sit on it, a bed to lie down on it.
           </small>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 5, borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 8 }}>

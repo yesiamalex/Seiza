@@ -42,6 +42,7 @@ which the app reads each clip's name, label, duration, and full-body flag.
 | `9` | `gassho` | Gasshō (thanks) | Upper | One-shot |
 | `0` | `raisehand` | Raise hand (hold) | Upper | Hold |
 | None | `sit` | Sit | Full | Hold, hidden |
+| None | `lie` | Lie down | Full | Hold, hidden |
 | None | `handshake` | Handshake | Upper | One-shot, hidden, together |
 | None | `highfive` | High five | Upper | One-shot, hidden, together |
 | None | `fistbump` | Fist bump | Upper | One-shot, hidden, together |

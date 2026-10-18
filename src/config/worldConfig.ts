@@ -34,6 +34,9 @@ export interface WorldConfig {
    */
   sky?: SkyConfig;
   spawnPoint: { x: number; y: number; z: number };
+  /** Which way a visitor faces on arrival, in radians about the vertical
+   *  (0 looks toward -Z; facing (-sin y, -cos y)). Default 0. */
+  spawnRotationY?: number;
   /** Avatar a first-time visitor starts with: a .vrm URL, or "" to start
    *  from the built-in avatar designer's default look. */
   defaultAvatarUrl: string;

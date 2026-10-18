@@ -62,7 +62,7 @@ export const live = {
   /** Whether the sky's time is moving (false while an editor holds it). */
   held: false,
   /** The room's light switches, which the glow outlines follow. */
-  lights: { hall: true, classroom: true, pond: true } as Record<LightZone, boolean>,
+  lights: { hall: true, classroom: true, pond: true, camp: true } as Record<LightZone, boolean>,
 };
 
 let lastSimMs = 0;

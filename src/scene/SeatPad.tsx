@@ -42,9 +42,13 @@ export function SeatPad({ seat, onSit, occupied }: { seat: Seat; onSit: (seat: S
       // Relative to the seat's own floor, not to y=0: the built-in seats all
       // stand on the ground, but a placed chair can sit on the tatami step
       // or be scaled, and the pad has to stay on its cushion either way.
-      position={[seat.position[0], seat.position[1] + SEAT_HEIGHT + 0.06, seat.position[2]]}
+      position={[seat.position[0], seat.position[1] + (seat.surfaceHeight ?? SEAT_HEIGHT) + 0.06, seat.position[2]]}
       rotation={[-Math.PI / 2, 0, 0]}
       userData={{ navIgnore: true }}
+      // Not drawn until it shows, which saves a draw call per seat (an
+      // opacity of 0 is still drawn). Clicks and hovers still land on it:
+      // raycasting doesn't skip invisible meshes.
+      visible={hovered || occupied}
       onPointerOver={(event) => {
         event.stopPropagation();
         setHovered(true);

@@ -23,9 +23,10 @@ export interface BuiltinGesture {
    * leg proportions, so a baked height that grounds one body leaves another
    * hovering or sunk. "floor" drops the avatar until whatever is lowest
    * (shins, feet) rests on the ground; "seat" lifts the hips to the height
-   * of the seat they're sitting on. See AvatarAnimator.
+   * of the seat they're sitting on; "body" is "floor" for any part of the
+   * body, for lying down. See AvatarAnimator.
    */
-  ground: "none" | "floor" | "seat";
+  ground: "none" | "floor" | "seat" | "body";
   /** Loops while held (a dance), instead of stopping on its last frame. */
   loop: boolean;
 }
@@ -174,6 +175,17 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
     "loop": false
   },
   {
+    "name": "lie",
+    "label": "Lie down",
+    "url": "/gestures/builtin/lie.vrma?v=56610941",
+    "duration": 2.04,
+    "fullBody": true,
+    "hold": true,
+    "hidden": true,
+    "ground": "body",
+    "loop": false
+  },
+  {
     "name": "dance",
     "label": "Dance",
     "url": "/gestures/builtin/dance.vrma?v=c1a2861b",
@@ -209,7 +221,7 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
   {
     "name": "fistbump",
     "label": "Fist bump",
-    "url": "/gestures/builtin/fistbump.vrma?v=5bbf8fd5",
+    "url": "/gestures/builtin/fistbump.vrma?v=49434645",
     "duration": 2.04,
     "fullBody": false,
     "hold": false,
@@ -220,7 +232,7 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
   {
     "name": "dap",
     "label": "Dap",
-    "url": "/gestures/builtin/dap.vrma?v=22dca2c9",
+    "url": "/gestures/builtin/dap.vrma?v=8cb32a80",
     "duration": 2.4,
     "fullBody": false,
     "hold": false,
@@ -231,7 +243,7 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
   {
     "name": "handshake",
     "label": "Handshake",
-    "url": "/gestures/builtin/handshake.vrma?v=e1c61a9f",
+    "url": "/gestures/builtin/handshake.vrma?v=6f1ade3a",
     "duration": 2.88,
     "fullBody": false,
     "hold": false,
@@ -242,7 +254,7 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
   {
     "name": "highfive",
     "label": "High five",
-    "url": "/gestures/builtin/highfive.vrma?v=45caece8",
+    "url": "/gestures/builtin/highfive.vrma?v=d065239f",
     "duration": 1.68,
     "fullBody": false,
     "hold": false,
@@ -253,7 +265,7 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
   {
     "name": "hug",
     "label": "Hug",
-    "url": "/gestures/builtin/hug.vrma?v=af82e7e8",
+    "url": "/gestures/builtin/hug.vrma?v=0c49af83",
     "duration": 3.48,
     "fullBody": false,
     "hold": false,

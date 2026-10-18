@@ -61,6 +61,49 @@ export function pondDepthAtRadius(r: number): number {
   return -POND_DEPTH * t * t * (3 - 2 * t);
 }
 export const CORRIDOR: Rect = { minX: -2.6, maxX: 2.6, minZ: -10, maxZ: -4 };
+
+/**
+ * The meadow beyond the garden's back edge: open ground you can walk out
+ * onto, kept clear of trees (Outdoors.tsx), with the campsite in it. Its
+ * edge is invisible but sits inside the treeline, so the trees mark it.
+ * Not in ROOMS: it has no floor of its own, only the outer ground, which
+ * lies FIELD_Y below the floors of the building and the garden deck.
+ */
+export const FIELD: Rect = { minX: -24, maxX: 24, minZ: 38, maxZ: 72 };
+export const FIELD_Y = -0.06;
+/** The campfire, the campsite's centre: far enough out that the garden
+ *  is a short walk away, clear of the turbines other worlds stand beyond
+ *  the garden (Seizora's, at x = ±7, z = 45 to 47). */
+export const CAMPFIRE: [number, number] = [-11, 58];
+/** The tent, west of the fire, its door facing it. */
+export const TENT = { x: CAMPFIRE[0] - 3.6, z: CAMPFIRE[1] + 0.6, length: 2.2, width: 1.8, height: 1.25 };
+/** Low folding chairs round the fire: each at `angle` round it (0 is the
+ *  +Z side), facing it. */
+export const CAMP_CHAIR_RADIUS = 1.9;
+export const CAMP_CHAIRS = [0.4, 1.6, 2.8, -2.75].map((angle) => ({
+  angle,
+  x: CAMPFIRE[0] + Math.sin(angle) * CAMP_CHAIR_RADIUS,
+  z: CAMPFIRE[1] + Math.cos(angle) * CAMP_CHAIR_RADIUS,
+  // Facing the fire: an avatar at yaw y faces (-sin y, -cos y).
+  rotationY: angle,
+}));
+/** A camp chair's seat is lower than a bench's. */
+export const CAMP_SEAT_HEIGHT = 0.33;
+/** The tent's yaw: its local +Z, the door, faces the fire. */
+export const TENT_YAW = Math.atan2(CAMPFIRE[0] - TENT.x, CAMPFIRE[1] - TENT.z);
+/** A point in the tent's own frame (+Z toward the door), in the world. */
+export function tentPoint(x: number, z: number): [number, number] {
+  const c = Math.cos(TENT_YAW);
+  const s = Math.sin(TENT_YAW);
+  return [TENT.x + x * c + z * s, TENT.z - x * s + z * c];
+}
+/** The sleeping bag in the tent, in its frame: centred off to one side,
+ *  the pillow at the back, and the height of its top. */
+export const SLEEPING_BAG = { x: 0.15, z: -0.05, length: 1.68, top: 0.12, pillowZ: -0.8 };
+/** Just outside the tent's door, where you stand on getting up, and where
+ *  every world puts you on arrival (each world.json's spawnPoint), as if
+ *  you'd just woken up. */
+export const TENT_DOORSTEP = tentPoint(0, TENT.length / 2 + 0.75);
 export const CLASSROOM: Rect = { minX: -9, maxX: 9, minZ: -24, maxZ: -10 };
 export const ROOMS: Rect[] = [HALL, OUTDOOR, CORRIDOR, CLASSROOM];
 
@@ -95,6 +138,16 @@ export interface Seat {
   /** Yaw the avatar faces while seated. */
   rotationY: number;
   label: string;
+  /** What you do there: sit (the default), or lie down, on a bed. Lying,
+   *  `position` is where the hips go, on the bed's surface, and the head
+   *  lies behind it. */
+  pose?: "sit" | "lie";
+  /** How far above `position` the surface is, for the click target.
+   *  Default SEAT_HEIGHT. */
+  surfaceHeight?: number;
+  /** Where getting up leaves you, when beside the seat (standUpSpot) is
+   *  the wrong place: out of a tent's door rather than through its wall. */
+  exit?: [number, number];
 }
 
 const inset = (rect: Rect, by: number): Rect => ({
@@ -137,6 +190,12 @@ const WALKABLE: Rect[] = [
     maxZ: CORRIDOR.maxZ + CORRIDOR_MOUTH,
   },
   inset(CLASSROOM, PLAYER_RADIUS),
+  {
+    ...inset(FIELD, PLAYER_RADIUS),
+    // Overlaps the garden's walkable area, which ends a radius short of
+    // their shared edge: there's no wall between them.
+    minZ: OUTDOOR.maxZ - PLAYER_RADIUS - 0.1,
+  },
 ];
 
 /**
@@ -275,6 +334,42 @@ const seatAt = (x: number, z: number, rotationY: number): [number, number, numbe
  * cushion. The id is the object's, so occupancy highlighting works without
  * a second registry.
  */
+/** How far the hips lie from the middle of the pillow, so the head rests
+ *  on it, for a typical VRoid avatar. */
+export const LIE_HIPS_FROM_PILLOW = 0.53;
+
+/** A place to lie down: the hips at (x, z) on a surface at height `top`,
+ *  facing `rotationY` (the feet that way, the head behind). */
+export function bedSeat(
+  id: string,
+  [x, z]: [number, number],
+  top: number,
+  rotationY: number,
+  label: string,
+  exit: [number, number]
+): Seat {
+  return { id, position: [x, top, z], rotationY, label, pose: "lie", surfaceHeight: 0, exit };
+}
+
+/** A bed placed in Edit Mode (Bed.tsx): its pillow end at local +Z, so
+ *  whoever lies in it faces -Z like a sitter, and they get up at its side. */
+export const BED = { length: 2, width: 1, top: 0.5, pillowZ: 0.68 };
+export function placedBedSeat(id: string, position: [number, number, number], rotationY: number, scale = 1): Seat {
+  const [fx, fz] = facingVector(rotationY);
+  // Behind the facing direction is toward the pillow; the side is the
+  // facing turned a quarter.
+  const back = (BED.pillowZ - LIE_HIPS_FROM_PILLOW) * scale;
+  const side = (BED.width / 2 + 0.45) * scale;
+  return bedSeat(
+    id,
+    [position[0] - fx * back, position[2] - fz * back],
+    position[1] + BED.top * scale,
+    rotationY,
+    "Bed",
+    [position[0] - fz * side, position[2] + fx * side]
+  );
+}
+
 export function placedChairSeat(
   id: string,
   position: [number, number, number],
@@ -340,6 +435,30 @@ export const SEATS: Seat[] = [
     rotationY: Math.PI, // facing the class
     label: "Teacher's chair",
   },
+  ...CAMP_CHAIRS.map((chair, i) => {
+    const [fx, fz] = facingVector(chair.rotationY);
+    return {
+      id: `camp-chair-${i}`,
+      // The sitting pose rests SEAT_HEIGHT above the seat's floor, so a
+      // lower seat reports a floor that much lower (see placedChairSeat).
+      position: [
+        chair.x + fx * PLACED_CHAIR_FORWARD_OFFSET,
+        FIELD_Y + CAMP_SEAT_HEIGHT - SEAT_HEIGHT,
+        chair.z + fz * PLACED_CHAIR_FORWARD_OFFSET,
+      ] as [number, number, number],
+      rotationY: chair.rotationY,
+      label: "Camp chair",
+    };
+  }),
+  bedSeat(
+    "camp-bed",
+    tentPoint(SLEEPING_BAG.x, SLEEPING_BAG.pillowZ + LIE_HIPS_FROM_PILLOW),
+    FIELD_Y + SLEEPING_BAG.top,
+    // Facing the door: feet toward it, head on the pillow at the back.
+    TENT_YAW + Math.PI,
+    "Sleeping bag",
+    TENT_DOORSTEP
+  ),
 ];
 
 // --- furniture collision ----------------------------------------------------
@@ -440,6 +559,10 @@ export const OBSTACLES: Obstacle[] = [
   // round its rim do, as one small box each; the gaps between them are
   // where you step in.
   ...POND_ROCKS.map((rock) => obstacle(POND_CENTER[0] + rock.x, POND_CENTER[1] + rock.z, rock.size * 0.75, rock.size * 0.75)),
+  // The campsite: the fire's stone ring, the tent, and the camp chairs.
+  obstacle(CAMPFIRE[0], CAMPFIRE[1], 0.62, 0.62),
+  obstacle(TENT.x, TENT.z, TENT.width / 2, TENT.length / 2, TENT_YAW),
+  ...CAMP_CHAIRS.map((chair) => obstacle(chair.x, chair.z, 0.27, 0.27, chair.rotationY)),
   // Shoe lockers down one side of the corridor.
   obstacle(CORRIDOR.minX + 0.36, (CORRIDOR.minZ + CORRIDOR.maxZ) / 2 + 0.3, 0.22, 2.4),
   // Lantern posts and planters in the hall.
@@ -626,13 +749,17 @@ export const TATAMI = {
   height: 0.13,
 };
 
+/** Out on the meadow, past the garden deck. */
+const inField = (x: number, z: number) => contains(FIELD, x, z) && !contains(OUTDOOR, x, z);
+
 export function floorHeightAt(x: number, z: number): number {
   if (contains(TATAMI, x, z)) return TATAMI.height;
+  if (inField(x, z)) return FIELD_Y;
   return pondDepthAt(x, z);
 }
 
 /** What a footstep at this point should sound like (see audio/sfx.ts). */
-export type FloorSurface = "wood" | "tatami" | "water" | "stone";
+export type FloorSurface = "wood" | "tatami" | "water" | "stone" | "grass";
 
 export function surfaceAt(x: number, z: number): FloorSurface {
   // Water first: the pond sits inside the garden, so its own test has to
@@ -641,6 +768,7 @@ export function surfaceAt(x: number, z: number): FloorSurface {
   if (contains(TATAMI, x, z)) return "tatami";
   // The garden is gravel and stepping stones rather than floorboards.
   if (contains(OUTDOOR, x, z)) return "stone";
+  if (inField(x, z)) return "grass";
   return "wood";
 }
 
@@ -653,5 +781,9 @@ export function surfaceAt(x: number, z: number): FloorSurface {
 export function ceilingHeightAt(x: number, z: number): number {
   if (contains(CLASSROOM, x, z)) return CLASSROOM_WALL_HEIGHT - 0.25;
   if (contains(CORRIDOR, x, z)) return 2.95;
+  // Open sky over the garden and the meadow: the camera may rise to look
+  // down on the campsite (the hall's walls are WALL_HEIGHT; over the
+  // garden it used to share their limit, which only mattered indoors).
+  if (inField(x, z)) return 9;
   return WALL_HEIGHT - 0.5;
 }

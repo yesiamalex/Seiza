@@ -47,6 +47,7 @@ any:
 | `environmentCollision` | Optional. Set to `false` to stop `sceneUrl` environments from blocking movement. Defaults to `true`. |
 | `sky` | Optional. `{ "cycle": "realtime", "site", "weather", "timeScale"? }` moves the sky with Philippine time and a shared weather schedule; `"cycle": "fixed"`, or leaving it out, keeps the still sunset. Editors can override the time and weather for one room from the edit panel. See DOCS.md, "Sky and weather". |
 | `spawnPoint` | Where players appear, as `{ "x", "y", "z" }`. |
+| `spawnRotationY` | Optional. Which way they face on arrival, in radians (0 looks toward -Z). |
 | `defaultAvatarUrl` | A `.vrm` URL for first-time visitors, or `""` for the designer's default look. |
 | `defaultAvatars` | Optional `.vrm` presets: `[{ "label", "url", "author"?, "license"?, "licenseUrl"? }]`. The optional fields appear as a credit line. |
 | `enabledGestures` | Optional. A list of built-in gesture names to offer. Leave it out to offer all of them. |

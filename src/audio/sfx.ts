@@ -162,7 +162,7 @@ function tone(
 }
 
 /** What the player is standing on, which decides the footstep. */
-export type StepSurface = "wood" | "tatami" | "water" | "stone";
+export type StepSurface = "wood" | "tatami" | "water" | "stone" | "grass";
 
 /**
  * Distance attenuation, matching the voice chat's model (linear to zero,
@@ -211,6 +211,12 @@ export function playFootstep(surface: StepSurface, distance?: number, scale = 1)
       break;
     case "stone":
       noiseBurst(a.ctx, a.out, { duration: 0.07, gain: 0.24 * level, frequency: 1700 * vary, q: 1.1, sweepTo: 700 });
+      break;
+    case "grass":
+      // A soft, short brush: the blades rustle (a little high noise, eased
+      // in so there's no click) over a dull thud of earth underneath.
+      noiseBurst(a.ctx, a.out, { duration: 0.12, gain: 0.16 * level, type: "highpass", frequency: 2400 * vary, q: 0.6, attack: 0.04 });
+      noiseBurst(a.ctx, a.out, { duration: 0.08, gain: 0.2 * level, type: "lowpass", frequency: 380 * vary, q: 0.7 });
       break;
     case "water":
       // No bright transient at all. The previous two attempts both led

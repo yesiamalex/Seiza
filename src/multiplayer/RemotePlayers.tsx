@@ -44,8 +44,11 @@ const FOLLOW_RATE = 10;
 /** Inside this radius (metres, horizontal) a remote avatar is hidden so
  *  the camera never ends up inside its mesh; it reappears a little
  *  further out so the two thresholds can't oscillate. */
-const AVATAR_HIDE_DISTANCE = 0.55;
-const AVATAR_SHOW_DISTANCE = 0.7;
+// Close enough to keep a hug partner in view (together gestures stand
+// people as close as 0.52 m apart), far enough that the camera never meets
+// a face: that takes about 0.25 m.
+const AVATAR_HIDE_DISTANCE = 0.38;
+const AVATAR_SHOW_DISTANCE = 0.5;
 const SNAP_DISTANCE = 6;
 
 /** Radius of the sphere tested against the view for each avatar. */

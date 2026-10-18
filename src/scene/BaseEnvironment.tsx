@@ -12,6 +12,7 @@ import { DateCalendar, WallClock } from "./ClassroomClock";
 import { LightSwitch } from "./LightSwitch";
 import { PooledLight } from "./LightPool";
 import { WindowSun } from "./WindowSun";
+import { Campsite } from "./Campsite";
 import { DEFAULT_LIGHTS, type LightZone } from "../multiplayer/types";
 import { playDoorSlide, playDoorSwing } from "../audio/sfx";
 import {
@@ -30,6 +31,8 @@ import {
   HALL,
   HALL_CENTRE,
   OUTDOOR,
+  FIELD,
+  FIELD_Y,
   GARDEN_LAMPS,
   OUTDOOR_BENCHES,
   POND_CENTER,
@@ -106,6 +109,7 @@ export const BaseEnvironment = memo(function BaseEnvironment({
       <CorridorShell m={m} />
       <ClassroomShell m={m} lit={lights.classroom} onToggleLight={onToggleLight} />
       <ClassroomFurniture m={m} />
+      <Campsite lit={lights.camp} onToggle={onToggleLight} inBed={occupiedSeatId === "camp-bed"} />
       {onSit &&
         SEATS.map((seat) => <SeatPad key={seat.id} seat={seat} onSit={onSit} occupied={occupiedSeatId === seat.id} />)}
     </group>
@@ -133,9 +137,23 @@ function Floors({ m, onFloorDoubleClick }: { m: WorldMaterials; onFloorDoubleCli
       />
       <FloorPlane rect={CORRIDOR} material={m.corridorFloor} onDoubleClick={handleDoubleClick} />
       <FloorPlane rect={CLASSROOM} material={m.classroomFloor} onDoubleClick={handleDoubleClick} />
+      {/* The meadow beyond the garden has no floor of its own: you walk on
+          the outer ground (Outdoors.tsx). This invisible plane, at its
+          height, is what click-to-walk and the navigation mesh find there. */}
+      <mesh
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[(FIELD.minX + FIELD.maxX) / 2, FIELD_Y, (FIELD.minZ + FIELD.maxZ) / 2]}
+        material={invisibleFloor}
+        onDoubleClick={handleDoubleClick}
+      >
+        <planeGeometry args={[FIELD.maxX - FIELD.minX, FIELD.maxZ - FIELD.minZ]} />
+      </mesh>
     </group>
   );
 }
+
+/** Drawn as nothing, but still there to raycast and to build a navmesh from. */
+const invisibleFloor = new THREE_RUNTIME.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
 
 function FloorPlane({
   rect,

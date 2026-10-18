@@ -75,7 +75,9 @@ Everything is in the world itself; there's no separate page to open.
   lamps, so everything reads after dark. All of it follows the same
   switches and costs no lights.
 
-Like every Seiza world, visitors can also dance, and ask each other for a
+Past the garden, Seiza's meadow and campsite are here too, with the
+turbines standing on the meadow. Visitors arrive just outside the tent,
+facing the fire, and the hall's welcome board is a short walk in. Like every Seiza world, visitors can also dance, and ask each other for a
 handshake, high five, fist bump, dap, hug, or slow dance from the Gestures menu, which plays
 only if the other person says yes (Seiza's together gestures; see DOCS.md).
 

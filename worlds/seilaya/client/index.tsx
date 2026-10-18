@@ -71,8 +71,10 @@ export function Scene(props: WorldSceneProps) {
     const [x, y, z] = getSelfPosition();
     const crowded = Object.values(playersRef.current).some((p) => p.id !== selfId && Math.hypot(p.position[0] - x, p.position[2] - z) < 1.2);
     if (!crowded) return;
+    // Along z: the spawn is outside the tent's door, facing the fire along
+    // x, with the tent behind it and the fire ahead.
     const side = Math.random() < 0.5 ? -1 : 1;
-    warp([x + side * (1.4 + Math.random() * 0.6), y, z + (Math.random() - 0.5) * 0.6]);
+    warp([x + (Math.random() - 0.5) * 0.6, y, z + side * (1.4 + Math.random() * 0.6)]);
   }, [selfId, getSelfPosition, warp]);
 
   return (

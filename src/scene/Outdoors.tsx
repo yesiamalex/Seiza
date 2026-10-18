@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { skyState } from "../sky/skyState";
-import { POND_CENTER, POND_WATER_RADIUS } from "./layout";
+import { FIELD, POND_CENTER, POND_WATER_RADIUS } from "./layout";
 
 /**
  * What you see through the windows.
@@ -29,6 +29,8 @@ const TREE_INNER = 38;
 const TREE_OUTER = 130;
 const TREE_COUNT = 260;
 const HILL_COUNT = 9;
+/** How far past the meadow's edge trees stay away. */
+const FIELD_TREE_MARGIN = 2;
 
 /** Deterministic, so every client in the room sees the same landscape. */
 function mulberry32(seed: number) {
@@ -146,7 +148,7 @@ export function Outdoors() {
   useEffect(() => () => ground?.dispose(), [ground]);
 
   // One instanced draw call for every tree, and another for the hills.
-  const { trees, treeColors, hills } = useMemo(() => {
+  const { trees, treeColors, hills, treeCount } = useMemo(() => {
     const random = mulberry32(1337);
     const matrix = new THREE.Matrix4();
     const position = new THREE.Vector3();
@@ -166,6 +168,20 @@ export function Outdoors() {
       // The cone's origin is its middle, so lift it half its height and
       // then sink it slightly, or every tree is buried to the waist.
       position.set(Math.cos(angle) * radius, height / 2 - 0.4, Math.sin(angle) * radius);
+      // None on the meadow you can walk out onto (or so close that a
+      // branch would hang over its edge): the trees beyond it mark where
+      // it ends instead.
+      if (
+        position.x > FIELD.minX - FIELD_TREE_MARGIN &&
+        position.x < FIELD.maxX + FIELD_TREE_MARGIN &&
+        position.z > FIELD.minZ - FIELD_TREE_MARGIN &&
+        position.z < FIELD.maxZ + FIELD_TREE_MARGIN
+      ) {
+        // Draw the rest of this tree's randoms anyway, so every other tree
+        // stays exactly where it was.
+        for (let skip = 0; skip < 5; skip++) random();
+        continue;
+      }
       quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), random() * Math.PI);
       scale.set(0.7 + random() * 0.5, height / 6, 0.7 + random() * 0.5);
       matrix.compose(position, quaternion, scale);
@@ -187,7 +203,7 @@ export function Outdoors() {
       hills.push(...matrix.elements);
     }
 
-    return { trees, treeColors, hills };
+    return { trees, treeColors, hills, treeCount: trees.length / 16 };
   }, []);
 
   const applyInstances = (mesh: THREE.InstancedMesh | null, elements: number[], colors?: number[]) => {
@@ -234,7 +250,7 @@ export function Outdoors() {
       {/* Treeline. Six-sided cones: from inside a building, that is a tree. */}
       <instancedMesh
         ref={(mesh) => applyInstances(mesh, trees, treeColors)}
-        args={[undefined, undefined, TREE_COUNT]}
+        args={[undefined, undefined, treeCount]}
         userData={{ navIgnore: true }}
       >
         <coneGeometry args={[1.5, 6, 6, 1]} />

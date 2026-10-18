@@ -14,6 +14,7 @@ import {
   resolveObstacles,
   SEATED_EYE_HEIGHT,
   standUpSpot,
+  type Seat,
 } from "../scene/layout";
 
 export type ViewMode = "first" | "third";
@@ -51,6 +52,14 @@ const ORBIT_PIVOT_HEIGHT = 1.15;
  *  very bottom of the frame, looking over its head at the room. */
 const ORBIT_PIVOT_SEATED = 0.5;
 const ORBIT_PIVOT_KNEELING = 0.62;
+const ORBIT_PIVOT_LYING = 0.3;
+/** Eye height above a bed's surface, lying on it: for the camera to ease
+ *  toward on a screen (the view itself is the avatar's own eyes there),
+ *  and for the playspace in a headset. */
+const LYING_EYE_HEIGHT = 0.25;
+/** Lying down, how far the view can turn from straight up the body
+ *  either way: the head turns on the pillow, the body stays put. */
+const LYING_LOOK_YAW = 1.3;
 const FOV_MIN = 50;
 const FOV_MAX = 90;
 const FOV_DEFAULT = 75;
@@ -131,6 +140,8 @@ const AVATAR_TURN_RATE = 12;
 
 interface PlayerRigProps {
   spawnPoint: [number, number, number];
+  /** Yaw the camera and avatar start at (see WorldConfig.spawnRotationY). */
+  spawnRotationY?: number;
   positionRef: MutableRefObject<[number, number, number]>;
   /** The yaw other players see: the avatar's facing. In third person that
    *  follows movement direction; in first person it follows the view. */
@@ -163,7 +174,7 @@ interface PlayerRigProps {
   touchInputRef?: MutableRefObject<TouchMoveInput>;
   /** Seat the player is sitting on, or null when standing. While seated,
    *  movement input stands them up instead of walking. */
-  sitAnchor?: { position: [number, number, number]; rotationY: number } | null;
+  sitAnchor?: Pick<Seat, "position" | "rotationY" | "pose" | "exit"> | null;
   /** True while the player holds any pose that moving should cancel, such
    *  as kneeling in seiza (which has no seat to sit on). */
   postureHeld?: boolean;
@@ -220,6 +231,7 @@ const approach = (current: number, target: number, rate: number, delta: number) 
  */
 export function PlayerRig({
   spawnPoint,
+  spawnRotationY = 0,
   positionRef,
   rotationRef,
   lookYawRef,
@@ -300,6 +312,8 @@ export function PlayerRig({
 
   useEffect(() => {
     virtualCameraRef.current!.position.set(spawnPoint[0], spawnPoint[1] + EYE_HEIGHT, spawnPoint[2]);
+    virtualCameraRef.current!.quaternion.setFromEuler(new THREE.Euler(0, spawnRotationY, 0, "YXZ"));
+    avatarYawRef.current = spawnRotationY;
     if (camera instanceof THREE.PerspectiveCamera) {
       camera.fov = FOV_DEFAULT;
       camera.updateProjectionMatrix();
@@ -697,7 +711,7 @@ export function PlayerRig({
           // sitting in a real chair.
           origin.position.y = THREE.MathUtils.damp(
             origin.position.y,
-            xrSeat.position[1] + SEATED_EYE_HEIGHT - standingEye,
+            xrSeat.position[1] + (xrSeat.pose === "lie" ? LYING_EYE_HEIGHT : SEATED_EYE_HEIGHT) - standingEye,
             POSTURE_CAMERA_EASE_RATE,
             delta
           );
@@ -808,7 +822,9 @@ export function PlayerRig({
         // off to the edge; orbiting keeps them centred at any angle, and
         // zooming moves toward them instead of past them.
         const pivotTarget = sitAnchorRef.current
-          ? ORBIT_PIVOT_SEATED
+          ? sitAnchorRef.current.pose === "lie"
+            ? ORBIT_PIVOT_LYING
+            : ORBIT_PIVOT_SEATED
           : postureHeldRef.current
             ? ORBIT_PIVOT_KNEELING
             : ORBIT_PIVOT_HEIGHT;
@@ -889,7 +905,7 @@ export function PlayerRig({
       // Step clear of the seat rather than standing up inside it. Which way
       // is clear depends on the seat — see standUpSpot.
       const previous = previousSitAnchorRef.current!;
-      const [x, , z] = standUpSpot(previous.position, previous.rotationY);
+      const [x, , z] = previous.exit ? [previous.exit[0], 0, previous.exit[1]] : standUpSpot(previous.position, previous.rotationY);
       vcam.position.x = x;
       vcam.position.z = z;
       seatedExitRef.current = true;
@@ -900,12 +916,28 @@ export function PlayerRig({
       if (move.lengthSq() > 0 || jumpPressed) {
         onStandUpRef.current?.();
       } else {
-        const seatEye = new THREE.Vector3(sit.position[0], sit.position[1] + SEATED_EYE_HEIGHT, sit.position[2]);
+        const lying = sit.pose === "lie";
+        const seatEye = new THREE.Vector3(sit.position[0], sit.position[1] + (lying ? LYING_EYE_HEIGHT : SEATED_EYE_HEIGHT), sit.position[2]);
         vcam.position.lerp(seatEye, 1 - Math.exp(-POSTURE_CAMERA_EASE_RATE * delta));
         verticalVelocityRef.current = 0;
         moveTargetRef.current = null;
         if (movePathRef) movePathRef.current = null;
-        if (viewMode === "first") {
+        if (lying) {
+          // The body lies the way the bed does, whichever way you look.
+          // In first person the view is the avatar's own eyes, looking up
+          // from the pillow, so looking around turns the head on it, as
+          // far as a head turns.
+          avatarYawRef.current = sit.rotationY;
+          if (viewMode === "first") {
+            const look = new THREE.Euler().setFromQuaternion(vcam.quaternion, "YXZ");
+            const turn = THREE.MathUtils.euclideanModulo(look.y - sit.rotationY + Math.PI, Math.PI * 2) - Math.PI;
+            const clamped = THREE.MathUtils.clamp(turn, -LYING_LOOK_YAW, LYING_LOOK_YAW);
+            if (clamped !== turn) {
+              look.y = sit.rotationY + clamped;
+              vcam.quaternion.setFromEuler(look);
+            }
+          }
+        } else if (viewMode === "first") {
           avatarYawRef.current = new THREE.Euler().setFromQuaternion(vcam.quaternion, "YXZ").y;
         } else {
           avatarYawRef.current = lerpAngle(avatarYawRef.current, sit.rotationY, 1 - Math.exp(-SIT_TURN_RATE * delta));
@@ -1003,7 +1035,7 @@ export function PlayerRig({
 
   return (
     <>
-      <XROrigin ref={xrOriginRef} position={spawnPoint} />
+      <XROrigin ref={xrOriginRef} position={spawnPoint} rotation-y={spawnRotationY} />
       {/* Own avatar body, in every view. In first person, flat screen or
           VR, the head is hidden from the camera instead (SelfView), so you
           can look down at your own body and, in VR, your hands. */}

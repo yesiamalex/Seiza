@@ -3,7 +3,8 @@ import { TransformControls, useGLTF } from "@react-three/drei";
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 import { isTextObjectKind, type WorldObject } from "../multiplayer/types";
-import { placedChairSeat, type Seat } from "../scene/layout";
+import { placedBedSeat, placedChairSeat, type Seat } from "../scene/layout";
+import { Bed } from "../scene/Bed";
 import { Chair } from "../scene/Chair";
 import { SeatPad } from "../scene/SeatPad";
 import { VideoPanel } from "../media/VideoPanel";
@@ -177,6 +178,13 @@ function PlacedObject({
           occupied={occupiedSeatId === object.id}
         />
       )}
+      {object.kind === "bed" && onSit && (
+        <SeatPad
+          seat={placedBedSeat(object.id, object.position, object.rotationY, object.scale)}
+          onSit={onSit}
+          occupied={occupiedSeatId === object.id}
+        />
+      )}
       {editMode && selected && groupRef.current && (
         <TransformControls
           object={groupRef.current}
@@ -202,6 +210,7 @@ function ObjectGeometry({ object, screenStream }: { object: WorldObject; screenS
   // colour: a chair is furniture, and one that matches the classroom's
   // chairs is what makes a placed one look placed rather than pasted in.
   if (object.kind === "chair") return <Chair />;
+  if (object.kind === "bed") return <Bed />;
   if (object.kind === "image" && object.src) return <ImageObject object={object} />;
   if (object.kind === "video" && object.src) return <VideoObject object={object} />;
   switch (object.kind) {

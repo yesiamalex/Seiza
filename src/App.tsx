@@ -12,6 +12,7 @@ import {
   findGesture,
   SEIZA_GESTURE_NAME,
   SIT_GESTURE_NAME,
+  LIE_GESTURE_NAME,
   type GestureDefinition,
 } from "./avatar/gestures";
 import type { Seat } from "./scene/layout";
@@ -29,7 +30,7 @@ import {
   useTogether,
 } from "./interactions/together";
 import { TogetherPrompt } from "./interactions/TogetherPrompt";
-import { DUET_SPACING, duetPosture, LASTING_TOGETHER, TOGETHER_GESTURES } from "./multiplayer/types";
+import { duetPosture, LASTING_TOGETHER, TOGETHER_GESTURES, togetherSpacing } from "./multiplayer/types";
 import type { VRM } from "@pixiv/three-vrm";
 import { useRoomSocket } from "./multiplayer/useRoomSocket";
 import { RemotePlayers } from "./multiplayer/RemotePlayers";
@@ -124,6 +125,10 @@ const GATHER_RADIUS = 1.1;
 // Custom clips don't declare a duration up front. AvatarAnimator reports
 // the real end; this only bounds how long a stuck gesture can stay "active".
 const GESTURE_FALLBACK_SECONDS = 10;
+/** Someone holding a pose this close to a seat is in it, so it's taken:
+ *  a seat puts its sitter exactly on its spot, and no two seats are this
+ *  close together. */
+const SEAT_TAKEN_RADIUS = 0.3;
 
 /** Number-key slots for the gesture menu: 1–9, then 0 for the tenth. */
 function gestureKeyIndex(code: string): number | null {
@@ -214,6 +219,7 @@ export default function App() {
   // directly; `sit` is hidden because chairs trigger it.
   const menuGestures = useMemo(() => gestures.filter((g) => !g.hidden), [gestures]);
   const sitGesture = useMemo(() => findGesture(gestures, SIT_GESTURE_NAME), [gestures]);
+  const lieGesture = useMemo(() => findGesture(gestures, LIE_GESTURE_NAME), [gestures]);
   // The kneeling pose the app is named for, offered as its own button on
   // touch (requestGesture already toggles it, so one handler does both).
   const seizaGesture = useMemo(() => findGesture(gestures, SEIZA_GESTURE_NAME), [gestures]);
@@ -487,15 +493,33 @@ export default function App() {
     [sendPosture]
   );
 
+  const playersRef = useRef(players);
+  playersRef.current = players;
   const sitDown = useCallback(
     (target: Seat) => {
+      // One to a seat: someone sitting or lying there already is right on
+      // its spot, since that's where a seat puts you.
+      const [sx, , sz] = target.position;
+      const taken = Object.values(playersRef.current).some(
+        (player) =>
+          player.id !== selfIdRef.current &&
+          player.posture !== null &&
+          Math.hypot(player.position[0] - sx, player.position[2] - sz) < SEAT_TAKEN_RADIUS
+      );
+      if (taken) {
+        setNotice(`Someone's already in the ${target.label.toLowerCase()}.`);
+        return;
+      }
       seatRef.current = target;
       setSeat(target);
-      applyPosture(sitGesture);
+      const lying = target.pose === "lie" && lieGesture;
+      applyPosture(lying ? lieGesture : sitGesture);
+      // Lying, the view starts straight up the body (see PlayerRig).
+      if (lying) faceYawRef.current = target.rotationY;
       moveTargetRef.current = null;
       movePathRef.current = null;
     },
-    [applyPosture, sitGesture]
+    [applyPosture, lieGesture, sitGesture]
   );
 
   /** Leaves a seat, or drops a held pose like seiza. */
@@ -653,9 +677,10 @@ export default function App() {
       // Put each kind where it's actually used: a note on a desk, a board at
       // eye level, a screen or a picture a little above that, a chair on the
       // floor (its own geometry is measured up from its base).
-      const distance = flat ? 1.1 : kind === "chair" ? 1.4 : 2;
+      const furniture = kind === "chair" || kind === "bed";
+      const distance = flat ? 1.1 : kind === "chair" ? 1.4 : kind === "bed" ? 2.2 : 2;
       const height =
-        kind === "chair"
+        furniture
           ? 0
           : flat
             ? 0.78
@@ -688,7 +713,8 @@ export default function App() {
         position: spawnPosition,
         // Boards and screens face whoever placed them. A chair is the
         // exception: you place one to sit in it, so it faces the way you're
-        // already looking rather than turning you back around.
+        // already looking rather than turning you back around. A bed faces
+        // you too, foot first, so the headboard doesn't hide the mattress.
         rotationY: kind === "chair" ? yaw : yaw + Math.PI,
         pitch,
         scale: 1,
@@ -1037,26 +1063,33 @@ export default function App() {
   standUpRef.current = standUp;
   useEffect(() => {
     const offStart = onTogetherStart(({ gesture, partner, role }) => {
+      // Every together gesture: each steps (only themselves) to arm's
+      // length from the midpoint between them and faces the other, so hands
+      // meet wherever the two stood when one asked. Both sides do the same
+      // sum from the same two positions, so they land facing each other.
       const other = playersForNames.current[partner];
-      if (!LASTING_TOGETHER.includes(gesture)) {
-        if (other) faceToward(other.position[0], other.position[2]);
-        requestGestureRef.current(gesture);
-        return;
+      if (other) {
+        const [sx, sy, sz] = positionRef.current;
+        const [px, , pz] = other.position;
+        const mx = (sx + px) / 2, mz = (sz + pz) / 2;
+        let dx = sx - mx, dz = sz - mz;
+        const length = Math.hypot(dx, dz);
+        if (length < 1e-3) {
+          // Standing on the same spot: step back along the way this player faces.
+          dx = Math.sin(rotationRef.current);
+          dz = Math.cos(rotationRef.current);
+        } else {
+          dx /= length;
+          dz /= length;
+        }
+        const half = togetherSpacing(gesture) / 2;
+        warpTo([mx + dx * half, sy, mz + dz * half]);
+        faceToward(mx - dx * half, mz - dz * half);
       }
-      // The slow dance: each steps (only themselves) to arm's length from
-      // the midpoint between them, faces the other, and takes up their part.
-      const [sx, sy, sz] = positionRef.current;
-      const [px, , pz] = other?.position ?? [sx, sy, sz - DUET_SPACING];
-      const mx = (sx + px) / 2, mz = (sz + pz) / 2;
-      let dx = sx - mx, dz = sz - mz;
-      const length = Math.hypot(dx, dz) || 1;
-      dx /= length;
-      dz /= length;
-      const half = DUET_SPACING / 2;
-      warpTo([mx + dx * half, sy, mz + dz * half]);
-      faceToward(mx - dx * half, mz - dz * half);
-      // After the step lands: a warp stands the player up first.
-      window.setTimeout(() => requestGestureRef.current(duetPosture(gesture, role)), 150);
+      // After the step lands: a warp stands the player up first. A lasting
+      // one (the slow dance) is this player's part, held until either stops.
+      const clip = LASTING_TOGETHER.includes(gesture) ? duetPosture(gesture, role) : gesture;
+      window.setTimeout(() => requestGestureRef.current(clip), 150);
     });
     // The partner stopped, walked off, or left: stop this side too.
     const offEnd = onTogetherEnd(() => {
@@ -1218,6 +1251,7 @@ export default function App() {
           </group>
           <PlayerRig
             spawnPoint={[world.spawnPoint.x, world.spawnPoint.y, world.spawnPoint.z]}
+            spawnRotationY={world.spawnRotationY}
             positionRef={positionRef}
             rotationRef={rotationRef}
             lookYawRef={lookYawRef}

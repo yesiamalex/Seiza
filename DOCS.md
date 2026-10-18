@@ -164,8 +164,10 @@ guarantee yet.
 
 - **A built-in world.** The default world has a hall with benches around a
   tatami platform, a corridor of shoe lockers, a classroom with desks facing a
-  chalkboard, and a garden with a pond and two lampposts. You can sit on
-  every chair and bench.
+  chalkboard, a garden with a pond and two lampposts, and, past the garden,
+  a meadow with a campsite, where everyone arrives. You can sit on every
+  chair and bench, and on the camp chairs round the fire. See
+  [The meadow and the campsite](#the-meadow-and-the-campsite).
   The world, including its textures and sky, is generated in code, so no 3D
   assets are bundled and nothing is fetched from another CDN. You can add
   your own glTF scene through `world.json`.
@@ -757,7 +759,8 @@ integrate with one. If you build a server-side integration later:
 | Zoom | Scroll | Pinch |
 | Walk to a spot | Double-click the floor | Double-tap the floor |
 | Sit down | Click a chair or bench | Tap a chair or bench |
-| Place a chair | **Edit Mode > Chair** | **Edit Mode > Chair** |
+| Lie down | Click the tent's sleeping bag or a bed | Tap the sleeping bag or a bed |
+| Place a chair or a bed | **Edit Mode > Chair** or **Bed** | **Edit Mode > Chair** or **Bed** |
 | Kneel (seiza) | `3`, then `3` again to stand | **Seiza** button |
 | Stand up | Move, jump, or **Stand up** | D-pad or **Stand up** |
 | Switch view | `V` or the camera button | Camera button |
@@ -1158,13 +1161,14 @@ above the tatami on another avatar and sinks into it on a third.
 
 To fix this:
 
-1. Each clip declares what it rests on: `ground: "floor"` or `ground: "seat"`,
-   in the generator and the manifest.
+1. Each clip declares what it rests on: `ground: "floor"`, `ground: "seat"`,
+   or `ground: "body"`, in the generator and the manifest.
 2. After `vrm.update()`, a second pass in `AvatarAnimator` measures where the
    posed skeleton's contact points ended up.
 3. It moves the model until those points are in place: the lowest of the
-   shins, feet, and toes onto the floor for seiza, and the hips onto the seat
-   for sitting.
+   shins, feet, and toes onto the floor for seiza, the hips onto the seat
+   for sitting, and whatever part of the body is lowest (the back, the back
+   of the head, the heels) onto the bed for lying down.
 
 The measurement includes last frame's correction, so this is a feedback loop
 that settles in a few frames and then holds still. Clearances, such as shin
@@ -1318,8 +1322,15 @@ rules in `TOGETHER` (`src/multiplayer/types.ts`):
    for 30 seconds. On a yes, both get `togetherStart { gesture, partner }`,
    and the server lets each of them play that one gesture, once, within 8
    seconds.
-4. Each client turns toward its partner (on a flat screen; never in a
-   headset) and plays the gesture through the ordinary gesture message.
+4. Each client steps only its own player to the gesture's spacing from the
+   midpoint between them (`togetherSpacing`: 0.74 m for the one-shot
+   gestures, 0.52 m for a hug, 0.85 m for the slow dance), turns toward its
+   partner (on a flat screen; never in a headset), and plays the gesture
+   through the ordinary gesture message. So hands meet wherever the two
+   stood when one asked. The clips are posed with the arm angles solved so
+   the hands meet on the line between the two at those spacings, sized for
+   a typical VRoid avatar; a much taller or shorter avatar meets a little
+   short or long.
 
 The server refuses any together gesture from a player without that fresh
 grant, so a modified client can't send a hug at anyone.
@@ -1327,9 +1338,8 @@ grant, so a modified client can't send a hug at anyone.
 The **slow dance** lasts until stopped, so it isn't one clip but a held,
 looping pose for each partner: the asker leads (`slowdancelead`), the other
 follows (`slowdancefollow`, the lead's moves mirrored, so the two sway the
-same way through the room). On a yes, each client steps only its own player
-to arm's length (`DUET_SPACING`, 0.85 m centre to centre) from the midpoint
-between them, faces the partner, and takes up its part. The server allows
+same way through the room). On a yes, each steps into place as for any
+together gesture and takes up its part. The server allows
 each of those postures only from the right partner with a fresh grant, never
 plays `slowdance` as a clip, and pairs the two: when either stops, moves off,
 or leaves, the other gets `togetherEnded` and stops too. Requests live in the
@@ -1348,6 +1358,63 @@ personal space while the gesture plays.
 
 A world that narrows its built-in gestures with `enabledGestures` can leave
 these out; the Together section then doesn't appear.
+
+### The meadow and the campsite
+
+Past the garden's back edge is a meadow you can walk out onto (`FIELD` in
+`src/scene/layout.ts`), cleared of trees, which ring it instead and mark
+where it ends. It has no floor of its own: you walk on the outer ground,
+6 cm below the garden deck (`FIELD_Y`), with an invisible plane there for
+click-to-walk and the navigation mesh. Footsteps sound like grass.
+
+The campsite (`src/scene/Campsite.tsx`) is about 20 m out:
+
+- **A campfire** in a ring of stones. Its flames are three unlit cones and a
+  glow, flickered by a few sines each frame, and its light is one of the
+  world's pooled lights (see [Effects are math, not extra rendering](#effects-are-math-not-extra-rendering)), so it costs no more
+  per pixel than the lamps already do. Click it to put it out or light it,
+  for everyone in the room: it's a light switch, the `camp` zone. The
+  ground round it is lit, so the firelight shows on it.
+- **A tent** with a sleeping bag inside, its door toward the fire. The bag
+  is a bed: click it to lie down on your back, head on the pillow, eyes
+  shut (see [Lying down](#lying-down)).
+- **Four low folding chairs** round the fire, built-in seats like the
+  benches (`CAMP_CHAIRS`), with a lower seat height.
+
+Everything that doesn't move is merged into one mesh per material, so the
+whole camp, fire included, is about a dozen draw calls. Every world
+(default, Seizora, and Seilaya) arrives you just outside the tent's door,
+facing the fire, as if you'd just woken up: `spawnPoint` there and
+`spawnRotationY` facing the fire (`TENT_DOORSTEP` in `layout.ts`). Seizora
+and Seilaya have the meadow and the campsite too (Seizora's turbines stand
+on the meadow, with collision).
+
+#### Lying down
+
+A seat can be a bed: `pose: "lie"` on a `Seat` (see `bedSeat` in
+`layout.ts`). Its `position` is where the hips go, on the bed's surface,
+and the head lies behind it on the pillow. Clicking it plays the hidden
+`lie` posture: down onto the knees, back onto the seat, then flat on the
+back, with the "sleep" face (eyes eased shut). It's grounded with
+`ground: "body"`, so whatever part of the body is lowest rests on the bed.
+
+- **First person:** you see from your avatar's eyes, so you look up at the
+  tent roof. Looking around turns your head on the pillow, up to about 75°
+  either way; the body stays put.
+- **Third person:** the tent's walls fade while you're in its bag and the
+  camera is outside, so you see yourself rather than the tent.
+- **In a headset:** the playspace drops so your eyes are just above the bed.
+- **Getting up:** any movement stands you up at the seat's `exit`, outside
+  the tent's door, rather than beside the bag and through the wall.
+
+A seat holds one person: if someone is already sitting or lying on its spot,
+clicking it shows "Someone's already in the sleeping bag" instead. Every
+seat checks this, chairs and benches included.
+
+Beds can also be placed in Edit Mode (**Bed**): a frame, mattress, blanket,
+and pillow (`src/scene/Bed.tsx`), seated through `placedBedSeat`, foot
+toward whoever placed it, getting up at its side. Like placed chairs, they
+aren't obstacles.
 
 ### Local profile storage
 

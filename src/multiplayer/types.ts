@@ -41,7 +41,7 @@ export interface PlayerState {
 // "sign" is a text object like "text", but shaped and typeset to be read
 // from across the room rather than up close — see createTextTexture's
 // "sign" surface and SignObject in src/edit/WorldObjects.tsx.
-export const WORLD_OBJECT_KINDS = ["box", "sphere", "cylinder", "model", "text", "sign", "screen", "image", "video", "chair"] as const;
+export const WORLD_OBJECT_KINDS = ["box", "sphere", "cylinder", "model", "text", "sign", "screen", "image", "video", "chair", "bed"] as const;
 export type WorldObjectKind = (typeof WORLD_OBJECT_KINDS)[number];
 
 /** Longest text a board or note will hold. Long enough for a notice, short
@@ -354,10 +354,12 @@ export type ServerMessage =
   | { type: "togetherEnded"; partner: string };
 
 /** Places with a light switch in the built-in world. */
-export type LightZone = "hall" | "classroom" | "pond";
-export const LIGHT_ZONES: readonly LightZone[] = ["hall", "classroom", "pond"];
+/** `camp` is the campfire on the meadow: a light switch too, so it's lit
+ *  or out for everyone in the room. */
+export type LightZone = "hall" | "classroom" | "pond" | "camp";
+export const LIGHT_ZONES: readonly LightZone[] = ["hall", "classroom", "pond", "camp"];
 /** Every light starts on, for a new room and for anything a stored state lacks. */
-export const DEFAULT_LIGHTS: Readonly<Record<LightZone, boolean>> = { hall: true, classroom: true, pond: true };
+export const DEFAULT_LIGHTS: Readonly<Record<LightZone, boolean>> = { hall: true, classroom: true, pond: true, camp: true };
 
 /** Weather choices for a room sky. "auto" follows the shared schedule. */
 export const ROOM_SKY_WEATHER = ["auto", "clear", "partly", "overcast", "rain", "typhoon"] as const;
@@ -419,11 +421,23 @@ export const isTogetherGesture = (v: unknown): v is TogetherGesture => (TOGETHER
  */
 export const LASTING_TOGETHER: readonly TogetherGesture[] = ["slowdance"];
 export const duetPosture = (gesture: TogetherGesture, role: "lead" | "follow") => `${gesture}${role}`;
-/** Partners stand this far apart (centre to centre, metres) for the dance:
- *  arms' reach, and just outside the distance at which Seiza hides an
- *  avatar from a first-person camera (RemotePlayers.tsx), so each still
- *  sees the other. */
+/** How far apart partners stand (centre to centre, metres) for a together
+ *  gesture: each steps to it on a yes, wherever they were. This is the
+ *  slow dance's, an easy arms' reach; TOGETHER_SPACING has the others. */
 export const DUET_SPACING = 0.85;
+/** Spacing per together gesture where it differs from the slow dance's: a
+ *  hug wraps round the partner, so it comes closest. */
+export const TOGETHER_SPACING: Partial<Record<TogetherGesture, number>> = {
+  // The one-shot clips are posed so hands meet DUET_SPACING apart on the
+  // generator's skeleton (scripts/generate-motions.mjs), which is about 12%
+  // bigger than a typical VRoid avatar; these are that, scaled down.
+  handshake: 0.74,
+  highfive: 0.74,
+  fistbump: 0.74,
+  dap: 0.74,
+  hug: 0.52,
+};
+export const togetherSpacing = (gesture: TogetherGesture) => TOGETHER_SPACING[gesture] ?? DUET_SPACING;
 export const TOGETHER = {
   /** Asking needs the two within this many metres (the server allows a
    *  little more than the menu offers, for movement while asking). */

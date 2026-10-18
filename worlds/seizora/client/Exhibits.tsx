@@ -722,6 +722,8 @@ export function exhibitObstacles() {
     // The battery's pad, turned to run along Z.
     { x: BATTERY.x, z: BATTERY.z + 0.8, halfX: 1.8, halfZ: 4, rotationY: 0 },
     { x: CELL.x, z: CELL.z, halfX: 0.6, halfZ: 0.6, rotationY: 0 },
+    // The turbines' footings, out on the meadow Seiza lets you walk onto.
+    ...TURBINES.map((t) => ({ x: t.x, z: t.z, halfX: 1.15, halfZ: 1.15, rotationY: 0 })),
     ...boards,
   ];
 }

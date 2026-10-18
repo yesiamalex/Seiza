@@ -31,7 +31,10 @@ For the full guide, see [DOCS.md](DOCS.md).
 ## 🏯 What you can do in a room
 
 - **Walk around** a hall, a classroom, and a garden, and sit on the chairs and
-  benches.
+  benches. Past the garden, a meadow leads to a campsite where everyone
+  arrives, just outside the tent as if they'd woken up: low chairs round a
+  crackling fire you can put out or light, a sleeping bag to lie down in,
+  and the stars overhead at night.
 - **Talk.** Voices get quieter with distance, so two small conversations can
   happen in one room.
 - **Use your camera or share your screen** onto one of the wall screens, for
@@ -55,6 +58,8 @@ For the full guide, see [DOCS.md](DOCS.md).
 - **Watch the day go by.** The sky follows Philippine time and weather, from
   a clear morning through rain to a starry night, and everyone in the room
   sees the same sky.
+
+<img src="docs/media/campsite.jpg" width="720" alt="Night at the campsite: an avatar sits in a low folding chair by a campfire under a sky full of stars, an orange tent with a sleeping bag inside to the left, and the hall's lamps glowing across the meadow.">
 
 <table>
   <tr>
