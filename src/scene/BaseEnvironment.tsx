@@ -14,6 +14,8 @@ import { PooledLight } from "./LightPool";
 import { WindowSun } from "./WindowSun";
 import { Campsite } from "./Campsite";
 import { GardenSteps } from "./GardenSteps";
+import { GlowEdges, rectOutline, type GlowSegment } from "./GlowEdges";
+import { UnderGlow, type GlowDesk } from "./UnderGlow";
 import { buildMeadowGeometry } from "./meadow";
 import { DEFAULT_LIGHTS, type LightZone } from "../multiplayer/types";
 import { playDoorSlide, playDoorSwing } from "../audio/sfx";
@@ -41,6 +43,7 @@ import {
   SEAT_HEIGHT,
   TEACHER_DESK,
   WALL_HEIGHT,
+  TATAMI,
   WALL_THICKNESS,
   type BenchPlacement,
   type Rect,
@@ -105,9 +108,15 @@ export const BaseEnvironment = memo(function BaseEnvironment({
       <Floors m={m} onFloorDoubleClick={onFloorDoubleClick} />
       <HallShell m={m} />
       <HallFurniture m={m} lit={lights.hall} onToggleLight={onToggleLight} />
+      <GlowEdges segments={HALL_GLOW} lit={lights.hall} />
+      <UnderGlow desks={RECEPTION_GLOW} lit={lights.hall} />
       <OutdoorGarden m={m} lit={lights.pond} onToggleLight={onToggleLight} />
+      {/* On the garden switch with the lampposts. */}
+      <GardenSteps lit={lights.pond} />
       <CorridorShell m={m} />
       <ClassroomShell m={m} lit={lights.classroom} onToggleLight={onToggleLight} />
+      <GlowEdges segments={CLASSROOM_GLOW} lit={lights.classroom} />
+      <UnderGlow desks={CLASSROOM_DESK_GLOW} lit={lights.classroom} />
       <ClassroomFurniture m={m} />
       <Campsite lit={lights.camp} onToggle={onToggleLight} inBed={occupiedSeatId?.startsWith("camp-bed") ?? false} />
       {onSit &&
@@ -141,12 +150,44 @@ function Floors({ m, onFloorDoubleClick }: { m: WorldMaterials; onFloorDoubleCli
           the navigation mesh ignores. This invisible copy of it is what
           click-to-walk and the navigation mesh find there. */}
       <mesh geometry={meadowFloor} material={invisibleFloor} onDoubleClick={handleDoubleClick} />
-      <GardenSteps />
     </group>
   );
 }
 
 const meadowFloor = buildMeadowGeometry();
+
+/** Warm outline trim on the hall's switch: the tatami platform's edge and
+ *  the skirting down both sides of the corridor to the classroom
+ *  (GlowEdges: one draw call, no light). The reception desk is lit from
+ *  under its top instead, like the classroom's desks (DESK_GLOW). */
+const HALL_GLOW: GlowSegment[] = [
+  // Along the outer top edge of the platform's raised border strips
+  // (HallFurniture), not the mats inside them, which the strips stand over.
+  ...rectOutline(TATAMI.minX - 0.16, TATAMI.maxX + 0.16, TATAMI.minZ - 0.12, TATAMI.maxZ + 0.12, 0.165 + 0.013),
+  ...[-1, 1].map((side): GlowSegment => {
+    const x = side * (CORRIDOR.maxX - WALL_THICKNESS / 2 - 0.03);
+    return [[x, 0.02, CORRIDOR.minZ], [x, 0.02, CORRIDOR.maxZ]];
+  }),
+];
+
+/** Desks lit from under their tops (UnderGlow), each on its room's switch:
+ *  the strip under the edge away from whoever sits there, so they see the
+ *  pool on the floor and not the strip. The teacher's desk is brighter, on
+ *  the side facing the class, so it reads as the front of the room. */
+const RECEPTION_GLOW: GlowDesk[] = [{ x: -7, z: 13.45, width: 3.6, depth: 0.9, under: 0.995, edge: -1 }];
+const CLASSROOM_DESK_GLOW: GlowDesk[] = [
+  ...DESKS.map((desk): GlowDesk => ({ x: desk.position[0], z: desk.position[2], width: 1.15, depth: 0.62, under: 0.685, edge: -1, strength: 0.8 })),
+  { x: TEACHER_DESK[0], z: TEACHER_DESK[2], width: 1.9, depth: 0.85, under: 0.7, edge: 1, strength: 1.3 },
+];
+
+/** The classroom notice board's frame, on the classroom's switch. */
+const NOTICE_Z = CLASSROOM.maxZ - 0.2 - 0.06;
+const CLASSROOM_GLOW: GlowSegment[] = [
+  [[-8.5, 1.1, NOTICE_Z], [-5.5, 1.1, NOTICE_Z]],
+  [[-8.5, 2.7, NOTICE_Z], [-5.5, 2.7, NOTICE_Z]],
+  [[-8.5, 1.1, NOTICE_Z], [-8.5, 2.7, NOTICE_Z]],
+  [[-5.5, 1.1, NOTICE_Z], [-5.5, 2.7, NOTICE_Z]],
+];
 
 /** Drawn as nothing, but still there to raycast and to build a navmesh from. */
 const invisibleFloor = new THREE_RUNTIME.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
