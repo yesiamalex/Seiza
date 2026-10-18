@@ -1,16 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import defaultWorld from "../../public/worlds/default/world.json";
+import seizoraWorld from "../../worlds/seizora/world/world.json";
+import seilayaWorld from "../../worlds/seilaya/world/world.json";
 import { CAMPFIRE, FIELD_Y, isBlocked, placedBedSeat, SEATS, SLEEPING_BAG, TENT_DOORSTEP, facingVector } from "./layout";
-
-const spawnOf = (path: string) => {
-  const world = JSON.parse(readFileSync(path, "utf8"));
-  return { ...world.spawnPoint, yaw: world.spawnRotationY as number };
-};
 
 describe("the campsite", () => {
   it("arrives every world outside the tent's door, facing the fire", () => {
-    for (const path of ["public/worlds/default/world.json", "worlds/seizora/world/world.json", "worlds/seilaya/world/world.json"]) {
-      const spawn = spawnOf(path);
+    for (const world of [defaultWorld, seizoraWorld, seilayaWorld]) {
+      const spawn = { ...world.spawnPoint, yaw: world.spawnRotationY };
       expect(Math.hypot(spawn.x - TENT_DOORSTEP[0], spawn.z - TENT_DOORSTEP[1])).toBeLessThan(0.05);
       expect(spawn.y).toBe(FIELD_Y);
       expect(isBlocked(spawn.x, spawn.z)).toBe(false);
