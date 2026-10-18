@@ -1323,14 +1323,21 @@ rules in `TOGETHER` (`src/multiplayer/types.ts`):
    and the server lets each of them play that one gesture, once, within 8
    seconds.
 4. Each client steps only its own player to the gesture's spacing from the
-   midpoint between them (`togetherSpacing`: 0.74 m for the one-shot
-   gestures, 0.52 m for a hug, 0.85 m for the slow dance), turns toward its
-   partner (on a flat screen; never in a headset), and plays the gesture
-   through the ordinary gesture message. So hands meet wherever the two
-   stood when one asked. The clips are posed with the arm angles solved so
-   the hands meet on the line between the two at those spacings, sized for
-   a typical VRoid avatar; a much taller or shorter avatar meets a little
-   short or long.
+   midpoint between them (`togetherSpacing`), turns toward its partner (on
+   a flat screen; never in a headset), and plays the gesture through the
+   ordinary gesture message. So hands meet wherever the two stood when one
+   asked.
+
+   The spacings were measured, not guessed: each clip's moment of contact
+   was posed on real rigs (VRoid samples, a VRM 1.0 sample, a VRoid Hub
+   model) and the hand's reach read off. For an arm of 0.434 m they are
+   0.65 m for a handshake, 0.63 m for a high five, 0.73 m for a fist bump,
+   0.62 m for a dap, 0.52 m for a hug, and 0.75 m for the slow dance. Each
+   client then scales them by both partners' arm lengths, read from their
+   avatars' rest skeletons (`src/avatar/avatarReach.ts`); both have both
+   avatars loaded, so both work out the same spacing, and longer- or
+   shorter-armed avatars meet too. Height isn't matched: partners of very
+   different heights each hold their hand at their own height.
 
 The server refuses any together gesture from a player without that fresh
 grant, so a modified client can't send a hug at anyone.
@@ -1349,8 +1356,14 @@ On the client, `src/interactions/together.ts` holds requests, prompts, and
 the "Others may ask me" setting (kept on the device);
 `src/interactions/TogetherPrompt.tsx` shows the prompt above the control bar
 (at the top on a phone); the Gestures menu has a Together section listing
-people in reach; and in a headset the request appears at the top of the
-wrist menu. A world's own code can add rules with `setTogetherPolicy` (turn
+people in reach. Who's in reach is rechecked a few times a second, so the
+list is right the moment you walk up to someone. With no prompt showing, the
+same place offers a small "Bea is close" chip that opens into the gestures
+to ask for. It hides while you're mid-gesture, holding a pose, or seated,
+and once dismissed, or once you've done something together, it stays away
+until that person has left and come back. In a headset the request appears
+at the top of the wrist menu, and below it an "Ask Bea for" row of the same
+gestures, which a phone viewer can choose by gaze. A world's own code can add rules with `setTogetherPolicy` (turn
 requests away without a prompt) and react with `onTogetherStart`. Seilaya
 does both: requests are turned away while you've stepped out or a
 facilitator has paused them, and your partner stays visible through your
@@ -1361,11 +1374,24 @@ these out; the Together section then doesn't appear.
 
 ### The meadow and the campsite
 
-Past the garden's back edge is a meadow you can walk out onto (`FIELD` in
-`src/scene/layout.ts`), cleared of trees, which ring it instead and mark
-where it ends. It has no floor of its own: you walk on the outer ground,
-6 cm below the garden deck (`FIELD_Y`), with an invisible plane there for
-click-to-walk and the navigation mesh. Footsteps sound like grass.
+Past the garden's back edge is a meadow (`FIELD` in `src/scene/layout.ts`),
+cleared of trees, which ring it instead and mark where it ends. It lies
+0.6 m below the garden (`FIELD_Y`):
+
+- A stone **retaining wall** runs along the garden's back edge, with a low
+  curb on top, and **steps** go down through its middle (`GARDEN_STEPS`,
+  drawn by `src/scene/GardenSteps.tsx` as one mesh). The steps walk as an
+  even slope through their noses, so going down them is smooth; the curb
+  and the wall's end walls are obstacles, so the steps are the way down.
+- **Grass banks** rise from the meadow floor to the outer ground round its
+  other edges (`meadowHeight`, which both the ground you walk on and the
+  ground drawn use). The meadow's ground is its own mesh
+  (`src/scene/meadow.ts`), cut out of the outer ground disc, with an
+  invisible copy for click-to-walk and the navigation mesh.
+
+Footsteps sound like grass: a soft brush that swells in, over a low pitched
+bump, with no sharp onset (high noise over a short noise thump is a snare
+drum, which the first version was).
 
 The campsite (`src/scene/Campsite.tsx`) is about 20 m out:
 
@@ -1373,11 +1399,14 @@ The campsite (`src/scene/Campsite.tsx`) is about 20 m out:
   glow, flickered by a few sines each frame, and its light is one of the
   world's pooled lights (see [Effects are math, not extra rendering](#effects-are-math-not-extra-rendering)), so it costs no more
   per pixel than the lamps already do. Click it to put it out or light it,
-  for everyone in the room: it's a light switch, the `camp` zone. The
-  ground round it is lit, so the firelight shows on it.
-- **A tent** with a sleeping bag inside, its door toward the fire. The bag
-  is a bed: click it to lie down on your back, head on the pillow, eyes
-  shut (see [Lying down](#lying-down)).
+  for everyone in the room: it's a light switch, the `camp` zone. Everyone
+  near hears it catch (a soft whoomph) or go out (a hiss), and while it
+  burns, a low roar and a few crackles a second, quieter with distance
+  (`setFireAmbience` in `src/audio/sfx.ts`). The ground round it is lit, so
+  the firelight shows on it.
+- **A tent** for two, its door toward the fire, with two sleeping bags side
+  by side. Each is a bed: click it to lie down on your back, head on the
+  pillow, eyes shut (see [Lying down](#lying-down)).
 - **Four low folding chairs** round the fire, built-in seats like the
   benches (`CAMP_CHAIRS`), with a lower seat height.
 
@@ -1387,7 +1416,7 @@ whole camp, fire included, is about a dozen draw calls. Every world
 facing the fire, as if you'd just woken up: `spawnPoint` there and
 `spawnRotationY` facing the fire (`TENT_DOORSTEP` in `layout.ts`). Seizora
 and Seilaya have the meadow and the campsite too (Seizora's turbines stand
-on the meadow, with collision).
+on the meadow floor, with collision, and its wind board beside the steps).
 
 #### Lying down
 
@@ -1400,10 +1429,14 @@ back, with the "sleep" face (eyes eased shut). It's grounded with
 
 - **First person:** you see from your avatar's eyes, so you look up at the
   tent roof. Looking around turns your head on the pillow, up to about 75°
-  either way; the body stays put.
-- **Third person:** the tent's walls fade while you're in its bag and the
-  camera is outside, so you see yourself rather than the tent.
-- **In a headset:** the playspace drops so your eyes are just above the bed.
+  either way, and down only as far as your chest; the body stays put.
+- **Third person:** the tent's walls fade whenever they'd stand between you
+  and the camera: you in a bag with the camera outside, or you at the door
+  with the camera behind you inside the tent.
+- **In a headset:** the playspace puts your eyes on the pillow, just above
+  the bed, rather than over your stomach, and the pose has the whole body:
+  head and hand tracking give way to it, so an upright headset doesn't fold
+  a lying neck.
 - **Getting up:** any movement stands you up at the seat's `exit`, outside
   the tent's door, rather than beside the bag and through the wall.
 

@@ -73,7 +73,7 @@ const LOOK_DOWN_TO = Math.sin((80 * Math.PI) / 180);
  * What other people see is untouched: their copy of this avatar is a
  * separate instance, at its own size, with its head where it belongs.
  */
-export function SelfView({ vrm, firstPerson }: { vrm: VRM | null; firstPerson: boolean }) {
+export function SelfView({ vrm, firstPerson, lying = false }: { vrm: VRM | null; firstPerson: boolean; lying?: boolean }) {
   const presenting = useXR((state) => state.session != null);
   const camera = useThree((state) => state.camera);
   const rig = useMemo(() => (vrm ? createBodyRig(vrm) : null), [vrm]);
@@ -182,8 +182,10 @@ export function SelfView({ vrm, firstPerson }: { vrm: VRM | null; firstPerson: b
     vrm.scene.scale.setScalar(fitRef.current);
 
     // In a headset, line the avatar's eyes up with yours (see
-    // VR_BODY_MARGIN). Only this copy: what others see is untouched.
-    if (presenting) {
+    // VR_BODY_MARGIN). Only this copy: what others see is untouched. Not
+    // lying down: the playspace already puts your head on the pillow
+    // (PlayerRig), and "behind" would slide the body up under your eyes.
+    if (presenting && !lying) {
       const world = trackingStore.getLocalWorld();
       const down = world ? -scratch.look.set(0, 0, -1).applyQuaternion(world.head.quaternion).y : 0;
       const goal = THREE.MathUtils.smoothstep(down, LOOK_DOWN_FROM, LOOK_DOWN_TO);

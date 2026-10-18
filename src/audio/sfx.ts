@@ -213,10 +213,23 @@ export function playFootstep(surface: StepSurface, distance?: number, scale = 1)
       noiseBurst(a.ctx, a.out, { duration: 0.07, gain: 0.24 * level, frequency: 1700 * vary, q: 1.1, sweepTo: 700 });
       break;
     case "grass":
-      // A soft, short brush: the blades rustle (a little high noise, eased
-      // in so there's no click) over a dull thud of earth underneath.
-      noiseBurst(a.ctx, a.out, { duration: 0.12, gain: 0.16 * level, type: "highpass", frequency: 2400 * vary, q: 0.6, attack: 0.04 });
-      noiseBurst(a.ctx, a.out, { duration: 0.08, gain: 0.2 * level, type: "lowpass", frequency: 380 * vary, q: 0.7 });
+      // A brush, not a hit. The first version was high noise over a short
+      // low noise thump, and that pair is a snare drum (the same trap the
+      // water step notes below). Grass has no crack: the foot pushes
+      // through the blades, so the noise swells in over a third of its
+      // length and stays mid-band, sweeping down as the blades fold.
+      noiseBurst(a.ctx, a.out, {
+        duration: 0.2,
+        gain: 0.17 * level,
+        type: "bandpass",
+        frequency: 1300 * vary,
+        q: 0.55,
+        sweepTo: 520,
+        attack: 0.35,
+      });
+      // The soft earth underneath, as a low pitched bump rather than
+      // noise, so it gives weight without rattle.
+      tone(a.ctx, a.out, { frequency: 82 * vary, duration: 0.08, gain: 0.09 * level, type: "sine", sweepTo: 58 });
       break;
     case "water":
       // No bright transient at all. The previous two attempts both led
@@ -422,4 +435,79 @@ export function setPondAmbience(distance: number) {
 
   // Ramped, not assigned: stepping a gain per frame clicks.
   ambientWater.gain.gain.setTargetAtTime(target, a.ctx.currentTime, 0.25);
+}
+
+/**
+ * The campfire, heard from nearby: a low, soft roar under it and a few
+ * crackles a second, in little clusters, the way wood spits. Call every
+ * frame with how far the listener is and how lit the fire is (0 to 1).
+ *
+ * The roar is a noise loop like the pond's; the crackles are pops far
+ * shorter than a footstep (a few milliseconds each), which is what keeps
+ * them reading as sparks rather than a drum.
+ */
+const FIRE_HEARD_DISTANCE = 14;
+let fireBed: { gain: GainNode } | null = null;
+
+export function setFireAmbience(distance: number, level: number, delta: number) {
+  const a = audio();
+  if (!a) return;
+  const near = Math.max(0, 1 - distance / FIRE_HEARD_DISTANCE) * level;
+  const target = near * near * 0.06;
+
+  if (!fireBed) {
+    if (target <= 0.001) return;
+    const frames = a.ctx.sampleRate * 3;
+    const buffer = a.ctx.createBuffer(1, frames, a.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < frames; i++) {
+      last = (last + Math.random() * 2 - 1) * 0.5;
+      data[i] = last;
+    }
+    const source = a.ctx.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+    const low = a.ctx.createBiquadFilter();
+    low.type = "lowpass";
+    low.frequency.value = 380;
+    const gain = a.ctx.createGain();
+    gain.gain.value = 0;
+    source.connect(low).connect(gain).connect(a.out);
+    source.start();
+    fireBed = { gain };
+  }
+  fireBed.gain.gain.setTargetAtTime(target, a.ctx.currentTime, 0.3);
+
+  // About four clusters a second at full strength.
+  if (near > 0.02 && Math.random() < delta * 4) {
+    const pops = 1 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < pops; i++) {
+      window.setTimeout(() => {
+        const b = audio();
+        if (!b) return;
+        noiseBurst(b.ctx, b.out, {
+          duration: 0.004 + Math.random() * 0.01,
+          gain: (0.05 + Math.random() * 0.1) * near,
+          frequency: 1600 + Math.random() * 2800,
+          q: 1.3,
+        });
+      }, i * (15 + Math.random() * 45));
+    }
+  }
+}
+
+/** The campfire lit (a soft whoomph as it catches) or put out (a hiss). */
+export function playFireToggle(on: boolean, distance?: number) {
+  const a = audio();
+  if (!a) return;
+  const level = gainForDistance(distance);
+  if (level <= 0.01) return;
+  if (on) {
+    noiseBurst(a.ctx, a.out, { duration: 0.7, gain: 0.26 * level, type: "lowpass", frequency: 220, q: 0.6, sweepTo: 900, attack: 0.45 });
+    tone(a.ctx, a.out, { frequency: 70, duration: 0.5, gain: 0.08 * level, type: "sine", sweepTo: 110 });
+  } else {
+    // Eased in and kept mid-band, so it's a hiss, not a hit.
+    noiseBurst(a.ctx, a.out, { duration: 0.9, gain: 0.12 * level, frequency: 2400, q: 0.45, sweepTo: 800, attack: 0.18 });
+  }
 }

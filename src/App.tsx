@@ -30,7 +30,7 @@ import {
   useTogether,
 } from "./interactions/together";
 import { TogetherPrompt } from "./interactions/TogetherPrompt";
-import { duetPosture, LASTING_TOGETHER, TOGETHER_GESTURES, togetherSpacing } from "./multiplayer/types";
+import { duetPosture, LASTING_TOGETHER, TOGETHER_GESTURES, togetherSpacing, type PlayerState, type TogetherGesture } from "./multiplayer/types";
 import type { VRM } from "@pixiv/three-vrm";
 import { useRoomSocket } from "./multiplayer/useRoomSocket";
 import { RemotePlayers } from "./multiplayer/RemotePlayers";
@@ -43,6 +43,7 @@ import { useNavMesh } from "./nav/useNavMesh";
 import { useRealtimeMedia, VOICE_ENABLED } from "./media/useRealtimeMedia";
 import { XrBodyTracker } from "./xr/body/XrBodyTracker";
 import { TrackedBody } from "./xr/body/TrackedBody";
+import { reachScale, setAvatarReach } from "./avatar/avatarReach";
 import { SelfView } from "./xr/body/SelfView";
 import { LOCAL_TRACKING_SOURCE } from "./xr/body/trackingStore";
 import { XrHud, type XrHudModel } from "./xr/hud/XrHud";
@@ -129,6 +130,8 @@ const GESTURE_FALLBACK_SECONDS = 10;
  *  a seat puts its sitter exactly on its spot, and no two seats are this
  *  close together. */
 const SEAT_TAKEN_RADIUS = 0.3;
+/** How often to recheck who's near enough to ask for a together gesture. */
+const NEARBY_CHECK_MS = 300;
 
 /** Number-key slots for the gesture menu: 1–9, then 0 for the tenth. */
 function gestureKeyIndex(code: string): number | null {
@@ -1082,7 +1085,9 @@ export default function App() {
           dx /= length;
           dz /= length;
         }
-        const half = togetherSpacing(gesture) / 2;
+        // Scaled by both partners' arms, which both sides know (each has
+        // both avatars loaded), so both work out the same spacing.
+        const half = (togetherSpacing(gesture) * (reachScale(selfIdRef.current) + reachScale(partner))) / 4;
         warpTo([mx + dx * half, sy, mz + dz * half]);
         faceToward(mx - dx * half, mz - dz * half);
       }
@@ -1108,7 +1113,32 @@ export default function App() {
       ? gestures.some((g) => g.name === duetPosture(name, "lead")) && gestures.some((g) => g.name === duetPosture(name, "follow"))
       : gestures.some((g) => g.name === name)
   );
-  const nearby = togetherGestures.length ? nearbyPeople(players, selfId, positionRef.current) : [];
+  // Who's within reach, rechecked a few times a second. Worked out only
+  // when the app happened to re-render, it went stale whenever you walked
+  // up to someone standing still (your own movement doesn't re-render
+  // anything), so the menu said nobody was near until something else did.
+  useEffect(() => {
+    if (!selfId) return;
+    setAvatarReach(selfId, localVrm);
+    return () => setAvatarReach(selfId, null);
+  }, [selfId, localVrm]);
+  const [nearby, setNearby] = useState<PlayerState[]>([]);
+  const togetherOffered = togetherGestures.length > 0;
+  useEffect(() => {
+    if (!togetherOffered) {
+      setNearby([]);
+      return;
+    }
+    const check = () =>
+      setNearby((previous) => {
+        const next = nearbyPeople(playersRef.current, selfIdRef.current, positionRef.current);
+        const same = next.length === previous.length && next.every((p, i) => p.id === previous[i].id && p.displayName === previous[i].displayName);
+        return same ? previous : next;
+      });
+    check();
+    const timer = window.setInterval(check, NEARBY_CHECK_MS);
+    return () => window.clearInterval(timer);
+  }, [togetherOffered]);
   const waitingRequest = together.incoming[0] ?? null;
 
   if (worldError) return <CenteredMessage text={`Couldn't load world: ${worldError.message}`} />;
@@ -1179,6 +1209,17 @@ export default function App() {
           decline: () => answerTogether(waitingRequest.id, false),
         }
       : null,
+    together:
+      nearby[0] && togetherGestures.length
+        ? {
+            name: nearby[0].displayName,
+            gestures: togetherGestures.map((name) => ({ name, label: TOGETHER_LABELS[name].label })),
+            onAsk: (gesture) => askTogether(nearby[0].id, gesture as TogetherGesture),
+            waiting: together.outgoing
+              ? `Asking ${nameOfPlayer(together.outgoing.peer)} for ${TOGETHER_LABELS[together.outgoing.gesture].ask}…`
+              : null,
+          }
+        : null,
   };
 
   return (
@@ -1263,7 +1304,7 @@ export default function App() {
             moveTargetRef={moveTargetRef}
             movePathRef={movePathRef}
             touchInputRef={touchInputRef}
-            sitAnchor={seat ? { position: seat.position, rotationY: seat.rotationY } : null}
+            sitAnchor={seat}
             postureHeld={!!posture}
             postureEyeHeight={posture?.name === "seiza" ? 0.82 : null}
             onStandUp={standUp}
@@ -1298,7 +1339,7 @@ export default function App() {
             <TrackedBody vrm={localVrm} source={LOCAL_TRACKING_SOURCE} layerWeightsRef={localLayerWeightsRef} />
             {/* First person, VR or screen: your body seen from your eyes,
                 with your head hidden from your own camera. */}
-            <SelfView vrm={localVrm} firstPerson={viewMode === "first"} />
+            <SelfView vrm={localVrm} firstPerson={viewMode === "first"} lying={posture?.ground === "body"} />
           </PlayerRig>
           <XrBodyTracker positionRef={positionRef} rotationRef={rotationRef} onSend={(pose) => send({ type: "tracking", pose })} />
           <XrHud model={xrHudModel} />
@@ -1574,7 +1615,12 @@ export default function App() {
           not inside it: on a phone the HUD's controls fold into a drawer,
           which hid every world card until the drawer was opened. */}
       <WorldOverlay />
-      <TogetherPrompt nameOf={nameOfPlayer} />
+      <TogetherPrompt
+        nameOf={nameOfPlayer}
+        near={nearby[0] ? { id: nearby[0].id, name: nearby[0].displayName } : null}
+        busy={!!localGesture || !!posture || !!seat}
+        gestures={togetherGestures.map((name) => ({ name, label: TOGETHER_LABELS[name].label }))}
+      />
       {showTouchControls && !webglLost && (
         <TouchControls
           inputRef={touchInputRef}

@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { LightZone } from "../../../src/multiplayer/types";
+import { floorHeightAt } from "../../../src/scene/layout";
 import { PLANT } from "../sim/energy";
 import type { InfoKey } from "../sim/info";
 import { openInfo } from "./InfoCard";
@@ -284,7 +285,8 @@ function Turbine({ x, z, phase }: { x: number; z: number; phase: number }) {
     if (spin.current) spin.current.rotation.z -= (rpm.current / 60) * Math.PI * 2 * delta;
   });
   return (
-    <group position={[x, 0, z]}>
+    // On the sunken meadow, so on its floor rather than the garden's.
+    <group position={[x, floorHeightAt(x, z), z]}>
       <Clickable onClick={() => openInfo("wind")}>
         <mesh geometry={tower} material={materials.white} castShadow />
         <mesh ref={spin} geometry={rotor} material={materials.white} position={[0, HUB.y, HUB.z]} rotation={[0, 0, phase]} castShadow>
@@ -576,7 +578,9 @@ export const BOARDS: BoardSpec[] = [
       "They start at about 3.5 m/s, reach full power at 12 m/s, and stop above 25 m/s.",
     ],
     now: windNow,
-    position: [0, 0, 36.5],
+    // Beside the steps down to the meadow (GARDEN_STEPS), the turbines
+    // beyond them.
+    position: [3.4, 0, 36.5],
     rotationY: Math.PI,
   },
   {

@@ -35,6 +35,9 @@ export interface XrHudModel {
   /** Someone's request for a together gesture ("Bea would like a hug"),
    *  answered here in a headset, or null. */
   request?: { text: string; accept: () => void; decline: () => void } | null;
+  /** Someone within reach to ask for a together gesture, in a headset as
+   *  on a screen, or null. `waiting` is your own request while it waits. */
+  together?: { name: string; gestures: { name: string; label: string }[]; onAsk: (gesture: string) => void; waiting: string | null } | null;
 }
 
 export interface HudButton {
@@ -188,6 +191,36 @@ export function layoutHud(model: XrHudModel): HudLayout {
     buttons.push({ id: "together:yes", label: "Yes", x: PAD, y, w, h: ROW, hold: false, active: true, disabled: false, onPress: request.accept });
     buttons.push({ id: "together:no", label: "No thanks", x: PAD + w + GAP, y, w, h: ROW, hold: false, active: false, disabled: false, onPress: request.decline });
     y += ROW + GAP * 2;
+  }
+
+  // ---- someone close enough to ask ----
+  if (model.together && !model.request) {
+    const together = model.together;
+    if (together.waiting) {
+      texts.push({ text: together.waiting, x: PAD, y: y + LABEL * 0.7, size: 13 * SCALE, color: MUTED_TEXT, maxWidth: inner });
+      y += LABEL + GAP;
+    } else {
+      texts.push({ text: `Ask ${together.name} for`, x: PAD, y: y + LABEL * 0.7, size: 12 * SCALE, color: MUTED_TEXT, maxWidth: inner });
+      y += LABEL;
+      const w = (inner - GAP * (GESTURE_COLUMNS - 1)) / GESTURE_COLUMNS;
+      together.gestures.forEach((gesture, i) => {
+        const column = i % GESTURE_COLUMNS;
+        const row = Math.floor(i / GESTURE_COLUMNS);
+        buttons.push({
+          id: `together:${gesture.name}`,
+          label: gesture.label,
+          x: PAD + column * (w + GAP),
+          y: y + row * (ROW + GAP),
+          w,
+          h: ROW,
+          hold: false,
+          active: false,
+          disabled: false,
+          onPress: () => together.onAsk(gesture.name),
+        });
+      });
+      y += Math.ceil(together.gestures.length / GESTURE_COLUMNS) * (ROW + GAP) + GAP;
+    }
   }
 
   // ---- voice and standing up ----

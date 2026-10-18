@@ -86,6 +86,7 @@ function signatureOf(model: XrHudModel): string {
     model.standUp != null,
     model.chat.map((m) => m.id),
     model.request?.text ?? null,
+    model.together ? [model.together.name, model.together.gestures.map((g) => g.name), model.together.waiting] : null,
   ]);
 }
 
@@ -129,6 +130,7 @@ function XrHudPanel({ model, session }: { model: XrHudModel; session: XRSession 
       crouch: m.crouch && { active: m.crouch.active, start: () => live().crouch?.start(), end: () => live().crouch?.end() },
       standUp: m.standUp && (() => live().standUp?.()),
       onExit: () => live().onExit(),
+      together: m.together && { ...m.together, onAsk: (gesture) => live().together?.onAsk(gesture) },
     });
     // The signature is the whole dependency on purpose: see signatureOf.
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -3,7 +3,7 @@
 // screen at the front of the classroom, two podiums for the interactive
 // stations, and Kanlungan, the refuge mat in the garden's back corner.
 // Every one opens a card (Hud.tsx) when clicked.
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import type { LightZone } from "../../../src/multiplayer/types";
 import type { Obstacle } from "../../../src/scene/layout";
@@ -403,7 +403,32 @@ export const PODIUMS: PodiumSpec[] = [
   { card: "quiz", title: "Is this harassment?", prompt: "Six situations. Decide, then see why.", color: "#3a6fd8", position: [3.4, 0, -21.95], rotationY: 0 },
   { card: "bystander", title: "What would you do?", prompt: "A scenario, and the 5Ds of bystander action.", color: "#c8607a", position: [-6.6, 0, -12.8], rotationY: Math.PI / 2 },
 ];
-const PODIUM = { w: 0.8, d: 0.5, h: 1.0 };
+/** A lectern: `front` high on the visitor's side (+Z), `back` higher
+ *  behind, so its top slopes toward whoever stands at it. */
+const PODIUM = { w: 0.8, d: 0.5, front: 0.92, back: 1.1 };
+const PODIUM_TILT = Math.atan2(PODIUM.back - PODIUM.front, PODIUM.d);
+
+/** The lectern's body: its side profile run across its width, so the
+ *  sloped top is solid wood and the card lies flush on it. */
+function usePodiumBody() {
+  const geometry = useMemo(() => {
+    const half = PODIUM.d / 2;
+    // Shape x is -z, so turning the extrusion onto X lands +Z at the front.
+    const shape = new THREE.Shape([
+      new THREE.Vector2(-half, 0),
+      new THREE.Vector2(-half, PODIUM.front),
+      new THREE.Vector2(half, PODIUM.back),
+      new THREE.Vector2(half, 0),
+    ]);
+    const g = new THREE.ExtrudeGeometry(shape, { depth: PODIUM.w, bevelEnabled: false });
+    g.rotateY(Math.PI / 2);
+    g.translate(-PODIUM.w / 2, 0, 0);
+    g.computeVertexNormals();
+    return g;
+  }, []);
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  return geometry;
+}
 
 function Podium(p: PodiumSpec) {
   const texture = useCanvasTexture(800, 500, (ctx, w, h) => {
@@ -424,15 +449,17 @@ function Podium(p: PodiumSpec) {
     ctx.font = `600 32px ${FONT}`;
     ctx.fillText("Click to start", 76, h - 63);
   });
+  const body = usePodiumBody();
+  // The card fits the sloped top, with a small margin of wood round it.
+  const cardW = PODIUM.w - 0.08;
+  const cardH = Math.min(cardW * 0.625, Math.hypot(PODIUM.d, PODIUM.back - PODIUM.front) - 0.06);
   return (
     <group position={p.position} rotation={[0, p.rotationY, 0]}>
       <Clickable onClick={() => openCard(p.card)}>
-        <mesh position={[0, PODIUM.h / 2, 0]} material={materials.wood} castShadow receiveShadow>
-          <boxGeometry args={[PODIUM.w, PODIUM.h, PODIUM.d]} />
-        </mesh>
-        {/* The top, tilted toward whoever stands on the podium's +Z side. */}
-        <mesh position={[0, PODIUM.h + 0.005, 0]} rotation={[-Math.PI / 2 + 0.35, 0, 0]}>
-          <planeGeometry args={[PODIUM.w - 0.06, (PODIUM.w - 0.06) * 0.625]} />
+        <mesh geometry={body} material={materials.wood} castShadow receiveShadow />
+        {/* The card, on the top, facing whoever stands on the +Z side. */}
+        <mesh position={[0, (PODIUM.front + PODIUM.back) / 2 + 0.004, 0]} rotation={[-Math.PI / 2 + PODIUM_TILT, 0, 0]}>
+          <planeGeometry args={[cardW, cardH]} />
           <meshBasicMaterial map={texture} toneMapped={false} />
         </mesh>
       </Clickable>

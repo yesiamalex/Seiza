@@ -66,17 +66,31 @@ export const CORRIDOR: Rect = { minX: -2.6, maxX: 2.6, minZ: -10, maxZ: -4 };
  * The meadow beyond the garden's back edge: open ground you can walk out
  * onto, kept clear of trees (Outdoors.tsx), with the campsite in it. Its
  * edge is invisible but sits inside the treeline, so the trees mark it.
- * Not in ROOMS: it has no floor of its own, only the outer ground, which
- * lies FIELD_Y below the floors of the building and the garden deck.
+ * Not in ROOMS. It lies sunk below the garden: a stone retaining wall
+ * along the garden's back edge, steps down through the middle of it
+ * (GARDEN_STEPS), and grass banks rising to the outer ground round its
+ * other edges (meadowHeight). Outdoors.tsx draws its ground.
  */
 export const FIELD: Rect = { minX: -24, maxX: 24, minZ: 38, maxZ: 72 };
-export const FIELD_Y = -0.06;
+export const FIELD_Y = -0.6;
+/** The outer ground's height, beyond the meadow and round the building. */
+export const OUTER_GROUND_Y = -0.06;
+/** How wide the grass banks are, from the meadow floor up to the outer
+ *  ground, at the meadow's sides, its far end, and beside the garden. */
+export const MEADOW_BANK = 3;
+/** The steps down from the garden: centred on x, from the garden's back
+ *  edge, four risers of 0.15 m with three treads between. */
+export const GARDEN_STEPS = { x: 0, halfWidth: 1.5, z: 38, tread: 0.4, risers: 4 };
+const STEPS_RUN = GARDEN_STEPS.tread * (GARDEN_STEPS.risers - 1);
+/** The retaining wall's end walls: beside the garden the meadow's front
+ *  edge is a bank rather than a wall, and these close the gap between. */
+export const MEADOW_WING = { x: 10, width: 0.6 };
 /** The campfire, the campsite's centre: far enough out that the garden
  *  is a short walk away, clear of the turbines other worlds stand beyond
  *  the garden (Seizora's, at x = ±7, z = 45 to 47). */
 export const CAMPFIRE: [number, number] = [-11, 58];
 /** The tent, west of the fire, its door facing it. */
-export const TENT = { x: CAMPFIRE[0] - 3.6, z: CAMPFIRE[1] + 0.6, length: 2.2, width: 1.8, height: 1.25 };
+export const TENT = { x: CAMPFIRE[0] - 4.1, z: CAMPFIRE[1] + 0.7, length: 2.7, width: 2.7, height: 1.65 };
 /** Low folding chairs round the fire: each at `angle` round it (0 is the
  *  +Z side), facing it. */
 export const CAMP_CHAIR_RADIUS = 1.9;
@@ -97,9 +111,9 @@ export function tentPoint(x: number, z: number): [number, number] {
   const s = Math.sin(TENT_YAW);
   return [TENT.x + x * c + z * s, TENT.z - x * s + z * c];
 }
-/** The sleeping bag in the tent, in its frame: centred off to one side,
- *  the pillow at the back, and the height of its top. */
-export const SLEEPING_BAG = { x: 0.15, z: -0.05, length: 1.68, top: 0.12, pillowZ: -0.8 };
+/** The two sleeping bags in the tent, in its frame: side by side (`xs`),
+ *  the pillows at the back, and the height of their tops. */
+export const SLEEPING_BAG = { xs: [-0.58, 0.58], z: -0.2, length: 1.68, top: 0.12, pillowZ: -1.0 };
 /** Just outside the tent's door, where you stand on getting up, and where
  *  every world puts you on arrival (each world.json's spawnPoint), as if
  *  you'd just woken up. */
@@ -450,14 +464,16 @@ export const SEATS: Seat[] = [
       label: "Camp chair",
     };
   }),
-  bedSeat(
-    "camp-bed",
-    tentPoint(SLEEPING_BAG.x, SLEEPING_BAG.pillowZ + LIE_HIPS_FROM_PILLOW),
-    FIELD_Y + SLEEPING_BAG.top,
-    // Facing the door: feet toward it, head on the pillow at the back.
-    TENT_YAW + Math.PI,
-    "Sleeping bag",
-    TENT_DOORSTEP
+  ...SLEEPING_BAG.xs.map((x, i) =>
+    bedSeat(
+      `camp-bed-${i}`,
+      tentPoint(x, SLEEPING_BAG.pillowZ + LIE_HIPS_FROM_PILLOW),
+      FIELD_Y + SLEEPING_BAG.top,
+      // Facing the door: feet toward it, head on the pillow at the back.
+      TENT_YAW + Math.PI,
+      "Sleeping bag",
+      TENT_DOORSTEP
+    )
   ),
 ];
 
@@ -563,6 +579,16 @@ export const OBSTACLES: Obstacle[] = [
   obstacle(CAMPFIRE[0], CAMPFIRE[1], 0.62, 0.62),
   obstacle(TENT.x, TENT.z, TENT.width / 2, TENT.length / 2, TENT_YAW),
   ...CAMP_CHAIRS.map((chair) => obstacle(chair.x, chair.z, 0.27, 0.27, chair.rotationY)),
+  // The garden's back edge: a low stone curb along the top of the meadow's
+  // retaining wall, open where the steps go down, and the wall's end walls.
+  ...[-1, 1].map((side) => {
+    const inner = GARDEN_STEPS.halfWidth;
+    const half = (OUTDOOR.maxX - inner) / 2;
+    return obstacle(GARDEN_STEPS.x + side * (inner + half), OUTDOOR.maxZ - 0.15, half, 0.15);
+  }),
+  ...[-1, 1].map((side) =>
+    obstacle(side * (MEADOW_WING.x + MEADOW_WING.width / 2), FIELD.minZ + MEADOW_BANK / 2, MEADOW_WING.width / 2, MEADOW_BANK / 2)
+  ),
   // Shoe lockers down one side of the corridor.
   obstacle(CORRIDOR.minX + 0.36, (CORRIDOR.minZ + CORRIDOR.maxZ) / 2 + 0.3, 0.22, 2.4),
   // Lantern posts and planters in the hall.
@@ -752,9 +778,30 @@ export const TATAMI = {
 /** Out on the meadow, past the garden deck. */
 const inField = (x: number, z: number) => contains(FIELD, x, z) && !contains(OUTDOOR, x, z);
 
+/** On the steps down from the garden. */
+const onSteps = (x: number, z: number) =>
+  Math.abs(x - GARDEN_STEPS.x) <= GARDEN_STEPS.halfWidth && z >= GARDEN_STEPS.z && z <= GARDEN_STEPS.z + STEPS_RUN + GARDEN_STEPS.tread;
+
+/**
+ * The meadow's ground: its floor at FIELD_Y, rising over MEADOW_BANK to the
+ * outer ground at its sides and far end, and beside the garden, where its
+ * front edge isn't the retaining wall. Eased at both ends, so a bank rolls
+ * rather than kinks. Shared by the floor you walk on and the ground drawn.
+ */
+export function meadowHeight(x: number, z: number): number {
+  let t = Math.min(x - FIELD.minX, FIELD.maxX - x, FIELD.maxZ - z) / MEADOW_BANK;
+  if (Math.abs(x) > MEADOW_WING.x) t = Math.min(t, (z - FIELD.minZ) / MEADOW_BANK);
+  t = THREE.MathUtils.clamp(t, 0, 1);
+  return THREE.MathUtils.lerp(OUTER_GROUND_Y, FIELD_Y, t * t * (3 - 2 * t));
+}
+
 export function floorHeightAt(x: number, z: number): number {
   if (contains(TATAMI, x, z)) return TATAMI.height;
-  if (inField(x, z)) return FIELD_Y;
+  // The steps walk as an even slope from the deck to the meadow, which
+  // their noses sit on, so going down them is smooth rather than a jolt
+  // per step.
+  if (onSteps(x, z)) return (FIELD_Y * (z - GARDEN_STEPS.z)) / (STEPS_RUN + GARDEN_STEPS.tread);
+  if (inField(x, z)) return meadowHeight(x, z);
   return pondDepthAt(x, z);
 }
 
@@ -767,7 +814,7 @@ export function surfaceAt(x: number, z: number): FloorSurface {
   if (Math.hypot(x - POND_CENTER[0], z - POND_CENTER[1]) <= POND_WATER_RADIUS) return "water";
   if (contains(TATAMI, x, z)) return "tatami";
   // The garden is gravel and stepping stones rather than floorboards.
-  if (contains(OUTDOOR, x, z)) return "stone";
+  if (contains(OUTDOOR, x, z) || onSteps(x, z)) return "stone";
   if (inField(x, z)) return "grass";
   return "wood";
 }

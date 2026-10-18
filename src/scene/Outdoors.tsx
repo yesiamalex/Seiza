@@ -3,6 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { skyState } from "../sky/skyState";
 import { FIELD, POND_CENTER, POND_WATER_RADIUS } from "./layout";
+import { buildMeadowGeometry } from "./meadow";
 
 /**
  * What you see through the windows.
@@ -90,6 +91,7 @@ const NIGHT_TINT = new THREE.Color(0.75, 0.82, 1.0);
 export function Outdoors() {
   const ground = useMemo(makeGroundTexture, []);
   const groundMaterial = useRef<THREE.MeshBasicMaterial>(null);
+  const meadowMaterial = useRef<THREE.MeshBasicMaterial>(null);
   const hillMaterial = useRef<THREE.MeshBasicMaterial>(null);
   const tint = useMemo(() => new THREE.Color(), []);
 
@@ -101,8 +103,8 @@ export function Outdoors() {
     if (!skyState.active) return;
     const k = THREE.MathUtils.lerp(1, NIGHT_BRIGHTNESS, skyState.night) * (1 - 0.25 * skyState.cloud * (1 - skyState.night));
     tint.setRGB(1, 1, 1).lerp(NIGHT_TINT, skyState.night).multiplyScalar(k);
-    if (groundMaterial.current) {
-      groundMaterial.current.color.set(ground ? "#ffffff" : "#8d9a5c").multiply(tint);
+    for (const material of [groundMaterial.current, meadowMaterial.current]) {
+      material?.color.set(ground ? "#ffffff" : "#8d9a5c").multiply(tint);
     }
     if (hillMaterial.current) hillMaterial.current.color.set("#6c6b58").multiply(tint);
   });
@@ -131,6 +133,15 @@ export function Outdoors() {
     // than the water so the cut edge hides under the basin rim.
     hole.absarc(POND_CENTER[0], -POND_CENTER[1], POND_WATER_RADIUS + 0.1, 0, Math.PI * 2, true);
     shape.holes.push(hole);
+    // And the sunken meadow, which has its own ground (meadowGeometry
+    // below), its edges meeting this one's level all the way round.
+    const field = new THREE.Path();
+    field.moveTo(FIELD.minX, -FIELD.minZ);
+    field.lineTo(FIELD.minX, -FIELD.maxZ);
+    field.lineTo(FIELD.maxX, -FIELD.maxZ);
+    field.lineTo(FIELD.maxX, -FIELD.minZ);
+    field.closePath();
+    shape.holes.push(field);
     const geometry = new THREE.ShapeGeometry(shape, 64);
     // ShapeGeometry uses raw shape coordinates as UVs; at this radius
     // that would repeat the grass texture hundreds of times. Rewrite
@@ -145,6 +156,13 @@ export function Outdoors() {
     return geometry;
   }, []);
   useEffect(() => () => groundGeometry.dispose(), [groundGeometry]);
+  // The meadow's ground, textured to run on from the disc's: the disc's
+  // UVs are its shape coordinates (x, -z) scaled into 0..1.
+  const meadowGeometry = useMemo(
+    () => buildMeadowGeometry((x, z) => [x / (GROUND_RADIUS * 2) + 0.5, -z / (GROUND_RADIUS * 2) + 0.5]),
+    []
+  );
+  useEffect(() => () => meadowGeometry.dispose(), [meadowGeometry]);
   useEffect(() => () => ground?.dispose(), [ground]);
 
   // One instanced draw call for every tree, and another for the hills.
@@ -235,6 +253,9 @@ export function Outdoors() {
         userData={{ navIgnore: true }}
       >
         <meshBasicMaterial ref={groundMaterial} map={ground ?? undefined} color={ground ? "#ffffff" : "#8d9a5c"} fog />
+      </mesh>
+      <mesh geometry={meadowGeometry} userData={{ navIgnore: true }}>
+        <meshBasicMaterial ref={meadowMaterial} map={ground ?? undefined} color={ground ? "#ffffff" : "#8d9a5c"} fog />
       </mesh>
 
       {/* Distant hills, sunk into the ground so only their tops show. */}

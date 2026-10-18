@@ -60,6 +60,12 @@ const LYING_EYE_HEIGHT = 0.25;
 /** Lying down, how far the view can turn from straight up the body
  *  either way: the head turns on the pillow, the body stays put. */
 const LYING_LOOK_YAW = 1.3;
+/** Lying down, how low the view may come toward the feet, as an angle
+ *  above level: lower and it runs down into your own chest. */
+const LYING_MIN_ELEVATION = 0.25;
+/** Lying down in a headset, how far behind the hips the head lies, so your
+ *  eyes are on the pillow rather than above your stomach. */
+const LYING_HEAD_BEHIND = 0.62;
 const FOV_MIN = 50;
 const FOV_MAX = 90;
 const FOV_DEFAULT = 75;
@@ -703,8 +709,11 @@ export function PlayerRig({
         } else {
           if (!xrWasSeatedRef.current) {
             xrWasSeatedRef.current = true;
-            origin.position.x += xrSeat.position[0] - xrCorrected.x;
-            origin.position.z += xrSeat.position[2] - xrCorrected.z;
+            // Your head goes where the avatar's is: over the seat, or lying
+            // down, on the pillow behind the hips.
+            const behind = xrSeat.pose === "lie" ? LYING_HEAD_BEHIND : 0;
+            origin.position.x += xrSeat.position[0] + Math.sin(xrSeat.rotationY) * behind - xrCorrected.x;
+            origin.position.z += xrSeat.position[2] + Math.cos(xrSeat.rotationY) * behind - xrCorrected.z;
           }
           // Lower the playspace instead of the person: their eyes end up
           // at seat height whether they are physically standing or
@@ -889,7 +898,28 @@ export function PlayerRig({
           const view = camera.getWorldDirection(new THREE.Vector3());
           const ahead = new THREE.Vector3(view.x, 0, view.z);
           if (ahead.lengthSq() < 1e-6) ahead.set(0, 0, -1).applyQuaternion(rig.quaternion);
-          camera.position.addScaledVector(ahead.normalize(), EYE_CAMERA_AHEAD + EYE_CAMERA_AHEAD_LOOKING_DOWN * Math.max(0, -view.y));
+          // Not lying down: there "ahead" is down the length of your body.
+          if (sitAnchorRef.current?.pose !== "lie") {
+            camera.position.addScaledVector(ahead.normalize(), EYE_CAMERA_AHEAD + EYE_CAMERA_AHEAD_LOOKING_DOWN * Math.max(0, -view.y));
+          }
+          // Lying down, you can look down your body toward your feet, but
+          // not so low that the view runs into your own chest: below
+          // LYING_MIN_ELEVATION the camera tips back up, and your look is
+          // nudged up by as much, so looking back up answers at once.
+          const lyingSeat = sitAnchorRef.current?.pose === "lie" ? sitAnchorRef.current : null;
+          if (lyingSeat) {
+            const [fx, fz] = [-Math.sin(lyingSeat.rotationY), -Math.cos(lyingSeat.rotationY)];
+            const elevation = Math.asin(THREE.MathUtils.clamp(view.y, -1, 1));
+            // Toward the feet or straight down; looking back past the pillow
+            // can go lower, there's nothing of you there.
+            if (view.x * fx + view.z * fz > -0.3 && elevation < LYING_MIN_ELEVATION) {
+              const lift = LYING_MIN_ELEVATION - elevation;
+              camera.rotateX(lift);
+              const look = new THREE.Euler().setFromQuaternion(vcam.quaternion, "YXZ");
+              look.x = Math.min(look.x + lift, PITCH_LIMIT);
+              vcam.quaternion.setFromEuler(look);
+            }
+          }
           clampToRooms(camera.position, PLAYER_RADIUS_MARGIN - CAMERA_RADIUS);
         }
       }
@@ -936,6 +966,9 @@ export function PlayerRig({
               look.y = sit.rotationY + clamped;
               vcam.quaternion.setFromEuler(look);
             }
+            // How far down toward the feet you may look is held on the
+            // camera itself (see applyTransforms), where the head's tilt and
+            // this look have been put together.
           }
         } else if (viewMode === "first") {
           avatarYawRef.current = new THREE.Euler().setFromQuaternion(vcam.quaternion, "YXZ").y;

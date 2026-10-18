@@ -143,7 +143,9 @@ export function TrackedBody({ vrm, source, layerWeightsRef }: TrackedBodyProps) 
     }
 
     const layers = layerWeightsRef?.current ?? NO_LAYERS;
-    const free = weight * (1 - Math.min(1, layers.gesture));
+    // Lying down, the pose has the whole body: an upright headset turning
+    // a lying head would fold the neck.
+    const free = weight * (1 - Math.min(1, layers.gesture)) * (1 - (layers.lying ?? 0));
     weights.head = free;
     weights.arms = free;
     weights.hand.left = smoothed.hand.left;

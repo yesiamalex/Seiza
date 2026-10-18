@@ -423,18 +423,23 @@ export const LASTING_TOGETHER: readonly TogetherGesture[] = ["slowdance"];
 export const duetPosture = (gesture: TogetherGesture, role: "lead" | "follow") => `${gesture}${role}`;
 /** How far apart partners stand (centre to centre, metres) for a together
  *  gesture: each steps to it on a yes, wherever they were. This is the
- *  slow dance's, an easy arms' reach; TOGETHER_SPACING has the others. */
-export const DUET_SPACING = 0.85;
-/** Spacing per together gesture where it differs from the slow dance's: a
- *  hug wraps round the partner, so it comes closest. */
+ *  slow dance's, both hands held; TOGETHER_SPACING has the others. */
+export const DUET_SPACING = 0.75;
+/** Spacing per together gesture where it differs from the slow dance's.
+ *
+ * Measured, not guessed: each clip's contact pose was put on real rigs
+ * (VRoid samples, a VRM 1.0 sample, a VRoid Hub model) and the hand's reach
+ * read off, so these are twice that, plus the hand's own thickness where
+ * the contact is its surface (a palm's, the knuckles'). They're for an arm
+ * of REFERENCE_ARM_LENGTH; App scales them by the two partners' own arms
+ * (src/avatar/avatarReach.ts), so bigger and smaller avatars meet too.
+ */
 export const TOGETHER_SPACING: Partial<Record<TogetherGesture, number>> = {
-  // The one-shot clips are posed so hands meet DUET_SPACING apart on the
-  // generator's skeleton (scripts/generate-motions.mjs), which is about 12%
-  // bigger than a typical VRoid avatar; these are that, scaled down.
-  handshake: 0.74,
-  highfive: 0.74,
-  fistbump: 0.74,
-  dap: 0.74,
+  handshake: 0.65,
+  highfive: 0.63,
+  fistbump: 0.73,
+  dap: 0.62,
+  // A hug wraps round the partner, so it comes closest.
   hug: 0.52,
 };
 export const togetherSpacing = (gesture: TogetherGesture) => TOGETHER_SPACING[gesture] ?? DUET_SPACING;

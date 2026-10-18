@@ -1,8 +1,9 @@
-import { useCallback, useRef, useState, type MutableRefObject } from "react";
+import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import type { VRM } from "@pixiv/three-vrm";
 import { VrmAvatar } from "../avatar/VrmAvatar";
+import { setAvatarReach } from "../avatar/avatarReach";
 import { AvatarAnimator, type AnimatorLayerWeights } from "../avatar/AvatarAnimator";
 import { TrackedBody } from "../xr/body/TrackedBody";
 import { findGesture, SEIZA_GESTURE_NAME, type GestureDefinition } from "../avatar/gestures";
@@ -219,6 +220,11 @@ function RemotePlayerAvatar({
 
   const playerId = player.id;
   const updateEvery = useCallback(() => detailRef.current.get(playerId) ?? 1, [detailRef, playerId]);
+  // Their arm length, for how far apart to stand for a together gesture.
+  useEffect(() => {
+    setAvatarReach(playerId, vrm);
+    return () => setAvatarReach(playerId, null);
+  }, [playerId, vrm]);
 
   return (
     <group ref={groupRef}>

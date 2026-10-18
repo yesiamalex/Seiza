@@ -307,6 +307,10 @@ export interface AnimatorLayerWeights {
   gesture: number;
   /** A held posture is in (sitting, seiza). */
   posture: number;
+  /** How far in a lying-down posture is (one grounded on the whole body,
+   *  ground: "body"): it owns the head and arms too, so a headset's
+   *  tracking gives way to it entirely. */
+  lying?: number;
 }
 
 function splitClip(clip: THREE.AnimationClip, vrm: VRM) {
@@ -778,6 +782,7 @@ export function AvatarAnimator({
     if (layerWeightsRef) {
       layerWeightsRef.current.gesture = upperTakeover;
       layerWeightsRef.current.posture = postureWeight;
+      layerWeightsRef.current.lying = state.posture?.ground === "body" ? postureWeight : 0;
     }
 
     const finished = state.gestures.filter(

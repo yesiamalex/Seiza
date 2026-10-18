@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef } from "react";
-import { useFrame, type ThreeEvent } from "@react-three/fiber";
+import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { LightZone } from "../multiplayer/types";
+import { playFireToggle, setFireAmbience } from "../audio/sfx";
 import { PooledLight } from "./LightPool";
 import { CAMP_CHAIRS, CAMP_SEAT_HEIGHT, CAMPFIRE, FIELD_Y, SLEEPING_BAG, TENT, TENT_YAW } from "./layout";
 
@@ -26,8 +27,10 @@ export function Campsite({
 }: {
   lit: boolean;
   onToggle?: (zone: LightZone, on: boolean) => void;
-  /** You're lying in the tent's sleeping bag: from outside, its walls fade
-   *  so the camera (third person) sees you rather than the tent. */
+  /** You're lying in one of the tent's sleeping bags. The walls fade
+   *  whenever they'd stand between you and the camera: you in a bag with
+   *  the camera outside, or you outside (at the door, say) with a third
+   *  person camera behind you inside the tent. */
   inBed?: boolean;
 }) {
   const geometry = useMemo(buildCamp, []);
@@ -63,7 +66,7 @@ export function Campsite({
 
   const tentFade = useRef(1);
   useFrame(({ camera }, delta) => {
-    const target = inBed && !insideTent(camera.position) ? TENT_SEE_THROUGH : 1;
+    const target = inBed !== insideTent(camera.position) ? TENT_SEE_THROUGH : 1;
     if (tentFade.current === target) return;
     tentFade.current = THREE.MathUtils.damp(tentFade.current, target, 8, delta);
     if (Math.abs(tentFade.current - target) < 0.01) tentFade.current = target;
@@ -123,8 +126,8 @@ function insideTent(point: THREE.Vector3) {
 // --- the fire --------------------------------------------------------------------
 
 const FIRE_COLOR = "#ff9a4a";
-const FIRE_INTENSITY = 7;
-const FIRE_REACH = 13;
+const FIRE_INTENSITY = 10;
+const FIRE_REACH = 15;
 
 function Fire({ lit }: { lit: boolean }) {
   const flames = useRef<(THREE.Mesh | null)[]>([]);
@@ -133,6 +136,18 @@ function Fire({ lit }: { lit: boolean }) {
   const level = useRef(lit ? 1 : 0);
   const litRef = useRef(lit);
   litRef.current = lit;
+  const camera = useThree((state) => state.camera);
+
+  // Lit or put out, by anyone: heard by everyone near enough. Not on the
+  // first render, which is only the room's state arriving.
+  const firstRender = useRef(true);
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    playFireToggle(lit, Math.hypot(camera.position.x - CAMPFIRE[0], camera.position.z - CAMPFIRE[1]));
+  }, [lit, camera]);
 
   const parts = useMemo(() => {
     const cone = new THREE.ConeGeometry(1, 1, 7, 1, true).translate(0, 0.5, 0);
@@ -179,12 +194,13 @@ function Fire({ lit }: { lit: boolean }) {
       mesh.rotation.y = t * 0.6 * f.speed + i;
     });
     if (glow.current) {
-      glow.current.material.opacity = 0.55 * on * flicker;
-      glow.current.scale.setScalar(2.4 + 0.3 * flicker);
+      glow.current.material.opacity = 0.7 * on * flicker;
+      glow.current.scale.setScalar(2.8 + 0.35 * flicker);
     }
     // Embers glow brighter as the flames die down, then settle dim.
     parts.embers.color.setRGB(1, 0.29, 0.08).multiplyScalar(0.25 + 0.75 * on);
     intensity.current = FIRE_INTENSITY * on * flicker;
+    setFireAmbience(Math.hypot(state.camera.position.x - CAMPFIRE[0], state.camera.position.z - CAMPFIRE[1]), on, delta);
   });
 
   const [x, z] = CAMPFIRE;
@@ -259,16 +275,18 @@ function buildCamp() {
   parts.metal.push(new THREE.CylinderGeometry(0.015, 0.015, TENT.length, 6).rotateX(Math.PI / 2).translate(0, TENT.height, 0).applyMatrix4(tent));
   parts.metal.push(new THREE.CylinderGeometry(0.015, 0.015, TENT.height, 6).translate(0, TENT.height / 2, TENT.length / 2).applyMatrix4(tent));
   parts.sheet.push(new THREE.BoxGeometry(TENT.width - 0.05, 0.01, TENT.length).translate(0, 0.006, 0).applyMatrix4(tent));
-  // A real bed (the `camp-bed` seat in layout.ts): you lie on its top.
+  // Real beds (the `camp-bed-*` seats in layout.ts): you lie on their tops.
   const bag = SLEEPING_BAG;
-  parts.bag.push(
-    new THREE.CapsuleGeometry(0.24, bag.length - 0.48, 4, 10)
-      .rotateX(Math.PI / 2)
-      .scale(1, bag.top / 0.48, 1)
-      .translate(bag.x, bag.top / 2, bag.z)
-      .applyMatrix4(tent)
-  );
-  parts.sheet.push(new THREE.BoxGeometry(0.42, 0.09, 0.26).translate(bag.x, bag.top + 0.03, bag.pillowZ).applyMatrix4(tent));
+  for (const x of bag.xs) {
+    parts.bag.push(
+      new THREE.CapsuleGeometry(0.24, bag.length - 0.48, 4, 10)
+        .rotateX(Math.PI / 2)
+        .scale(1, bag.top / 0.48, 1)
+        .translate(x, bag.top / 2, bag.z)
+        .applyMatrix4(tent)
+    );
+    parts.sheet.push(new THREE.BoxGeometry(0.42, 0.09, 0.26).translate(x, bag.top + 0.03, bag.pillowZ).applyMatrix4(tent));
+  }
 
   // Folding camp chairs: a sagging fabric seat and back on a metal frame.
   const seat = CAMP_SEAT_HEIGHT;

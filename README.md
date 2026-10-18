@@ -31,10 +31,10 @@ For the full guide, see [DOCS.md](DOCS.md).
 ## 🏯 What you can do in a room
 
 - **Walk around** a hall, a classroom, and a garden, and sit on the chairs and
-  benches. Past the garden, a meadow leads to a campsite where everyone
-  arrives, just outside the tent as if they'd woken up: low chairs round a
-  crackling fire you can put out or light, a sleeping bag to lie down in,
-  and the stars overhead at night.
+  benches. Past the garden, steps lead down to a meadow and a campsite
+  where everyone arrives, just outside the tent as if they'd woken up: low
+  chairs round a crackling fire you can put out or light, sleeping bags to
+  lie down in, and the stars overhead at night.
 - **Talk.** Voices get quieter with distance, so two small conversations can
   happen in one room.
 - **Use your camera or share your screen** onto one of the wall screens, for
@@ -79,7 +79,7 @@ For the full guide, see [DOCS.md](DOCS.md).
     <td align="center"><sub>Or bring a full VRM, like this fan-made model<sup>*</sup></sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/media/together-consent.gif" alt="Bea asks for a hug; a prompt reads 'Bea would like a hug' with Yes and No thanks. After Yes, the two turn to face each other and hug."></td>
+    <td width="50%"><img src="docs/media/together-consent.gif" alt="Bea asks for a hug; a prompt reads 'Bea would like a hug' with Yes and No thanks. After Yes, the two step close, face each other, and hug."></td>
     <td width="50%"><img src="docs/media/together-menu.jpg" alt="The Gestures menu, with a Together section offering a handshake, high five, hug, or slow dance to a nearby person, an 'Others may ask me' switch, and the built-in gestures including Dance."></td>
   </tr>
   <tr>
