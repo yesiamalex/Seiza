@@ -187,7 +187,7 @@ function SafetyPanel() {
       </div>
 
       <div style={section}>
-        <h3 style={heading}>Handshakes, high fives, hugs</h3>
+        <h3 style={heading}>Handshakes, hugs, dances, and more</h3>
         <div style={{ display: "flex", gap: 6 }}>
           <button type="button" style={chip(t.allow)} onClick={() => setAllowRequests(true)}>
             Others may ask me
@@ -292,7 +292,7 @@ function FacilitatorSection() {
       <h3 style={heading}>Facilitator</h3>
       <p style={small}>You can change these because you're an editor here. They apply to everyone in the room.</p>
       <button type="button" style={chip(room.paused)} onClick={() => setRoom(ROOM_KEYS.paused, !room.paused)}>
-        {room.paused ? "Requests paused for everyone: resume" : "Pause handshake, high five, and hug requests"}
+        {room.paused ? "Requests paused for everyone: resume" : "Pause handshake, hug, and dance requests"}
       </button>
       <span style={{ fontSize: 12, opacity: 0.85 }}>Minimum personal space for everyone</span>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>

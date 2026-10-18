@@ -237,14 +237,17 @@ describe.skipIf(!built)("room server", () => {
     const gesturesOf = (c: { received: ServerMessage[] }, name: string) =>
       c.received.filter((m) => m.type === "playerGesture" && m.gesture === name).length;
 
-    it("refuses a hug nobody agreed to", async () => {
+    it("refuses a hug, fist bump, or dap nobody agreed to", async () => {
       const room = freshRoom();
       const a = await client(room, "A", ["batch"]);
       const b = await client(room, "B", ["batch"]);
-      a.send({ type: "gesture", gesture: "hug" });
+      for (const g of ["hug", "fistbump", "dap", "handshake", "highfive"]) {
+        a.send({ type: "gesture", gesture: g });
+        await sleep(300); // past the per-connection gesture rate limit
+      }
       a.send({ type: "gesture", gesture: "wave" }); // an ordinary gesture still plays
       await until(() => b.received.find((m) => m.type === "playerGesture" && m.gesture === "wave"));
-      expect(gesturesOf(b, "hug")).toBe(0);
+      for (const g of ["hug", "fistbump", "dap", "handshake", "highfive"]) expect(gesturesOf(b, g)).toBe(0);
       a.socket.close();
       b.socket.close();
     });
@@ -298,6 +301,39 @@ describe.skipIf(!built)("room server", () => {
       a.send({ type: "togetherAsk", to: b.selfId, gesture: "highfive" });
       await until(() => a.received.filter((m) => m.type === "togetherClosed").length === 2 || undefined);
       expect(b.received.filter((m) => m.type === "togetherAsked").length).toBe(1);
+      a.socket.close();
+      b.socket.close();
+    });
+
+    it("holds the slow dance to a yes, each partner to their part, and ends it for both", async () => {
+      const room = freshRoom();
+      const a = await client(room, "A", ["batch"]);
+      const b = await client(room, "B", ["batch"]);
+      const postures = (c: { received: ServerMessage[] }, name: string | null) =>
+        c.received.filter((m) => m.type === "playerPosture" && m.posture === name).length;
+      // Without a yes: neither the poses nor a "slowdance" clip get through.
+      a.send({ type: "setPosture", posture: "slowdancelead" });
+      a.send({ type: "gesture", gesture: "slowdance" });
+      await sleep(400);
+      expect(postures(b, "slowdancelead")).toBe(0);
+      expect(gesturesOf(b, "slowdance")).toBe(0);
+      // A asks, B says yes: A leads, B follows.
+      a.send({ type: "togetherAsk", to: b.selfId, gesture: "slowdance" });
+      const asked = await until(() => b.received.find((m) => m.type === "togetherAsked"));
+      b.send({ type: "togetherAnswer", id: asked.type === "togetherAsked" ? asked.id : "", accept: true });
+      const start = await until(() => a.received.find((m) => m.type === "togetherStart"));
+      expect(start.type === "togetherStart" && start.role).toBe("lead");
+      a.send({ type: "setPosture", posture: "slowdancefollow" }); // not A's part
+      await sleep(300);
+      expect(postures(b, "slowdancefollow")).toBe(0);
+      a.send({ type: "setPosture", posture: "slowdancelead" });
+      b.send({ type: "setPosture", posture: "slowdancefollow" });
+      await until(() => b.received.find((m) => m.type === "playerPosture" && m.posture === "slowdancelead"));
+      await until(() => a.received.find((m) => m.type === "playerPosture" && m.posture === "slowdancefollow"));
+      // A stops: B is told, so B's side stops too.
+      a.send({ type: "setPosture", posture: null });
+      const ended = await until(() => b.received.find((m) => m.type === "togetherEnded"));
+      expect(ended.type === "togetherEnded" && ended.partner).toBe(a.selfId);
       a.socket.close();
       b.socket.close();
     });

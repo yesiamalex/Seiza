@@ -348,7 +348,10 @@ export type ServerMessage =
   | { type: "togetherClosed"; id: string; reason: "declined" | "unavailable" | "expired" | "cancelled" }
   // Both said yes: each side now plays the gesture, facing `partner`. The
   // server lets each of the two play that one gesture once, for a moment.
-  | { type: "togetherStart"; id: string; gesture: TogetherGesture; partner: string };
+  | { type: "togetherStart"; id: string; gesture: TogetherGesture; partner: string; role: "lead" | "follow" }
+  // A lasting together gesture (the slow dance) ended: the partner stopped,
+  // walked away, or left. Your side stops too.
+  | { type: "togetherEnded"; partner: string };
 
 /** Places with a light switch in the built-in world. */
 export type LightZone = "hall" | "classroom" | "pond";
@@ -404,9 +407,23 @@ export const WORLD_STATE_LIMITS = { keys: 64, keyPattern: /^[a-z][a-zA-Z0-9.-]{0
  * gesture menu, since playing one alone at someone is what consent rules
  * out.
  */
-export const TOGETHER_GESTURES = ["handshake", "highfive", "hug"] as const;
+export const TOGETHER_GESTURES = ["handshake", "highfive", "fistbump", "dap", "hug", "slowdance"] as const;
 export type TogetherGesture = (typeof TOGETHER_GESTURES)[number];
 export const isTogetherGesture = (v: unknown): v is TogetherGesture => (TOGETHER_GESTURES as readonly unknown[]).includes(v);
+/**
+ * Together gestures that last until either person stops (the slow dance)
+ * aren't one clip but a held pose for each: the asker leads, the other
+ * follows, as the postures `slowdancelead` and `slowdancefollow`. The
+ * server allows those postures only after a yes, ends the dance for both
+ * when either stops, and never plays `slowdance` itself as a clip.
+ */
+export const LASTING_TOGETHER: readonly TogetherGesture[] = ["slowdance"];
+export const duetPosture = (gesture: TogetherGesture, role: "lead" | "follow") => `${gesture}${role}`;
+/** Partners stand this far apart (centre to centre, metres) for the dance:
+ *  arms' reach, and just outside the distance at which Seiza hides an
+ *  avatar from a first-person camera (RemotePlayers.tsx), so each still
+ *  sees the other. */
+export const DUET_SPACING = 0.85;
 export const TOGETHER = {
   /** Asking needs the two within this many metres (the server allows a
    *  little more than the menu offers, for movement while asking). */

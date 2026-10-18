@@ -452,6 +452,37 @@ const rightHandOnly = (shape) => Object.fromEntries(Object.entries(mirror(leftHa
 /** Fingers wrapped loosely round another hand, thumb up. */
 const GRIP = { thumb: 0.15, index: 0.45, middle: 0.5, ring: 0.55, little: 0.6, spread: -2 };
 
+/** A closed fist, thumb wrapped over the fingers. */
+const FIST = { thumb: 0.9, index: 1, middle: 1, ring: 1, little: 1, spread: -2 };
+
+/**
+ * Right fist forward at chest height, knuckles toward a partner. `reach`
+ * pushes it out for the bump; `recoil` pulls it back a touch after.
+ */
+const fistBump = (reach, recoil = 0) => ({
+  rightUpperArm: { z: 60, x: -50 - 18 * reach + 10 * recoil, y: 22 },
+  rightLowerArm: { y: 70 - 52 * reach + 20 * recoil },
+  rightHand: { z: 4 },
+  ...rightHandOnly(FIST),
+  spine: { x: 2 + 3 * reach, y: -5 * reach },
+  head: { x: 3 },
+});
+
+/**
+ * A dap: hands clasp high at chest height, thumbs up (the arm raised and
+ * the forearm upright, unlike a handshake's low reach), the two pull in,
+ * then release with a snap of the fingers. `pull` draws the clasp toward
+ * the chest; `open` is the release.
+ */
+const dap = (pull, open = 0) => ({
+  rightUpperArm: { z: 58, x: -46 + 14 * pull, y: 24 },
+  rightLowerArm: { y: 96 + 16 * pull - 40 * open },
+  rightHand: { x: -10, z: -6 },
+  ...rightHandOnly(open > 0.5 ? FLAT : GRIP),
+  spine: { x: 3 + 4 * pull, y: -6 * pull },
+  head: { x: 4 + 4 * pull },
+});
+
 /** Right hand out at waist height, palm in, toward the body's midline
  *  where a handshake meets. Close to the point gesture's checked arm.
  *  `pump` moves the hand a few degrees up (positive) or down. */
@@ -486,6 +517,110 @@ const hug = (squeeze, sway = 0) => ({
   upperChest: { x: 4 },
   head: { x: 6, z: 6 },
 });
+
+// ---------------------------------------------------------------------------
+// Dances. A solo dance anyone can toggle on, and a slow dance two people do
+// together after both agree (a together gesture that lasts: see
+// LASTING_TOGETHER in src/multiplayer/types.ts). All three loop: they're
+// held poses that keep moving, `loop: true`, until the player stops.
+// ---------------------------------------------------------------------------
+
+/**
+ * The whole pose reflected across the body's midline: left and right bones
+ * swap, every rotation's Y and Z flip (X stays; see MIRRORING at the top),
+ * and the hips' sideways shift flips too. Two partners facing each other
+ * sway the same way through the room only if one does the other's moves
+ * mirrored, which is what the slow dance's follow part is.
+ */
+function mirrorAll(pose) {
+  const out = {};
+  for (const [bone, r] of Object.entries(pose)) {
+    if (bone === "_hips") {
+      out._hips = [-(r[0] ?? 0), r[1] ?? 0, r[2] ?? 0];
+      continue;
+    }
+    const target = bone.startsWith("left") ? `right${bone.slice(4)}` : bone.startsWith("right") ? `left${bone.slice(5)}` : bone;
+    out[target] = { x: r.x ?? 0, y: -(r.y ?? 0), z: -(r.z ?? 0) };
+  }
+  return out;
+}
+
+/** Knees soft: a slight bend in both legs, feet kept flat. */
+const softKnees = (bend) => ({
+  leftUpperLeg: { x: -bend },
+  rightUpperLeg: { x: -bend },
+  leftLowerLeg: { x: bend * 2 },
+  rightLowerLeg: { x: bend * 2 },
+  leftFoot: { x: -bend },
+  rightFoot: { x: -bend },
+  _hips: [0, -0.012 * bend / 8, 0],
+});
+
+/**
+ * The solo dance: a step-touch to each side, with the arms bent and
+ * swinging opposite the hips. `side` is +1 toward the dancer's left, -1
+ * toward the right, 0 centred.
+ */
+const groove = (side) => {
+  const out = softKnees(side === 0 ? 10 : 6);
+  // Weight shifts over to one side, that knee straightening, the other bending.
+  if (side !== 0) {
+    const [near, far] = side > 0 ? ["left", "right"] : ["right", "left"];
+    out[`${near}UpperLeg`] = { x: -4, z: side > 0 ? 6 : -6 };
+    out[`${near}LowerLeg`] = { x: 6 };
+    out[`${far}UpperLeg`] = { x: -28, z: side > 0 ? 6 : -6 };
+    out[`${far}LowerLeg`] = { x: 52 };
+    out[`${far}Foot`] = { x: -14 };
+    // Down into the step: the weight drops as it lands.
+    out._hips = [0.09 * side, -0.045, 0];
+  }
+  return {
+    ...out,
+    spine: { z: -6 * side, y: 10 * side },
+    chest: { z: -4 * side, y: 4 * side },
+    head: { z: 7 * side, x: -3 },
+    // Elbows bent at the sides, the arms swinging against the hips.
+    leftUpperArm: { z: -58, x: 30 * side },
+    rightUpperArm: { z: 58, x: -30 * side },
+    leftLowerArm: { y: -78 },
+    rightLowerArm: { y: 78 },
+    ...mirror(leftHand(RELAXED)),
+  };
+};
+
+/**
+ * The slow dance's lead part: arms forward and a little bent, hands meeting
+ * a partner's about DUET_SPACING away at waist height, swaying side to side.
+ * The follow part is this mirrored (mirrorAll). `side` as for groove().
+ */
+const sway = (side) => ({
+  ...softKnees(side === 0 ? 7 : 5),
+  _hips: [0.04 * side, -0.01, 0],
+  spine: { z: -3 * side, x: 4 },
+  head: { z: 4 * side, x: 4 },
+  ...mirror({
+    // Reaching forward to a partner's hands about DUET_SPACING away.
+    leftUpperArm: { z: -55, x: -56 },
+    leftLowerArm: { y: -26 },
+    leftHand: { z: -6 },
+    ...leftHand(RELAXED),
+  }),
+});
+
+const DANCE_KEYS = [
+  { t: 0, pose: groove(0) },
+  { t: 0.6, pose: groove(1) },
+  { t: 1.2, pose: groove(0) },
+  { t: 1.8, pose: groove(-1) },
+  { t: 2.4, pose: groove(0) },
+];
+const SWAY_KEYS = [
+  { t: 0, pose: sway(0) },
+  { t: 0.9, pose: sway(1) },
+  { t: 1.8, pose: sway(0) },
+  { t: 2.7, pose: sway(-1) },
+  { t: 3.6, pose: sway(0) },
+];
 
 const GESTURES = [
   {
@@ -961,6 +1096,65 @@ const GESTURES = [
     ],
   },
   {
+    name: "dance",
+    label: "Dance",
+    fullBody: true,
+    hold: true,
+    loop: true,
+    fingers: true,
+    keys: DANCE_KEYS,
+  },
+  {
+    name: "slowdancelead",
+    label: "Slow dance (lead)",
+    fullBody: true,
+    hold: true,
+    loop: true,
+    hidden: true,
+    fingers: true,
+    keys: SWAY_KEYS,
+  },
+  {
+    name: "slowdancefollow",
+    label: "Slow dance (follow)",
+    fullBody: true,
+    hold: true,
+    loop: true,
+    hidden: true,
+    fingers: true,
+    keys: SWAY_KEYS.map((k) => ({ t: k.t, pose: mirrorAll(withBase(k.pose)) })),
+  },
+  {
+    name: "fistbump",
+    label: "Fist bump",
+    fullBody: false,
+    hidden: true,
+    fingers: true,
+    keys: [
+      { t: 0, pose: {} },
+      { t: 0.45, pose: fistBump(0) },
+      { t: 0.7, pose: fistBump(1) },
+      { t: 0.85, pose: fistBump(1, 1) },
+      { t: 1.2, pose: fistBump(0.4) },
+      { t: 1.7, pose: {} },
+    ],
+  },
+  {
+    name: "dap",
+    label: "Dap",
+    fullBody: false,
+    hidden: true,
+    fingers: true,
+    keys: [
+      { t: 0, pose: {} },
+      { t: 0.45, pose: dap(0) },
+      { t: 0.8, pose: dap(1) },
+      { t: 1.15, pose: dap(1) },
+      { t: 1.4, pose: dap(0.4, 1) },
+      { t: 2.0, pose: {} },
+    ],
+  },
+  {
     name: "handshake",
     label: "Handshake",
     fullBody: false,
@@ -1158,7 +1352,8 @@ for (const gesture of GESTURES) {
   const bones = (carriesLegs ? allBones : allBones.filter((b) => UPPER_BODY.has(b))).filter(
     (b) => gesture.fingers === true || !FINGER_BONES.has(b)
   );
-  const bytes = writeVrma({ name: gesture.name, duration, sample: keyed(keys), loop: false, bones });
+  // A looping clip samples its last frame at t = 0, so the wrap is seamless.
+  const bytes = writeVrma({ name: gesture.name, duration, sample: keyed(keys), loop: gesture.loop === true, bones });
   emit(`public/gestures/builtin/${gesture.name}.vrma`, bytes);
   manifest.push({
     name: gesture.name,
@@ -1169,6 +1364,7 @@ for (const gesture of GESTURES) {
     hold: gesture.hold === true,
     hidden: gesture.hidden === true,
     ground: gesture.ground ?? "none",
+    loop: gesture.loop === true,
   });
 }
 
@@ -1200,6 +1396,8 @@ export interface BuiltinGesture {
    * of the seat they're sitting on. See AvatarAnimator.
    */
   ground: "none" | "floor" | "seat";
+  /** Loops while held (a dance), instead of stopping on its last frame. */
+  loop: boolean;
 }
 
 // The ?v= is a content hash: regenerating a clip changes its URL, so a

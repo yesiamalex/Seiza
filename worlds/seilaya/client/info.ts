@@ -49,7 +49,7 @@ export const CARDS: Record<Exclude<CardKey, "quiz" | "bystander">, Card> = {
     title: "Your safety tools",
     body: [
       ["Personal space", "Anyone who comes closer than the distance you choose fades from your view. Their voice still comes through."],
-      ["Together gestures", "Ask someone nearby for a handshake, high five, or hug. It only plays if they accept. You can turn off requests completely."],
+      ["Together gestures", "Ask someone nearby for a handshake, high five, fist bump, dap, hug, or slow dance. It only plays if they accept. You can turn off requests completely."],
       ["Block", "Hides someone from you for this visit: their avatar, voice, and chat. They aren't told, and they can't ask you for anything."],
       ["Step out", "Takes you to Kanlungan in the garden, where you don't see or hear anyone until you choose to return."],
       ["Pronouns", "Optional. Shown under your name to the people here."],

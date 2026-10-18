@@ -150,7 +150,7 @@ export function GesturePanel({
                 <Section title="Together">
                   {together.nearby.length === 0 ? (
                     <small style={{ opacity: 0.7, lineHeight: 1.4 }}>
-                      Stand near someone to ask for a handshake, high five, or hug. It only happens if they say yes.
+                      Stand near someone to ask for a handshake, fist bump, hug, slow dance, and more. It only happens if they say yes.
                     </small>
                   ) : (
                     together.nearby.slice(0, 3).map((person) => (
@@ -190,7 +190,7 @@ export function GesturePanel({
               )}
               {gestures.some((g) => g.hold) && (
                 <small style={{ opacity: 0.6 }}>
-                  A raised hand stays up while you hold its key. Seiza stays until you press its key again, or move.
+                  A raised hand stays up while you hold its key. Seiza and Dance stay until you press them again, or move.
                 </small>
               )}
               <small style={{ opacity: 0.6 }}>Click a chair or bench in the world to sit down.</small>

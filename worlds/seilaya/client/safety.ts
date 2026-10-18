@@ -27,11 +27,12 @@ import {
   answerTogether,
   cancelTogether,
   getTogether,
+  onTogetherEnd,
   onTogetherStart,
   setTogetherPolicy,
   TOGETHER_LABELS,
 } from "../../../src/interactions/together";
-import { TOGETHER as TOGETHER_RULES, TOGETHER_GESTURES, type PlayerState, type TogetherGesture } from "../../../src/multiplayer/types";
+import { LASTING_TOGETHER, TOGETHER as TOGETHER_RULES, TOGETHER_GESTURES, type PlayerState, type TogetherGesture } from "../../../src/multiplayer/types";
 import { onWorldMessage } from "../../../src/worlds/WorldExtension";
 
 // --- what a world's code gets from Seiza (set by the Scene each render) ---------
@@ -141,8 +142,9 @@ export const state = {
   inRefuge: false,
   /** Others' pronouns, as each of them shared them with this visitor. */
   pronouns: new Map<string, string>(),
-  /** The person this visitor is doing a together gesture with right now. */
-  together: null as { peer: string; until: number } | null,
+  /** The person this visitor is doing a together gesture with right now;
+   *  a dance (lasting) runs until it ends rather than for a set time. */
+  together: null as { peer: string; until: number; lasting?: boolean; since?: number } | null,
   notices: [] as Notice[],
   panelOpen: false,
   card: null as CardKey | null,
@@ -325,7 +327,14 @@ export function ask(peer: string, gesture: Together) {
 }
 
 /** While the gesture plays, keep the partner visible through personal space. */
-function onStart(peer: string) {
+function onStart(peer: string, gesture: Together) {
+  if (LASTING_TOGETHER.includes(gesture)) {
+    // A dance: until it ends (onTogetherEnd, or checkTogether below).
+    state.together = { peer, until: Infinity, lasting: true, since: Date.now() };
+    applyFilter();
+    emit();
+    return;
+  }
   state.together = { peer, until: Date.now() + TOGETHER_MS };
   applyFilter();
   emit();
@@ -336,6 +345,23 @@ function onStart(peer: string) {
       emit();
     }
   }, TOGETHER_MS + 50);
+}
+
+function endTogether() {
+  if (!state.together) return;
+  state.together = null;
+  applyFilter();
+  emit();
+}
+
+/** A few times a second (Social.tsx): a dance this visitor stopped
+ *  themselves ends the exemption too. Their own pose starts a moment after
+ *  the yes, so there's a short grace period. */
+export function checkTogether() {
+  const t = state.together;
+  if (!t?.lasting || !api?.selfId) return;
+  const posture = api.players[api.selfId]?.posture ?? "";
+  if (Date.now() - (t.since ?? 0) > 2_000 && !LASTING_TOGETHER.some((g) => posture.startsWith(g))) endTogether();
 }
 
 // --- private messages: pronouns only ---------------------------------------------------------
@@ -382,7 +408,11 @@ let unsubscribe: (() => void)[] | null = null;
 export function startListening() {
   if (unsubscribe) return;
   setTogetherPolicy(policy);
-  unsubscribe = [onWorldMessage(handle), onTogetherStart(({ partner }) => onStart(partner))];
+  unsubscribe = [
+    onWorldMessage(handle),
+    onTogetherStart(({ partner, gesture }) => onStart(partner, gesture)),
+    onTogetherEnd(() => endTogether()),
+  ];
 }
 export function stopListening() {
   for (const off of unsubscribe ?? []) off();

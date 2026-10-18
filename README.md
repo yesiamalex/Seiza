@@ -38,13 +38,14 @@ For the full guide, see [DOCS.md](DOCS.md).
   example to show slides.
 - **Write on the notice boards**, hang pictures, and put up signs. Anyone in
   the room can do this.
-- **Wave, bow, clap, raise your hand, kneel, or crouch.** Your avatar's face
+- **Wave, bow, clap, raise your hand, kneel, crouch, or dance.** Your avatar's face
   changes to match. If you kneel in seiza for a minute, your avatar nods off,
   and then its legs fall asleep. You can turn this off in the Avatar menu for
   meetings.
-- **Ask for a handshake, high five, or hug.** Stand near someone and ask from
-  the Gestures menu. It only happens if they say yes; no answer means no, and
-  you can turn requests off.
+- **Ask for a handshake, high five, fist bump, dap, hug, or slow dance.**
+  Stand near someone and ask from the Gestures menu. It only happens if they say yes; no answer
+  means no, and you can turn requests off. A slow dance lasts until either of
+  you stops.
 - **Chat by text** if you prefer not to talk.
 - **Rearrange the room** in Edit Mode, including replacing the whole
   environment with your own 3D model. Your changes stay for the next person
@@ -74,17 +75,32 @@ For the full guide, see [DOCS.md](DOCS.md).
   </tr>
   <tr>
     <td width="50%"><img src="docs/media/together-consent.gif" alt="Bea asks for a hug; a prompt reads 'Bea would like a hug' with Yes and No thanks. After Yes, the two turn to face each other and hug."></td>
-    <td width="50%"><img src="docs/media/together-menu.jpg" alt="The Gestures menu, with a Together section offering a handshake, high five, or hug to a nearby person, and an 'Others may ask me' switch."></td>
+    <td width="50%"><img src="docs/media/together-menu.jpg" alt="The Gestures menu, with a Together section offering a handshake, high five, hug, or slow dance to a nearby person, an 'Others may ask me' switch, and the built-in gestures including Dance."></td>
   </tr>
   <tr>
     <td align="center"><sub>A hug, only after a yes</sub></td>
     <td align="center"><sub>Ask someone nearby from the Gestures menu</sub></td>
   </tr>
+  <tr>
+    <td width="50%"><img src="docs/media/slow-dance.gif" alt="A slow dance seen through one dancer's eyes: Bea stands face to face at arm's length, both reaching for each other's hands, swaying side to side."></td>
+    <td width="50%"><img src="docs/media/dance.gif" alt="Bea dances on her own on the tatami: stepping side to side with bent knees, her arms swinging against her hips."></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>A slow dance, from your partner's eyes</sub></td>
+    <td align="center"><sub>Or dance on your own</sub></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><img src="docs/media/fistbump-dap.gif" width="384" alt="Two avatars face each other: they fist bump, then dap, clasping hands high and releasing."></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><sub>A fist bump and a dap, each after a yes</sub></td>
+  </tr>
 </table>
 
 The same link works on a phone, a laptop, or a VR headset. In a headset, your
 avatar follows your head and hands, and turning your left palm toward you
-opens a menu for voice and gestures.
+opens a menu for voice and gestures (in a phone viewer, look at Menu and
+tap).
 
 ## 🔒 Why run it yourself
 

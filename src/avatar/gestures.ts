@@ -36,8 +36,11 @@ export interface CustomGestureConfig {
   /** Face to wear while this gesture plays. See FACE_EXPRESSIONS. */
   expression?: string;
   /** Kept out of the gesture menu and number keys, for a clip a world's
-   *  own code plays (Seilaya's consent gestures, after both people agree). */
+   *  own code plays. */
   hidden?: boolean;
+  /** With `hold`: keeps looping while held (a dance) instead of stopping
+   *  on its last frame. */
+  loop?: boolean;
 }
 
 /**
@@ -76,6 +79,9 @@ export interface GestureDefinition {
   overridesBuiltin: boolean;
   /** Expression to wear while this gesture plays, or null for none. */
   expression: string | null;
+  /** A held clip that keeps looping (a dance) rather than freezing on its
+   *  last frame. */
+  loop: boolean;
 }
 
 /**
@@ -159,6 +165,7 @@ export function buildGestureRegistry(options: {
     source: "builtin",
     overridesBuiltin: false,
     expression: BUILTIN_GESTURE_EXPRESSIONS[g.name] ?? null,
+    loop: g.loop,
   }));
 
   for (const custom of options.customGestures ?? []) {
@@ -192,6 +199,7 @@ export function buildGestureRegistry(options: {
       expression: isValidExpression(custom.expression)
         ? custom.expression
         : (BUILTIN_GESTURE_EXPRESSIONS[custom.name] ?? null),
+      loop: custom.loop === true || BUILTIN_GESTURES.some((g) => g.name === custom.name && g.loop),
     };
     const existing = list.findIndex((g) => g.name === custom.name);
     if (existing >= 0) {

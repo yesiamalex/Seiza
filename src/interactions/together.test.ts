@@ -58,8 +58,8 @@ describe("together gestures, this visitor's side", () => {
     expect(sent[0]).toEqual({ type: "togetherAsk", to: "ben", gesture: "highfive" });
     receiveTogether({ type: "togetherSent", id: "s1", to: "ben", gesture: "highfive" });
     expect(started).not.toHaveBeenCalled();
-    receiveTogether({ type: "togetherStart", id: "s1", gesture: "highfive", partner: "ben" });
-    expect(started).toHaveBeenCalledWith({ gesture: "highfive", partner: "ben" });
+    receiveTogether({ type: "togetherStart", id: "s1", gesture: "highfive", partner: "ben", role: "lead" });
+    expect(started).toHaveBeenCalledWith({ gesture: "highfive", partner: "ben", role: "lead" });
     expect(getTogether().outgoing).toBeNull();
     off();
   });

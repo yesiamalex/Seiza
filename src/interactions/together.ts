@@ -1,5 +1,5 @@
 // Together gestures on this visitor's side: asking someone nearby for a
-// handshake, high five, or hug, answering when asked, and playing the
+// handshake, high five, fist bump, dap, hug, or slow dance, answering when asked, and playing the
 // gesture once both have said yes. The room server keeps the score (see
 // TOGETHER in src/multiplayer/types.ts and worker/room.ts): it only lets a
 // together gesture play right after a mutual yes, checks distance, and
@@ -22,12 +22,17 @@ export interface TogetherRequest {
 export interface TogetherStart {
   gesture: TogetherGesture;
   partner: string;
+  /** The asker leads, the other follows (it matters for the slow dance). */
+  role: "lead" | "follow";
 }
 
 export const TOGETHER_LABELS: Record<TogetherGesture, { label: string; ask: string }> = {
   handshake: { label: "Handshake", ask: "a handshake" },
   highfive: { label: "High five", ask: "a high five" },
   hug: { label: "Hug", ask: "a hug" },
+  fistbump: { label: "Fist bump", ask: "a fist bump" },
+  dap: { label: "Dap", ask: "a dap" },
+  slowdance: { label: "Slow dance", ask: "a slow dance" },
 };
 
 /** A world's own say over requests (Seilaya: a refuge, a facilitator's
@@ -76,6 +81,7 @@ let send: ((message: ClientMessage) => void) | null = null;
 let nameOf: (id: string) => string = () => "Someone";
 let policy: TogetherPolicy | null = null;
 const startHandlers = new Set<(start: TogetherStart) => void>();
+const endHandlers = new Set<(partner: string) => void>();
 
 /** App wires these once: how to reach the room server, and names. */
 export function setTogetherConnection(sender: ((message: ClientMessage) => void) | null, names: (id: string) => string) {
@@ -93,6 +99,13 @@ export function setTogetherPolicy(next: TogetherPolicy | null) {
 export function onTogetherStart(handler: (start: TogetherStart) => void): () => void {
   startHandlers.add(handler);
   return () => startHandlers.delete(handler);
+}
+
+/** Called when a lasting together gesture (the slow dance) ends because the
+ *  partner stopped or left: App stops this visitor's side too. */
+export function onTogetherEnd(handler: (partner: string) => void): () => void {
+  endHandlers.add(handler);
+  return () => endHandlers.delete(handler);
 }
 
 let noticeId = 0;
@@ -211,7 +224,12 @@ export function receiveTogether(message: ServerMessage): boolean {
         if (outgoingTimer) clearTimeout(outgoingTimer);
       }
       emit();
-      for (const handler of startHandlers) handler({ gesture: message.gesture, partner: message.partner });
+      const role = message.role === "follow" ? "follow" : "lead";
+      for (const handler of startHandlers) handler({ gesture: message.gesture, partner: message.partner, role });
+      return true;
+    }
+    case "togetherEnded": {
+      for (const handler of endHandlers) handler(message.partner);
       return true;
     }
     default:

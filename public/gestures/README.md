@@ -44,10 +44,17 @@ which the app reads each clip's name, label, duration, and full-body flag.
 | None | `sit` | Sit | Full | Hold, hidden |
 | None | `handshake` | Handshake | Upper | One-shot, hidden, together |
 | None | `highfive` | High five | Upper | One-shot, hidden, together |
+| None | `fistbump` | Fist bump | Upper | One-shot, hidden, together |
+| None | `dap` | Dap | Upper | One-shot, hidden, together |
 | None | `hug` | Hug | Upper | One-shot, hidden, together |
+| None | `dance` | Dance | Full | Hold, toggle, loop |
+| None | `slowdancelead` | Slow dance (lead) | Full | Hold, loop, hidden, together |
+| None | `slowdancefollow` | Slow dance (follow) | Full | Hold, loop, hidden, together |
 
-The three **together** gestures are played by two people at once, and only
-after the other person says yes; the room server refuses them otherwise.
+The **together** gestures are played by two people at once, and only after
+the other person says yes; the room server refuses them otherwise. The slow
+dance is two looping parts, lead and follow, held until either person stops.
+**Dance** has no number key; it's in the menu, and toggles like seiza.
 They're asked for from the Together section of the Gestures menu, not played
 from the menu like the rest. See "Together gestures" in DOCS.md.
 

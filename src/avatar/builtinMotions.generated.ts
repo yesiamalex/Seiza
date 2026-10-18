@@ -26,6 +26,8 @@ export interface BuiltinGesture {
    * of the seat they're sitting on. See AvatarAnimator.
    */
   ground: "none" | "floor" | "seat";
+  /** Loops while held (a dance), instead of stopping on its last frame. */
+  loop: boolean;
 }
 
 // The ?v= is a content hash: regenerating a clip changes its URL, so a
@@ -47,7 +49,8 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
     "fullBody": false,
     "hold": false,
     "hidden": false,
-    "ground": "none"
+    "ground": "none",
+    "loop": false
   },
   {
     "name": "bow",
@@ -57,7 +60,8 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
     "fullBody": false,
     "hold": false,
     "hidden": false,
-    "ground": "none"
+    "ground": "none",
+    "loop": false
   },
   {
     "name": "crouch",
@@ -67,7 +71,8 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
     "fullBody": false,
     "hold": true,
     "hidden": true,
-    "ground": "none"
+    "ground": "none",
+    "loop": false
   },
   {
     "name": "seiza",
@@ -77,7 +82,8 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
     "fullBody": true,
     "hold": true,
     "hidden": false,
-    "ground": "floor"
+    "ground": "floor",
+    "loop": false
   },
   {
     "name": "nod",
@@ -87,7 +93,8 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
     "fullBody": false,
     "hold": false,
     "hidden": false,
-    "ground": "none"
+    "ground": "none",
+    "loop": false
   },
   {
     "name": "clap",
@@ -97,7 +104,8 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
     "fullBody": false,
     "hold": false,
     "hidden": false,
-    "ground": "none"
+    "ground": "none",
+    "loop": false
   },
   {
     "name": "cheer",
@@ -107,7 +115,8 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
     "fullBody": false,
     "hold": false,
     "hidden": false,
-    "ground": "none"
+    "ground": "none",
+    "loop": false
   },
   {
     "name": "shrug",
@@ -117,7 +126,8 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
     "fullBody": false,
     "hold": false,
     "hidden": false,
-    "ground": "none"
+    "ground": "none",
+    "loop": false
   },
   {
     "name": "point",
@@ -127,7 +137,8 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
     "fullBody": false,
     "hold": false,
     "hidden": false,
-    "ground": "none"
+    "ground": "none",
+    "loop": false
   },
   {
     "name": "gassho",
@@ -137,7 +148,8 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
     "fullBody": false,
     "hold": false,
     "hidden": false,
-    "ground": "none"
+    "ground": "none",
+    "loop": false
   },
   {
     "name": "raisehand",
@@ -147,7 +159,8 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
     "fullBody": false,
     "hold": true,
     "hidden": false,
-    "ground": "none"
+    "ground": "none",
+    "loop": false
   },
   {
     "name": "sit",
@@ -157,7 +170,63 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
     "fullBody": true,
     "hold": true,
     "hidden": true,
-    "ground": "seat"
+    "ground": "seat",
+    "loop": false
+  },
+  {
+    "name": "dance",
+    "label": "Dance",
+    "url": "/gestures/builtin/dance.vrma?v=c1a2861b",
+    "duration": 2.88,
+    "fullBody": true,
+    "hold": true,
+    "hidden": false,
+    "ground": "none",
+    "loop": true
+  },
+  {
+    "name": "slowdancelead",
+    "label": "Slow dance (lead)",
+    "url": "/gestures/builtin/slowdancelead.vrma?v=92d40db8",
+    "duration": 4.32,
+    "fullBody": true,
+    "hold": true,
+    "hidden": true,
+    "ground": "none",
+    "loop": true
+  },
+  {
+    "name": "slowdancefollow",
+    "label": "Slow dance (follow)",
+    "url": "/gestures/builtin/slowdancefollow.vrma?v=dd64c141",
+    "duration": 4.32,
+    "fullBody": true,
+    "hold": true,
+    "hidden": true,
+    "ground": "none",
+    "loop": true
+  },
+  {
+    "name": "fistbump",
+    "label": "Fist bump",
+    "url": "/gestures/builtin/fistbump.vrma?v=5bbf8fd5",
+    "duration": 2.04,
+    "fullBody": false,
+    "hold": false,
+    "hidden": true,
+    "ground": "none",
+    "loop": false
+  },
+  {
+    "name": "dap",
+    "label": "Dap",
+    "url": "/gestures/builtin/dap.vrma?v=22dca2c9",
+    "duration": 2.4,
+    "fullBody": false,
+    "hold": false,
+    "hidden": true,
+    "ground": "none",
+    "loop": false
   },
   {
     "name": "handshake",
@@ -167,7 +236,8 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
     "fullBody": false,
     "hold": false,
     "hidden": true,
-    "ground": "none"
+    "ground": "none",
+    "loop": false
   },
   {
     "name": "highfive",
@@ -177,7 +247,8 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
     "fullBody": false,
     "hold": false,
     "hidden": true,
-    "ground": "none"
+    "ground": "none",
+    "loop": false
   },
   {
     "name": "hug",
@@ -187,6 +258,7 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
     "fullBody": false,
     "hold": false,
     "hidden": true,
-    "ground": "none"
+    "ground": "none",
+    "loop": false
   }
 ];

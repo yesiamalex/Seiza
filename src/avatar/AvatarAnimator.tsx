@@ -549,6 +549,8 @@ export function AvatarAnimator({
   const postureUrl = posture?.url ?? null;
   const postureGroundRef = useRef<GroundContact>("none");
   postureGroundRef.current = posture?.ground ?? "none";
+  const postureLoopRef = useRef(false);
+  postureLoopRef.current = posture?.loop === true;
   useEffect(() => {
     const state = stateRef.current;
     if (!vrm || !state) return;
@@ -571,10 +573,13 @@ export function AvatarAnimator({
           current.posture.lower.stop();
         }
         const bundle = getClipBundle(current, postureUrl, animation);
+        // A dance keeps going while held; anything else (sitting, seiza)
+        // settles into its last frame and stays there.
+        const loop = postureLoopRef.current;
         const make = (part: THREE.AnimationClip) => {
           const action = current.mixer.clipAction(part);
-          action.setLoop(THREE.LoopOnce, 1);
-          action.clampWhenFinished = true;
+          action.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, loop ? Infinity : 1);
+          action.clampWhenFinished = !loop;
           action.setEffectiveWeight(0);
           action.reset();
           action.play();

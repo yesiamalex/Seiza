@@ -41,7 +41,7 @@ export const BOARDS: BoardSpec[] = [
     lines: [
       "A space for learning about gender, safety, and respect, built to feel safe for everyone in it.",
       "Your safety tools are under the Safety button, top left. Nothing you choose is recorded.",
-      "Ask before any handshake, high five, or hug. No answer means no.",
+      "Ask before any handshake, hug, fist bump, or dance. No answer means no.",
     ],
     // The hall's free front-right corner, turned toward the spawn point.
     position: [6.2, 0, 14.2],

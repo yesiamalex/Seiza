@@ -21,6 +21,7 @@ import {
   answerTogether,
   askTogether,
   nearbyPeople,
+  onTogetherEnd,
   onTogetherStart,
   setAllowRequests,
   setTogetherConnection,
@@ -28,7 +29,7 @@ import {
   useTogether,
 } from "./interactions/together";
 import { TogetherPrompt } from "./interactions/TogetherPrompt";
-import { TOGETHER_GESTURES } from "./multiplayer/types";
+import { DUET_SPACING, duetPosture, LASTING_TOGETHER, TOGETHER_GESTURES } from "./multiplayer/types";
 import type { VRM } from "@pixiv/three-vrm";
 import { useRoomSocket } from "./multiplayer/useRoomSocket";
 import { RemotePlayers } from "./multiplayer/RemotePlayers";
@@ -85,7 +86,29 @@ import { isTextObjectKind, type PresentSource, type WorldObject, type WorldObjec
 // Keep baseline immersive VR compatible with headsets that do not implement
 // optional scene-understanding or DOM-overlay features. These are not needed
 // for Seiza's controller-based locomotion or in-world UI.
-const xrStore = createXRStore({ meshDetection: false, planeDetection: false, domOverlay: false });
+//
+// Development aid, on localhost only: ?xrEmulate=gaze stands the built-in
+// headset emulator in for a phone in a Cardboard-style viewer (stereo, and
+// no controllers or hands), to check the headset interface's gaze mode
+// without a phone. It needs a browser with no WebXR of its own, which the
+// emulator then fills in.
+const xrEmulateGaze =
+  typeof window !== "undefined" && window.location.hostname === "localhost" && new URLSearchParams(window.location.search).get("xrEmulate") === "gaze";
+const xrStore = createXRStore({
+  meshDetection: false,
+  planeDetection: false,
+  domOverlay: false,
+  ...(xrEmulateGaze ? { emulate: { type: "metaQuest3" as const, stereoEnabled: true, syntheticEnvironment: false } } : {}),
+});
+if (xrEmulateGaze) {
+  xrStore.subscribe((state) => {
+    const device = state.emulator;
+    if (!device) return;
+    for (const input of [...Object.values(device.controllers), ...Object.values(device.hands)]) if (input) input.connected = false;
+    // So a test can turn the emulated head (look down, look around).
+    (window as unknown as { __seizaXrDevice?: unknown }).__seizaXrDevice = device;
+  });
+}
 const OBJECT_COLORS = ["#c94f4f", "#4f8fc9", "#4fc97e", "#c9a94f", "#9a4fc9"];
 // Boards and screens get the app's accent rather than a random colour.
 const ACCENT_OBJECT_COLOR = "#e8c37a";
@@ -1005,17 +1028,48 @@ export default function App() {
   useEffect(() => setTogetherConnection(send, nameOfPlayer), [send, nameOfPlayer]);
   const requestGestureRef = useRef(requestGesture);
   requestGestureRef.current = requestGesture;
-  useEffect(
-    () =>
-      onTogetherStart(({ gesture, partner }) => {
-        const other = playersForNames.current[partner];
+  const standUpRef = useRef(standUp);
+  standUpRef.current = standUp;
+  useEffect(() => {
+    const offStart = onTogetherStart(({ gesture, partner, role }) => {
+      const other = playersForNames.current[partner];
+      if (!LASTING_TOGETHER.includes(gesture)) {
         if (other) faceToward(other.position[0], other.position[2]);
         requestGestureRef.current(gesture);
-      }),
-    [faceToward]
-  );
+        return;
+      }
+      // The slow dance: each steps (only themselves) to arm's length from
+      // the midpoint between them, faces the other, and takes up their part.
+      const [sx, sy, sz] = positionRef.current;
+      const [px, , pz] = other?.position ?? [sx, sy, sz - DUET_SPACING];
+      const mx = (sx + px) / 2, mz = (sz + pz) / 2;
+      let dx = sx - mx, dz = sz - mz;
+      const length = Math.hypot(dx, dz) || 1;
+      dx /= length;
+      dz /= length;
+      const half = DUET_SPACING / 2;
+      warpTo([mx + dx * half, sy, mz + dz * half]);
+      faceToward(mx - dx * half, mz - dz * half);
+      // After the step lands: a warp stands the player up first.
+      window.setTimeout(() => requestGestureRef.current(duetPosture(gesture, role)), 150);
+    });
+    // The partner stopped, walked off, or left: stop this side too.
+    const offEnd = onTogetherEnd(() => {
+      if (postureRef.current && LASTING_TOGETHER.some((g) => postureRef.current?.name.startsWith(g))) standUpRef.current();
+    });
+    return () => {
+      offStart();
+      offEnd();
+    };
+  }, [faceToward, warpTo]);
   const together = useTogether();
-  const togetherGestures = TOGETHER_GESTURES.filter((name) => gestures.some((g) => g.name === name));
+  // Offered when this world has the clips: a lasting one (the slow dance)
+  // is its two parts, lead and follow, rather than a clip of its own.
+  const togetherGestures = TOGETHER_GESTURES.filter((name) =>
+    LASTING_TOGETHER.includes(name)
+      ? gestures.some((g) => g.name === duetPosture(name, "lead")) && gestures.some((g) => g.name === duetPosture(name, "follow"))
+      : gestures.some((g) => g.name === name)
+  );
   const nearby = togetherGestures.length ? nearbyPeople(players, selfId, positionRef.current) : [];
   const waitingRequest = together.incoming[0] ?? null;
 
@@ -1065,8 +1119,10 @@ export default function App() {
     // gesture playing".
     gestures: menuGestures
       .filter((g) => g.name !== SEIZA_GESTURE_NAME)
-      .map((g) => ({ name: g.name, label: g.label, hold: g.hold })),
-    activeGesture: localGesture?.gesture.name ?? null,
+      // A held full-body pose (the dance) toggles, like seiza: press to
+      // start, press again to stop, lit while it's on.
+      .map((g) => ({ name: g.name, label: g.label, hold: g.hold && !g.fullBody })),
+    activeGesture: localGesture?.gesture.name ?? posture?.name ?? null,
     onGestureStart: requestGesture,
     onGestureEnd: (name) => releaseGesture(name),
     seiza: seizaGesture

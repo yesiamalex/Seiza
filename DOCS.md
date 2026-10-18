@@ -231,11 +231,14 @@ guarantee yet.
   Environment uploads use the same permissions and validation as other
   uploads.
 - **Together gestures, with consent.** Stand within 2.5 m of someone and ask
-  them, from the Gestures menu, for a handshake, a high five, or a hug. They
-  get a prompt (in a headset, in the wrist menu); only a yes starts it, both
-  turn to face each other, and both avatars play it. No answer within 20
-  seconds means no. The room server enforces this rather than trusting the
+  them, from the Gestures menu, for a handshake, a high five, a fist bump, a
+  dap, a hug, or a slow dance. They get a prompt (in a headset, in the wrist menu); only a yes
+  starts it, both turn to face each other, and both avatars play it. A slow
+  dance lasts until either person stops, and ends for both. No answer within
+  20 seconds means no. The room server enforces this rather than trusting the
   clients; see [Together gestures](#together-gestures).
+- **Dance.** A solo dance in the Gestures menu, on and off like seiza: press
+  to start, press again (or move) to stop.
 - **Text chat.** A room-wide chat panel, relayed through the room server. Chat
   isn't saved between connections.
 - **Name tags** above every player, highlighted while that player speaks.
@@ -823,6 +826,11 @@ for you and for everyone else:
 
 You see your own body and hands, but not the inside of your own head. The
 same self-view works in flat-screen first person (see `src/xr/body/SelfView.tsx`).
+In a headset your avatar is drawn a few centimetres behind your eyes (its
+eyes sit in front of its neck, and your feet are placed under the headset),
+so looking down shows your chest and feet rather than the tops of your
+shoulders, and the near clipping plane is 4 cm, so it never slices through
+your own collar.
 
 How it works:
 
@@ -854,6 +862,11 @@ headset gets its own menu (`src/xr/hud/`):
 - **Use it:** point with your right hand and pull the trigger, or pinch.
 - **Pin it:** on a controller, press **X** to pin it in the air in front of
   you, and press **X** again to put it back.
+- **In a phone viewer** (Cardboard-style, no controllers or hands): a small
+  **Menu** button floats low on the right of your view. Look at it and tap
+  the screen to open the menu in front of you; look at any button and tap
+  to press it; tap **Menu** (now **Close**) again to put it away. The
+  first-time hint says so instead of the palm gesture.
 
 The menu has voice controls (enable, mute, and unmute), every menu gesture
 plus seiza and crouch (hold-type gestures are held), **Stand up** when
@@ -874,6 +887,11 @@ likely to differ between runtimes are isolated as constants:
 - Which side of a controller grip the palm is on: `GRIP_TO_HAND` in
   `xrPose.ts`.
 - The **X** button's index: `PIN_BUTTON` in `XrHud.tsx`.
+
+To check the phone-viewer (gaze) mode without a phone, run the app locally
+and open it with `?xrEmulate=gaze` in a browser without WebXR of its own:
+the built-in emulator then acts as a stereo viewer with no controllers or
+hands. This only works on `localhost` and changes nothing in a deployment.
 
 ## How it works
 
@@ -1181,13 +1199,14 @@ npm run generate:motions
 - Use the **T-pose** button in any avatar preview to check a model's rig
   before assuming a clip is wrong.
 
-Three flags in the generator control how a clip is used:
+Four flags in the generator control how a clip is used:
 
 | Flag | Effect |
 |---|---|
 | `hold` | The clip ends on the pose it keeps, instead of returning to a relaxed stance. The raised hand, seiza, and sitting use it. |
 | `hold` with `fullBody` | The clip becomes a posture, toggled by its key instead of held down. |
 | `hidden` | The clip stays out of the menu and off the number keys, because something else triggers it. Chairs use the hidden `sit` clip. |
+| `loop` | With `hold`, the pose keeps moving in a seamless loop instead of freezing on its last frame. The dances use it. |
 
 Clip URLs in the manifest include a `?v=` content hash. Regenerating a clip
 changes the file but not its path, so without the hash, browsers would keep
@@ -1269,8 +1288,10 @@ wave finished.
 
 #### Together gestures
 
-`handshake`, `highfive`, and `hug` are built-in clips played by two people at
-once, and only when both agree. They're hidden from the gesture menu and the
+`handshake`, `highfive`, `fistbump`, `dap`, `hug`, and `slowdance` are played
+by two people at once, and only when both agree.
+
+<img src="docs/media/fistbump-dap.gif" width="384" alt="Two avatars face each other: they fist bump, then dap, clasping hands high and releasing."> They're hidden from the gesture menu and the
 number keys: playing one alone at someone is exactly what consent rules out.
 
 The flow, between two clients and the room server (`worker/room.ts`), with the
@@ -1294,7 +1315,17 @@ rules in `TOGETHER` (`src/multiplayer/types.ts`):
    headset) and plays the gesture through the ordinary gesture message.
 
 The server refuses any together gesture from a player without that fresh
-grant, so a modified client can't send a hug at anyone. Requests live in the
+grant, so a modified client can't send a hug at anyone.
+
+The **slow dance** lasts until stopped, so it isn't one clip but a held,
+looping pose for each partner: the asker leads (`slowdancelead`), the other
+follows (`slowdancefollow`, the lead's moves mirrored, so the two sway the
+same way through the room). On a yes, each client steps only its own player
+to arm's length (`DUET_SPACING`, 0.85 m centre to centre) from the midpoint
+between them, faces the partner, and takes up its part. The server allows
+each of those postures only from the right partner with a fresh grant, never
+plays `slowdance` as a clip, and pairs the two: when either stops, moves off,
+or leaves, the other gets `togetherEnded` and stops too. Requests live in the
 room's memory only; one lost when a room sleeps simply expires.
 
 On the client, `src/interactions/together.ts` holds requests, prompts, and
@@ -1546,8 +1577,9 @@ it isn't production-hardened. These limitations are known:
   desktop computer can check them (see [In a VR headset](#in-a-vr-headset)).
   Body tracking covers the head, hands, fingers, and a physical crouch. There
   is no leg or hip tracking, and leaning moves your whole avatar instead of
-  bending it. Phones use the touch version, not an immersive session, because
-  Chrome for Android dropped Cardboard support.
+  bending it. On a phone, a browser that still offers immersive VR with a
+  Cardboard-style viewer gets the gaze-mode menu (look and tap); otherwise
+  phones use the touch version.
 - **Sound effects are synthesized.** Footsteps (which differ by surface and
   play on the walk cycle's foot contacts), the clap gesture, light switches,
   doors, the classroom clocks, and the pond are generated from noise and

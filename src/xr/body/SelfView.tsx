@@ -30,9 +30,18 @@ const FOLLOW_SLOW_SPEED = 3;
  *  head shouldn't nod the view. */
 const MOVING_TURN_SHARE = 0.2;
 
-/** The first-person near plane on a screen. The default clips your own
- *  shoulders and hands, which are closer to your eyes than anything else. */
+/** The first-person near plane, on a screen and in a headset. The default
+ *  (0.12 m) slices through your own collar and shoulders when you look
+ *  down, which reads as a cut-open neck; your hands come that close too.
+ *  In a headset three.js hands this to the session as its depthNear. */
 const SELF_VIEW_NEAR = 0.04;
+/** In a headset, how far behind its own eyes your avatar is shifted, past
+ *  the eyes' offset in front of the neck. Your feet are placed under the
+ *  headset, and an avatar's eyes sit several centimetres in front of its
+ *  neck, so without the shift the camera sat right above the neck: looking
+ *  down showed the tops of both shoulders with the folded neck between
+ *  them. Shifted back, you look down your front at your chest and feet. */
+const VR_BODY_MARGIN = 0.05;
 
 /**
  * Lets you see your own body in first person, on a screen or in VR, with
@@ -68,6 +77,7 @@ export function SelfView({ vrm, firstPerson }: { vrm: VRM | null; firstPerson: b
   const scratch = useMemo(
     () => ({
       parentQuat: new THREE.Quaternion(),
+      back: new THREE.Vector3(),
       restQuat: new THREE.Quaternion(),
       eye: new THREE.Vector3(),
       turn: new THREE.Quaternion(),
@@ -83,7 +93,7 @@ export function SelfView({ vrm, firstPerson }: { vrm: VRM | null; firstPerson: b
   }, []);
 
   useEffect(() => {
-    if (!screenFirstPerson || !(camera instanceof THREE.PerspectiveCamera)) return;
+    if (!hideHead || !(camera instanceof THREE.PerspectiveCamera)) return;
     const near = camera.near;
     camera.near = SELF_VIEW_NEAR;
     camera.updateProjectionMatrix();
@@ -91,7 +101,7 @@ export function SelfView({ vrm, firstPerson }: { vrm: VRM | null; firstPerson: b
       camera.near = near;
       camera.updateProjectionMatrix();
     };
-  }, [camera, screenFirstPerson]);
+  }, [camera, hideHead]);
 
   const hiddenBone = () => vrm?.humanoid.getRawBoneNode("neck") ?? vrm?.humanoid.getRawBoneNode("head");
 
@@ -160,6 +170,18 @@ export function SelfView({ vrm, firstPerson }: { vrm: VRM | null; firstPerson: b
     fitRef.current += (target - fitRef.current) * (1 - Math.exp(-4 * Math.min(delta, 0.1)));
     if (Math.abs(fitRef.current - target) < 1e-4) fitRef.current = target;
     vrm.scene.scale.setScalar(fitRef.current);
+
+    // In a headset, line the avatar's eyes up with yours (see
+    // VR_BODY_MARGIN). Only this copy: what others see is untouched.
+    if (presenting) {
+      const behind = rig.eyeOffset.dot(rig.modelForward) * fitRef.current + VR_BODY_MARGIN;
+      const back = scratch.back.copy(rig.modelForward).applyQuaternion(vrm.scene.quaternion).multiplyScalar(-behind);
+      vrm.scene.position.x = back.x;
+      vrm.scene.position.z = back.z;
+    } else if (vrm.scene.position.x !== 0 || vrm.scene.position.z !== 0) {
+      vrm.scene.position.x = 0;
+      vrm.scene.position.z = 0;
+    }
   });
 
   return null;

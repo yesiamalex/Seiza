@@ -80,7 +80,7 @@ describe("Seilaya's say over together gestures", () => {
   it("keeps the partner visible through personal space while the gesture plays", () => {
     const { api } = setup();
     state.inBubble.add("amy");
-    receiveTogether({ type: "togetherStart", id: "x", gesture: "hug", partner: "amy" });
+    receiveTogether({ type: "togetherStart", id: "x", gesture: "hug", partner: "amy", role: "follow" });
     const filter = api.setPlayerFilter.mock.calls[api.setPlayerFilter.mock.calls.length - 1][0] as { hidden: string[] };
     expect(filter.hidden).not.toContain("amy");
     state.inBubble.clear();

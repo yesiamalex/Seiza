@@ -70,22 +70,29 @@ interface Button {
   active?: boolean;
   disabled?: boolean;
   primary?: boolean;
+  /** Takes the panel's whole width (the dock's one button). */
+  fill?: boolean;
   onPress: () => void;
 }
 
 /** Lays out a panel top to bottom: text, headings, and rows of buttons. */
 class Painter {
-  y = 40;
+  y: number;
   buttons: Button[] = [];
-  constructor(private ctx: CanvasRenderingContext2D, private pad = 40) {}
+  constructor(
+    private ctx: CanvasRenderingContext2D,
+    private canvasWidth = PX,
+    private pad = 40
+  ) {
+    this.y = pad;
+  }
   private get width() {
-    return PX - this.pad * 2;
+    return this.canvasWidth - this.pad * 2;
   }
   title(text: string) {
-    this.ctx.fillStyle = "#fff";
-    this.ctx.font = `700 46px ${FONT}`;
-    this.ctx.fillText(text, this.pad, this.y + 40);
-    this.y += 70;
+    // Wrapped like body text, so a long title can't run past the edge.
+    this.text(text, 46, "#fff", 700);
+    this.y += 6;
   }
   heading(text: string) {
     this.y += 14;
@@ -98,8 +105,21 @@ class Painter {
     this.ctx.fillStyle = color;
     this.ctx.font = `${weight} ${size}px ${FONT}`;
     const lineHeight = Math.round(size * 1.35);
-    let line = "";
+    // A word wider than the panel (a long link, say) is cut into pieces
+    // that fit, rather than running past the edge.
+    const words: string[] = [];
     for (const word of text.split(" ")) {
+      let rest = word;
+      while (rest.length > 1 && this.ctx.measureText(rest).width > this.width) {
+        let cut = rest.length - 1;
+        while (cut > 1 && this.ctx.measureText(rest.slice(0, cut)).width > this.width) cut--;
+        words.push(rest.slice(0, cut));
+        rest = rest.slice(cut);
+      }
+      words.push(rest);
+    }
+    let line = "";
+    for (const word of words) {
       const test = line ? `${line} ${word}` : word;
       if (this.ctx.measureText(test).width > this.width && line) {
         this.ctx.fillText(line, this.pad, this.y + size);
@@ -117,9 +137,13 @@ class Painter {
   row(buttons: Omit<Button, "x" | "y" | "w" | "h">[], height = 72) {
     this.ctx.font = `600 30px ${FONT}`;
     let x = this.pad;
-    for (const b of buttons) {
-      const w = Math.min(this.width, this.ctx.measureText(b.label).width + 56);
-      if (x + w > PX - this.pad && x > this.pad) {
+    for (const original of buttons) {
+      // A label too long for the panel is cut short with an ellipsis.
+      let label = original.label;
+      while (label.length > 2 && this.ctx.measureText(label).width + 56 > this.width) label = `${label.slice(0, -2)}…`;
+      const b = { ...original, label };
+      const w = b.fill ? this.width : Math.min(this.width, this.ctx.measureText(b.label).width + 56);
+      if (x + w > this.canvasWidth - this.pad && x > this.pad) {
         x = this.pad;
         this.y += height + 14;
       }
@@ -166,7 +190,23 @@ type Placement = "dock" | "front" | "low-front";
  * whenever `signature` changes, and placed relative to the head. A press
  * lands on release, and only on the button it started on.
  */
-function XrPanel({ widthM, paint, signature, placement }: { widthM: number; paint: Paint; signature: string; placement: Placement }) {
+function XrPanel({
+  widthM,
+  paint,
+  signature,
+  placement,
+  canvasWidth = PX,
+  pad = 40,
+}: {
+  widthM: number;
+  paint: Paint;
+  signature: string;
+  placement: Placement;
+  /** The canvas's width in pixels: a small button (the dock) gets a small
+   *  canvas, so its one button fills it instead of a corner of a strip. */
+  canvasWidth?: number;
+  pad?: number;
+}) {
   const mesh = useRef<THREE.Mesh>(null);
   const layout = useRef<{ height: number; buttons: Button[] }>({ height: 100, buttons: [] });
   const pressed = useRef<Button | null>(null);
@@ -176,12 +216,14 @@ function XrPanel({ widthM, paint, signature, placement }: { widthM: number; pain
 
   const { texture, canvas } = useMemo(() => {
     const canvas = document.createElement("canvas");
-    canvas.width = PX;
+    canvas.width = canvasWidth;
     canvas.height = MAX_H;
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.anisotropy = 4;
     return { texture, canvas };
+    // The canvas is made once per panel; its width never changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const material = useMemo(() => new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthTest: false, toneMapped: false }), [texture]);
   useEffect(
@@ -195,27 +237,27 @@ function XrPanel({ widthM, paint, signature, placement }: { widthM: number; pain
   useEffect(() => {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    ctx.clearRect(0, 0, PX, MAX_H);
+    ctx.clearRect(0, 0, canvasWidth, MAX_H);
     // Measure first, then draw the background under the content.
-    const measure = new Painter(ctx);
+    const measure = new Painter(ctx, canvasWidth, pad);
     ctx.save();
     ctx.globalAlpha = 0;
     paintRef.current(measure);
     ctx.restore();
-    const height = Math.min(MAX_H, Math.ceil(measure.y + 30));
-    ctx.clearRect(0, 0, PX, MAX_H);
+    const height = Math.min(MAX_H, Math.ceil(measure.y + pad - 18));
+    ctx.clearRect(0, 0, canvasWidth, MAX_H);
     ctx.beginPath();
-    ctx.roundRect(0, 0, PX, height, 36);
+    ctx.roundRect(0, 0, canvasWidth, height, Math.min(36, height / 2));
     ctx.fillStyle = "rgba(18,18,24,0.94)";
     ctx.fill();
-    const painter = new Painter(ctx);
+    const painter = new Painter(ctx, canvasWidth, pad);
     paintRef.current(painter);
     layout.current = { height, buttons: painter.buttons };
     // Show only the used part of the canvas.
     texture.repeat.set(1, height / MAX_H);
     texture.offset.set(0, 1 - height / MAX_H);
     texture.needsUpdate = true;
-    if (mesh.current) mesh.current.scale.set(widthM, (widthM * height) / PX, 1);
+    if (mesh.current) mesh.current.scale.set(widthM, (widthM * height) / canvasWidth, 1);
   }, [signature, canvas, texture, widthM]);
 
   const goal = useMemo(() => new THREE.Vector3(), []);
@@ -252,7 +294,7 @@ function XrPanel({ widthM, paint, signature, placement }: { widthM: number; pain
     m.lookAt(head);
   });
 
-  const toCanvas = (event: ThreeEvent<PointerEvent>) => (event.uv ? { x: event.uv.x * PX, y: (1 - event.uv.y) * layout.current.height } : null);
+  const toCanvas = (event: ThreeEvent<PointerEvent>) => (event.uv ? { x: event.uv.x * canvasWidth, y: (1 - event.uv.y) * layout.current.height } : null);
   const hit = (event: ThreeEvent<PointerEvent>) => {
     const point = toCanvas(event);
     if (!point) return null;
@@ -312,7 +354,7 @@ function XrPanels() {
   const card: CardKey | null = gate ? "conduct" : s.card;
   return (
     <>
-      <XrPanel widthM={0.16} placement="dock" signature={`dock:${t.incoming.length}:${s.panelOpen}:${s.inRefuge}`} paint={paintDock} />
+      <XrPanel widthM={0.12} canvasWidth={220} pad={14} placement="dock" signature={`dock:${t.incoming.length}:${s.panelOpen}:${s.inRefuge}`} paint={paintDock} />
       {s.panelOpen && !card && <XrPanel widthM={0.62} placement="front" signature={base} paint={paintSafety} />}
       {t.incoming[0] && !s.inRefuge && !card && <XrPanel widthM={0.5} placement="low-front" signature={base} paint={paintPrompt} />}
       {s.inRefuge && !card && !s.panelOpen && <XrPanel widthM={0.55} placement="low-front" signature={base} paint={paintRefuge} />}
@@ -328,7 +370,7 @@ const togglePanel = () => {
 };
 
 const paintDock: Paint = (p) => {
-  p.row([{ label: getTogether().incoming.length ? "Safety  •" : "Safety", active: state.panelOpen, onPress: togglePanel }], 96);
+  p.row([{ label: getTogether().incoming.length ? "Safety  •" : "Safety", active: state.panelOpen, fill: true, onPress: togglePanel }], 96);
 };
 
 const paintSafety: Paint = (p) => {
@@ -345,7 +387,7 @@ const paintSafety: Paint = (p) => {
       onPress: () => updateSettings({ bubble: r }),
     }))
   );
-  p.heading("Handshakes, high fives, hugs");
+  p.heading("Handshakes, hugs, dances, and more");
   p.row([
     { label: "Others may ask me", active: getTogether().allow, onPress: () => setAllowRequests(true) },
     { label: "No requests", active: !getTogether().allow, onPress: () => setAllowRequests(false) },

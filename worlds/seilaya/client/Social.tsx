@@ -10,7 +10,7 @@ import * as THREE from "three";
 import type { PlayerState } from "../../../src/multiplayer/types";
 import { isPlayerHidden } from "../../../src/multiplayer/playerFilter";
 import { FONT } from "./kit";
-import { applyFilter, effectiveBubble, emit, REACH, state, useSafety } from "./safety";
+import { applyFilter, checkTogether, effectiveBubble, emit, REACH, state, useSafety } from "./safety";
 
 /** Checks per second: people walk slowly enough that this never shows. */
 const CHECK_HZ = 6;
@@ -41,6 +41,7 @@ export function SafetyLoop({ selfId, players, getSelfPosition }: { selfId: strin
     since.current += delta;
     if (since.current < 1 / CHECK_HZ) return;
     since.current = 0;
+    checkTogether();
 
     let changed = false;
     const nearby: string[] = [];

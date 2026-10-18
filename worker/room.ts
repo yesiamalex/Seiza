@@ -11,6 +11,8 @@ import {
   WORLD_STATE_LIMITS,
   isTogetherGesture,
   TOGETHER,
+  LASTING_TOGETHER,
+  duetPosture,
   type TogetherGesture,
   ROOM_SKY_SCALES,
   ROOM_SKY_WEATHER,
@@ -237,7 +239,9 @@ export class SeizaRoom extends DurableObject<Env> {
   /** "to|from": when `from` recently asked `to`, for the per-window cap. */
   private togetherAsked = new Map<string, number[]>();
   /** Who may play which together gesture, until when: set by a yes. */
-  private togetherGrants = new Map<string, { gesture: TogetherGesture; until: number }>();
+  private togetherGrants = new Map<string, { gesture: TogetherGesture; until: number; role: "lead" | "follow" }>();
+  /** Partners in a lasting together gesture (the slow dance), both ways. */
+  private duets = new Map<string, string>();
   /** Failed password guesses per IP (see MAX_AUTH_FAILURES_PER_IP). */
   private authFailures = new Map<string, { count: number; windowStart: number }>();
   private ready: Promise<void>;
@@ -442,6 +446,8 @@ export class SeizaRoom extends DurableObject<Env> {
         // it with someone else, once. Without this a modified client could
         // send "hug" at anyone; the menu hiding it would mean nothing.
         if (isTogetherGesture(gesture)) {
+          // A lasting one (the slow dance) is a pair of held poses, never a clip.
+          if (LASTING_TOGETHER.includes(gesture)) return;
           const grant = this.togetherGrants.get(attachment.connId);
           if (!grant || grant.gesture !== gesture || grant.until < Date.now()) return;
           this.togetherGrants.delete(attachment.connId);
@@ -471,6 +477,16 @@ export class SeizaRoom extends DurableObject<Env> {
         if (raw !== null && (typeof raw !== "string" || !GESTURE_NAME.test(raw))) return;
         const posture = raw as Posture;
         if (attachment.player.posture === posture) return;
+        // The slow dance's poses only after a yes, in the role it gave.
+        const duet = LASTING_TOGETHER.flatMap((g) => [duetPosture(g, "lead"), duetPosture(g, "follow")]);
+        if (posture && duet.includes(posture)) {
+          const grant = this.togetherGrants.get(attachment.connId);
+          if (!grant || grant.until < Date.now() || posture !== duetPosture(grant.gesture, grant.role)) return;
+          this.togetherGrants.delete(attachment.connId);
+        } else if (attachment.player.posture && duet.includes(attachment.player.posture)) {
+          // Stopping (or anything else) ends the dance for the partner too.
+          this.endDuet(attachment.connId);
+        }
         attachment.player.posture = posture;
         this.save(ws, attachment);
         this.broadcast({ type: "playerPosture", id: attachment.connId, posture }, attachment.connId);
@@ -828,10 +844,18 @@ export class SeizaRoom extends DurableObject<Env> {
         }
         if (message.accept === true && asker && this.att(asker)?.player) {
           const until = now + TOGETHER.grantSeconds * 1000;
-          this.togetherGrants.set(request.from, { gesture: request.gesture, until });
-          this.togetherGrants.set(request.to, { gesture: request.gesture, until });
-          this.sendTo(asker, { type: "togetherStart", id: message.id, gesture: request.gesture, partner: request.to });
-          this.sendTo(ws, { type: "togetherStart", id: message.id, gesture: request.gesture, partner: request.from });
+          // The asker leads; the other follows.
+          this.togetherGrants.set(request.from, { gesture: request.gesture, until, role: "lead" });
+          this.togetherGrants.set(request.to, { gesture: request.gesture, until, role: "follow" });
+          if (LASTING_TOGETHER.includes(request.gesture)) {
+            // Either could already be in another dance: end that first.
+            this.endDuet(request.from);
+            this.endDuet(request.to);
+            this.duets.set(request.from, request.to);
+            this.duets.set(request.to, request.from);
+          }
+          this.sendTo(asker, { type: "togetherStart", id: message.id, gesture: request.gesture, partner: request.to, role: "lead" });
+          this.sendTo(ws, { type: "togetherStart", id: message.id, gesture: request.gesture, partner: request.from, role: "follow" });
           return;
         }
         this.togetherQuiet.set(`${request.to}|${request.from}`, now + TOGETHER.quietSeconds * 1000);
@@ -922,6 +946,7 @@ export class SeizaRoom extends DurableObject<Env> {
       if (other) this.sendTo(other, { type: "togetherClosed", id, reason: "cancelled" });
     }
     this.togetherGrants.delete(connId);
+    this.endDuet(connId);
     this.broadcast({ type: "playerLeft", id: connId });
   }
 
@@ -1008,6 +1033,16 @@ export class SeizaRoom extends DurableObject<Env> {
       .getWebSockets()
       .map((ws) => (this.att(ws))?.player)
       .filter((p): p is PlayerState => !!p);
+  }
+
+  /** Ends a lasting together gesture: the partner is told, and stops too. */
+  private endDuet(connId: string) {
+    const partner = this.duets.get(connId);
+    if (!partner) return;
+    this.duets.delete(connId);
+    if (this.duets.get(partner) === connId) this.duets.delete(partner);
+    const other = this.findConnection(partner);
+    if (other) this.sendTo(other, { type: "togetherEnded", partner: connId });
   }
 
   /** Sends one message to one connection, ignoring one that's closing. */
