@@ -5,6 +5,7 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import type { LightZone } from "../multiplayer/types";
 import { playFireToggle, setFireAmbience } from "../audio/sfx";
 import { PooledLight } from "./LightPool";
+import { nightNeed } from "./roomLights";
 import { poolTexture } from "./UnderGlow";
 import { CAMP_CHAIRS, CAMP_SEAT_HEIGHT, CAMPFIRE, FIELD_Y, SLEEPING_BAG, TENT, TENT_YAW } from "./layout";
 
@@ -107,7 +108,7 @@ export function Campsite({
         <mesh geometry={geometry.wood} material={m.wood} castShadow />
         <Fire lit={lit} />
       </group>
-      <TentLantern lit={lit} />
+      <TentLantern lit={lit} metal={m.metal} windows={geometry.windows} />
     </group>
   );
 }
@@ -117,9 +118,24 @@ const TENT_SEE_THROUGH = 0.22;
 /**
  * A small lantern hung from the tent's ridge, and the very faint warm pool
  * it throws on the ground sheet: lit with the fire, on the camp switch. No
- * light: an unlit bulb and an additive pool, two draw calls.
+ * light. A camping lantern on a cord from the ridge pole: a metal cap,
+ * base, and three frame bars (one merged mesh), round a frosted globe that
+ * glows, and an additive pool on the ground sheet. Three draw calls.
  */
-function TentLantern({ lit }: { lit: boolean }) {
+function TentLantern({ lit, metal, windows }: { lit: boolean; metal: THREE.Material; windows: THREE.BufferGeometry }) {
+  // The windows: a fine mesh with soft rounded edges, dark by day and
+  // glowing warm when the lantern inside is lit.
+  const screen = useMemo(() => {
+    const map = windowTexture();
+    return new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false, side: THREE.DoubleSide, toneMapped: false });
+  }, []);
+  useEffect(
+    () => () => {
+      screen.map?.dispose();
+      screen.dispose();
+    },
+    [screen]
+  );
   const texture = useMemo(poolTexture, []);
   const parts = useMemo(() => {
     const at = (x: number, y: number, z: number) => {
@@ -127,9 +143,24 @@ function TentLantern({ lit }: { lit: boolean }) {
       const s = Math.sin(TENT_YAW);
       return [TENT.x + x * c + z * s, FIELD_Y + y, TENT.z - x * s + z * c] as [number, number, number];
     };
+    // Built at the origin, its top at the ridge pole, then hung there.
+    const parts: THREE.BufferGeometry[] = [
+      new THREE.CylinderGeometry(0.004, 0.004, 0.16, 5).translate(0, -0.08, 0), // cord
+      new THREE.TorusGeometry(0.018, 0.004, 5, 10).translate(0, -0.172, 0), // hook ring
+      new THREE.CylinderGeometry(0.022, 0.062, 0.045, 12).translate(0, -0.21, 0), // cap
+      new THREE.CylinderGeometry(0.06, 0.055, 0.03, 12).translate(0, -0.36, 0), // base
+    ];
+    for (let k = 0; k < 3; k++) {
+      const a = (k / 3) * Math.PI * 2;
+      parts.push(new THREE.BoxGeometry(0.008, 0.12, 0.008).translate(Math.cos(a) * 0.057, -0.29, Math.sin(a) * 0.057));
+    }
+    const frame = mergeGeometries(parts.map((g) => (g.index ? g.toNonIndexed() : g))) ?? new THREE.BufferGeometry();
+    for (const g of parts) g.dispose();
     return {
-      bulbAt: at(0, TENT.height - 0.22, -TENT.length * 0.15),
+      hangAt: at(0, TENT.height - 0.01, -TENT.length * 0.15),
       poolAt: at(0, 0.02, -TENT.length * 0.1),
+      frame,
+      globe: new THREE.CylinderGeometry(0.05, 0.05, 0.12, 14).translate(0, -0.29, 0),
       bulb: new THREE.MeshBasicMaterial({ color: "#ffc77a", toneMapped: false }),
       pool: new THREE.MeshBasicMaterial({ map: texture, color: "#ffc77a", transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }),
     };
@@ -138,6 +169,8 @@ function TentLantern({ lit }: { lit: boolean }) {
     () => () => {
       texture.dispose();
       parts.bulb.dispose();
+      parts.frame.dispose();
+      parts.globe.dispose();
       parts.pool.dispose();
     },
     [texture, parts]
@@ -146,20 +179,54 @@ function TentLantern({ lit }: { lit: boolean }) {
   useFrame((_, delta) => {
     level.current += ((lit ? 1 : 0) - level.current) * (1 - Math.exp(-delta / 0.4));
     parts.bulb.color.set("#ffc77a").multiplyScalar(0.12 + 0.88 * level.current);
+    // Seen glowing at night; by day the mesh just reads dark.
+    screen.color.set("#2a1d19").lerp(WINDOW_GLOW, 0.75 * level.current * nightNeed());
     // Very dim: enough to find your bag by, not to read.
     parts.pool.color.set("#ffc77a").multiplyScalar(0.22 * level.current);
     parts.pool.visible = level.current > 0.01;
   });
   return (
     <>
-      <mesh position={parts.bulbAt} material={parts.bulb} raycast={() => null}>
-        <sphereGeometry args={[0.05, 10, 8]} />
-      </mesh>
+      <mesh geometry={windows} material={screen} raycast={() => null} renderOrder={1} />
+      <group position={parts.hangAt} rotation={[0, TENT_YAW, 0]}>
+        <mesh geometry={parts.frame} material={metal} raycast={() => null} />
+        <mesh geometry={parts.globe} material={parts.bulb} raycast={() => null} />
+      </group>
       <mesh position={parts.poolAt} rotation={[-Math.PI / 2, 0, TENT_YAW]} material={parts.pool} raycast={() => null} renderOrder={1}>
         <planeGeometry args={[TENT.width * 0.9, TENT.length * 0.9]} />
       </mesh>
     </>
   );
+}
+
+const WINDOW_GLOW = new THREE.Color("#ffc77a");
+
+/** A tent window: rounded, its edges fading into the fabric, with the
+ *  faint grid of insect mesh across it. */
+function windowTexture(): THREE.Texture {
+  const w = 128;
+  const h = 96;
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d")!;
+  const image = ctx.createImageData(w, h);
+  const r = 26;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      // Distance inside a rounded rectangle, for a soft edge.
+      const dx = Math.max(r - x, x - (w - 1 - r), 0);
+      const dy = Math.max(r - y, y - (h - 1 - r), 0);
+      const inside = r - Math.hypot(dx, dy);
+      const edge = Math.max(0, Math.min(1, inside / 9));
+      const grid = x % 6 === 0 || y % 6 === 0 ? 0.78 : 1;
+      image.data.set([255 * grid, 255 * grid, 255 * grid, 255 * edge * 0.92], (y * w + x) * 4);
+    }
+  }
+  ctx.putImageData(image, 0, 0);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
 }
 
 /** Whether a point is under the tent's walls. */
@@ -270,6 +337,7 @@ function Fire({ lit }: { lit: boolean }) {
 
 /** One geometry per material, everything placed in world space. */
 function buildCamp() {
+  const windows: THREE.BufferGeometry[] = [];
   const parts: Record<"tent" | "sheet" | "bag" | "fabric" | "metal" | "stone" | "wood", THREE.BufferGeometry[]> = {
     tent: [],
     sheet: [],
@@ -309,16 +377,35 @@ function buildCamp() {
     new THREE.Vector3(1, 1, 1)
   );
   const half = TENT.width / 2;
-  const slope = Math.hypot(half, TENT.height);
-  const lean = Math.atan2(half, TENT.height);
-  for (const side of [-1, 1]) {
-    parts.tent.push(
-      new THREE.BoxGeometry(0.02, slope, TENT.length)
-        .rotateZ(side * lean)
-        .translate((side * half) / 2, TENT.height / 2, 0)
-        .applyMatrix4(tent)
-    );
-  }
+  // The walls are fabric, not boards: each sags a little between the ridge
+  // and the ground and between the door and the back, with a few soft
+  // ripples, so its shading rolls rather than lying flat. One surface,
+  // sampled at (u along the length, s up the slope), shared with the
+  // windows so they lie exactly on it.
+  const wallPoint = (side: number, u: number, s: number, lift = 0) => {
+    const sag = Math.sin(Math.PI * s) * (0.07 * (0.55 + 0.45 * Math.sin(Math.PI * u)) + 0.012 * Math.sin(u * Math.PI * 7));
+    const slope = Math.hypot(half, TENT.height);
+    // Inward, toward the middle of the tent, square to the wall.
+    const nx = (-side * TENT.height) / slope;
+    const ny = -half / slope;
+    const d = sag - lift;
+    return new THREE.Vector3(side * half * (1 - s) + nx * d, TENT.height * s + ny * d, (u - 0.5) * TENT.length);
+  };
+  const wallPatch = (side: number, u0: number, u1: number, s0: number, s1: number, nu: number, ns: number, lift = 0) => {
+    const g = new THREE.PlaneGeometry(1, 1, nu, ns);
+    const pos = g.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const u = u0 + (pos.getX(i) + 0.5) * (u1 - u0);
+      const s = s0 + (pos.getY(i) + 0.5) * (s1 - s0);
+      pos.setXYZ(i, ...wallPoint(side, u, s, lift).toArray());
+    }
+    g.computeVertexNormals();
+    return g.applyMatrix4(tent);
+  };
+  for (const side of [-1, 1]) parts.tent.push(wallPatch(side, 0, 1, 0, 1, 18, 8));
+  // A mesh window in each wall, toward the back, standing a hair off the
+  // fabric so the two never fight for the same pixels.
+  windows.push(...[-1, 1].map((side) => wallPatch(side, 0.2, 0.52, 0.32, 0.66, 6, 4, 0.006)));
   const back = new THREE.Shape([new THREE.Vector2(-half, 0), new THREE.Vector2(half, 0), new THREE.Vector2(0, TENT.height)]);
   parts.tent.push(new THREE.ShapeGeometry(back).translate(0, 0, -TENT.length / 2).applyMatrix4(tent));
   // A ridge pole and the front pole that holds the door's peak up.
@@ -365,6 +452,7 @@ function buildCamp() {
   };
   return {
     tent: merge(parts.tent),
+    windows: mergeGeometries(windows) ?? new THREE.BufferGeometry(),
     sheet: merge(parts.sheet),
     bag: merge(parts.bag),
     fabric: merge(parts.fabric),

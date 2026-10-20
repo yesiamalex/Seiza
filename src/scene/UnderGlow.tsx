@@ -41,7 +41,7 @@ export function UnderGlow({ desks, lit }: { desks: GlowDesk[]; lit: boolean }) {
     },
     [strips, pools]
   );
-  const texture = useMemo(poolTexture, []);
+  const texture = useMemo(spillTexture, []);
   useEffect(() => () => texture.dispose(), [texture]);
   const stripMaterial = useMemo(() => new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }), []);
   const poolMaterial = useMemo(
@@ -86,15 +86,57 @@ function build(desks: GlowDesk[]) {
     // Built round the piece's own centre, then turned and placed.
     const place = (g: THREE.BufferGeometry) => g.rotateY(d.yaw ?? 0).translate(d.x, 0, d.z).toNonIndexed();
     strips.push(tint(place(new THREE.BoxGeometry(d.width - 0.1, STRIP, STRIP).translate(0, d.under - STRIP / 2, d.edge * (d.depth / 2 - 0.04))), k));
-    // The pool spills out past the lit edge, where the strip faces.
+    // The pool starts under the piece and spills out past the lit edge,
+    // fading as it goes (spillTexture: brightest at its -Z end). Turned
+    // round for a strip under the +Z edge.
+    const reach = d.depth * 2.6;
     pools.push(
-      tint(place(new THREE.PlaneGeometry(d.width * 1.35, d.depth * 1.9).rotateX(-Math.PI / 2).translate(0, 0.004, d.edge * d.depth * 0.45)), 0.55 * k)
+      tint(
+        place(
+          new THREE.PlaneGeometry(d.width * 1.5, reach)
+            .rotateX(-Math.PI / 2)
+            // Laid out spilling toward +Z, brightest just inside the lit
+            // edge; turned round when that edge is the -Z one.
+            .translate(0, 0.004, reach / 2 + d.depth * 0.1)
+            .rotateY(d.edge > 0 ? 0 : Math.PI)
+        ),
+        0.5 * k
+      )
     );
   }
   return {
     strips: mergeGeometries(strips) ?? new THREE.BufferGeometry(),
     pools: mergeGeometries(pools) ?? new THREE.BufferGeometry(),
   };
+}
+
+/** A texture from a brightness function of (u across, v down), 0 to 1. */
+function shadedTexture(size: number, shade: (u: number, v: number) => number): THREE.Texture {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  const image = ctx.createImageData(size, size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const a = Math.round(255 * Math.max(0, Math.min(1, shade((x + 0.5) / size, (y + 0.5) / size))));
+      image.data.set([255, 255, 255, a], (y * size + x) * 4);
+    }
+  }
+  ctx.putImageData(image, 0, 0);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+const smooth = (t: number) => {
+  const c = Math.max(0, Math.min(1, t));
+  return c * c * (3 - 2 * c);
+};
+/** Light thrown from a strip: full along its length, softening to nothing
+ *  at the ends (no oval, no hard sides), and fading with distance from it. */
+const stripFalloff = (u: number, v: number) => smooth((0.5 - Math.abs(u - 0.5)) / 0.3) * Math.pow(1 - v, 2.2);
+/** A pool on the floor, brightest at the strip's end (the top of the canvas). */
+export function spillTexture(): THREE.Texture {
+  return shadedTexture(64, stripFalloff);
 }
 
 /** A soft rounded pool: brightest in the middle, gone at the edges. */
@@ -182,7 +224,7 @@ function buildWashes(ledges: WashLedge[]) {
   const washes: THREE.BufferGeometry[] = [];
   for (const l of ledges) {
     const k = l.strength ?? 1;
-    const reach = l.reach ?? 0.9;
+    const reach = (l.reach ?? 0.9) * 1.3;
     const place = (g: THREE.BufferGeometry) => g.rotateY(l.yaw).translate(l.x, 0, l.z).toNonIndexed();
     const tint = (g: THREE.BufferGeometry, s: number) => {
       const n = g.attributes.position.count;
@@ -192,7 +234,9 @@ function buildWashes(ledges: WashLedge[]) {
       return g;
     };
     strips.push(tint(place(new THREE.BoxGeometry(l.width - 0.1, STRIP, STRIP).translate(0, l.top - STRIP / 2, l.lip - STRIP / 2)), k));
-    washes.push(tint(place(new THREE.PlaneGeometry(l.width * 1.15, reach).translate(0, l.top - reach / 2, l.wall + 0.005)), 0.5 * k));
+    // Wider than the ledge, so the light fades out on the wall beside it
+    // rather than stopping square at its ends.
+    washes.push(tint(place(new THREE.PlaneGeometry(l.width * 1.7, reach).translate(0, l.top - reach / 2, l.wall + 0.005)), 0.5 * k));
   }
   return {
     strips: mergeGeometries(strips) ?? new THREE.BufferGeometry(),
@@ -200,19 +244,8 @@ function buildWashes(ledges: WashLedge[]) {
   };
 }
 
-/** Brightest at the top middle, fading down and out to the sides. */
+/** Brightest along the top, under the ledge, fading down the wall and
+ *  softly out to both sides. */
 function washTexture(): THREE.Texture {
-  const size = 64;
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = size;
-  const ctx = canvas.getContext("2d")!;
-  const g = ctx.createRadialGradient(size / 2, 0, 0, size / 2, 0, size);
-  g.addColorStop(0, "rgba(255,255,255,1)");
-  g.addColorStop(0.45, "rgba(255,255,255,0.4)");
-  g.addColorStop(1, "rgba(255,255,255,0)");
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, size, size);
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  return texture;
+  return shadedTexture(64, (u, v) => smooth((0.5 - Math.abs(u - 0.5)) / 0.32) * Math.pow(1 - v, 1.8));
 }

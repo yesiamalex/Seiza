@@ -88,10 +88,14 @@ function buildGlow(): THREE.BufferGeometry {
     const wx = side * (MEADOW_WING.x + MEADOW_WING.width - GLOW_BAR / 2);
     const wallEnd = FIELD.minZ + MEADOW_BANK;
     bar(wx - GLOW_BAR / 2, wx + GLOW_BAR / 2, CURB.height + lip, edge - CURB.depth, wallEnd);
-    upright(side * MEADOW_WING.x, edge + GLOW_BAR / 2, FIELD_Y, CURB.height);
-    upright(wx, edge - CURB.depth + GLOW_BAR / 2, OUTER_GROUND_Y, CURB.height);
-    upright(wx, wallEnd - GLOW_BAR / 2, OUTER_GROUND_Y, CURB.height);
-    upright(kx, OUTDOOR.minZ + GLOW_BAR / 2, OUTER_GROUND_Y, KERB.height);
+    // Upright lines on the end wall's three outside corners, standing just
+    // clear of both faces (inside them, they flickered), from the ground
+    // there to the top.
+    const o = GLOW_BAR / 2 + 0.004;
+    const [x0, x1] = [side * MEADOW_WING.x, side * (MEADOW_WING.x + MEADOW_WING.width)];
+    upright(x0 - side * o, wallEnd + o, FIELD_Y - 0.05, CURB.height + lip);
+    upright(x1 + side * o, wallEnd + o, FIELD_Y - 0.05, CURB.height + lip);
+    upright(x1 + side * o, edge - CURB.depth - o, OUTER_GROUND_Y - 0.03, CURB.height + lip);
   }
   const merged = mergeGeometries(parts.map((g) => g.toNonIndexed()));
   for (const g of parts) g.dispose();
@@ -134,7 +138,9 @@ function buildSteps(): THREE.BufferGeometry {
 
   // A stone landing at the top of the steps, over the deck's edge, which
   // otherwise showed as a strip of bare wood between the curb's ends.
-  box(x - halfWidth - 0.24, x + halfWidth + 0.24, -0.03, 0.012, edge - CURB.depth, edge);
+  // Solid down to the meadow: a slab only at the top left a gap down to
+  // the first step that showed the wood behind.
+  box(x - halfWidth - 0.24, x + halfWidth + 0.24, bottom, 0.012, edge - CURB.depth, edge);
   // The steps: each tread a riser lower than the last, down to the meadow.
   for (let i = 1; i < risers; i++) {
     box(x - halfWidth, x + halfWidth, bottom, -rise * i, edge + tread * (i - 1), edge + tread * i);
