@@ -85,11 +85,14 @@ function build(desks: GlowDesk[]) {
     const k = d.strength ?? 1;
     // Built round the piece's own centre, then turned and placed.
     const place = (g: THREE.BufferGeometry) => g.rotateY(d.yaw ?? 0).translate(d.x, 0, d.z).toNonIndexed();
-    strips.push(tint(place(new THREE.BoxGeometry(d.width - 0.1, STRIP, STRIP).translate(0, d.under - STRIP / 2, d.edge * (d.depth / 2 - 0.04))), k));
+    // The strip is the source, kept faint: the pool is what reads.
+    strips.push(tint(place(new THREE.BoxGeometry(d.width - 0.1, STRIP, STRIP).translate(0, d.under - STRIP / 2, d.edge * (d.depth / 2 - 0.04))), 0.55 * k));
     // The pool starts under the piece and spills out past the lit edge,
     // fading as it goes (spillTexture: brightest at its -Z end). Turned
     // round for a strip under the +Z edge.
-    const reach = d.depth * 2.6;
+    // From well back under the piece to well out past its lit edge.
+    const back = d.depth * 0.8;
+    const reach = d.depth * 2.6 + back;
     pools.push(
       tint(
         place(
@@ -97,7 +100,7 @@ function build(desks: GlowDesk[]) {
             .rotateX(-Math.PI / 2)
             // Laid out spilling toward +Z, brightest just inside the lit
             // edge; turned round when that edge is the -Z one.
-            .translate(0, 0.004, reach / 2 + d.depth * 0.1)
+            .translate(0, 0.004, reach / 2 - back)
             .rotateY(d.edge > 0 ? 0 : Math.PI)
         ),
         0.5 * k
@@ -134,9 +137,16 @@ const smooth = (t: number) => {
 /** Light thrown from a strip: full along its length, softening to nothing
  *  at the ends (no oval, no hard sides), and fading with distance from it. */
 const stripFalloff = (u: number, v: number) => smooth((0.5 - Math.abs(u - 0.5)) / 0.3) * Math.pow(1 - v, 2.2);
-/** A pool on the floor, brightest at the strip's end (the top of the canvas). */
+/** Where along a floor pool the lit edge falls: the light fades from
+ *  there both ways, softly back under the piece and further out past it. */
+const POOL_PEAK = 0.38;
+/** A pool on the floor, starting under the piece (the top of the canvas)
+ *  and spilling out past its lit edge. */
 export function spillTexture(): THREE.Texture {
-  return shadedTexture(64, stripFalloff);
+  return shadedTexture(64, (u, v) => {
+    const along = v < POOL_PEAK ? Math.pow(smooth(v / POOL_PEAK), 1.4) : Math.pow(1 - (v - POOL_PEAK) / (1 - POOL_PEAK), 2.2);
+    return smooth((0.5 - Math.abs(u - 0.5)) / 0.3) * along;
+  });
 }
 
 /** A soft rounded pool: brightest in the middle, gone at the edges. */

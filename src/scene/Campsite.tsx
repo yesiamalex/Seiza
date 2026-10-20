@@ -158,7 +158,8 @@ function TentLantern({ lit, metal, windows }: { lit: boolean; metal: THREE.Mater
     for (const g of parts) g.dispose();
     return {
       hangAt: at(0, TENT.height - 0.01, -TENT.length * 0.15),
-      poolAt: at(0, 0.02, -TENT.length * 0.1),
+      // Under the lantern, a hair above the ground sheet.
+      poolAt: at(0, 0.014, -TENT.length * 0.15),
       frame,
       globe: new THREE.CylinderGeometry(0.05, 0.05, 0.12, 14).translate(0, -0.29, 0),
       bulb: new THREE.MeshBasicMaterial({ color: "#ffc77a", toneMapped: false }),
@@ -180,9 +181,10 @@ function TentLantern({ lit, metal, windows }: { lit: boolean; metal: THREE.Mater
     level.current += ((lit ? 1 : 0) - level.current) * (1 - Math.exp(-delta / 0.4));
     parts.bulb.color.set("#ffc77a").multiplyScalar(0.12 + 0.88 * level.current);
     // Seen glowing at night; by day the mesh just reads dark.
-    screen.color.set("#2a1d19").lerp(WINDOW_GLOW, 0.75 * level.current * nightNeed());
-    // Very dim: enough to find your bag by, not to read.
-    parts.pool.color.set("#ffc77a").multiplyScalar(0.22 * level.current);
+    screen.color.set("#6b5148").lerp(WINDOW_GLOW, 0.75 * level.current * nightNeed());
+    // A warm pool on the ground sheet, brightest under the lantern:
+    // enough to show it is lit, and to find your bag by.
+    parts.pool.color.set("#ffc77a").multiplyScalar(0.55 * level.current);
     parts.pool.visible = level.current > 0.01;
   });
   return (
@@ -193,7 +195,7 @@ function TentLantern({ lit, metal, windows }: { lit: boolean; metal: THREE.Mater
         <mesh geometry={parts.globe} material={parts.bulb} raycast={() => null} />
       </group>
       <mesh position={parts.poolAt} rotation={[-Math.PI / 2, 0, TENT_YAW]} material={parts.pool} raycast={() => null} renderOrder={1}>
-        <planeGeometry args={[TENT.width * 0.9, TENT.length * 0.9]} />
+        <planeGeometry args={[TENT.width * 1.05, TENT.length * 1.05]} />
       </mesh>
     </>
   );
@@ -201,8 +203,8 @@ function TentLantern({ lit, metal, windows }: { lit: boolean; metal: THREE.Mater
 
 const WINDOW_GLOW = new THREE.Color("#ffc77a");
 
-/** A tent window: rounded, its edges fading into the fabric, with the
- *  faint grid of insect mesh across it. */
+/** A tent window: a dark binding round a rounded opening of see-through
+ *  insect mesh, its fine grid faint against whatever is behind it. */
 function windowTexture(): THREE.Texture {
   const w = 128;
   const h = 96;
@@ -214,13 +216,16 @@ function windowTexture(): THREE.Texture {
   const r = 26;
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
-      // Distance inside a rounded rectangle, for a soft edge.
-      const dx = Math.max(r - x, x - (w - 1 - r), 0);
-      const dy = Math.max(r - y, y - (h - 1 - r), 0);
-      const inside = r - Math.hypot(dx, dy);
-      const edge = Math.max(0, Math.min(1, inside / 9));
-      const grid = x % 6 === 0 || y % 6 === 0 ? 0.78 : 1;
-      image.data.set([255 * grid, 255 * grid, 255 * grid, 255 * edge * 0.92], (y * w + x) * 4);
+      // Inside the opening, by how far in from the binding (12 px wide).
+      const inset = 12;
+      const ox = Math.max(r + inset - x, x - (w - 1 - r - inset), 0);
+      const oy = Math.max(r + inset - y, y - (h - 1 - r - inset), 0);
+      const open = Math.max(0, Math.min(1, (r - Math.hypot(ox, oy)) / 3));
+      const grid = x % 6 === 0 || y % 6 === 0;
+      // Binding: opaque and dark. Mesh: mostly clear, its threads a little less.
+      const alpha = 1 - open * (grid ? 0.6 : 0.85);
+      const shade = 255 - (1 - open) * 185;
+      image.data.set([shade, shade * 0.86, shade * 0.8, 255 * alpha], (y * w + x) * 4);
     }
   }
   ctx.putImageData(image, 0, 0);
@@ -402,10 +407,20 @@ function buildCamp() {
     g.computeVertexNormals();
     return g.applyMatrix4(tent);
   };
-  for (const side of [-1, 1]) parts.tent.push(wallPatch(side, 0, 1, 0, 1, 18, 8));
-  // A mesh window in each wall, toward the back, standing a hair off the
-  // fabric so the two never fight for the same pixels.
-  windows.push(...[-1, 1].map((side) => wallPatch(side, 0.2, 0.52, 0.32, 0.66, 6, 4, 0.006)));
+  // Each wall is four pieces round an opening for its window, toward the
+  // back, so you can see in (and out).
+  const [w0, w1, h0, h1] = [0.2, 0.52, 0.32, 0.66];
+  for (const side of [-1, 1]) {
+    parts.tent.push(
+      wallPatch(side, 0, 1, 0, h0, 18, 3),
+      wallPatch(side, 0, 1, h1, 1, 18, 3),
+      wallPatch(side, 0, w0, h0, h1, 4, 3),
+      wallPatch(side, w1, 1, h0, h1, 9, 3)
+    );
+    // The window: binding round the edge and see-through mesh, standing a
+    // hair off the fabric line so the two never fight for the same pixels.
+    windows.push(wallPatch(side, w0, w1, h0, h1, 6, 4, 0.006));
+  }
   const back = new THREE.Shape([new THREE.Vector2(-half, 0), new THREE.Vector2(half, 0), new THREE.Vector2(0, TENT.height)]);
   parts.tent.push(new THREE.ShapeGeometry(back).translate(0, 0, -TENT.length / 2).applyMatrix4(tent));
   // A ridge pole and the front pole that holds the door's peak up.
