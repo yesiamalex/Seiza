@@ -714,11 +714,14 @@ export default function App() {
             ? ACCENT_OBJECT_COLOR
             : OBJECT_COLORS[Math.floor(Math.random() * OBJECT_COLORS.length)],
         position: spawnPosition,
-        // Boards and screens face whoever placed them. A chair is the
-        // exception: you place one to sit in it, so it faces the way you're
-        // already looking rather than turning you back around. A bed faces
-        // you too, foot first, so the headboard doesn't hide the mattress.
-        rotationY: kind === "chair" ? yaw : yaw + Math.PI,
+        // A placed object's face is its local +Z, so taking the placer's
+        // yaw turns boards, screens, and pictures toward them, lays a note
+        // the right way up to read, and turns a chair to sit in facing the
+        // way they look. It was yaw + π, which showed everyone the back of
+        // what they had just placed (and their writing on its far side).
+        // A bed is the exception: turned round, foot toward the placer, so
+        // the headboard doesn't hide the mattress.
+        rotationY: kind === "bed" ? yaw + Math.PI : yaw,
         pitch,
         scale: 1,
         text: isTextObjectKind(kind) ? "" : undefined,

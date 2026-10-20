@@ -15,7 +15,7 @@ import { WindowSun } from "./WindowSun";
 import { Campsite } from "./Campsite";
 import { GardenSteps } from "./GardenSteps";
 import { GlowEdges, rectOutline, type GlowSegment } from "./GlowEdges";
-import { UnderGlow, type GlowDesk } from "./UnderGlow";
+import { UnderGlow, WallWash, type GlowDesk, type WashLedge } from "./UnderGlow";
 import { buildMeadowGeometry } from "./meadow";
 import { DEFAULT_LIGHTS, type LightZone } from "../multiplayer/types";
 import { playDoorSlide, playDoorSwing } from "../audio/sfx";
@@ -110,13 +110,16 @@ export const BaseEnvironment = memo(function BaseEnvironment({
       <HallFurniture m={m} lit={lights.hall} onToggleLight={onToggleLight} />
       <GlowEdges segments={HALL_GLOW} lit={lights.hall} />
       <UnderGlow desks={RECEPTION_GLOW} lit={lights.hall} />
+      <WallWash ledges={HALL_WASH} lit={lights.hall} />
       <OutdoorGarden m={m} lit={lights.pond} onToggleLight={onToggleLight} />
       {/* On the garden switch with the lampposts. */}
       <GardenSteps lit={lights.pond} />
+      <UnderGlow desks={GARDEN_BENCH_GLOW} lit={lights.pond} />
       <CorridorShell m={m} />
       <ClassroomShell m={m} lit={lights.classroom} onToggleLight={onToggleLight} />
       <GlowEdges segments={CLASSROOM_GLOW} lit={lights.classroom} />
       <UnderGlow desks={CLASSROOM_DESK_GLOW} lit={lights.classroom} />
+      <WallWash ledges={CLASSROOM_WASH} lit={lights.classroom} />
       <ClassroomFurniture m={m} />
       <Campsite lit={lights.camp} onToggle={onToggleLight} inBed={occupiedSeatId?.startsWith("camp-bed") ?? false} />
       {onSit &&
@@ -164,9 +167,17 @@ const HALL_GLOW: GlowSegment[] = [
   // Along the outer top edge of the platform's raised border strips
   // (HallFurniture), not the mats inside them, which the strips stand over.
   ...rectOutline(TATAMI.minX - 0.16, TATAMI.maxX + 0.16, TATAMI.minZ - 0.12, TATAMI.maxZ + 0.12, 0.165 + 0.013),
-  ...[-1, 1].map((side): GlowSegment => {
+  // Skirting and a cove line where each wall meets the ceiling, so the
+  // corridor reads as a lit passage between the two rooms.
+  ...[-1, 1].flatMap((side): GlowSegment[] => {
     const x = side * (CORRIDOR.maxX - WALL_THICKNESS / 2 - 0.03);
-    return [[x, 0.02, CORRIDOR.minZ], [x, 0.02, CORRIDOR.maxZ]];
+    // Under the front of the walls' top trim (DressedWall: 0.2 m down from
+    // the top, standing 0.1 m proud), as if lit from a strip tucked there.
+    const cove = side * (CORRIDOR.maxX - WALL_THICKNESS / 2 - 0.085);
+    return [
+      [[x, 0.02, CORRIDOR.minZ], [x, 0.02, CORRIDOR.maxZ]],
+      [[cove, 3.2 - 0.215, CORRIDOR.minZ], [cove, 3.2 - 0.215, CORRIDOR.maxZ]],
+    ];
   }),
 ];
 
@@ -174,15 +185,48 @@ const HALL_GLOW: GlowSegment[] = [
  *  the strip under the edge away from whoever sits there, so they see the
  *  pool on the floor and not the strip. The teacher's desk is brighter, on
  *  the side facing the class, so it reads as the front of the room. */
-const RECEPTION_GLOW: GlowDesk[] = [{ x: -7, z: 13.45, width: 3.6, depth: 0.9, under: 0.995, edge: -1 }];
+/** Benches are lit under the front of the seat, where the sitters' feet
+ *  are, softer than a desk. */
+const benchGlow = (bench: BenchPlacement): GlowDesk => ({
+  x: bench.position[0],
+  z: bench.position[2],
+  width: BENCH_LENGTH,
+  depth: 0.54,
+  under: SEAT_HEIGHT - 0.055,
+  edge: -1,
+  yaw: bench.rotationY,
+  strength: 0.45,
+});
+const RECEPTION_GLOW: GlowDesk[] = [{ x: -7, z: 13.45, width: 3.6, depth: 0.9, under: 0.995, edge: -1 }, ...BENCHES.map(benchGlow)];
+const GARDEN_BENCH_GLOW: GlowDesk[] = OUTDOOR_BENCHES.map(benchGlow);
 const CLASSROOM_DESK_GLOW: GlowDesk[] = [
-  ...DESKS.map((desk): GlowDesk => ({ x: desk.position[0], z: desk.position[2], width: 1.15, depth: 0.62, under: 0.685, edge: -1, strength: 0.8 })),
-  { x: TEACHER_DESK[0], z: TEACHER_DESK[2], width: 1.9, depth: 0.85, under: 0.7, edge: 1, strength: 1.3 },
+  ...DESKS.map((desk): GlowDesk => ({ x: desk.position[0], z: desk.position[2], width: 1.15, depth: 0.62, under: 0.685, edge: -1, strength: 0.4 })),
+  { x: TEACHER_DESK[0], z: TEACHER_DESK[2], width: 1.9, depth: 0.85, under: 0.7, edge: 1, strength: 0.75 },
 ];
 
 /** The classroom notice board's frame, on the classroom's switch. */
 const NOTICE_Z = CLASSROOM.maxZ - 0.2 - 0.06;
 const CLASSROOM_GLOW: GlowSegment[] = [
+  // A cove line round the room under the front of the walls' top trim,
+  // as in the corridor.
+  ...rectOutline(
+    CLASSROOM.minX + WALL_THICKNESS / 2 + 0.085,
+    CLASSROOM.maxX - WALL_THICKNESS / 2 - 0.085,
+    CLASSROOM.minZ + WALL_THICKNESS / 2 + 0.085,
+    CLASSROOM.maxZ - WALL_THICKNESS / 2 - 0.085,
+    CLASSROOM_WALL_HEIGHT - 0.215
+  ),
+  // The blackboard's frame (ClassroomShell: 6.6 by 1.95 m, centred 1.8 m
+  // up, its front face 0.06 in front of boardZ).
+  ...((): GlowSegment[] => {
+    const z = CLASSROOM.minZ + WALL_THICKNESS / 2 + 0.12 + 0.065;
+    const [x0, x1, y0, y1] = [-3.3, 3.3, 1.8 - 0.975, 1.8 + 0.975];
+    return [
+      [[x0, y1, z], [x1, y1, z]],
+      [[x0, y0, z], [x0, y1, z]],
+      [[x1, y0, z], [x1, y1, z]],
+    ];
+  })(),
   [[-8.5, 1.1, NOTICE_Z], [-5.5, 1.1, NOTICE_Z]],
   [[-8.5, 2.7, NOTICE_Z], [-5.5, 2.7, NOTICE_Z]],
   [[-8.5, 1.1, NOTICE_Z], [-8.5, 2.7, NOTICE_Z]],
@@ -1365,3 +1409,35 @@ function ClassroomFurniture({ m }: { m: WorldMaterials }) {
     </group>
   );
 }
+
+/** Window sills lit from under their front edges, washing the wall below
+ *  (WallWash), and the notice board from under its bottom edge. The sill
+ *  is the Window component's: 2 cm below the frame, 0.24 deep, its front
+ *  0.2 into the room; the wall's face is WALL_THICKNESS / 2 + WAINSCOT_PROUD
+ *  in front of its middle, and windows and board hang 0.2 in from that. */
+const WALL_FACE = WALL_THICKNESS / 2 + WAINSCOT_PROUD - 0.2;
+const sill = (x: number, z: number, yaw: number, width: number, centerY: number, height: number): WashLedge => ({
+  x,
+  z,
+  yaw,
+  width: width + 0.1,
+  top: centerY - height / 2 - 0.055,
+  wall: WALL_FACE,
+  lip: 0.2,
+  strength: 0.7,
+});
+const HALL_WASH: WashLedge[] = HALL_WINDOW_Z.flatMap((z) => [
+  sill(HALL.minX + 0.2, z, Math.PI / 2, HALL_WINDOW_WIDTH, HALL_WINDOW_CENTER_Y, HALL_WINDOW_HEIGHT),
+  sill(HALL.maxX - 0.2, z, -Math.PI / 2, HALL_WINDOW_WIDTH, HALL_WINDOW_CENTER_Y, HALL_WINDOW_HEIGHT),
+]);
+const CLASSROOM_WASH: WashLedge[] = [
+  ...CLASSROOM_WINDOW_Z.flatMap((z) => [
+    sill(CLASSROOM.minX + 0.2, z, Math.PI / 2, CLASSROOM_WINDOW_WIDTH, CLASSROOM_WINDOW_CENTER_Y, CLASSROOM_WINDOW_HEIGHT),
+    sill(CLASSROOM.maxX - 0.2, z, -Math.PI / 2, CLASSROOM_WINDOW_WIDTH, CLASSROOM_WINDOW_CENTER_Y, CLASSROOM_WINDOW_HEIGHT),
+  ]),
+  // The blackboard's chalk tray (ClassroomShell): 6.6 m wide, its
+  // underside 0.69 m up, its front 0.24 m off the wall's middle line.
+  { x: 0, z: CLASSROOM.minZ + WALL_THICKNESS / 2, yaw: 0, width: 6.6, top: 0.69, wall: WAINSCOT_PROUD, lip: 0.24, reach: 0.6, strength: 0.8 },
+  // The notice board (ClassroomShell): 3 m wide, its bottom at 1.1 m.
+  { x: -7, z: CLASSROOM.maxZ - 0.2, yaw: Math.PI, width: 3, top: 1.1, wall: WALL_FACE, lip: 0.05, reach: 0.8, strength: 0.8 },
+];

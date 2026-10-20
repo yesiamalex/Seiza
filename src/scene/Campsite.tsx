@@ -5,6 +5,7 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import type { LightZone } from "../multiplayer/types";
 import { playFireToggle, setFireAmbience } from "../audio/sfx";
 import { PooledLight } from "./LightPool";
+import { poolTexture } from "./UnderGlow";
 import { CAMP_CHAIRS, CAMP_SEAT_HEIGHT, CAMPFIRE, FIELD_Y, SLEEPING_BAG, TENT, TENT_YAW } from "./layout";
 
 /**
@@ -106,11 +107,60 @@ export function Campsite({
         <mesh geometry={geometry.wood} material={m.wood} castShadow />
         <Fire lit={lit} />
       </group>
+      <TentLantern lit={lit} />
     </group>
   );
 }
 
 const TENT_SEE_THROUGH = 0.22;
+
+/**
+ * A small lantern hung from the tent's ridge, and the very faint warm pool
+ * it throws on the ground sheet: lit with the fire, on the camp switch. No
+ * light: an unlit bulb and an additive pool, two draw calls.
+ */
+function TentLantern({ lit }: { lit: boolean }) {
+  const texture = useMemo(poolTexture, []);
+  const parts = useMemo(() => {
+    const at = (x: number, y: number, z: number) => {
+      const c = Math.cos(TENT_YAW);
+      const s = Math.sin(TENT_YAW);
+      return [TENT.x + x * c + z * s, FIELD_Y + y, TENT.z - x * s + z * c] as [number, number, number];
+    };
+    return {
+      bulbAt: at(0, TENT.height - 0.22, -TENT.length * 0.15),
+      poolAt: at(0, 0.02, -TENT.length * 0.1),
+      bulb: new THREE.MeshBasicMaterial({ color: "#ffc77a", toneMapped: false }),
+      pool: new THREE.MeshBasicMaterial({ map: texture, color: "#ffc77a", transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }),
+    };
+  }, [texture]);
+  useEffect(
+    () => () => {
+      texture.dispose();
+      parts.bulb.dispose();
+      parts.pool.dispose();
+    },
+    [texture, parts]
+  );
+  const level = useRef(lit ? 1 : 0);
+  useFrame((_, delta) => {
+    level.current += ((lit ? 1 : 0) - level.current) * (1 - Math.exp(-delta / 0.4));
+    parts.bulb.color.set("#ffc77a").multiplyScalar(0.12 + 0.88 * level.current);
+    // Very dim: enough to find your bag by, not to read.
+    parts.pool.color.set("#ffc77a").multiplyScalar(0.22 * level.current);
+    parts.pool.visible = level.current > 0.01;
+  });
+  return (
+    <>
+      <mesh position={parts.bulbAt} material={parts.bulb} raycast={() => null}>
+        <sphereGeometry args={[0.05, 10, 8]} />
+      </mesh>
+      <mesh position={parts.poolAt} rotation={[-Math.PI / 2, 0, TENT_YAW]} material={parts.pool} raycast={() => null} renderOrder={1}>
+        <planeGeometry args={[TENT.width * 0.9, TENT.length * 0.9]} />
+      </mesh>
+    </>
+  );
+}
 
 /** Whether a point is under the tent's walls. */
 function insideTent(point: THREE.Vector3) {

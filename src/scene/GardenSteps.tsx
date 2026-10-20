@@ -64,12 +64,16 @@ function buildGlow(): THREE.BufferGeometry {
     parts.push(
       new THREE.BoxGeometry(Math.max(GLOW_BAR, x1 - x0), GLOW_BAR, Math.max(GLOW_BAR, z1 - z0)).translate((x0 + x1) / 2, y, (z0 + z1) / 2)
     );
+  /** An upright line at (x, z) from y0 up to y1. */
+  const upright = (x: number, z: number, y0: number, y1: number) =>
+    parts.push(new THREE.BoxGeometry(GLOW_BAR, y1 - y0, GLOW_BAR).translate(x, (y0 + y1) / 2, z));
   const edge = OUTDOOR.maxZ;
   const { x, halfWidth, tread, risers } = GARDEN_STEPS;
   const rise = -FIELD_Y / risers;
   const lip = GLOW_BAR / 2 + 0.004;
   // The landing's edge and each step's nose.
-  for (let i = 0; i < risers; i++) bar(x - halfWidth, x + halfWidth, -rise * i + lip, edge + tread * i - GLOW_BAR, edge + tread * i);
+  // (The landing's on its stone slab, a little above the deck.)
+  for (let i = 0; i < risers; i++) bar(x - halfWidth, x + halfWidth, (i === 0 ? 0.012 : -rise * i) + lip, edge + tread * i - GLOW_BAR, edge + tread * i);
   for (const side of [-1, 1]) {
     // The curb's outer top edge along the wall, either side of the steps.
     const [a, b] = side < 0 ? [-MEADOW_WING.x, x - halfWidth - 0.24] : [x + halfWidth + 0.24, MEADOW_WING.x];
@@ -77,6 +81,17 @@ function buildGlow(): THREE.BufferGeometry {
     // The kerb's outer top edge down the garden's side.
     const kx = side * (OUTDOOR.maxX + KERB.width - GLOW_BAR / 2);
     bar(kx - GLOW_BAR / 2, kx + GLOW_BAR / 2, KERB.height + lip, OUTDOOR.minZ, edge - CURB.depth);
+    // The end wall's outer top edge, carrying the curb's line out over the
+    // bank, and the stonework's corners as upright lines: where the wall
+    // meets the end wall on the meadow side, the end wall's two outer
+    // corners, and where the kerb starts at the building.
+    const wx = side * (MEADOW_WING.x + MEADOW_WING.width - GLOW_BAR / 2);
+    const wallEnd = FIELD.minZ + MEADOW_BANK;
+    bar(wx - GLOW_BAR / 2, wx + GLOW_BAR / 2, CURB.height + lip, edge - CURB.depth, wallEnd);
+    upright(side * MEADOW_WING.x, edge + GLOW_BAR / 2, FIELD_Y, CURB.height);
+    upright(wx, edge - CURB.depth + GLOW_BAR / 2, OUTER_GROUND_Y, CURB.height);
+    upright(wx, wallEnd - GLOW_BAR / 2, OUTER_GROUND_Y, CURB.height);
+    upright(kx, OUTDOOR.minZ + GLOW_BAR / 2, OUTER_GROUND_Y, KERB.height);
   }
   const merged = mergeGeometries(parts.map((g) => g.toNonIndexed()));
   for (const g of parts) g.dispose();
@@ -117,6 +132,9 @@ function buildSteps(): THREE.BufferGeometry {
     box(Math.min(w0, w1), Math.max(w0, w1), bottom, CURB.height, edge - CURB.depth, FIELD.minZ + MEADOW_BANK);
   }
 
+  // A stone landing at the top of the steps, over the deck's edge, which
+  // otherwise showed as a strip of bare wood between the curb's ends.
+  box(x - halfWidth - 0.24, x + halfWidth + 0.24, -0.03, 0.012, edge - CURB.depth, edge);
   // The steps: each tread a riser lower than the last, down to the meadow.
   for (let i = 1; i < risers; i++) {
     box(x - halfWidth, x + halfWidth, bottom, -rise * i, edge + tread * (i - 1), edge + tread * i);
