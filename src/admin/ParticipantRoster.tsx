@@ -139,7 +139,10 @@ export function ParticipantRoster({
               top: "calc(100% + 8px)",
               left: 0,
               width: "min(320px, calc(100vw - 32px))",
-              zIndex: 21,
+              // Above a world's own overlays (Seilaya's Safety pill sits
+              // just below this pill, at 35): a menu you just opened comes
+              // first. Still under dialogs and the controls guide (40+).
+              zIndex: 37,
               padding: 10,
               display: "flex",
               flexDirection: "column",
