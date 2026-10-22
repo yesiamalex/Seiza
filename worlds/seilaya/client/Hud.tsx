@@ -6,6 +6,7 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { ACCENT_COLOR, panelStyle, pillButtonActiveStyle, pillButtonStyle, primaryButtonStyle } from "../../../src/ui/styles";
 import { setAllowRequests, useTogether } from "../../../src/interactions/together";
+import { useExclusiveMenu } from "../../../src/ui/exclusiveMenu";
 import { BYSTANDER, CARDS, HELP_CONTACTS, QUIZ } from "./info";
 import { REFERENCES } from "./references";
 import {
@@ -63,6 +64,13 @@ const HUD_CSS = `
 
 export function SeilayaHud() {
   const s = useSafety();
+  // One of Seiza's menus, like its roster and gesture menus: opening the
+  // Safety panel closes them, and opening one of them closes this. Both
+  // open under the top-left corner, and stacked they hid each other.
+  useExclusiveMenu("seilaya-safety", s.panelOpen, () => {
+    state.panelOpen = false;
+    openCard(state.card);
+  });
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
