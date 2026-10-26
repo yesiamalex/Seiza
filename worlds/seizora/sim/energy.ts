@@ -1,6 +1,6 @@
 /**
  * Seizora's microgrid: a solar farm with a perovskite pilot row, two wind
- * turbines, a battery, and a community load, run minute by minute from
+ * turbines, a battery, and the town it serves (sim/town.ts), run minute by minute from
  * Seiza's shared weather engine (src/sky/weather.ts).
  *
  * A learning model. The physics is the standard textbook kind (irradiance
@@ -14,10 +14,13 @@ import {
   ambientTemperature,
   clearSkyGhi,
   cloudyGhi,
+  SITES,
   sunPosition,
+  WEATHER,
   WeatherState,
   type Site,
 } from "../../../src/sky/weather";
+import { designPeakMw, townLoad } from "./town";
 
 export interface PlantSpec {
   /** Silicon PV, MW peak. */
@@ -30,7 +33,7 @@ export interface PlantSpec {
   /** Battery energy, MWh, and power limit, MW. */
   batteryMwh: number;
   batteryMw: number;
-  /** Peak community load, MW. */
+  /** The town's design peak, MW: its highest hour on a hot, clear day. */
   peakLoadMw: number;
 }
 
@@ -48,7 +51,8 @@ export const PLANT: PlantSpec = {
   turbineMw: 1.5,
   batteryMwh: 6,
   batteryMw: 3,
-  peakLoadMw: 3.2,
+  // From the town itself (sim/town.ts), on a clear day in Cebu.
+  peakLoadMw: designPeakMw((hour) => ambientTemperature(hour, SITES.cebu, WEATHER.clear.tempOffset)),
 };
 
 /** Panel tilt and facing used for the farm: 15° toward the south. */
@@ -181,15 +185,46 @@ export function turbinePower(ratedMw: number, wind: number): number {
 
 // --- load ------------------------------------------------------------------------
 
-/** Community load as a fraction of peak: a small morning rise, a midday
- *  plateau (school and clinic), and the evening peak when homes light up.
- *  An illustrative shape for a small rural community, not a measured
- *  feeder profile. */
+/** The town's load as a fraction of its design peak, at an hour and an air
+ *  temperature: what its homes, school, clinic, and shops have switched on
+ *  (sim/town.ts). */
 export function loadFraction(hour: number, temp = 28): number {
-  const g = (mu: number, sigma: number) => Math.exp(-(((hour - mu) / sigma) ** 2) / 2);
-  const base = 0.38 + 0.18 * g(7.5, 1.4) + 0.3 * g(13, 3) + 0.55 * g(19.5, 1.8);
-  const cooling = Math.max(0, temp - 30) * 0.02; // air conditioning on hot afternoons
-  return Math.min(1, base + cooling);
+  return townLoad(hour, temp).totalMw / PLANT.peakLoadMw;
+}
+
+// --- El Niño ----------------------------------------------------------------------
+
+/**
+ * The El Niño 2026 scenario. PAGASA reports a strong to very strong El Niño
+ * from late 2026 into the first half of 2027, with below-normal rainfall,
+ * and named Cebu among the provinces likely to be in drought (GMA News,
+ * 2026). The console pairs it with clear skies, so the sky shows the dry
+ * weather; the model adds what the sky can't show:
+ * - Warmer air. WARMING_C is an assumption: El Niño seasons run warm, and
+ *   Metro Manila set its record of 38.8 °C in April 2024, during the last
+ *   one (PIA, 2024), though attribution puts El Niño's own share of that
+ *   heatwave at only about 0.2 °C, most of it being climate change.
+ * - A strained main grid. In April and May 2024, with demand above forecast
+ *   in the heat and plants on forced outage, NGCP put the Luzon grid on red
+ *   alert from 2 to 4 p.m. and 6 to 9 p.m. on 16 April (Inquirer, 2024), and
+ *   distribution utilities rotated brownouts. In the scenario, on hot, dry
+ *   days the main grid can supply only ALERT_IMPORT_SHARE of the town's
+ *   design peak in those hours (an assumption), and whatever the plant and
+ *   battery can't cover goes dark in rotation.
+ */
+export const EL_NINO = {
+  warmingC: 1,
+  alertHours: [
+    [14, 16],
+    [18, 21],
+  ] as [number, number][],
+  importShare: 0.5,
+};
+
+/** Whether the main grid is on alert: El Niño, a hot dry day, alert hours. */
+export function gridAlertAt(hour: number, elNino: boolean, weatherType: string): boolean {
+  if (!elNino || (weatherType !== "clear" && weatherType !== "partly")) return false;
+  return EL_NINO.alertHours.some(([from, to]) => hour >= from && hour < to);
 }
 
 // --- the plant ----------------------------------------------------------------------
@@ -204,6 +239,8 @@ export interface Controls {
   gridConnected: boolean;
   batteryMode: BatteryMode;
   encapsulation: Encapsulation;
+  /** The El Niño 2026 scenario (see EL_NINO). */
+  elNino: boolean;
 }
 
 export const DEFAULT_CONTROLS: Controls = {
@@ -214,6 +251,7 @@ export const DEFAULT_CONTROLS: Controls = {
   gridConnected: true,
   batteryMode: "auto",
   encapsulation: "glass",
+  elNino: false,
 };
 
 export interface Snapshot {
@@ -236,8 +274,14 @@ export interface Snapshot {
   loadMw: number;
   /** Positive when importing from the main grid, negative when exporting. */
   gridMw: number;
-  /** Load the island could not serve (grid disconnected). */
+  /** Load that went unserved: shed in island mode, or rotated off in an
+   *  El Niño grid alert. */
   unservedMw: number;
+  /** The main grid is on alert and can supply only `gridLimitMw`. */
+  gridAlert: boolean;
+  gridLimitMw: number;
+  /** The El Niño scenario was on. */
+  elNino: boolean;
   soc: number;
   perovskiteHealth: number;
   turbinesFeathered: boolean;
@@ -267,6 +311,7 @@ export class Microgrid {
   last: Snapshot | null = null;
   private feathered = false;
   private lowSocWarned = false;
+  private alert = false;
 
   constructor(public spec: PlantSpec = PLANT) {}
 
@@ -277,7 +322,7 @@ export class Microgrid {
     const cloud = weather.effectiveCloud();
     const ghi = cloudyGhi(clearSkyGhi(sun.elevation), cloud);
     const poa = planeOfArrayIrradiance(ghi, sun.elevation, sun.azimuth, cloud);
-    const ambient = ambientTemperature(hour, site, weather.tempOffset);
+    const ambient = ambientTemperature(hour, site, weather.tempOffset) + (c.elNino ? EL_NINO.warmingC : 0);
     const wind = weather.windSpeed();
     const cellTemp = cellTemperature(ambient, poa, wind);
 
@@ -298,7 +343,20 @@ export class Microgrid {
     }
     const windMw = c.wind ? this.spec.turbines * turbinePower(this.spec.turbineMw, wind) : 0;
     const generation = siliconMw + perovskiteMw + windMw;
-    const loadMw = this.spec.peakLoadMw * loadFraction(hour, ambient);
+    const loadMw = townLoad(hour, ambient).totalMw;
+    const gridAlert = c.gridConnected && gridAlertAt(hour, c.elNino, weather.type);
+    const gridLimitMw = gridAlert ? EL_NINO.importShare * this.spec.peakLoadMw : Infinity;
+    if (gridAlert !== this.alert) {
+      this.log(
+        dayOfYear,
+        hour,
+        gridAlert
+          ? `Grid alert: the main grid can supply only ${gridLimitMw.toFixed(2)} MW. Anything more goes dark in rotating brownouts.`
+          : "Grid alert lifted: the main grid can supply the town again.",
+        gridAlert ? "warn" : "info"
+      );
+      this.alert = gridAlert;
+    }
 
     // Battery dispatch.
     let batteryMw = 0;
@@ -312,7 +370,8 @@ export class Microgrid {
           if (net >= 0) {
             batteryMw = -Math.min(net, maxCharge); // store the surplus
           } else {
-            const threshold = c.gridConnected ? PEAK_SHAVE_FRACTION * this.spec.peakLoadMw : 0;
+            // In a grid alert it covers whatever the grid can't, as well.
+            const threshold = c.gridConnected ? Math.min(PEAK_SHAVE_FRACTION * this.spec.peakLoadMw, gridLimitMw) : 0;
             const aboveThreshold = Math.max(0, loadMw - Math.max(threshold, generation));
             batteryMw = Math.min(c.gridConnected ? aboveThreshold : -net, maxDischarge);
           }
@@ -340,6 +399,10 @@ export class Microgrid {
     let unservedMw = 0;
     if (c.gridConnected) {
       gridMw = -balance; // import a shortfall, export a surplus
+      if (gridMw > gridLimitMw) {
+        unservedMw = gridMw - gridLimitMw; // rotating brownouts
+        gridMw = gridLimitMw;
+      }
     } else if (balance < 0) {
       unservedMw = -balance; // island: shed what can't be served
     }
@@ -362,6 +425,7 @@ export class Microgrid {
       hour, dayOfYear, sunElevation: sun.elevation, ghi, poa, ambient, cellTemp, windSpeed: wind, cloud,
       humidity: weather.humidity, rain: weather.rain, siliconMw, perovskiteMw, windMw, batteryMw, loadMw,
       gridMw, unservedMw, soc: this.soc, perovskiteHealth: this.perovskiteHealth, turbinesFeathered: feathered,
+      gridAlert, gridLimitMw: Number.isFinite(gridLimitMw) ? gridLimitMw : 0, elNino: c.elNino,
     };
     return this.last;
   }

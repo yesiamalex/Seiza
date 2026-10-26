@@ -16,11 +16,14 @@ import {
   SOC_MAX,
   SOC_MIN,
   turbinePower,
+  EL_NINO,
+  PEAK_SHAVE_FRACTION,
   type Snapshot,
 } from "./energy";
 import type { RefKey } from "./references";
+import { TOWN, townLoad, USE_LABELS, type Use } from "./town";
 
-export type InfoKey = "sky" | "silicon" | "perovskite" | "wind" | "battery" | "grid" | "load" | "layers" | "degradation";
+export type InfoKey = "sky" | "silicon" | "perovskite" | "wind" | "battery" | "grid" | "load" | "elnino" | "layers" | "degradation";
 
 /** What a card's live parts read: the plant now, its switches, and its
  *  last 24 hours. */
@@ -103,6 +106,13 @@ const healthLost = (c: LiveContext) => (c.history.length ? Math.max(0, c.history
 /** Output lost to heat at this cell temperature, by the model's own
  *  temperature coefficient. */
 const heatLoss = (cellTemp: number, tech: typeof SILICON) => Math.max(0, -tech.tempCoeff * (cellTemp - 25));
+/** One average home's use over the last 24 hours, in kWh, from the town
+ *  model at each sample's hour and temperature. */
+const homeKwh = (c: LiveContext) => c.history.reduce((sum, s) => sum + townLoad(s.hour, s.ambient).perHomeKw * c.sampleHours, 0);
+/** Homes dark now: unserved load as a share of the town. */
+const homesDark = (now: Snapshot) =>
+  now.unservedMw > 0.001 ? Math.min(TOWN.homes, Math.round((now.unservedMw / Math.max(0.001, townLoad(now.hour, now.ambient).totalMw)) * TOWN.homes)) : 0;
+const homes = (n: number) => `${n.toLocaleString("en")} home${n === 1 ? "" : "s"}`;
 
 // The model's own curves, drawn once: the community's load through a day,
 // and the wind farm's power against wind speed.
@@ -288,7 +298,7 @@ export const INFO: Record<InfoKey, InfoCard> = {
     },
     liveTrend: { label: "Charge", value: (s) => s.soc * 100, unit: "%", color: "#8a5fe0", min: 0, max: 100, digits: 0 },
     body: [
-      "The battery holds 6 MWh and can charge or discharge at up to 3 MW. In Auto, it stores whatever the plant makes beyond the load. On the grid it saves that energy for the evening peak: it covers only the part of the load above about 2.1 MW, so its charge lasts through the evening while the main grid supplies the rest. Cut off from the grid, it covers all it can.",
+      `The battery holds 6 MWh and can charge or discharge at up to 3 MW. In Auto, it stores whatever the plant makes beyond the load. On the grid it saves that energy for the evening peak: it covers only the part of the load above about ${(PEAK_SHAVE_FRACTION * PLANT.peakLoadMw).toFixed(1)} MW (65% of the town's design peak), so its charge lasts through the evening while the main grid supplies the rest. In an El Niño grid alert it also covers whatever the grid can't. Cut off from the grid, it covers all it can.`,
       "About 15% of the energy is lost on the round trip (85% comes back, typical of large lithium-ion systems), and the battery is kept between 10% and 95% full to protect it.",
     ],
     try: "Press 18:00 and open the Grid tie breaker, and see how long the battery carries the evening.",
@@ -304,9 +314,10 @@ export const INFO: Record<InfoKey, InfoCard> = {
       "Connected to the main grid, the plant exports its surplus and imports any shortfall, so the lights never go out. Island mode is a community running on its own, as it would after a typhoon cuts the lines.",
       "In island mode, whatever the plant and battery can't supply has to be shed. Many smaller Philippine islands are not on the main grid at all: the National Power Corporation runs their power plants, nearly all on diesel, and is adding solar and batteries to burn less fuel.",
       "Every MWh the plant makes instead of the main grid avoids about 0.71 tonnes of CO₂, the grid's emission factor for Luzon and the Visayas.",
+      "The main grid can run short too. In the El Niño heat of April and May 2024 it went on red alert in the afternoons and evenings, and towns took turns in rotating brownouts. The El Niño 2026 switch on the console brings that here.",
     ],
     liveStats: ({ now, gridConnected, day }) => [
-      ["Grid tie", gridConnected ? "connected" : "island mode"],
+      ["Grid tie", gridConnected ? (now.gridAlert ? `on alert: ${mw(now.gridLimitMw)} max` : "connected") : "island mode"],
       [
         "Now",
         !gridConnected
@@ -324,27 +335,67 @@ export const INFO: Record<InfoKey, InfoCard> = {
     ],
     liveTrend: { label: "From the grid (below the line: exported)", value: (s) => s.gridMw, unit: "MW", color: "#55607a" },
     try: "Press 00:00 and Rain, then open the Grid tie and Wind breakers.",
-    sources: ["npc2025", "doeNgef"],
+    sources: ["npc2025", "doeNgef", "inquirer2024"],
   },
   load: {
-    title: "The community load",
+    title: "The town: who uses the power",
     art: loadArt(),
     liveArt: ({ now }) => loadArt(now),
     liveStats: (c) => {
       const { now } = c;
       const own = Math.max(0, now.loadMw - Math.max(0, now.gridMw) - now.unservedMw);
+      const town = townLoad(now.hour, now.ambient);
+      const kwh = homeKwh(c);
+      // What it's going to right now, biggest first.
+      const uses = (Object.entries(town.byUse) as [Use, number][]).sort((a, b) => b[1] - a[1]).slice(0, 4);
       return [
-        ["Load now", `${mw(now.loadMw)} of ${PLANT.peakLoadMw} peak`],
+        ["Town now", `${mw(now.loadMw)} (design peak ${mw(PLANT.peakLoadMw)})`],
+        ["One home now", `${(town.perHomeKw * 1000).toFixed(0)} W at ${now.ambient.toFixed(0)} °C`],
+        ["One home, 24 h", `${kwh.toFixed(1)} kWh (≈ ${(kwh * 30.4).toFixed(0)} kWh a month)`],
         ["From the plant now", now.loadMw > 0 ? pct(own / now.loadMw) : "–"],
-        ["Used, 24 h", mwh(energyOf(c, (s) => s.loadMw))],
-        ["Peak, 24 h", mw(peakOf(c, (s) => s.loadMw))],
+        ...uses.map(([use, value]): Stat => [USE_LABELS[use], `${mw(value)} (${pct(value / Math.max(0.001, town.totalMw))})`]),
+        ["Homes dark now", homesDark(now) ? homes(homesDark(now)) : "none"],
       ];
     },
     body: [
-      "The load is a small community with a school and a clinic: a rise in the morning, a plateau through the school day, and the biggest demand in the evening, when homes switch on lights, fans, and televisions, just as the sun sets.",
-      "That mismatch between when the sun shines and when people use power is the whole reason for the battery. The curve is the model's own, with the load right now marked; its shape is illustrative, not measured from a real feeder.",
+      `The plant serves a provincial coastal town in Cebu: ${TOWN.homes.toLocaleString("en")} homes, about ${Math.round((TOWN.homes * TOWN.peoplePerHome) / 1000)},000 people at ${TOWN.peoplePerHome} per home (the national average), plus a school, a health centre, shops and eateries, a water pumping station, and street lights.`,
+      "A typical home here has six LED bulbs, two electric fans, a television, a rice cooker, phones, and Wi-Fi; seven homes in ten have a refrigerator, and one in four a 1 HP aircon. That comes to about 140 to 180 kWh a month, depending on the weather: a little under the 200 kWh household Meralco quotes its Metro Manila rates for, as suits a provincial town.",
+      "Heat drives it. On a hot, clear day the town uses about a quarter more than on a cool, rainy one, mostly through fans and aircon, inside the 10 to 40% rise Meralco expects in summer. And the biggest demand comes in the evening, as the sun sets, which is the whole reason for the battery.",
+      "The mix and schedules are the model's assumptions, calibrated to those figures, not a survey of a real town. The curve is the town's own on a 28 °C day, with the load right now marked.",
     ],
-    sources: [],
+    try: "Press 14:00 with Clear weather, then 14:00 with Rain, and compare one home's draw and the fans-and-aircon share.",
+    sources: ["psa2020", "tribune2024", "gma2021", "teko2024"],
+  },
+  elnino: {
+    title: "El Niño 2026",
+    art: svg(`
+      <rect width="320" height="200" fill="#f6e3c4"/>
+      <circle cx="250" cy="52" r="30" fill="#f2a531"/>
+      ${Array.from({ length: 12 }, (_, i) => {
+        const a = (i / 12) * Math.PI * 2;
+        return `<line x1="${(250 + Math.cos(a) * 38).toFixed(1)}" y1="${(52 + Math.sin(a) * 38).toFixed(1)}" x2="${(250 + Math.cos(a) * 50).toFixed(1)}" y2="${(52 + Math.sin(a) * 50).toFixed(1)}" stroke="#f2a531" stroke-width="5"/>`;
+      }).join("")}
+      <rect y="140" width="320" height="60" fill="#c99a5b"/>
+      <path d="M20 160 l30 10 l-12 18 M90 150 l20 22 l25 -6 M170 160 l-12 24 M210 150 l26 18 l-8 22 M280 162 l-22 20" stroke="#8a6232" stroke-width="3" fill="none"/>
+      <rect x="40" y="40" width="16" height="80" rx="8" fill="#fff" stroke="#c0392b" stroke-width="3"/>
+      <rect x="44" y="64" width="8" height="54" fill="#c0392b"/><circle cx="48" cy="124" r="13" fill="#c0392b"/>
+      <text x="76" y="70" font-size="13" fill="#7a3b12">drier, hotter,</text>
+      <text x="76" y="88" font-size="13" fill="#7a3b12">a grid on alert</text>`),
+    liveStats: ({ now, day }) => [
+      ["Scenario", now.elNino ? "El Niño 2026" : "normal year"],
+      ["Air now", `${now.ambient.toFixed(1)} °C`],
+      ["Main grid", now.gridAlert ? `alert: ${mw(now.gridLimitMw)} max` : "no alert"],
+      ["Homes dark now", homesDark(now) ? homes(homesDark(now)) : "none"],
+      ["Unserved, 24 h", mwh(day.unservedMwh)],
+    ],
+    body: [
+      "El Niño is a warming of the central and eastern tropical Pacific that shifts rain away from the Philippines. PAGASA reports a strong to very strong El Niño now, likely to peak around the end of 2026 and last into the first half of 2027, with below-normal rainfall, dry spells and drought, and fewer typhoons. Its July 2026 outlook named Cebu, this town's province, among those likely to be in drought by the end of August.",
+      "The last one, from mid-2023 to May 2024, overlapped the hot dry months. Metro Manila set its all-time record of 38.8 °C on 27 April 2024. Demand ran above forecast in the heat, and with many plants on forced outage the Luzon grid went on red alert, on 16 April from 2 to 4 p.m. and 6 to 9 p.m., and towns took turns in rotating brownouts.",
+      `The El Niño 2026 switch on the console brings that here. It sets clear skies and adds ${EL_NINO.warmingC} °C to the air, an assumption for a warm El Niño season (attribution puts El Niño's own share of the April 2024 heatwave at about 0.2 °C; most of it was climate change). Fans and aircon then run longer, so the town draws more. And on hot, dry days, from 2 to 4 p.m. and 6 to 9 p.m., the main grid can supply only ${Math.round(EL_NINO.importShare * 100)}% of the town's design peak, another assumption; whatever the plant and battery can't cover goes dark in rotation.`,
+      "That is what a local plant is for in a drought year: clear skies are good for solar, and a battery charged at noon can carry the town through an evening alert.",
+    ],
+    try: "Press El Niño 2026, then 18:00, and switch off the Battery breaker: homes go dark in the alert. Switch it back on and watch them come back.",
+    sources: ["pagasa2026", "pagasa2024end", "pia2024", "inquirer2024", "mb2024"],
   },
   layers: {
     title: "Inside a perovskite cell",

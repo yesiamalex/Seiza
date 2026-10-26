@@ -7,6 +7,7 @@ import { philippineTime, scheduledWeather, SITES, WeatherState, type WeatherType
 import type { LightZone, WorldStateValue } from "../../../src/multiplayer/types";
 import { DEFAULT_CONTROLS, GRID_EMISSION_FACTOR, Microgrid, PLANT, type BatteryMode, type Controls, type Encapsulation, type Snapshot } from "../sim/energy";
 import { cloudyGhi } from "../../../src/sky/weather";
+import { TOWN, townLoad } from "../sim/town";
 
 /** Matches "site" in worlds/seizora/world/world.json. */
 export const SITE = SITES.cebu;
@@ -28,6 +29,7 @@ export const KEYS = {
   grid: "breaker.grid",
   batteryMode: "battery.mode",
   seal: "perovskite.seal",
+  elNino: "climate.elNino",
 } as const;
 
 const BATTERY_MODES: BatteryMode[] = ["auto", "charge", "hold", "discharge"];
@@ -47,7 +49,37 @@ export function controlsFrom(state: Record<string, WorldStateValue>): Controls {
     gridConnected: on(KEYS.grid, DEFAULT_CONTROLS.gridConnected),
     batteryMode: BATTERY_MODES.includes(mode as BatteryMode) ? (mode as BatteryMode) : DEFAULT_CONTROLS.batteryMode,
     encapsulation: SEALS.includes(seal as Encapsulation) ? (seal as Encapsulation) : DEFAULT_CONTROLS.encapsulation,
+    elNino: on(KEYS.elNino, DEFAULT_CONTROLS.elNino),
   };
+}
+
+// --- the scenario, in words -------------------------------------------------------
+
+/** The town, in one line for a display. */
+export const TOWN_LINE = `${TOWN.homes.toLocaleString("en")} homes · about ${Math.round((TOWN.homes * TOWN.peoplePerHome) / 1000)},000 people · school, clinic, shops`;
+
+/** The scenario the plant is running: the climate and the weather now. */
+export function scenarioLabel(): string {
+  const s = live.now;
+  const climate = live.controls.elNino ? "El Niño 2026" : "Normal year";
+  if (!s) return climate;
+  const weather = skyState.weatherState ? weatherName(skyState.weatherState.type) : "";
+  return `${climate} · ${weather} · ${s.ambient.toFixed(0)} °C`;
+}
+
+function weatherName(type: WeatherType): string {
+  return { clear: "clear", partly: "partly cloudy", overcast: "overcast", rain: "rain", typhoon: "typhoon" }[type];
+}
+
+/** What one average home is drawing now, and how many homes are dark in a
+ *  rotating brownout or island-mode shedding. */
+export function homesNow(): { perHomeKw: number; dark: number } {
+  const s = live.now;
+  if (!s) return { perHomeKw: 0, dark: 0 };
+  const town = townLoad(s.hour, s.ambient);
+  // Unserved load, as homes: what's dropped is spread over the town's mix.
+  const dark = s.unservedMw > 0.001 ? Math.min(TOWN.homes, Math.round((s.unservedMw / town.totalMw) * TOWN.homes)) : 0;
+  return { perHomeKw: town.perHomeKw, dark };
 }
 
 // --- the running plant ----------------------------------------------------------
@@ -181,6 +213,10 @@ export function lessonNow(): string {
   if (!c.gridConnected && s.unservedMw > 0.05)
     return `Island mode: ${s.unservedMw.toFixed(2)} MW of homes are dark. Only sun, wind, and the battery can serve them now.`;
   if (!c.gridConnected) return "Island mode: cut off from the main grid, the plant must match the load by itself.";
+  if (s.gridAlert && s.unservedMw > 0.01)
+    return `El Niño grid alert: the main grid can give only ${s.gridLimitMw.toFixed(2)} MW, so about ${homesNow().dark.toLocaleString("en")} homes are in a rotating brownout. Stored sunlight in the battery is what keeps the rest lit.`;
+  if (s.gridAlert)
+    return `El Niño grid alert: the main grid is short in the heat and can give only ${s.gridLimitMw.toFixed(2)} MW. Solar and the battery are covering the rest, so no home is dark.`;
   if (s.turbinesFeathered) return "Typhoon winds: the turbines feather their blades and brake to survive. They make nothing in a storm.";
   if (s.sunElevation <= 0 && s.batteryMw > 0.05) return "Night: no solar at all. The battery is covering the evening peak with sunlight stored earlier.";
   if (s.sunElevation <= 0) return "Night: no solar at all. Wind, the battery, and the main grid carry the load.";
@@ -199,5 +235,7 @@ export function lessonNow(): string {
   if (s.windMw >= 0.98 * windRating)
     return "Full wind power: past 12 m/s the turbines pitch their blades to hold their rating, so more wind adds nothing.";
   if (s.gridMw < -0.05) return "Exporting: the plant makes more than the town needs and sends the rest to the main grid.";
+  if (c.elNino && s.ambient >= 32)
+    return `El Niño heat: at ${s.ambient.toFixed(0)} °C, fans and aircon run longer, and the town draws more than on a cooler day.`;
   return "A normal hour: sun, wind, and the battery share the load, and the main grid fills any gap.";
 }

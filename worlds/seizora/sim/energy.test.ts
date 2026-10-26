@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { cloudyGhi, SITES, WeatherState } from "../../../src/sky/weather";
+import { ambientTemperature, cloudyGhi, SITES, WEATHER, WeatherState } from "../../../src/sky/weather";
+import { TOWN, townLoad } from "./town";
 import {
   BATTERY_ROUND_TRIP,
   DEFAULT_CONTROLS,
+  EL_NINO,
+  PLANT,
   GRID_EMISSION_FACTOR,
   evaluateDesign,
   loadFraction,
@@ -166,5 +169,73 @@ describe("cited figures", () => {
     }
     expect(delivered / 1).toBeCloseTo(0.85, 2); // 1 MWh in from the bus, 0.85 MWh back
     expect(stored).toBeGreaterThan(0);
+  });
+});
+
+describe("the town", () => {
+  /** One home's kWh over a day in a given weather, in Cebu. */
+  const homeDay = (type: keyof typeof WEATHER) => {
+    let kwh = 0;
+    for (let h = 0; h < 24; h++) kwh += townLoad(h, ambientTemperature(h + 0.5, SITES.cebu, WEATHER[type].tempOffset)).perHomeKw;
+    return kwh;
+  };
+
+  it("uses 140 to 200 kWh a month per home, under Meralco's 200 kWh household", () => {
+    for (const type of ["clear", "partly", "overcast", "rain"] as const) {
+      const month = homeDay(type) * 30.4;
+      expect(month).toBeGreaterThan(130);
+      expect(month).toBeLessThan(200);
+    }
+  });
+
+  it("uses 10 to 40% more on a hot, clear day than a cool, rainy one, as Meralco's summers do", () => {
+    const rise = homeDay("clear") / homeDay("rain") - 1;
+    expect(rise).toBeGreaterThan(0.1);
+    expect(rise).toBeLessThan(0.4);
+  });
+
+  it("peaks in the evening, when homes light up", () => {
+    const at = (h: number) => townLoad(h, 28).totalMw;
+    expect(at(19)).toBeGreaterThan(at(3));
+    expect(at(19)).toBeGreaterThan(at(13));
+  });
+
+  it("sizes the plant's design peak from the town itself", () => {
+    let peak = 0;
+    for (let h = 0; h < 24; h++) peak = Math.max(peak, townLoad(h, ambientTemperature(h + 0.5, SITES.cebu, WEATHER.clear.tempOffset)).totalMw);
+    expect(PLANT.peakLoadMw).toBeCloseTo(peak, 9);
+    expect(TOWN.homes).toBeGreaterThan(0);
+  });
+});
+
+describe("El Niño 2026", () => {
+  const elNino = { ...DEFAULT_CONTROLS, elNino: true };
+
+  it("warms the air and raises the town's demand", () => {
+    const normal = runDay(new WeatherState("clear")).snapshots;
+    const hot = runDay(new WeatherState("clear"), elNino).snapshots;
+    expect(hot[150].ambient - normal[150].ambient).toBeCloseTo(EL_NINO.warmingC, 6);
+    const load = (snaps: typeof normal) => snaps.reduce((sum, s) => sum + s.loadMw, 0);
+    expect(load(hot)).toBeGreaterThan(load(normal));
+  });
+
+  it("puts the grid on alert in the afternoon and evening of a hot, dry day, and never imports past the limit", () => {
+    const { snapshots } = runDay(new WeatherState("clear"), elNino);
+    expect(snapshots[19 * 12].gridAlert).toBe(true);
+    expect(snapshots[15 * 12].gridAlert).toBe(true);
+    expect(snapshots[11 * 12].gridAlert).toBe(false);
+    for (const s of snapshots) if (s.gridAlert) expect(s.gridMw).toBeLessThanOrEqual(s.gridLimitMw + 1e-9);
+  });
+
+  it("darkens homes in the evening alert without the battery, and far fewer with it", () => {
+    const without = runDay(new WeatherState("clear"), { ...elNino, battery: false }).grid.totals.unservedMwh;
+    const withBattery = runDay(new WeatherState("clear"), elNino).grid.totals.unservedMwh;
+    expect(without).toBeGreaterThan(0.5);
+    expect(withBattery).toBeLessThan(without / 2);
+  });
+
+  it("raises no alert in a normal year, or on a rainy El Niño day", () => {
+    expect(runDay(new WeatherState("clear")).snapshots.some((s) => s.gridAlert)).toBe(false);
+    expect(runDay(new WeatherState("rain"), elNino).snapshots.some((s) => s.gridAlert)).toBe(false);
   });
 });

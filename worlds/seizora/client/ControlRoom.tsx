@@ -11,7 +11,9 @@ import { PLANT, type Controls } from "../sim/energy";
 import type { InfoKey } from "../sim/info";
 import { openInfo } from "./InfoCard";
 import { FONT, fmt, GlowLines, hhmm, roundRect, standard, useCanvasTexture, useMerged, usePrismX, useSignLamp, wrapText, type BoxSpec } from "./kit";
-import { dayTotals, KEYS, lessonNow, live, SITE } from "./live";
+import { dayTotals, homesNow, KEYS, lessonNow, live, SITE, TOWN_LINE } from "./live";
+import { EL_NINO } from "../sim/energy";
+import { TOWN } from "../sim/town";
 
 export const COLORS = {
   silicon: "#4f8bff",
@@ -52,24 +54,36 @@ function drawDisplay(ctx: CanvasRenderingContext2D, w: number, h: number, room: 
   ctx.fillStyle = "#0a0f1c";
   ctx.fillRect(0, 0, w, h);
 
-  // Header.
+  // Header: what this is and who it serves on the left; the time, the
+  // weather, and the scenario (normal year or El Niño) on the right.
   ctx.fillStyle = "#16213a";
   ctx.fillRect(0, 0, w, 74);
   ctx.fillStyle = "#ffcf6e";
-  ctx.font = `700 34px ${FONT}`;
+  ctx.font = `700 30px ${FONT}`;
   ctx.textBaseline = "middle";
-  ctx.fillText("☀ SEIZORA CONTROL ROOM", 28, 38);
+  ctx.fillText("☀ SEIZORA CONTROL ROOM", 28, 25);
+  ctx.fillStyle = COLORS.muted;
+  ctx.font = `500 19px ${FONT}`;
+  ctx.fillText(`Serving a town in ${SITE.label}: ${TOWN_LINE}`, 28, 56);
+  regions.push({ x: 28, y: 42, w: 600, h: 30, info: "load" });
   const tag = skyLabel(room);
   ctx.textAlign = "right";
-  ctx.font = `600 26px ${FONT}`;
+  ctx.font = `600 22px ${FONT}`;
   ctx.fillStyle = tag.color;
-  ctx.fillText(tag.text, w - 28, 38);
+  ctx.fillText(tag.text, w - 28, 25);
   if (s) {
     ctx.fillStyle = COLORS.text;
-    ctx.font = `600 30px ${FONT}`;
+    ctx.font = `600 26px ${FONT}`;
     const weather = skyState.weatherState ? WEATHER[skyState.weatherState.type].label : "";
-    ctx.fillText(`${hhmm(s.hour)} PHT · ${SITE.label} · ${weather}`, w - 28 - ctx.measureText(tag.text).width - 60, 38);
+    ctx.fillText(`${hhmm(s.hour)} PHT · ${weather} · ${fmt(s.ambient, 0)} °C`, w - 28 - ctx.measureText(tag.text).width - 50, 25);
   }
+  const scenario = c.elNino
+    ? `EL NIÑO 2026 · clear skies, +${EL_NINO.warmingC} °C · grid alerts 2–4 & 6–9 p.m.`
+    : "NORMAL YEAR · weather from the shared schedule";
+  ctx.font = `700 19px ${FONT}`;
+  ctx.fillStyle = c.elNino ? "#ffb347" : COLORS.muted;
+  ctx.fillText(scenario, w - 28, 56);
+  regions.push({ x: w - 28 - ctx.measureText(scenario).width, y: 42, w: ctx.measureText(scenario).width, h: 30, info: "elnino" });
   ctx.textAlign = "left";
   if (!s) {
     ctx.fillStyle = COLORS.muted;
@@ -109,9 +123,10 @@ function drawDisplay(ctx: CanvasRenderingContext2D, w: number, h: number, room: 
   ctx.font = `600 16px ${FONT}`;
   ctx.fillText("13.8 kV BUS", 260, top + 186);
   const low = top + 204;
-  node(28, low, "TOWN LOAD", s.loadMw - s.unservedMw, s.unservedMw > 0.01 ? `${fmt(s.unservedMw)} MW unserved` : "all served", COLORS.load, true, "load");
+  const { perHomeKw, dark } = homesNow();
+  node(28, low, "TOWN LOAD", s.loadMw - s.unservedMw, dark > 0 ? `${dark.toLocaleString("en")} homes dark` : `${TOWN.homes.toLocaleString("en")} homes lit`, COLORS.load, true, "load");
   node(222, low, "BATTERY", s.batteryMw, s.batteryMw > 0.01 ? "discharging" : s.batteryMw < -0.01 ? "charging" : "idle", COLORS.battery, c.battery, "battery");
-  node(416, low, "MAIN GRID", s.gridMw, !c.gridConnected ? "island mode" : s.gridMw > 0.01 ? "importing" : s.gridMw < -0.01 ? "exporting" : "balanced", COLORS.grid, c.gridConnected, "grid");
+  node(416, low, "MAIN GRID", s.gridMw, !c.gridConnected ? "island mode" : s.gridAlert ? `ALERT, ${fmt(s.gridLimitMw)} max` : s.gridMw > 0.01 ? "importing" : s.gridMw < -0.01 ? "exporting" : "balanced", s.gridAlert ? "#ff6b6b" : COLORS.grid, c.gridConnected, s.gridAlert ? "elnino" : "grid");
   // Battery charge.
   const socY = low + 146;
   roundRect(ctx, 28, socY, 568, 34, 10);
@@ -138,9 +153,10 @@ function drawDisplay(ctx: CanvasRenderingContext2D, w: number, h: number, room: 
     ["Wind", `${fmt(s.windSpeed, 1)} m/s`],
     ["Cloud", `${fmt(s.cloud * 100, 0)}%`],
     ["Humidity", `${fmt(s.humidity, 0)}%`],
+    ["One home", `${fmt(perHomeKw * 1000, 0)} W now`],
   ];
   rows.forEach(([k, v], i) => {
-    const y = top + 50 + i * 46;
+    const y = top + 50 + i * 42;
     ctx.fillStyle = COLORS.muted;
     ctx.font = `500 21px ${FONT}`;
     ctx.fillText(k, cx, y);
@@ -148,7 +164,8 @@ function drawDisplay(ctx: CanvasRenderingContext2D, w: number, h: number, room: 
     ctx.font = `600 25px ${FONT}`;
     ctx.fillText(v, cx + 130, y);
   });
-  regions.push({ x: cx, y: top, w: 300, h: 340, info: "sky" });
+  regions.push({ x: cx, y: top, w: 300, h: 50 + 6.5 * 42, info: "sky" });
+  regions.push({ x: cx, y: top + 50 + 6.5 * 42, w: 300, h: 42, info: "load" });
 
   // The last 24 hours, stacked: silicon, perovskite, wind, battery out; load as a line.
   const gx = 960, gy = top, gw = w - gx - 28, gh = 250;
@@ -357,11 +374,24 @@ function useRows({ roomSky, setRoomSky, controls, setWorldState }: ConsoleProps)
     },
     {
       title: "WEATHER",
-      buttons: (["auto", "clear", "partly", "overcast", "rain", "typhoon"] as const).map((w) => ({
-        label: w === "auto" ? "Auto" : w === "partly" ? "Cloudy" : WEATHER[w].label,
-        active: weather === w,
-        run: () => setWeather(w),
-      })),
+      buttons: [
+        ...(["auto", "clear", "partly", "overcast", "rain", "typhoon"] as const).map((w) => ({
+          label: w === "auto" ? "Auto" : w === "partly" ? "Cloudy" : WEATHER[w].label,
+          active: weather === w,
+          run: () => setWeather(w),
+        })),
+        // The El Niño 2026 scenario: its dry, clear skies on the sky
+        // everyone sees, and its heat and grid alerts in the plant.
+        {
+          label: "El Niño",
+          active: controls.elNino,
+          tone: "toggle" as const,
+          run: () => {
+            setWorldState(KEYS.elNino, !controls.elNino);
+            setWeather(controls.elNino ? "auto" : "clear");
+          },
+        },
+      ],
     },
   ];
 }

@@ -18,6 +18,17 @@ equipment data and local weather records.
 
 Everything is in the world itself; there's no separate page to open.
 
+- **The town it serves.** A provincial coastal town in Cebu: 7,000 homes
+  (about 29,000 people at 4.1 per home, the national average), a school, a
+  health centre, shops and eateries, a water pumping station, and street
+  lights. Its load is built from what each home switches on, hour by hour:
+  six LED bulbs, two electric fans, a television, a rice cooker, phones and
+  Wi-Fi; seven homes in ten have a refrigerator and one in four a 1 HP
+  aircon. A home uses about 140 to 180 kWh a month, depending on the
+  weather, and fans and aircon run longer in the heat (`sim/town.ts`). The
+  display's header names the town and the scenario, and the town card
+  breaks the load down live.
+
 - **The control room**, at the front of the classroom. A live display
   across the chalkboard wall, which the desks already face, shows:
   - megawatts from the silicon panels, the perovskite pilot, and the wind
@@ -42,6 +53,12 @@ Everything is in the world itself; there's no separate page to open.
     00:00, or running at 360×) and the weather (auto, clear, cloudy,
     overcast, rain, typhoon). These set the room's sky, so the real sky
     overhead changes with them.
+  - **El Niño**: the El Niño 2026 scenario. It sets clear, dry skies, adds
+    1 °C to the air, and on hot, dry days puts the main grid on alert from
+    2 to 4 p.m. and 6 to 9 p.m., as NGCP did in April 2024. In an alert the
+    grid can supply only half of the town's design peak, and whatever the
+    plant and battery can't cover goes dark in rotating brownouts. Press it
+    again for a normal year and the shared weather schedule.
 
   When the deployment has an editor password, only editors can use the
   console; with an admin key (`SEIZA_ADMIN_KEY`, set on the Seizora Worker
@@ -110,15 +127,22 @@ than a board that disagrees with the display.
 | Wind | P = ½ρAv³; cut-in 3.5 m/s, rated 12 m/s, cut-out 25 m/s; rotors 10 to 20 rpm | Manwell et al. (2009); GE 1.5 MW data |
 | Turbine size | 2 × 1.5 MW; real ones have 77 m rotors on 80 m towers, so the garden's are scale models | GE 1.5 MW data |
 | Battery | 6 MWh, 3 MW, 85% round trip, kept between 10% and 95% | Cole & Frazier (2019); EIA (2021) |
-| Battery dispatch (Auto) | Stores any surplus; on the grid it covers only the load above 65% of the peak (about 2.1 MW), so its charge lasts through the evening peak; in island mode it covers all it can | Peak shaving, the usual job of a grid-tied community battery |
+| Battery dispatch (Auto) | Stores any surplus; on the grid it covers only the load above 65% of the design peak (about 1.8 MW), or above the grid's limit in an El Niño alert, so its charge lasts through the evening peak; in island mode it covers all it can | Peak shaving, the usual job of a grid-tied community battery |
 | CO₂ avoided | 0.71 t per MWh generated | DOE Philippines 2015–2017 grid emission factor (Luzon–Visayas operating margin, 0.7122) |
 | Perovskite durability | Moisture, oxygen, heat, and light; rates illustrative, ordered as in the literature; T80 as the stability measure | Boyd et al. (2019); Khenkin et al. (2020) |
 | Perovskite efficiency | Lab options 19 to 23.5%, below the best single-junction cells (about 27%) | NREL chart |
 | Seasons | Dry December to May, wet June to November (PAGASA climate Type I); Cebu itself is mostly Type III and less seasonal | PAGASA |
-| Load | An illustrative evening-peaking community load, peak 3.2 MW | — (not measured) |
+| Town | 7,000 homes at 4.1 people each, plus a school, health centre, shops, water pumping, and street lights; design peak 2.71 MW on a clear day | PSA 2020 census (household size); the rest assumed |
+| One home | 140 to 180 kWh a month by weather, under the 200 kWh Metro Manila household | Daily Tribune (2024), Meralco rates |
+| Heat and demand | A hot, clear day uses about 24% more than a cool, rainy one, inside the 10 to 40% Meralco expects in summer | GMA News (2021), Meralco |
+| Aircon | 1 HP non-inverter, 900 W, in one home in four | Teko.ph |
+| El Niño 2026 | Strong to very strong, into early 2027; below-normal rain; Cebu likely in drought | GMA News (2026), PAGASA outlook; PAGASA ENSO monitoring |
+| El Niño warming | +1 °C to the air: an assumption (El Niño's own share of the April 2024 heatwave was about 0.2 °C) | PIA (2024), Manila's 38.8 °C record |
+| Grid alerts | 2 to 4 p.m. and 6 to 9 p.m. on hot, dry El Niño days, as on 16 April 2024; the grid then supplies half the design peak (an assumption) | Inquirer (2024); Manila Bulletin (2024) |
 
-What is invented: the plant, its load, and the weather. What is not: the
-physics, and every constant above.
+What is invented: the plant, the town's appliance mix and schedules (set to
+match the figures above), the weather, and El Niño's warming and grid limit.
+What is not: the physics, and every sourced constant above.
 
 ## References
 
@@ -129,18 +153,27 @@ physics, and every constant above.
 - Dobos, A. P. (2014). *PVWatts version 5 manual* (NREL/TP-6A20-62641). National Renewable Energy Laboratory. https://doi.org/10.2172/1158421
 - Duffie, J. A., & Beckman, W. A. (2013). *Solar engineering of thermal processes* (4th ed.). Wiley. https://doi.org/10.1002/9781118671603
 - Dupré, O., Vaillon, R., & Green, M. A. (2015). Physics of the temperature coefficients of solar cells. *Solar Energy Materials and Solar Cells, 140*, 92–100. https://doi.org/10.1016/j.solmat.2015.03.025
+- GMA News. (2021). Meralco expects power rate hike in April (summer may raise residential consumption by 10% to 40%). https://www.gmanetwork.com/news/money/economy/781853/meralco-expects-power-rate-hike-in-april/story
+- GMA News. (2026, July 28). Very strong El Niño likely from October 2026 to January 2027 — PAGASA. https://www.gmanetwork.com/news/weather/content/996484/very-strong-el-ni-o-likely-from-october-2026-to-january-2027-pagasa/story/
 - Green, M. A., Ho-Baillie, A., & Snaith, H. J. (2014). The emergence of perovskite solar cells. *Nature Photonics, 8*(7), 506–514. https://doi.org/10.1038/nphoton.2014.134
 - Haurwitz, B. (1945). Insolation in relation to cloudiness and cloud density. *Journal of Meteorology, 2*(3), 154–166. https://doi.org/10.1175/1520-0469(1945)002<0154:IIRTCA>2.0.CO;2
 - Jošt, M., Lipovšek, B., Glažar, B., Al-Ashouri, A., et al. (2020). Perovskite solar cells go outdoors: Field testing and temperature effects on energy yield. *Advanced Energy Materials, 10*(25), 2000454. https://doi.org/10.1002/aenm.202000454
 - Kasten, F., & Czeplak, G. (1980). Solar and terrestrial radiation dependent on the amount and type of cloud. *Solar Energy, 24*(2), 177–189. https://doi.org/10.1016/0038-092X(80)90391-6
 - Khenkin, M. V., et al. (2020). Consensus statement for stability assessment and reporting for perovskite photovoltaics based on ISOS procedures. *Nature Energy, 5*(1), 35–49. https://doi.org/10.1038/s41560-019-0529-5
+- Manila Bulletin. (2024, April 18). Red alert strikes again: Luzon grid wobbles anew into rotational brownouts. https://mb.com.ph/2024/4/18/red-alert-strikes-again-luzon-grid-wobbles-anew-into-rotational-brownouts
 - Manwell, J. F., McGowan, J. G., & Rogers, A. L. (2009). *Wind energy explained: Theory, design and application* (2nd ed.). Wiley. https://doi.org/10.1002/9781119994367
 - Meeus, J. (1998). *Astronomical algorithms* (2nd ed.). Willmann-Bell. (The moon's cycle and reference new moon.)
 - National Power Corporation. *Missionary electrification plan 2025–2029*. https://www.napocor.gov.ph/wp-content/uploads/Operations/NPC_Missionary_Electrification_Plan_2025-2029.pdf
 - National Renewable Energy Laboratory. *Best research-cell efficiency chart*. https://www.nrel.gov/pv/cell-efficiency.html
 - Philippine Atmospheric, Geophysical and Astronomical Services Administration. *Climate of the Philippines*. https://www.pagasa.dost.gov.ph/information/climate-philippines
+- Philippine Atmospheric, Geophysical and Astronomical Services Administration. *El Niño / La Niña monitoring* (ENSO advisories). https://www.pagasa.dost.gov.ph/climate/el-nino-la-nina/monitoring
+- Philippine Daily Inquirer. (2024, April 16). Luzon and Visayas grids placed under yellow, red alert. https://business.inquirer.net/454876/luzon-and-visayas-grids-placed-under-yellow-red-alert
+- Philippine Information Agency. (2024, April 29). Metro Manila logs highest temperature in history. https://pia.gov.ph/news/2024/04/29/metro-manila-logs-highest-temperature-in-history
+- Philippine Statistics Authority. (2022). *2020 Census of Population and Housing* (average household size 4.1).
 - pv magazine. (2024, November 28). Japan aims to deploy 20 GW of perovskite solar by 2040. https://www.pv-magazine.com/2024/11/28/japan-aims-to-deploy-20-gw-of-perovskite-solar-by-2040/
 - Reno, M. J., Hansen, C. W., & Stein, J. S. (2012). *Global horizontal irradiance clear sky models: Implementation and analysis* (SAND2012-2389). Sandia National Laboratories. https://doi.org/10.2172/1039404
+- Romero, M. B. (2024, June 14). Brace for June power bill hike. *Daily Tribune* (Meralco rates for a 200 kWh household). https://tribune.net.ph/2024/06/13/brace-for-june-power-bill-hike
+- Teko.ph. How much electricity does an aircon use? https://teko.ph/tips/?p=4088
 - U.S. Energy Information Administration. (2021, February 12). Utility-scale batteries and pumped storage return about 80% of the electricity they store. *Today in Energy*. https://www.eia.gov/todayinenergy/detail.php?id=46756
 - Wind-turbine-models.com. *GE 1.5s* technical data (and the GE 1.5sle: 77 m rotor, 3.5/12/25 m/s, 10.1 to 20.4 rpm). https://en.wind-turbine-models.com/turbines/565-ge-vernova-ge-1-5s
 

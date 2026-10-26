@@ -28,7 +28,8 @@ import {
   type CylinderSpec,
   type RingSpec,
 } from "./kit";
-import { live, rotorRpm } from "./live";
+import { homesNow, live, rotorRpm } from "./live";
+import { TOWN } from "../sim/town";
 
 // --- where everything stands ----------------------------------------------------------
 
@@ -527,7 +528,9 @@ const cellNow = () => {
 const welcomeNow = () => {
   const s = live.now;
   if (!s) return "";
-  return `Right now the plant makes ${fmt(s.siliconMw + s.perovskiteMw + s.windMw)} MW for a town using ${fmt(s.loadMw)} MW.`;
+  const scenario = live.controls.elNino ? "El Niño 2026" : "a normal year";
+  const dark = homesNow().dark;
+  return `Now (${scenario}, ${s.ambient.toFixed(0)} °C): the plant makes ${fmt(s.siliconMw + s.perovskiteMw + s.windMw)} MW for a town using ${fmt(s.loadMw)} MW${dark > 0 ? `, and ${dark.toLocaleString("en")} homes are dark` : ""}.`;
 };
 
 export const BOARDS: BoardSpec[] = [
@@ -539,7 +542,7 @@ export const BOARDS: BoardSpec[] = [
     art: "sun",
     info: "sky",
     lines: [
-      "A solar, wind, and storage microgrid for a Philippine community, from the lab to the grid.",
+      `A solar, wind, and storage microgrid for a town in Cebu: ${TOWN.homes.toLocaleString("en")} homes, a school, a clinic, and shops.`,
       "Garden: the solar farm, a perovskite pilot row, wind turbines, and a battery.",
       "Classroom: the control room, and a perovskite solar cell, layer by layer.",
       "The sky follows real Philippine time and weather, and so does the plant.",

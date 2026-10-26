@@ -23,7 +23,16 @@ export type RefKey =
   | "boyd2019"
   | "khenkin2020"
   | "meti2024"
-  | "npc2025";
+  | "npc2025"
+  | "pagasa2026"
+  | "pagasa2024end"
+  | "inquirer2024"
+  | "mb2024"
+  | "pia2024"
+  | "tribune2024"
+  | "gma2021"
+  | "teko2024"
+  | "psa2020";
 
 export interface Reference {
   /** Short form shown on cards. */
@@ -137,5 +146,49 @@ export const REFERENCES: Record<RefKey, Reference> = {
     short: "NPC, Missionary Electrification Plan 2025–2029",
     full: "National Power Corporation. Missionary electrification plan 2025–2029 (Small Power Utilities Group, off-grid areas).",
     url: "https://www.napocor.gov.ph/wp-content/uploads/Operations/NPC_Missionary_Electrification_Plan_2025-2029.pdf",
+  },
+  pagasa2026: {
+    short: "GMA News (2026), PAGASA El Niño outlook",
+    full: "GMA News. (2026, July 28). Very strong El Niño likely from October 2026 to January 2027 — PAGASA (81% chance of a very strong El Niño; below-normal rainfall; drought likely in Cebu and seven other provinces by end of August).",
+    url: "https://www.gmanetwork.com/news/weather/content/996484/very-strong-el-ni-o-likely-from-october-2026-to-january-2027-pagasa/story/",
+  },
+  pagasa2024end: {
+    short: "PAGASA ENSO monitoring",
+    full: "Philippine Atmospheric, Geophysical and Astronomical Services Administration. El Niño / La Niña monitoring and ENSO advisories (El Niño conditions July 2023 to May 2024; a strong to very strong El Niño present as of October 2026).",
+    url: "https://www.pagasa.dost.gov.ph/climate/el-nino-la-nina/monitoring",
+  },
+  inquirer2024: {
+    short: "Inquirer (2024), Luzon red alert",
+    full: "Philippine Daily Inquirer. (2024, April 16). Luzon and Visayas grids placed under yellow, red alert (Luzon red alert 2 to 4 p.m. and 6 to 9 p.m.; 19 plants on forced outage, 3 derated).",
+    url: "https://business.inquirer.net/454876/luzon-and-visayas-grids-placed-under-yellow-red-alert",
+  },
+  mb2024: {
+    short: "Manila Bulletin (2024), rotational brownouts",
+    full: "Manila Bulletin. (2024, April 18). Red alert strikes again: Luzon grid wobbles anew into rotational brownouts.",
+    url: "https://mb.com.ph/2024/4/18/red-alert-strikes-again-luzon-grid-wobbles-anew-into-rotational-brownouts",
+  },
+  pia2024: {
+    short: "PIA (2024), Metro Manila record heat",
+    full: "Philippine Information Agency. (2024, April 29). Metro Manila logs highest temperature in history (38.8 °C at NAIA, Pasay, on 27 April 2024).",
+    url: "https://pia.gov.ph/news/2024/04/29/metro-manila-logs-highest-temperature-in-history",
+  },
+  tribune2024: {
+    short: "Daily Tribune (2024), Meralco rates",
+    full: "Romero, M. B. (2024, June 14). Brace for June power bill hike. Daily Tribune (Meralco's rates for residential customers consuming 200 kWh a month).",
+    url: "https://tribune.net.ph/2024/06/13/brace-for-june-power-bill-hike",
+  },
+  gma2021: {
+    short: "GMA News (2021), Meralco summer use",
+    full: "GMA News. (2021). Meralco expects power rate hike in April (summer may raise residential consumption by 10% to 40% over January and February, mainly from cooling).",
+    url: "https://www.gmanetwork.com/news/money/economy/781853/meralco-expects-power-rate-hike-in-april/story",
+  },
+  teko2024: {
+    short: "Teko.ph, aircon power draw",
+    full: "Teko.ph. How much electricity does an aircon use? (a 1.0 HP non-inverter unit draws about 850 to 1,000 W; an inverter unit about 700 to 900 W).",
+    url: "https://teko.ph/tips/?p=4088",
+  },
+  psa2020: {
+    short: "PSA, 2020 Census of Population and Housing",
+    full: "Philippine Statistics Authority. (2022). 2020 Census of Population and Housing: household population, number of households, and average household size (4.1 persons, down from 4.4 in 2015).",
   },
 };
