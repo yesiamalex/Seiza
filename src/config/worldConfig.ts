@@ -25,6 +25,22 @@ export interface WorldConfig {
    */
   environmentCollision?: boolean;
   /**
+   * What the world is made of. "builtin" (the default): Seiza's own hall,
+   * classroom, garden, and meadow, with `sceneUrl` layered over them.
+   * "model": `sceneUrl` is the whole world (a campus, a museum). The
+   * built-in rooms, grounds, and their collision are left out, and where
+   * people can walk comes from `navMeshUrl`.
+   */
+  environment?: "builtin" | "model";
+  /**
+   * For `environment: "model"`: a navigation mesh baked from the model
+   * (recast-navigation's exportNavMesh format; see
+   * worlds/seiou/scripts/build-campus.mjs). Walking, stairs, floor heights,
+   * and click-to-walk all follow it. Without one, walking isn't held to
+   * anything.
+   */
+  navMeshUrl?: string;
+  /**
    * The sky. Leave it out for the original still sunset. With
    * `{ "cycle": "realtime" }` the sun follows Philippine time and the
    * weather follows a shared schedule, so every visitor sees the same sky

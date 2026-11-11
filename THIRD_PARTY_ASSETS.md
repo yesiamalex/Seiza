@@ -72,6 +72,7 @@ deployment.
 | Content | Rights holders | Notes |
 |---|---|---|
 | `worlds/seisugbo/world/media/` (art and photos) | The students of the Meiji × UP arts-based research collaboration (2026), by group, and whoever took each photo | Shown in the Seisugbo world for the project. A deployer should confirm the makers, and anyone recognizable in the photos, agree to a public deployment. Not covered by the repository's AGPL license: don't reuse them outside a Seisugbo deployment without asking. Remove any piece on request. The originals aren't committed (`media-src/` is gitignored); `scripts/optimize-media.mjs` makes these small copies and strips their metadata, GPS included. |
+| `worlds/seiou/world/models/campus.glb` and `campus.navmesh` | Made from the UPOU campus layout model provided by the SeiOU project | Shown in the SeiOU world. A deployer should confirm UPOU's permission for a public deployment. The original model isn't committed (`worlds/seiou/media-src/` is gitignored); `scripts/build-campus.mjs` makes these optimized copies. |
 
 ## Add a new asset
 

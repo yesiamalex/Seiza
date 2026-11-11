@@ -154,7 +154,9 @@ thing, after first copying the repository into your GitHub account.
   [Seisugbo](worlds/seisugbo/README.md), the Meiji × UP arts-based research
   exhibition of 2026, in a model Cebu lane and covered court, and
   [Seizorai](worlds/seizorai/README.md), Seizora with Ilaw-san, a guide
-  who answers questions offline, with guardrails
+  who answers questions offline, with guardrails, and
+  [SeiOU](worlds/seiou/README.md), a walkable digital twin of UP Open
+  University's campus, with two guides
 - Hosting somewhere other than Cloudflare: [SELF-HOSTING.md](SELF-HOSTING.md)
 - What's protected, and a checklist for deployers: [SECURITY.md](SECURITY.md)
 

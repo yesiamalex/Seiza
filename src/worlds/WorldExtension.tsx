@@ -1,4 +1,5 @@
 import { Component, useEffect, useState, useSyncExternalStore, type ComponentType, type ReactNode } from "react";
+import type * as THREE from "three";
 import type { LightZone, PlayerState, RoomSky, WorldObject, WorldStateValue } from "../multiplayer/types";
 
 /**
@@ -50,6 +51,10 @@ export interface WorldSceneProps {
   /** Who this visitor doesn't see (hidden) or neither sees nor hears
    *  (blocked), for this visit only. See src/multiplayer/playerFilter.ts. */
   setPlayerFilter: (filter: { hidden?: Iterable<string>; blocked?: Iterable<string> } | null) => void;
+  /** A walking route between two points along the world's navigation
+   *  mesh (the one click-to-walk uses), or null when there's none yet:
+   *  for guides who lead the way (src/guides/). */
+  findPath: (from: THREE.Vector3, to: THREE.Vector3) => THREE.Vector3[] | null;
 }
 
 export interface WorldModule {

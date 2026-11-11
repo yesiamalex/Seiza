@@ -15,6 +15,10 @@ import type { RoomSky } from "../multiplayer/types";
 
 interface SceneProps {
   sceneUrl?: string;
+  /** Seiza's own rooms and grounds. False for a world made of its own
+   *  model (world.json `environment: "model"`): only `sceneUrl` is drawn,
+   *  and a double-click on it walks there. */
+  builtin?: boolean;
   /** True when `sceneUrl` is a model somebody uploaded through the
    *  in-world editor at runtime, rather than the deployment's own
    *  configured `world.json` scene. Only an uploaded one gets collision
@@ -78,7 +82,16 @@ function OnDemandShadows({ refreshKey }: { refreshKey?: unknown }) {
   return null;
 }
 
-function SceneModel({ sceneUrl, generateCollision }: { sceneUrl: string; generateCollision: boolean }) {
+function SceneModel({
+  sceneUrl,
+  generateCollision,
+  onFloorDoubleClick,
+}: {
+  sceneUrl: string;
+  generateCollision: boolean;
+  /** For a model world, where the model is the floor: walk to the spot. */
+  onFloorDoubleClick?: (point: THREE.Vector3) => void;
+}) {
   const { scene } = useGLTF(sceneUrl);
 
   // A deployer-supplied scene is layered *over* BaseEnvironment rather
@@ -114,7 +127,18 @@ function SceneModel({ sceneUrl, generateCollision }: { sceneUrl: string; generat
     return () => setActiveObstacles(null);
   }, [scene, generateCollision]);
 
-  return <primitive object={scene} />;
+  return (
+    <primitive
+      object={scene}
+      onDoubleClick={
+        onFloorDoubleClick &&
+        ((event: { stopPropagation: () => void; point: THREE.Vector3 }) => {
+          event.stopPropagation();
+          onFloorDoubleClick(event.point.clone());
+        })
+      }
+    />
+  );
 }
 
 /**
@@ -170,6 +194,7 @@ const FOG_FAR = 210;
  */
 export const Scene = memo(function Scene({
   sceneUrl,
+  builtin = true,
   environmentIsCustom = false,
   environmentCollision = true,
   skyboxUrl = null,
@@ -201,7 +226,7 @@ export const Scene = memo(function Scene({
         <SunsetSky sunPosition={SUN} dynamic={moving} />
       )}
       <fog attach="fog" args={[SUNSET_HORIZON_COLOR, FOG_NEAR, FOG_FAR]} />
-      <Outdoors />
+      {builtin && <Outdoors />}
       {/* Warm sky above, warmer bounce off the wooden floor below. A big
           share of the light comes from here rather than the sun, which is
           what keeps the shadows soft. */}
@@ -233,13 +258,15 @@ export const Scene = memo(function Scene({
       )}
       {/* The lamps' shared point lights (see LightPool.tsx). */}
       <LightPool />
-      <BaseEnvironment
-        onFloorDoubleClick={onFloorDoubleClick}
-        onSit={onSit}
-        occupiedSeatId={occupiedSeatId}
-        lights={lights}
-        onToggleLight={onToggleLight}
-      />
+      {builtin && (
+        <BaseEnvironment
+          onFloorDoubleClick={onFloorDoubleClick}
+          onSit={onSit}
+          occupiedSeatId={occupiedSeatId}
+          lights={lights}
+          onToggleLight={onToggleLight}
+        />
+      )}
       {sceneUrl && (
         <SceneLoadBoundary>
           <Suspense fallback={null}>
@@ -248,7 +275,11 @@ export const Scene = memo(function Scene({
                 how that world was authored: whoever set it up also owns
                 layout.ts and can put real obstacles there, and deriving
                 boxes underneath them would silently double up. */}
-            <SceneModel sceneUrl={sceneUrl} generateCollision={environmentIsCustom && environmentCollision} />
+            <SceneModel
+              sceneUrl={sceneUrl}
+              generateCollision={builtin && environmentIsCustom && environmentCollision}
+              onFloorDoubleClick={builtin ? undefined : onFloorDoubleClick}
+            />
           </Suspense>
         </SceneLoadBoundary>
       )}

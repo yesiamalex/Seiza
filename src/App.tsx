@@ -201,7 +201,9 @@ export default function App() {
   // group, so avatars and edit gizmos elsewhere in the graph aren't
   // baked into the walkable surface.
   const navSourceRef = useRef<THREE.Group | null>(null);
-  const navMesh = useNavMesh(navSourceRef);
+  // A world made of its own model brings a navmesh baked from it, which is
+  // also its ground for walking (src/nav/navGround.ts).
+  const navMesh = useNavMesh(navSourceRef, world?.environment === "model" ? world.navMeshUrl ?? null : null);
   const touchInputRef = useRef<TouchMoveInput>(createTouchMoveInput());
   const showTouchControls = useWantsTouchControls();
   const hasHoverPointer = useMediaQuery("(hover: hover)");
@@ -1255,6 +1257,7 @@ export default function App() {
           <group ref={navSourceRef}>
             <Scene
               sceneUrl={environmentUrl ?? world.sceneUrl}
+              builtin={world.environment !== "model"}
               environmentIsCustom={!!environmentUrl}
               environmentCollision={currentWorld.environmentCollision !== false}
               skyboxUrl={skyboxUrl}
@@ -1291,6 +1294,7 @@ export default function App() {
               faceToward={faceToward}
               sendWorldMessage={sendWorldMessage}
               setPlayerFilter={setPlayerFilter}
+              findPath={navMesh.findPath}
             />
           </group>
           <PlayerRig

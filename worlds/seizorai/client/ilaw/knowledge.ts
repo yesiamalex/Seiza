@@ -1,39 +1,30 @@
-// What Ilaw-san knows. Every answer it gives is written here (or built from
-// Seizorai's own info cards and the live plant), so it can never say
-// something nobody wrote, and every number matches the displays.
+// What Ilaw-san knows, and who she is. Every answer she gives is written
+// here (or built from Seizorai's own info cards and the live plant), so she
+// can never say something nobody wrote, and every number matches the
+// displays. Seiza's shared guides (src/guides/) do the rest: matching a
+// question to an answer, guardrails, walking, gestures, and the chat.
 //
-// To teach it something, add a Topic: a title, the answer, and a few
+// To teach her something, add a Topic: a title, the answer, and a few
 // `asks` (ways people might put the question, in any language). They're
 // what the matcher compares a question with, so more and more varied
-// `asks` make it understand more. `place` lets it offer to take you there;
-// `card` lets it open the matching info card.
+// `asks` make her understand more. `place` lets her walk you there or take
+// you there; `card` lets her open the matching info card.
+import type { Knowledge, LiveIntent, Mood, Persona, Place, Topic } from "../../../../src/guides/brain";
+import type { Stop } from "../../../../src/guides/route";
 import { INFO, type InfoKey } from "../../sim/info";
 
-export interface Place {
-  label: string;
-  /** Where to stand: a spot near the exhibit, facing it. */
-  at: [number, number, number];
-}
-
-export interface Topic {
-  id: string;
-  title: string;
-  answer: string;
-  asks: string[];
-  card?: InfoKey;
-  place?: Place;
-}
+const place = (id: string, label: string, at: [number, number, number]): Place => ({ id, label, at });
 
 export const PLACES = {
-  welcome: { label: "the welcome board in the hall", at: [5.2, 0, 12.6] },
-  solar: { label: "the solar array in the garden", at: [-4.2, 0, 27.6] },
-  battery: { label: "the battery in the garden", at: [5.6, 0, 27.4] },
-  turbines: { label: "the wind turbines on the meadow", at: [4.2, -0.6, 43.2] },
-  control: { label: "the control room in the classroom", at: [1.2, 0, -18.6] },
-  lab: { label: "the perovskite lab in the classroom", at: [-4.6, 0, -11.4] },
-  cell: { label: "the perovskite cell in the classroom", at: [5.4, 0, -11.2] },
-  camp: { label: "the campsite on the meadow", at: [-9.6, -0.6, 58.4] },
-} satisfies Record<string, Place>;
+  welcome: place("welcome", "the welcome board in the hall", [5.2, 0, 12.6]),
+  solar: place("solar", "the solar array in the garden", [-4.2, 0, 27.6]),
+  battery: place("battery", "the battery in the garden", [5.6, 0, 27.4]),
+  turbines: place("turbines", "the wind turbines on the meadow", [4.2, -0.6, 43.2]),
+  control: place("control", "the control room in the classroom", [1.2, 0, -18.6]),
+  lab: place("lab", "the perovskite lab in the classroom", [-4.6, 0, -11.4]),
+  cell: place("cell", "the perovskite cell in the classroom", [5.4, 0, -11.2]),
+  camp: place("camp", "the campsite on the meadow", [-9.6, -0.6, 58.4]),
+};
 
 /** The info cards, with where each exhibit stands and how people ask. */
 const CARD_TOPICS: { card: InfoKey; place: Place; asks: string[] }[] = [
@@ -80,7 +71,7 @@ const FAQ: Topic[] = [
     id: "tour",
     title: "A tour",
     answer:
-      "Start with the welcome board in the hall. Then the garden: the solar array and the battery. Down the steps to the meadow for the wind turbines. Last, the classroom: the control room, where you can run the plant, and the perovskite lab, where you design a cell. Ask me to take you to any of them.",
+      "Start with the welcome board in the hall. Then the garden: the solar array and the battery. Down the steps to the meadow for the wind turbines. Last, the classroom: the control room, where you can run the plant, and the perovskite lab, where you design a cell. Ask me to walk you to any of them.",
     asks: ["give me a tour", "where should i go", "what should i see first", "show me around", "where to start", "pasyal", "annai shite"],
     place: PLACES.welcome,
   },
@@ -164,20 +155,6 @@ const FAQ: Topic[] = [
 /** Who Ilaw-san is, and small talk. */
 const SELF: Topic[] = [
   {
-    id: "self",
-    title: "Ilaw-san",
-    answer:
-      "I'm Ilaw-san, Seizorai's guide. Ilaw means light in Filipino, and san is how you'd politely say someone's name in Japanese. I walk around the exhibits all day. I'm not a chatbot that makes things up: everything I say was written for this world, so if I don't know, I'll say so.",
-    asks: ["who are you", "what are you", "your name", "are you an ai", "are you a robot", "are you human", "sino ka", "anata wa dare", "are you chatgpt", "are you real"],
-  },
-  {
-    id: "how",
-    title: "How I work",
-    answer:
-      "I compare your question with the questions I was taught, in your browser, and give the closest answer. Nothing you type leaves your device or is saved, and I don't use the internet.",
-    asks: ["how do you work", "do you save my messages", "are you listening", "privacy", "do you use the internet", "is this recorded"],
-  },
-  {
     id: "joke",
     title: "A joke",
     answer: "Why did the solar panel get a good grade? It was a bright student. (I also know one about a battery, but it isn't charged up yet.)",
@@ -186,7 +163,7 @@ const SELF: Topic[] = [
   {
     id: "fav",
     title: "My favourite",
-    answer: "The battery at sunset: all day it quietly saves sunlight, and then at dusk it keeps the town's lights on. Ask me to take you there.",
+    answer: "The battery at sunset: all day it quietly saves sunlight, and then at dusk it keeps the town's lights on. Ask me to walk you there.",
     asks: ["what is your favorite", "what do you like", "favourite exhibit", "best thing here"],
     place: PLACES.battery,
   },
@@ -196,3 +173,180 @@ export const TOPICS: Topic[] = [...cardTopics, ...FAQ, ...SELF];
 
 /** What to suggest when someone doesn't know what to ask. */
 export const STARTERS = ["What is this place?", "What's the battery doing now?", "Give me a tour", "How do solar panels work?", "What is El Niño?", "How can I save electricity?"];
+
+// --- who she is --------------------------------------------------------------------------------
+
+export const ILAW: Persona = {
+  name: "Ilaw-san",
+  self: "I'm Ilaw-san, Seizorai's guide. Ilaw means light in Filipino, and san is how you'd politely say someone's name in Japanese. I walk around the exhibits all day. I'm not a chatbot that makes things up: everything I say was written for this world, so if I don't know, I'll say so.",
+  invite: "Ask me about the sun, the wind, the battery, or the town, or ask for a tour.",
+};
+
+/** The model: Sendagaya Shino, a CC0 VRoid Studio sample (pixiv Inc.),
+ *  fetched at build time with the other preset avatars. */
+export const ILAW_AVATAR = "/avatars/vroid/sendagaya-shino.vrm";
+
+/** Her patrol: [x, z, seconds to wait]. Through the doorways, round the
+ *  pond, down the steps, and back. */
+export const ILAW_ROUTE: Stop[] = (
+  [
+    [5.0, 12.0, 30], // the welcome board
+    [0, 15.0, 0],
+    [0, 18.6, 0],
+    [-4.4, 26.6, 30], // the solar array
+    [-1.0, 22.4, 0],
+    [3.2, 22.6, 0],
+    [5.4, 27.2, 30], // the battery
+    [2.2, 34.6, 0],
+    [0, 36.6, 0],
+    [0, 41.6, 0],
+    [4.2, 44.0, 25], // a turbine
+    [-4.2, 43.6, 20], // the other
+    [0, 41.6, 0],
+    [0, 36.6, 0],
+    [0, 22.0, 0],
+    [0, 18.6, 0],
+    [0, 15.0, 0],
+    [0, -2.8, 0],
+    [0, -10.8, 0],
+    [1.4, -18.6, 30], // the control room
+    [-4.4, -12.6, 25], // the lab
+    [0, -10.8, 0],
+    [0, -2.8, 0],
+  ] as [number, number, number][]
+).map(([x, z, wait]) => ({ at: [x, 0, z], wait }));
+
+// --- the live plant --------------------------------------------------------------------------------
+
+/** The plant, as Ilaw-san reads it: null before it has started. */
+export interface LiveReader {
+  now(): {
+    hour: number;
+    soc: number;
+    batteryMw: number;
+    siliconMw: number;
+    perovskiteMw: number;
+    windMw: number;
+    loadMw: number;
+    gridMw: number;
+    unservedMw: number;
+    ambient: number;
+    windSpeed: number;
+    cloud: number;
+    sunElevation: number;
+    elNino: boolean;
+    gridAlert: boolean;
+  } | null;
+  /** One line on what the plant is doing and why. */
+  lesson(): string;
+  co2TodayT(): number | null;
+  weather(): string | null;
+}
+
+const f = (v: number, d = 2) => v.toFixed(d);
+
+function liveIntents(l: LiveReader): LiveIntent[] {
+  // Worried, not cheerful, when homes are going dark.
+  const mood = (): Mood => {
+    const s = l.now();
+    return s && (s.unservedMw > 0.01 || s.gridAlert) ? "sad" : "neutral";
+  };
+  return [
+    {
+      test: /\b(battery|baterya|denchi|charge|stored)\b/,
+      card: "battery",
+      mood,
+      answer: () => {
+        const s = l.now();
+        if (!s) return null;
+        const doing = s.batteryMw < -0.01 ? `charging at ${f(-s.batteryMw)} MW` : s.batteryMw > 0.01 ? `discharging at ${f(s.batteryMw)} MW to the town` : "resting";
+        return `The battery is ${Math.round(s.soc * 100)}% full and ${doing}.`;
+      },
+    },
+    {
+      test: /\b(solar|panels?|sun|araw|taiyou?)\b/,
+      card: "silicon",
+      mood,
+      answer: () => {
+        const s = l.now();
+        if (!s) return null;
+        if (s.sunElevation <= 0) return "The sun is down, so the panels are making nothing right now. The battery and the grid are carrying the town.";
+        return `The panels are making ${f(s.siliconMw + s.perovskiteMw)} MW: ${f(s.siliconMw)} from silicon and ${f(s.perovskiteMw)} from the perovskite row.`;
+      },
+    },
+    {
+      test: /\b(wind|hangin|kaze|turbines?)\b/,
+      card: "wind",
+      mood,
+      answer: () => {
+        const s = l.now();
+        return s ? `The wind is ${f(s.windSpeed, 1)} m/s and the turbines are making ${f(s.windMw)} MW.` : null;
+      },
+    },
+    {
+      test: /\b(town|load|demand|homes?|using|consum)/,
+      card: "load",
+      mood,
+      answer: () => {
+        const s = l.now();
+        if (!s) return null;
+        const dark = s.unservedMw > 0.01 ? ` ${f(s.unservedMw)} MW of it can't be served, so some homes are dark.` : "";
+        return `The town is drawing ${f(s.loadMw)} MW.${dark}`;
+      },
+    },
+    {
+      test: /\b(grid|import|export|brownout)\b/,
+      card: "grid",
+      mood,
+      answer: () => {
+        const s = l.now();
+        if (!s) return null;
+        const flow = s.gridMw > 0.01 ? `importing ${f(s.gridMw)} MW from the main grid` : s.gridMw < -0.01 ? `exporting ${f(-s.gridMw)} MW to the main grid` : "not trading with the main grid";
+        return `The plant is ${flow}.${s.gridAlert ? " The main grid is on alert, short of power in the heat." : ""}`;
+      },
+    },
+    {
+      test: /\b(weather|temperature|hot|rain|cloudy|panahon|init|ulan|tenki)\b/,
+      card: "sky",
+      answer: () => {
+        const s = l.now();
+        if (!s) return null;
+        const w = l.weather();
+        return `It's ${Math.round(s.ambient)} °C${w ? ` and ${w}` : ""}, with ${Math.round(s.cloud * 100)}% cloud.${s.elNino ? " The El Niño 2026 scenario is on." : ""}`;
+      },
+    },
+    {
+      test: /\b(co2|carbon|emission|avoided)\b/,
+      card: "grid",
+      answer: () => {
+        const t = l.co2TodayT();
+        return t === null ? null : `Over the last 24 hours the plant has avoided about ${f(t, 1)} tonnes of CO₂, compared with the same power from the grid.`;
+      },
+    },
+    { test: /\b(happening|going on|status|doing|update|nangyayari)\b/, mood, answer: () => (l.now() ? l.lesson() : null) },
+  ];
+}
+
+/** Seizorai's knowledge, reading the live plant through `live`. */
+export function seizoraiKnowledge(live: LiveReader): Knowledge {
+  return {
+    topics: TOPICS,
+    starters: STARTERS,
+    subject: "the sun, the wind, the battery, the town, and getting around",
+    live: liveIntents(live),
+    liveSuggestions: ["What's happening right now?", "Take me to the control room"],
+    synonyms: {
+      baterya: "battery", denchi: "battery", setsuden: "save", solar: "solar", photovoltaic: "pv", panels: "panel", turbines: "turbine", windmill: "turbine",
+      windmills: "turbine", batteries: "battery", aircon: "aircon", ac: "aircon", airconditioner: "aircon", emissions: "co2", carbon: "co2", nino: "nino",
+      elnino: "nino", storage: "battery", charge: "battery", soc: "battery",
+    },
+    cardTitle: (card) => INFO[card as InfoKey]?.title ?? card,
+    topicStyle: {
+      joke: { gesture: "cheer", mood: "happy" },
+      fav: { gesture: "point", mood: "happy" },
+      tour: { gesture: "raisehand", mood: "happy" },
+      save: { gesture: "raisehand", mood: "happy" },
+      climate: { gesture: "nod", mood: "neutral" },
+    },
+  };
+}

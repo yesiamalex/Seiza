@@ -493,8 +493,46 @@ consent-based gestures, personal space, blocking, and a refuge.
 `worlds/seisugbo/` is an exhibition: students' art and photos in a model
 Cebu lane and covered court, loaded only as visitors come near.
 `worlds/seizorai/` is Seizora with a guide who walks the exhibits and
-answers questions from written knowledge, offline. See their READMEs, and [World code](#world-code) for how a world adds its own
-exhibits and controls.
+answers questions from written knowledge, offline. `worlds/seiou/` is a
+whole campus: a digital twin of UP Open University's headquarters, made
+from a 3D model instead of Seiza's rooms (see
+[A world made of its own model](#a-world-made-of-its-own-model)), with two
+guides. See their READMEs, and [World code](#world-code) for how a world
+adds its own exhibits and controls.
+
+#### A world made of its own model
+
+Set `"environment": "model"` in `world.json` and the model at `sceneUrl`
+is the whole world: Seiza's hall, classroom, garden, and meadow, their
+furniture, and their collision are left out. Where people can walk comes
+from `navMeshUrl`, a navigation mesh baked from the model ahead of time:
+
+```json
+"environment": "model",
+"sceneUrl": "/worlds/seiou/models/campus.glb",
+"navMeshUrl": "/worlds/seiou/models/campus.navmesh"
+```
+
+- **Walking** follows the navmesh's surface (`src/nav/navGround.ts`):
+  along paths and floors, up stairs and ramps, through doorways, stopping
+  at walls and drops. Each step is one navmesh query, so it costs about
+  what the built-in floor plan does.
+- **Floors** come from the navmesh too: you stand on whichever level
+  you're on, upstairs included.
+- **Click-to-walk** uses the same navmesh, so a double-click on any
+  ground walks you there along the paths, into buildings.
+- **Warps**, spawning, and an admin's gather land on the nearest walkable
+  spot to where they aim, on the nearest floor.
+
+Bake the navmesh when you prepare the model, not in the browser: for a
+whole campus, building one takes the browser far too long.
+`worlds/seiou/scripts/build-campus.mjs` is a worked example: it shrinks the
+model (textures to WebP, heavy meshes simplified, meshes joined by
+material, geometry meshopt-compressed) and bakes the navmesh with
+recast-navigation in Node, then checks you can walk from the entrance into
+each building. A single file must stay under Cloudflare's 25 MiB limit for
+static assets. three.js decodes meshopt-compressed models with a decoder
+bundled in the app, so nothing comes from a CDN.
 
 #### World code
 
@@ -558,6 +596,45 @@ It can also use `setWorldObstacles` from `src/scene/layout.ts` to make its
 furniture solid, `showWorldOverlay` to open a card in the HUD, and `skyState`
 from `src/sky/skyState.ts` to read the exact time (`simMs`) and live weather
 (`weatherState`) the sky shows.
+
+`findPath(from, to)` gives a walking route along the world's navigation
+mesh (the one click-to-walk uses), or null before there is one.
+
+#### Guides
+
+A world can have guides: avatars who walk a round of the world and answer
+questions (`src/guides/`). Seizorai's Ilaw-san and SeiOU's Chancy Joan and
+Dean Rob are built this way. A guide:
+
+- walks a patrol (`route.ts`) worked out from the wall clock, so everyone
+  sees them in the same place with nothing sent over the network;
+- answers from the world's written knowledge (`brain.ts`): guardrails
+  first, then live readings, small talk, and the closest written topic by
+  keyword matching, with Filipino, Cebuano, and romanized Japanese words
+  folded onto English. Nothing is generated, so a guide can't make up a
+  fact or be talked into anything, and nothing leaves the visitor's device;
+- shows each answer with one of Seiza's gestures and a face: a wave hello,
+  gasshō for thanks, a bow to decline, a shrug when they don't know,
+  pointing at a reading or the way;
+- comes over while you talk, and on request walks you to a place along the
+  world's paths, waiting if you fall behind, or takes you there at once.
+  This happens on your screen only; everyone else still sees the patrol.
+
+To add one, write the world's `Knowledge` (topics, each with an answer and
+several ways people might ask it) and a `Persona`, then in the world's
+`Scene`:
+
+```tsx
+registerGuides([{ id: "rob", name: "Dean Rob", brain: createBrain(knowledge, persona) }]);
+showWorldOverlay(<GuideHud />);
+setGuideWarp(warp);
+// …and in the scene:
+<Guide id="rob" name="Dean Rob" avatarUrl="/avatars/vroid/sample-male.vrm" stops={round}
+       pathsOnPatrol getSelfPosition={getSelfPosition} findPath={findPath} />
+```
+
+In a headset, the chat appears as a panel beside the guide, with the next
+questions as buttons (`GuideXr.tsx`).
 
 ### Uploads and storage limits
 
@@ -1670,7 +1747,9 @@ src/            Frontend (React Three Fiber, WebXR, VRM)
   profile/      Remembered name and avatar (IndexedDB)
   voice/        WebRTC voice mesh, signaled through the room server
   edit/         In-world editing UI and image compression
-  nav/          Runtime navigation mesh for click-to-move
+  nav/          Navigation meshes: built at runtime for click-to-move, or
+                loaded baked, as a model world's ground (navGround.ts)
+  guides/       Guides who walk a world and answer questions (opt-in)
   scene/        Built-in world: floor plan (layout.ts), canvas-drawn
                 materials, lighting, outdoors (Outdoors.tsx), shared
                 furniture (Chair, SeatPad), and the deployer's scene overlay
@@ -1687,7 +1766,8 @@ worlds/         Separate worlds built from this repository, each with
                 optional in-world code in client/ (seizora/: a solar,
                 wind, and storage world; seilaya/: a safe spaces lab;
                 seisugbo/: an arts-based research exhibition;
-                seizorai/: Seizora with a guide, Ilaw-san)
+                seizorai/: Seizora with a guide, Ilaw-san;
+                seiou/: UP Open University's campus, with two guides)
 public/animations/, public/gestures/
                 Built-in motion clips (generated) and custom gesture clips
 scripts/        Motion clip generator, KV setup, and asset fetching

@@ -219,6 +219,9 @@ const WALKABLE: Rect[] = [
  * rectangles also means the only way between the rooms is the corridor.
  */
 export function clampToRooms(position: THREE.Vector3, margin = 0): void {
+  // A world made of its own model has no rooms to stay in: walking is the
+  // ground's (see setGround), and the camera goes where it likes.
+  if (ground) return;
   for (const room of WALKABLE) {
     if (contains(inset(room, -margin), position.x, position.z)) return;
   }
@@ -694,8 +697,59 @@ export function deriveObstaclesFromObject(root: THREE.Object3D): Obstacle[] {
  * resolve a box overlap without a physics engine.
  */
 export function resolveObstacles(position: THREE.Vector3, radius = PLAYER_RADIUS): void {
-  pushOutOf(activeObstacles, position, radius);
+  // The built-in room's furniture isn't there in a model world.
+  if (!ground) pushOutOf(activeObstacles, position, radius);
   pushOutOf(worldObstacles, position, radius);
+}
+
+// --- a world's own ground ------------------------------------------------------
+
+/**
+ * Where people can walk in a world made of its own model (world.json
+ * `environment: "model"`), instead of the built-in floor plan above: a
+ * baked navigation mesh (src/nav/navGround.ts). With one set, the built-in
+ * rooms' bounds, furniture, floor heights, and ceilings stop applying, and
+ * walkers are moved along the ground's surface, up its stairs and ramps and
+ * through its doorways, by constrainWalker.
+ */
+export interface Ground {
+  /** Moves a walker from where it last stood toward `position` without
+   *  leaving the walkable surface, writing where it ends up into
+   *  `position`'s x and z, and returns the floor height there. */
+  constrain(position: THREE.Vector3): number;
+  /** The floor height near (x, z), on the level the walker is on. */
+  floorAt(x: number, z: number): number;
+  /** Whether a walker could stand at (x, z) on its current level. */
+  isWalkable(x: number, z: number): boolean;
+  /** Moves the walker to a spot at once (a spawn, a warp, a seat), on the
+   *  level nearest `y`. Returns the floor height there. */
+  place(x: number, y: number, z: number): number;
+}
+
+let ground: Ground | null = null;
+
+export function setGround(next: Ground | null): void {
+  ground = next;
+}
+
+export function getGround(): Ground | null {
+  return ground;
+}
+
+/**
+ * Keeps a walker on walkable floor and out of furniture: the built-in
+ * floor plan and its obstacles, or a model world's ground. Returns the
+ * floor height where the walker ends up.
+ */
+export function constrainWalker(position: THREE.Vector3): number {
+  if (ground) {
+    const floor = ground.constrain(position);
+    pushOutOf(worldObstacles, position, PLAYER_RADIUS);
+    return floor;
+  }
+  clampToRooms(position);
+  resolveObstacles(position);
+  return floorHeightAt(position.x, position.z);
 }
 
 function pushOutOf(obstacles: readonly Obstacle[], position: THREE.Vector3, radius: number): void {
@@ -724,6 +778,7 @@ function pushOutOf(obstacles: readonly Obstacle[], position: THREE.Vector3, radi
 
 /** True if a walker of this radius would be inside a wall or some furniture. */
 export function isBlocked(x: number, z: number, radius = PLAYER_RADIUS): boolean {
+  if (ground) return !ground.isWalkable(x, z);
   const probe = new THREE.Vector3(x, 0, z);
   clampToRooms(probe);
   if (probe.distanceTo(new THREE.Vector3(x, 0, z)) > 1e-4) return true;
@@ -796,6 +851,7 @@ export function meadowHeight(x: number, z: number): number {
 }
 
 export function floorHeightAt(x: number, z: number): number {
+  if (ground) return ground.floorAt(x, z);
   if (contains(TATAMI, x, z)) return TATAMI.height;
   // The steps walk as an even slope from the deck to the meadow, which
   // their noses sit on, so going down them is smooth rather than a jolt
@@ -809,6 +865,7 @@ export function floorHeightAt(x: number, z: number): number {
 export type FloorSurface = "wood" | "tatami" | "water" | "stone" | "grass";
 
 export function surfaceAt(x: number, z: number): FloorSurface {
+  if (ground) return "stone";
   // Water first: the pond sits inside the garden, so its own test has to
   // win over the outdoor default underneath it.
   if (Math.hypot(x - POND_CENTER[0], z - POND_CENTER[1]) <= POND_WATER_RADIUS) return "water";
@@ -826,6 +883,8 @@ export function surfaceAt(x: number, z: number): FloorSurface {
  * walls and showed a roofless set.
  */
 export function ceilingHeightAt(x: number, z: number): number {
+  // A model world's buildings aren't known here: no ceiling for the camera.
+  if (ground) return Infinity;
   if (contains(CLASSROOM, x, z)) return CLASSROOM_WALL_HEIGHT - 0.25;
   if (contains(CORRIDOR, x, z)) return 2.95;
   // Open sky over the garden and the meadow: the camera may rise to look

@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { answer, retrieve, tokens, type LiveReader } from "./brain";
+import { createBrain } from "../../../../src/guides/brain";
+import { ILAW, seizoraiKnowledge, type LiveReader } from "./knowledge";
+
+// Ilaw-san's answers, on Seiza's shared guide brain (src/guides/brain.ts)
+// with Seizorai's knowledge.
+const answer = (question: string, l: LiveReader) => createBrain(seizoraiKnowledge(l), ILAW).answer(question);
+const brain = () => createBrain(seizoraiKnowledge(live), ILAW);
+const tokens = (text: string) => brain().tokens(text);
+const retrieve = (question: string) => fast.retrieve(question);
 
 const plant = {
   hour: 13,
@@ -19,6 +27,7 @@ const plant = {
   gridAlert: false,
 };
 const live: LiveReader = { now: () => plant, lesson: () => "Surplus sun.", co2TodayT: () => 12.3, weather: () => "partly cloudy" };
+const fast = createBrain(seizoraiKnowledge(live), ILAW);
 const dark: LiveReader = { now: () => null, lesson: () => "", co2TodayT: () => null, weather: () => null };
 
 describe("Ilaw-san's guardrails", () => {
@@ -99,7 +108,7 @@ describe("Ilaw-san's topics", () => {
   it("offers to take you to the place you ask for", () => {
     const reply = answer("where is the battery?", live);
     expect(reply.place?.label).toMatch(/battery/);
-    expect(reply.text).toMatch(/Take me there/);
+    expect(reply.text).toMatch(/walk you there/);
   });
 
   it("says it doesn't know rather than guessing", () => {

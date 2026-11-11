@@ -10,8 +10,8 @@ import {
   CAMERA_RADIUS,
   ceilingHeightAt,
   clampToRooms,
+  constrainWalker,
   floorHeightAt,
-  resolveObstacles,
   SEATED_EYE_HEIGHT,
   standUpSpot,
   type Seat,
@@ -683,8 +683,7 @@ export function PlayerRig({
       const headOffset = Math.hypot(xrHead.x - origin.position.x, xrHead.z - origin.position.z);
       if (headOffset < XR_MAX_PLAUSIBLE_HEAD_OFFSET) {
         xrCorrected.copy(xrDesired);
-        clampToRooms(xrCorrected);
-        resolveObstacles(xrCorrected);
+        constrainWalker(xrCorrected);
         origin.position.x += xrCorrected.x - xrDesired.x;
         origin.position.z += xrCorrected.z - xrDesired.z;
       } else {
@@ -1001,13 +1000,11 @@ export function PlayerRig({
         vcam.position.addScaledVector(heading, MOVE_SPEED * delta);
       }
     }
-    clampToRooms(vcam.position);
-    resolveObstacles(vcam.position);
-
     // Gravity/jump — applied every frame so landing is a clean clamp back to
     // eye height rather than separate ground detection. The ground is not
-    // always y=0: the tatami platform is a step up.
-    const floorY = floorHeightAt(vcam.position.x, vcam.position.z);
+    // always y=0: the tatami platform is a step up, and a model world's
+    // ground has stairs and upper floors (layout.ts, constrainWalker).
+    const floorY = constrainWalker(vcam.position);
     const postureTarget = postureHeldRef.current
       ? postureEyeHeightRef.current ?? SEIZA_EYE_HEIGHT
       : lastPostureEyeHeightRef.current;

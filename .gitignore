@@ -17,6 +17,6 @@ dist/
 # (see THIRD_PARTY_ASSETS.md); not committed.
 public/avatars/vroid/
 
-# Seisugbo's original photos, kept local: scripts/optimize-media.mjs
-# turns them into the small WebP files the world serves (committed).
-worlds/seisugbo/media-src/
+# A world's original media (photos, the campus model), kept local: each
+# world's scripts/ turn them into the small files it serves (committed).
+worlds/*/media-src/

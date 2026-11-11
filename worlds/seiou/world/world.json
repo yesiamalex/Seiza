@@ -1,0 +1,23 @@
+{
+  "id": "seiou",
+  "displayName": "SeiOU — UP Open University",
+  "environment": "model",
+  "sceneUrl": "/worlds/seiou/models/campus.glb",
+  "navMeshUrl": "/worlds/seiou/models/campus.navmesh",
+  "sky": { "cycle": "realtime", "site": "manila", "weather": "auto" },
+  "spawnPoint": { "x": 66, "y": 0.2, "z": 0 },
+  "spawnRotationY": -1.5708,
+  "defaultAvatarUrl": "",
+  "maxOccupants": 16,
+  "voiceEnabled": true,
+  "editingEnabled": true,
+  "allowAvatarUpload": true,
+  "defaultAvatars": [
+    { "label": "Fumiriya", "url": "/avatars/vroid/sakurada-fumiriya.vrm", "author": "pixiv Inc. (VRoid Studio sample)", "license": "CC0 1.0", "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/" },
+    { "label": "Shino", "url": "/avatars/vroid/sendagaya-shino.vrm", "author": "pixiv Inc. (VRoid Studio sample)", "license": "CC0 1.0", "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/" },
+    { "label": "Sample A", "url": "/avatars/vroid/sample-female.vrm", "author": "pixiv Inc. (VRoid Studio sample)", "license": "CC0 1.0", "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/" },
+    { "label": "Sample B", "url": "/avatars/vroid/sample-male.vrm", "author": "pixiv Inc. (VRoid Studio sample)", "license": "CC0 1.0", "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/" }
+  ],
+  "customGestures": [],
+  "defaultObjects": []
+}

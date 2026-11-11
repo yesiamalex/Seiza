@@ -3,7 +3,7 @@
 //
 // Seizorai is Seizora (worlds/seizora), copied, with Ilaw-san: a guide who
 // walks the exhibits and answers questions, offline and with guardrails
-// (ilaw/). Everything else below is Seizora's.
+// (ilaw/, on Seiza's shared guides in src/guides/). Everything else below is Seizora's.
 //
 // - The plant runs live on the sky's own time and weather (live.ts).
 // - The control room is at the front of the classroom: a live display the
@@ -21,9 +21,12 @@ import { useFrame } from "@react-three/fiber";
 import type { WorldObject } from "../../../src/multiplayer/types";
 import { setWorldObstacles } from "../../../src/scene/layout";
 import { showWorldOverlay, type WorldSceneProps } from "../../../src/worlds/WorldExtension";
+import { createBrain } from "../../../src/guides/brain";
+import { Guide } from "../../../src/guides/Guide";
+import { openGuide, registerGuides, setGuideWarp } from "../../../src/guides/store";
 import { SeizoraiHud } from "./ilaw/Hud";
-import { IlawSan } from "./ilaw/IlawSan";
-import { setChatOpen, setWarp } from "./ilaw/store";
+import { ILAW, ILAW_AVATAR, ILAW_ROUTE, seizoraiKnowledge } from "./ilaw/knowledge";
+import { liveReader } from "./ilaw/liveReader";
 import { openInfo } from "./InfoCard";
 import { CONSOLE, ControlRoom } from "./ControlRoom";
 import { exhibitObstacles, Exhibits } from "./Exhibits";
@@ -40,7 +43,7 @@ function isRetired(object: WorldObject): boolean {
   return object.kind !== "model" && !!object.text?.includes("/seizora/");
 }
 
-export function Scene({ canEdit, connected, objects, removeObject, roomSky, setRoomSky, worldState, setWorldState, lights, warp, getSelfPosition }: WorldSceneProps) {
+export function Scene({ canEdit, connected, objects, removeObject, roomSky, setRoomSky, worldState, setWorldState, lights, warp, getSelfPosition, findPath }: WorldSceneProps) {
   const controls = useMemo(() => controlsFrom(worldState), [worldState]);
   live.controls = controls;
   live.lights = lights;
@@ -58,16 +61,18 @@ export function Scene({ canEdit, connected, objects, removeObject, roomSky, setR
 
   // The HUD (info cards and Ilaw-san's chat) holds the world's overlay.
   useEffect(() => {
+    registerGuides([{ id: "ilaw", name: ILAW.name, brain: createBrain(seizoraiKnowledge(liveReader), ILAW) }]);
     showWorldOverlay(<SeizoraiHud />);
     return () => {
       openInfo(null);
-      setChatOpen(false);
+      openGuide(null);
+      registerGuides(null);
       showWorldOverlay(null);
     };
   }, []);
   useEffect(() => {
-    setWarp(warp);
-    return () => setWarp(null);
+    setGuideWarp(warp);
+    return () => setGuideWarp(null);
   }, [warp]);
 
   // A room set up before the exhibits were built in still has the old
@@ -82,7 +87,7 @@ export function Scene({ canEdit, connected, objects, removeObject, roomSky, setR
       <Exhibits />
       <ControlRoom canEdit={canEdit} connected={connected} roomSky={roomSky} setRoomSky={setRoomSky} controls={controls} setWorldState={setWorldState} />
       <LabBench />
-      <IlawSan getSelfPosition={getSelfPosition} />
+      <Guide id="ilaw" name={ILAW.name} avatarUrl={ILAW_AVATAR} stops={ILAW_ROUTE} speed={0.9} getSelfPosition={getSelfPosition} findPath={findPath} />
     </>
   );
 }

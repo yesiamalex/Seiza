@@ -1,0 +1,42 @@
+<!--
+  SeiOU's mark: an arch like the Main Building's over the drive, under
+  Seiza's own twilight-into-starfield (the same gradient stops as
+  public/favicon.svg), so the worlds read as one family in a row of tabs.
+  build.mjs copies this over dist/favicon.svg in SeiOU's build only.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="SeiOU">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#070c26"/>
+      <stop offset="42%" stop-color="#1b1546"/>
+      <stop offset="72%" stop-color="#4b2a66"/>
+      <stop offset="92%" stop-color="#a85570"/>
+      <stop offset="100%" stop-color="#e8823f"/>
+    </linearGradient>
+    <clipPath id="frame">
+      <rect width="64" height="64" rx="15"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#frame)">
+    <rect width="64" height="64" fill="url(#sky)"/>
+    <g fill="#ffffff">
+      <circle cx="9" cy="8" r="0.9" opacity="0.95"/>
+      <circle cx="21" cy="5" r="0.6" opacity="0.7"/>
+      <circle cx="50" cy="7" r="0.8" opacity="0.9"/>
+      <circle cx="58" cy="15" r="0.5" opacity="0.6"/>
+    </g>
+    <!-- The building: two blocks and the curved arch between them. -->
+    <rect x="6" y="30" width="15" height="24" fill="#d8c98a"/>
+    <rect x="43" y="30" width="15" height="24" fill="#d8c98a"/>
+    <path d="M19 34 Q32 24 45 34 L45 40 L19 40 Z" fill="#cdbd7c"/>
+    <rect x="21" y="40" width="22" height="5" fill="#1d3b2c"/>
+    <g fill="#1d3b2c">
+      <rect x="9" y="35" width="3" height="19"/>
+      <rect x="15" y="35" width="3" height="19"/>
+      <rect x="46" y="35" width="3" height="19"/>
+      <rect x="52" y="35" width="3" height="19"/>
+    </g>
+    <text x="32" y="44" text-anchor="middle" font-family="system-ui, sans-serif" font-size="4.2" font-weight="700" fill="#f3e9c0">UPOU</text>
+    <rect x="0" y="54" width="64" height="10" fill="#0b0a1c"/>
+  </g>
+</svg>

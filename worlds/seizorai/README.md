@@ -37,14 +37,19 @@ Seizora's README for the plant and its sources.
 She is the CC0 VRoid Studio sample "Sendagaya Shino" (pixiv Inc.), one of
 the avatars the world already offers visitors, animated by Seiza's own
 walk, idle, and gesture clips. To change her look, set `ILAW_AVATAR` in
-`client/ilaw/IlawSan.tsx` to another licensed `.vrm`.
+`client/ilaw/knowledge.ts` to another licensed `.vrm`.
+
+She runs on Seiza's shared guides (`src/guides/`, see DOCS.md, "Guides"),
+the same as SeiOU's Chancy Joan and Dean Rob. Ask her to walk you
+somewhere and she leads the way along the world's paths, waiting if you
+fall behind; "Take me there now" moves you at once.
 
 ### How she answers, and why she can't go off the rails
 
 Ilaw-san is not a generative model. She never writes a sentence nobody
 wrote: every answer is one of the answers in `client/ilaw/knowledge.ts`
 (or a fixed sentence with a live number in it). A question goes through,
-in order (`client/ilaw/brain.ts`):
+in order (Seiza's `src/guides/brain.ts`, with Seizorai's knowledge):
 
 1. **Guardrails.** Requests for code, homework written for you, anything
    harmful, sexual, or about other people's personal details, medical,
@@ -88,14 +93,14 @@ The same as Seizora's (see its README), plus:
 
 ```
 worlds/seizorai/client/ilaw/
-  IlawSan.tsx      Ilaw-san in the world: her model, her route, her gestures
-  brain.ts         How she answers: guardrails, live readings, matching
-  brain.test.ts    What she answers and how she declines
-  knowledge.ts     Everything she knows, and the exhibits' places
-  store.ts         The conversation (this visitor only, never sent or saved)
-  Hud.tsx          The chat on a screen or phone, and the info cards
-  Xr.tsx           The chat in a headset
+  knowledge.ts     Everything she knows, the exhibits' places, her
+                   persona, her round, and the live readings she answers
+  liveReader.ts    The live plant, as she reads it
+  brain.test.ts    What she answers, how she declines, and her gestures
+  Hud.tsx          The info cards and Seiza's guide chat, in the overlay
 ```
+
+How she walks, answers, gestures, and chats is Seiza's (`src/guides/`).
 
 `client/InfoCard.tsx` differs from Seizora's in one way: cards open through
 a small store (`openInfo`), because the chat and the cards share the

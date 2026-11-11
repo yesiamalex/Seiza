@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
+import { setGround } from "../scene/layout";
+import { loadNavGround, type NavGround } from "./navGround";
 
 /**
  * Runtime navmesh for click-to-move, built from whatever environment
@@ -46,14 +48,36 @@ export interface NavMeshApi {
   rebuild: () => void;
 }
 
-export function useNavMesh(sourceRef: React.MutableRefObject<THREE.Object3D | null>): NavMeshApi {
+/**
+ * `prebuiltUrl`: a navmesh baked offline for a world made of its own model
+ * (world.json `navMeshUrl`). It's loaded instead of building one here,
+ * which for a whole campus would take the browser a long while, and it
+ * also becomes the world's ground, for walking (see navGround.ts).
+ */
+export function useNavMesh(sourceRef: React.MutableRefObject<THREE.Object3D | null>, prebuiltUrl?: string | null): NavMeshApi {
   const queryRef = useRef<NavMeshQueryLike | null>(null);
+  const groundRef = useRef<NavGround | null>(null);
+
+  useEffect(() => {
+    if (!prebuiltUrl) return;
+    let live = true;
+    void loadNavGround(prebuiltUrl).then((loaded) => {
+      if (!live || !loaded) return;
+      groundRef.current = loaded;
+      setGround(loaded);
+    });
+    return () => {
+      live = false;
+      groundRef.current = null;
+      setGround(null);
+    };
+  }, [prebuiltUrl]);
   const buildingRef = useRef(false);
   const rebuildTimerRef = useRef<number | null>(null);
 
   const build = useCallback(async () => {
     const root = sourceRef.current;
-    if (!root || buildingRef.current) return;
+    if (prebuiltUrl || !root || buildingRef.current) return;
     buildingRef.current = true;
     try {
       const [{ init, NavMeshQuery }, { threeToSoloNavMesh }] = await Promise.all([
@@ -89,7 +113,7 @@ export function useNavMesh(sourceRef: React.MutableRefObject<THREE.Object3D | nu
     } finally {
       buildingRef.current = false;
     }
-  }, [sourceRef]);
+  }, [sourceRef, prebuiltUrl]);
 
   const rebuild = useCallback(() => {
     if (rebuildTimerRef.current !== null) window.clearTimeout(rebuildTimerRef.current);
@@ -108,6 +132,7 @@ export function useNavMesh(sourceRef: React.MutableRefObject<THREE.Object3D | nu
   }, []);
 
   const findPath = useCallback((from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3[] | null => {
+    if (groundRef.current) return groundRef.current.path(from, to);
     const query = queryRef.current;
     if (!query) return null;
     try {
