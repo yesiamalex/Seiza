@@ -152,7 +152,9 @@ thing, after first copying the repository into your GitHub account.
   world, [Seilaya](worlds/seilaya/README.md), a safe spaces lab for
   learning about gender, safety, and respect, and
   [Seisugbo](worlds/seisugbo/README.md), the Meiji × UP arts-based research
-  exhibition of 2026, in a model Cebu lane and covered court
+  exhibition of 2026, in a model Cebu lane and covered court, and
+  [Seizorai](worlds/seizorai/README.md), Seizora with Ilaw-san, a guide
+  who answers questions offline, with guardrails
 - Hosting somewhere other than Cloudflare: [SELF-HOSTING.md](SELF-HOSTING.md)
 - What's protected, and a checklist for deployers: [SECURITY.md](SECURITY.md)
 

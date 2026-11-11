@@ -479,8 +479,9 @@ the same repository. `worlds/seizora/` is one example: a solar, wind, and
 storage learning world. `worlds/seilaya/` is another: a safe spaces lab with
 consent-based gestures, personal space, blocking, and a refuge.
 `worlds/seisugbo/` is an exhibition: students' art and photos in a model
-Cebu lane and covered court, loaded only as visitors come near. See their
-READMEs, and [World code](#world-code) for how a world adds its own
+Cebu lane and covered court, loaded only as visitors come near.
+`worlds/seizorai/` is Seizora with a guide who walks the exhibits and
+answers questions from written knowledge, offline. See their READMEs, and [World code](#world-code) for how a world adds its own
 exhibits and controls.
 
 #### World code
@@ -1646,7 +1647,8 @@ public/worlds/  Per-deployment world configuration
 worlds/         Separate worlds built from this repository, each with
                 optional in-world code in client/ (seizora/: a solar,
                 wind, and storage world; seilaya/: a safe spaces lab;
-                seisugbo/: an arts-based research exhibition)
+                seisugbo/: an arts-based research exhibition;
+                seizorai/: Seizora with a guide, Ilaw-san)
 public/animations/, public/gestures/
                 Built-in motion clips (generated) and custom gesture clips
 scripts/        Motion clip generator, KV setup, and asset fetching

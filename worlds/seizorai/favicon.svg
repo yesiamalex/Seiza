@@ -1,0 +1,72 @@
+<!--
+  Seizora's mark: a wind turbine and a solar panel against Seiza's own
+  twilight-into-starfield (the same gradient stops and star field as
+  public/favicon.svg), so the two read as one family in a row of tabs.
+  build.mjs copies this over dist/favicon.svg in Seizora's build only.
+
+  Same treatment as Seiza's figure: warm white shapes with a soft gold rim
+  drawn underneath, which carries at 16px against the dark sky.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Seizora">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#070c26"/>
+      <stop offset="42%" stop-color="#1b1546"/>
+      <stop offset="72%" stop-color="#4b2a66"/>
+      <stop offset="92%" stop-color="#a85570"/>
+      <stop offset="100%" stop-color="#e8823f"/>
+    </linearGradient>
+    <clipPath id="frame">
+      <rect width="64" height="64" rx="15"/>
+    </clipPath>
+
+    <!-- One blade, pointing up from the hub at (41, 22). -->
+    <path id="blade" d="M41 22 C38.4 17, 38.8 10.5, 41.2 4.6 C44 10.5, 44.2 17, 41 22 Z"/>
+    <!-- The turbine: tapered tower, hub, and three blades. -->
+    <g id="turbine">
+      <path d="M39.4 23 L42.6 23 L44.2 64 L37.8 64 Z"/>
+      <use href="#blade" transform="rotate(12 41 22)"/>
+      <use href="#blade" transform="rotate(132 41 22)"/>
+      <use href="#blade" transform="rotate(252 41 22)"/>
+      <circle cx="41" cy="22" r="2.6"/>
+    </g>
+    <!-- The panel, tilted toward us, on two short legs. -->
+    <g id="panel">
+      <path d="M9.5 41 L29.5 41 L33 52 L6 52 Z"/>
+      <rect x="11" y="52" width="2.6" height="7"/>
+      <rect x="25.4" y="52" width="2.6" height="7"/>
+    </g>
+  </defs>
+
+  <g clip-path="url(#frame)">
+    <rect width="64" height="64" fill="url(#sky)"/>
+
+    <g fill="#ffffff">
+      <circle cx="9"  cy="8"  r="0.9" opacity="0.95"/>
+      <circle cx="21" cy="5"  r="0.6" opacity="0.7"/>
+      <circle cx="30" cy="12" r="0.5" opacity="0.55"/>
+      <circle cx="55" cy="8"  r="0.85" opacity="0.9"/>
+      <circle cx="58" cy="19" r="0.7" opacity="0.8"/>
+      <circle cx="14" cy="18" r="0.55" opacity="0.6"/>
+      <circle cx="24" cy="25" r="0.75" opacity="0.75"/>
+      <circle cx="54" cy="31" r="0.5" opacity="0.5"/>
+      <circle cx="6"  cy="30" r="0.6" opacity="0.5"/>
+      <circle cx="18" cy="34" r="0.45" opacity="0.4"/>
+    </g>
+
+    <!-- Rim, then fill on top. -->
+    <g fill="#f3d9a4" stroke="#f3d9a4" stroke-width="2" stroke-linejoin="round" opacity="0.95">
+      <use href="#turbine"/>
+      <use href="#panel"/>
+    </g>
+    <g fill="#fbf3e4">
+      <use href="#turbine"/>
+      <use href="#panel"/>
+    </g>
+    <!-- The panel's cells: the sky showing through the grid lines. -->
+    <g stroke="#2a1d55" stroke-width="1.1" fill="none">
+      <path d="M8 46.5 L31 46.5"/>
+      <path d="M16.2 41 L15 52 M22.8 41 L24 52"/>
+    </g>
+  </g>
+</svg>
