@@ -1555,6 +1555,14 @@ materials, textures drawn in code, and detail where people look.
   takes a gradient light map, bright at the top as if a lamp hung over it,
   that follows its room's switch (`src/scene/roomLights.ts`). It costs no
   light and no draw call, and keeps the writing readable after dark.
+- **Glow under furniture is painted, not lit.** The warm light under the
+  benches, desks, and window sills is a soft texture laid on the floor or
+  wall (`src/scene/UnderGlow.tsx`), with no light. These layers, and the
+  campfire's scorched ground, use a polygon offset (`src/scene/decal.ts`)
+  so they always draw in front of the surface they lie on. A few
+  millimeters of gap isn't enough on its own: many Android phones and
+  headsets have a coarse depth buffer, and the layer flickered through the
+  floor as you moved.
 
 ### Only update what changed
 

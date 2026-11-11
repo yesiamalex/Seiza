@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { DECAL } from "./decal";
 import { nightNeed } from "./roomLights";
 
 /** A desk lit from under its top, as in a hotel: where it stands, the size
@@ -45,7 +46,7 @@ export function UnderGlow({ desks, lit }: { desks: GlowDesk[]; lit: boolean }) {
   useEffect(() => () => texture.dispose(), [texture]);
   const stripMaterial = useMemo(() => new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }), []);
   const poolMaterial = useMemo(
-    () => new THREE.MeshBasicMaterial({ map: texture, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }),
+    () => new THREE.MeshBasicMaterial({ map: texture, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, ...DECAL }),
     [texture]
   );
   useEffect(
@@ -86,7 +87,7 @@ function build(desks: GlowDesk[]) {
     // Built round the piece's own centre, then turned and placed.
     const place = (g: THREE.BufferGeometry) => g.rotateY(d.yaw ?? 0).translate(d.x, 0, d.z).toNonIndexed();
     // The strip is the source, kept faint: the pool is what reads.
-    strips.push(tint(place(new THREE.BoxGeometry(d.width - 0.1, STRIP, STRIP).translate(0, d.under - STRIP / 2, d.edge * (d.depth / 2 - 0.04))), 0.55 * k));
+    strips.push(tint(place(new THREE.BoxGeometry(d.width - 0.1, STRIP, STRIP).translate(0, d.under - STRIP / 2 - 0.003, d.edge * (d.depth / 2 - 0.04))), 0.55 * k));
     // The pool starts under the piece and spills out past the lit edge,
     // fading as it goes (spillTexture: brightest at its -Z end). Turned
     // round for a strip under the +Z edge.
@@ -203,7 +204,7 @@ export function WallWash({ ledges, lit }: { ledges: WashLedge[]; lit: boolean })
   useEffect(() => () => texture.dispose(), [texture]);
   const stripMaterial = useMemo(() => new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }), []);
   const washMaterial = useMemo(
-    () => new THREE.MeshBasicMaterial({ map: texture, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }),
+    () => new THREE.MeshBasicMaterial({ map: texture, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, ...DECAL }),
     [texture]
   );
   useEffect(

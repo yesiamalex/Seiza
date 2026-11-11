@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { LightZone } from "../multiplayer/types";
 import { playFireToggle, setFireAmbience } from "../audio/sfx";
+import { DECAL } from "./decal";
 import { PooledLight } from "./LightPool";
 import { nightNeed } from "./roomLights";
 import { poolTexture } from "./UnderGlow";
@@ -46,13 +47,15 @@ export function Campsite({
     () => ({
       // Lambert: lit by the sun, the moon, and the fire, at the least cost.
       tent: new THREE.MeshLambertMaterial({ color: "#c8662f", side: THREE.DoubleSide }),
-      sheet: new THREE.MeshLambertMaterial({ color: "#3b3a30" }),
+      // Lifted in depth like the scorched ground it lies over (DECAL), so
+      // the two keep their order: sheet on top.
+      sheet: new THREE.MeshLambertMaterial({ color: "#3b3a30", ...DECAL }),
       bag: new THREE.MeshLambertMaterial({ color: "#2f4a7a" }),
       fabric: new THREE.MeshLambertMaterial({ color: "#2e5a4a", side: THREE.DoubleSide }),
       metal: new THREE.MeshLambertMaterial({ color: "#3a3d42" }),
       stone: new THREE.MeshLambertMaterial({ color: "#7d7a74", flatShading: true }),
       wood: new THREE.MeshLambertMaterial({ color: "#5a3a22" }),
-      ground: new THREE.MeshLambertMaterial({ map: makeCampGroundTexture(), transparent: true, depthWrite: false }),
+      ground: new THREE.MeshLambertMaterial({ map: makeCampGroundTexture(), transparent: true, depthWrite: false, ...DECAL }),
     }),
     []
   );
@@ -163,7 +166,7 @@ function TentLantern({ lit, metal, windows }: { lit: boolean; metal: THREE.Mater
       frame,
       globe: new THREE.CylinderGeometry(0.05, 0.05, 0.12, 14).translate(0, -0.29, 0),
       bulb: new THREE.MeshBasicMaterial({ color: "#ffc77a", toneMapped: false }),
-      pool: new THREE.MeshBasicMaterial({ map: texture, color: "#ffc77a", transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }),
+      pool: new THREE.MeshBasicMaterial({ map: texture, color: "#ffc77a", transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, ...DECAL }),
     };
   }, [texture]);
   useEffect(
