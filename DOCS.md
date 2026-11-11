@@ -394,6 +394,11 @@ already keeps every room, asset, and avatar in your own Cloudflare account.
 
 4. Open the frontend dev server's URL, not the Worker's.
 
+   To run one of the separate worlds in `worlds/` this way, set its id:
+   `VITE_SEIZA_WORLD_ID=seisugbo npm run dev`. The dev server serves that
+   world's `world/` folder at `/worlds/<id>/`, as its `build.mjs` does in a
+   build.
+
 The frontend proxies `/api` and `/rooms` requests to the local Worker. Don't
 set `VITE_SEIZA_ROOM_HOST` unless you run the room server on another host on
 purpose.
@@ -472,7 +477,9 @@ previews a day, and so its moon: with `?skyHour=21`, a full moon night.
 A deployment can also be a separate world with its own features, built from
 the same repository. `worlds/seizora/` is one example: a solar, wind, and
 storage learning world. `worlds/seilaya/` is another: a safe spaces lab with
-consent-based gestures, personal space, blocking, and a refuge. See their
+consent-based gestures, personal space, blocking, and a refuge.
+`worlds/seisugbo/` is an exhibition: students' art and photos in a model
+Cebu lane and covered court, loaded only as visitors come near. See their
 READMEs, and [World code](#world-code) for how a world adds its own
 exhibits and controls.
 
@@ -827,7 +834,12 @@ for you and for everyone else:
 - Physically crouching lowers the avatar's hips and bends its knees with the
   feet planted.
 
-You see your own body and hands, but not the inside of your own head. The
+You see your own body and hands, but not the inside of your own head.
+A gesture that bends at the waist, such as a bow, leaves your own copy's
+spine upright while its arms play the gesture: the headset is the camera and
+can't follow the body down without tipping your view, which makes people
+sick, so the body stays under your eyes instead of bowing away headless in
+front of you. Everyone else sees the whole bow (`TrackedBody.tsx`). The
 same self-view works in flat-screen first person (see `src/xr/body/SelfView.tsx`).
 In a headset your avatar is drawn a few centimetres behind your eyes (its
 eyes sit in front of its neck, and your feet are placed under the headset),
@@ -1412,7 +1424,7 @@ The campsite (`src/scene/Campsite.tsx`) is about 20 m out:
 
 Everything that doesn't move is merged into one mesh per material, so the
 whole camp, fire included, is about a dozen draw calls. Every world
-(default, Seizora, and Seilaya) arrives you just outside the tent's door,
+(default, Seizora, Seilaya, and Seisugbo) arrives you just outside the tent's door,
 facing the fire, as if you'd just woken up: `spawnPoint` there and
 `spawnRotationY` facing the fire (`TENT_DOORSTEP` in `layout.ts`). Seizora
 and Seilaya have the meadow and the campsite too (Seizora's turbines stand
@@ -1633,7 +1645,8 @@ worker/         Cloudflare Worker: static hosting, upload API (KV), and the
 public/worlds/  Per-deployment world configuration
 worlds/         Separate worlds built from this repository, each with
                 optional in-world code in client/ (seizora/: a solar,
-                wind, and storage world; seilaya/: a safe spaces lab)
+                wind, and storage world; seilaya/: a safe spaces lab;
+                seisugbo/: an arts-based research exhibition)
 public/animations/, public/gestures/
                 Built-in motion clips (generated) and custom gesture clips
 scripts/        Motion clip generator, KV setup, and asset fetching

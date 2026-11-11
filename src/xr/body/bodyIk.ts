@@ -49,6 +49,9 @@ export interface BodyRig {
    *  the model is not necessarily parented yet when the rig is read. */
   scene: THREE.Object3D;
   hips: THREE.Object3D;
+  /** The spine, chest, and upper chest, whichever the rig has: what a bow
+   *  bends. */
+  spine: THREE.Object3D[];
   neck: THREE.Object3D | null;
   head: THREE.Object3D;
   arms: Partial<Record<Side, ArmBones>>;
@@ -168,6 +171,7 @@ export function createBodyRig(vrm: VRM): BodyRig | null {
     root: humanoid.normalizedHumanBonesRoot,
     scene: vrm.scene,
     hips,
+    spine: (["spine", "chest", "upperChest"] as const).map(bone).filter((node): node is THREE.Object3D => node != null),
     neck: bone("neck"),
     head,
     arms,

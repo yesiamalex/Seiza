@@ -16,3 +16,7 @@ dist/
 # Third-party models fetched at build time by scripts/fetch-assets.mjs
 # (see THIRD_PARTY_ASSETS.md); not committed.
 public/avatars/vroid/
+
+# Seisugbo's original photos, kept local: scripts/optimize-media.mjs
+# turns them into the small WebP files the world serves (committed).
+worlds/seisugbo/media-src/

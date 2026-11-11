@@ -149,8 +149,10 @@ thing, after first copying the repository into your GitHub account.
 - Full setup, configuration, and world customization: [DOCS.md](DOCS.md)
 - Other worlds from the same repository, each with its own features:
   [Seizora](worlds/seizora/README.md), a solar, wind, and storage learning
-  world, and [Seilaya](worlds/seilaya/README.md), a safe spaces lab for
-  learning about gender, safety, and respect
+  world, [Seilaya](worlds/seilaya/README.md), a safe spaces lab for
+  learning about gender, safety, and respect, and
+  [Seisugbo](worlds/seisugbo/README.md), the Meiji × UP arts-based research
+  exhibition of 2026, in a model Cebu lane and covered court
 - Hosting somewhere other than Cloudflare: [SELF-HOSTING.md](SELF-HOSTING.md)
 - What's protected, and a checklist for deployers: [SECURITY.md](SECURITY.md)
 

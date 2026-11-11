@@ -67,6 +67,12 @@ deployment.
 | `docs/media/hero.gif`, `docs/media/uploaded-vrm.jpg` | "Hitori 'Bocchi' Gotoh" VRM | Fan model by [@wawari_w](https://wawari.carrd.co/), of the character from *Bocchi the Rock!* (© Aki Hamaji / Houbunsha / Aniplex) | VRoid Hub license: use by everyone allowed; personal commercial use allowed; corporate commercial use **not** allowed; redistribution **not** allowed. | Captured from the maintainer's own copy for personal, illustrative use. Not an endorsement for commercial use or for forks. If you fork Seiza, consider replacing these images. Remove it on request from the model's author or the rights holders. |
 | `docs/media/buttons/*.png` | Ko-fi, GitHub Sponsors, GCash, and BPI logos | Trademarks of Ko-fi Labs, GitHub, G-Xchange, and the Bank of the Philippine Islands | Used only to identify each payment option on the support buttons | The Ko-fi and GitHub Sponsors marks come from Simple Icons; the GCash and BPI marks were taken from the maintainer's own payment QR codes. |
 
+## World content from contributors
+
+| Content | Rights holders | Notes |
+|---|---|---|
+| `worlds/seisugbo/world/media/` (art and photos) | The students of the Meiji × UP arts-based research collaboration (2026), by group, and whoever took each photo | Shown in the Seisugbo world for the project. A deployer should confirm the makers, and anyone recognizable in the photos, agree to a public deployment. Not covered by the repository's AGPL license: don't reuse them outside a Seisugbo deployment without asking. Remove any piece on request. The originals aren't committed (`media-src/` is gitignored); `scripts/optimize-media.mjs` makes these small copies and strips their metadata, GPS included. |
+
 ## Add a new asset
 
 1. Record the source URL, the exact license, and whether the license allows

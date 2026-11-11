@@ -83,6 +83,8 @@ function easePose(smoothed: SmoothedPose | null, next: TrackedPose, t: number, d
 }
 
 const NO_LAYERS: AnimatorLayerWeights = { gesture: 0, posture: 0 };
+/** Normalized bones rest at identity: the spine straight up. */
+const UPRIGHT = new THREE.Quaternion();
 
 /**
  * Drives one avatar from body tracking, when there is any for it.
@@ -152,6 +154,19 @@ export function TrackedBody({ vrm, source, layerWeightsRef }: TrackedBodyProps) 
     weights.hand.right = smoothed.hand.right;
     weights.legs = free * (1 - Math.min(1, layers.posture));
     applyTrackedPose(rig, overlay, smoothed.pose, weights);
+
+    // Your own copy, in a headset. The headset is the camera and stays
+    // where your real head is, so a gesture that bends at the waist (a
+    // bow, gasshō) carried this body forward and down, out from under
+    // your eyes: you saw your own headless body bowing in front of you.
+    // Moving the view to follow it instead would tip the horizon without
+    // your head moving, which makes people sick, so the body stays under
+    // you here and the arms still play the gesture. Everyone else's copy
+    // is untouched and shows the whole bow.
+    if (source === LOCAL_TRACKING_SOURCE) {
+      const hold = weight * Math.min(1, layers.gesture) * (1 - (layers.lying ?? 0));
+      for (const bone of rig.spine) overlay.setQuaternion(bone, UPRIGHT, hold);
+    }
   }, -0.5);
 
   return null;
