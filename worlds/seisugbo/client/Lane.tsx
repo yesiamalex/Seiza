@@ -13,12 +13,12 @@ import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { PooledLight } from "../../../src/scene/LightPool";
-import { nightNeed, roomLights } from "../../../src/scene/roomLights";
+import { roomLights } from "../../../src/scene/roomLights";
 import type { Obstacle } from "../../../src/scene/layout";
 import { addBacking, dims, Labels, Picture, type LabelPlacement, type Placement } from "./art";
 import { PIECE_BY_ID } from "./collection";
 import { TITLE } from "./info";
-import { Builder, canvasTexture, Clickable, FONT, noRaycast, paint, useDrawDistance, useNight, washed, type Vec3 } from "./kit";
+import { Builder, canvasTexture, Clickable, FONT, noRaycast, lampNeed, ON_TOP, paint, useDrawDistance, useNight, washed, type Vec3 } from "./kit";
 import { ARCH_X, BAMBOO, HOUSES, LANE, LANE_CENTRE, PALMS, PATH, POLES, RACK, seeded, STORE, TOUR, TOUR_Z, Y, type House } from "./plan";
 import { openPiece } from "./viewer";
 
@@ -495,10 +495,10 @@ export function Lane() {
       roofs: paint({ map: corrugatedTexture() }),
       cloth: paint({ side: THREE.DoubleSide }),
       wires: paint(),
-      glass: new THREE.MeshLambertMaterial({ color: "#2a3036", emissive: new THREE.Color("#000") }),
+      glass: new THREE.MeshLambertMaterial({ color: "#2a3036", emissive: new THREE.Color("#000"), ...ON_TOP }),
       bulbs: new THREE.MeshBasicMaterial({ color: "#333", toneMapped: false }),
-      lane: new THREE.MeshLambertMaterial({ map: lane }),
-      path: new THREE.MeshLambertMaterial({ map: path }),
+      lane: new THREE.MeshLambertMaterial({ map: lane, ...ON_TOP }),
+      path: new THREE.MeshLambertMaterial({ map: path, ...ON_TOP }),
       archFront: washed(archSign(true)),
       archBack: washed(archSign(false)),
       store: washed(storeSign()),
@@ -524,7 +524,7 @@ export function Lane() {
   // The street lamps' light: Seiza's pooled lights, on the garden switch.
   const lamp = useRef(0);
   useFrame((_, delta) => {
-    const target = roomLights.pond ? 6 * nightNeed() : 0;
+    const target = roomLights.pond ? 6 * lampNeed() : 0;
     lamp.current += (target - lamp.current) * (1 - Math.exp(-delta / 0.2));
   });
 
@@ -563,11 +563,11 @@ export function Lane() {
       ))}
       <mesh geometry={geometry.cloth} material={m.cloth} raycast={noRaycast} userData={{ navIgnore: true }} />
       <mesh geometry={geometry.wires} material={m.wires} raycast={noRaycast} userData={{ navIgnore: true }} />
-      {/* Paving, a hair above the grass. */}
-      <mesh position={[(LANE.x0 + LANE.x1) / 2, Y + 0.012, (LANE.z0 + LANE.z1) / 2]} rotation={[-Math.PI / 2, 0, 0]} material={m.lane} receiveShadow userData={{ navIgnore: true }}>
+      {/* Paving, just above the grass (and drawn over it: ON_TOP). */}
+      <mesh position={[(LANE.x0 + LANE.x1) / 2, Y + 0.03, (LANE.z0 + LANE.z1) / 2]} rotation={[-Math.PI / 2, 0, 0]} material={m.lane} receiveShadow userData={{ navIgnore: true }}>
         <planeGeometry args={[LANE.x1 - LANE.x0, LANE.z1 - LANE.z0]} />
       </mesh>
-      <mesh position={[(PATH.x0 + PATH.x1) / 2, Y + 0.011, (PATH.z0 + PATH.z1) / 2]} rotation={[-Math.PI / 2, 0, 0]} material={m.path} receiveShadow userData={{ navIgnore: true }}>
+      <mesh position={[(PATH.x0 + PATH.x1) / 2, Y + 0.028, (PATH.z0 + PATH.z1) / 2]} rotation={[-Math.PI / 2, 0, 0]} material={m.path} receiveShadow userData={{ navIgnore: true }}>
         <planeGeometry args={[PATH.x1 - PATH.x0, PATH.z1 - PATH.z0]} />
       </mesh>
       {/* The arch's sign: welcome on the way in, thanks on the way out.

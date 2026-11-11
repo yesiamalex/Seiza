@@ -2,11 +2,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   BUSY_BACKOFF_MS,
   hasAnyMedia,
+  isSending,
   planPeers,
   tuneOpus,
   VOICE_MAX_BITRATE,
+  voiceVolume,
 } from "./meshPolicy";
 import type { PlayerMedia, PlayerState } from "../multiplayer/types";
+import { audioRunning, closeVoiceAudioContext, onAudioStateChange, unlockAudio, voiceAudioContext } from "./audioContext";
 import { isPlayerBlocked } from "../multiplayer/playerFilter";
 
 // On unless a deployer explicitly turns it off. The per-world switch is
@@ -33,10 +36,33 @@ export const VOICE_ENABLED = import.meta.env.VITE_SEIZA_VOICE_ENABLED !== "false
  * - remote video is decoded only while something on screen is showing it
  *   (see VideoPanel), so an idle share costs nothing to a viewer looking
  *   the other way;
- * - a muted mic sends nothing at all, and voice is capped at 24 kbps with
- *   discontinuous transmission, so silence is nearly free.
+ * - a muted mic sends nothing at all, and voice is capped at 24 kbps
+ *   (see tuneOpus for why it isn't also cut during silence).
  */
-const VOICE_FALLOFF_DISTANCE = 12;
+/**
+ * Voices are made louder than they arrive, then held under a limiter, so a
+ * quiet microphone or a laptop's small speakers are still easy to hear and
+ * a loud one doesn't distort. One chain per page, shared by every voice.
+ */
+const VOICE_BOOST = 1.8;
+const voiceOutputs = new WeakMap<AudioContext, AudioNode>();
+function voiceOutput(context: AudioContext): AudioNode {
+  let input = voiceOutputs.get(context);
+  if (!input) {
+    const boost = context.createGain();
+    boost.gain.value = VOICE_BOOST;
+    const limiter = context.createDynamicsCompressor();
+    limiter.threshold.value = -14;
+    limiter.knee.value = 10;
+    limiter.ratio.value = 6;
+    limiter.attack.value = 0.003;
+    limiter.release.value = 0.25;
+    boost.connect(limiter).connect(context.destination);
+    input = boost;
+    voiceOutputs.set(context, input);
+  }
+  return input;
+}
 
 /** setLocalDescription(), with this app's voice preferences written in. */
 async function setTunedLocalDescription(connection: RTCPeerConnection) {
@@ -181,6 +207,11 @@ export interface RealtimeMediaState {
   screenOn: boolean;
   /** Last thing that went wrong, for the UI to show. */
   error: string | null;
+  /** Someone can be heard, but the browser is still holding audio back
+   *  until a tap or a key (see audioContext.ts). The UI offers a button. */
+  audioBlocked: boolean;
+  /** Starts audio; call from a click or key handler. */
+  unlockAudio: () => void;
   /** Which local stream is which, to publish over the room protocol. */
   localMedia: PlayerMedia;
   localCameraStream: MediaStream | null;
@@ -272,28 +303,32 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
 
   const bumpStreams = useCallback(() => setStreamsVersion((version) => version + 1), []);
 
+  // The shared voice context (audioContext.ts), which the Join button has
+  // usually unlocked already.
   const ensureAudioContext = useCallback(() => {
-    if (!audioContextRef.current) audioContextRef.current = new AudioContext();
+    audioContextRef.current = voiceAudioContext();
     return audioContextRef.current;
   }, []);
 
-  // Lets people who never turn their own mic on still hear everyone else.
-  // Browsers start audio suspended until a user gesture resumes it, and the
-  // only resume() used to be in the mic button's handler. Chrome tolerated
-  // that after the Join click; Safari on iPhone and iPad didn't, so a
-  // listener there heard nothing. Any tap, click, or key now resumes it, and
-  // keeps doing so after iOS suspends audio for a call or an app switch.
+  // Lets people who never turn their own mic on hear everyone else. The
+  // Join button unlocks audio; if the browser suspends it later (a call,
+  // an app switch, iOS being iOS), any tap, click, or key starts it again.
+  // pointerdown alone isn't enough: a touch's pointerdown doesn't count as
+  // a gesture in Chrome, its touchend and click do.
+  const [audioOn, setAudioOn] = useState(audioRunning);
   useEffect(() => {
     const unlock = () => {
-      const context = ensureAudioContext();
-      if (context.state !== "running") void context.resume().catch(() => {});
+      if (!audioRunning()) unlockAudio();
     };
-    const events = ["pointerdown", "keydown", "touchend"] as const;
+    const events = ["pointerdown", "pointerup", "click", "keydown", "touchend"] as const;
     for (const name of events) window.addEventListener(name, unlock, { capture: true, passive: true });
+    const stop = onAudioStateChange(() => setAudioOn(audioRunning()));
+    setAudioOn(audioRunning());
     return () => {
       for (const name of events) window.removeEventListener(name, unlock, { capture: true });
+      stop();
     };
-  }, [ensureAudioContext]);
+  }, []);
 
   const publishLocalMedia = useCallback(() => {
     setLocalMedia({
@@ -420,7 +455,7 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
       gain.gain.value = 0;
       const analyser = context.createAnalyser();
       analyser.fftSize = 256;
-      context.createMediaStreamSource(stream).connect(gain).connect(analyser).connect(context.destination);
+      context.createMediaStreamSource(stream).connect(gain).connect(analyser).connect(voiceOutput(context));
       // The element is what keeps the stream flowing in Chrome, but it must
       // stay muted or the audio plays twice: once flat through the element
       // and once spatialised through the graph above.
@@ -860,7 +895,7 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
       for (const stream of [micStreamRef.current, cameraStreamRef.current, screenStreamRef.current]) {
         stream?.getTracks().forEach((track) => track.stop());
       }
-      void audioContextRef.current?.close();
+      closeVoiceAudioContext();
       audioContextRef.current = null;
     },
     [closePeer]
@@ -890,12 +925,8 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
       for (const [peerId, peer] of peersRef.current.entries()) {
         const player = playersRef.current[peerId];
         if (player) {
-          const dx = player.position[0] - localPosition[0];
-          const dy = player.position[1] - localPosition[1];
-          const dz = player.position[2] - localPosition[2];
-          const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
           // Silent for someone this viewer has blocked (playerFilter.ts).
-          const volume = isPlayerBlocked(peerId) ? 0 : Math.max(0, 1 - distance / VOICE_FALLOFF_DISTANCE);
+          const volume = isPlayerBlocked(peerId) ? 0 : voiceVolume(player.position[0] - localPosition[0], player.position[2] - localPosition[2]);
           for (const audio of peer.audio.values()) {
             audio.gain.gain.setTargetAtTime(volume, audio.gain.context.currentTime, 0.1);
           }
@@ -923,6 +954,8 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
     cameraOn,
     screenOn,
     error,
+    audioBlocked: !audioOn && Object.values(players).some((p) => p.id !== selfId && isSending(p.media)),
+    unlockAudio,
     localMedia,
     localCameraStream,
     localScreenStream,

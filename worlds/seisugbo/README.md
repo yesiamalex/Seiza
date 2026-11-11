@@ -3,7 +3,7 @@
 **Seisugbo: Meiji × UP Arts-Based Research 2026** is a Seiza world for the
 art and photos from a face-to-face collaboration in Cebu. Students from
 Meiji University and the University of the Philippines walked the city
-together, through its markets, streets, and neighbourhoods, and then made art
+together, through its markets, streets, and neighborhoods, and then made art
 about what stayed with them, naming each piece in Japanese, English, and
 Filipino or Cebuano. The world carries that work to people who weren't
 there. *Sugbo* is Cebu's old name.
@@ -16,7 +16,7 @@ hook, so the other worlds are unaffected.
 
 Visitors wake at the tent on the meadow and look east down the lane.
 
-- **The lane.** A model Cebu neighbourhood, built in code: painted houses
+- **The lane.** A model Cebu neighborhood, built in code: painted houses
   close together, galvanized roofs held down with tyres, power lines strung
   pole to pole, fiesta bunting, washing on the line, a sari-sari store on
   the corner, a rack of bulad (dried fish) with Group C's paper fish hanging
@@ -58,11 +58,17 @@ on a phone and a standalone headset:
   can't see them anyway).
 - **The structures are a handful of draw calls.** Every house, roof, wire,
   flag, and shirt is merged into one mesh per material, with each house's
-  paint as vertex colour; all the labels are one texture and one mesh per
+  paint as vertex color; all the labels are one texture and one mesh per
   area; all the pins are one mesh. Each picture is one draw call.
 - **Night costs no extra lights.** Windows and lamps glow, boards and
   labels are washed from the top with a light map, and the lane's and
-  court's lamps use Seiza's shared pool of four lights.
+  court's lamps use Seiza's shared pool of four lights, and only at dusk
+  and night, so by day they leave the pool to the lamps that need it.
+- **Nothing flickers through anything.** Pictures, labels, signs, windows,
+  and the paving are drawn in front of the surface they lie on
+  (`ON_TOP` in `client/kit.tsx`), and the court's slab stands 4 cm proud
+  of the grass. A few millimeters of gap shimmers at a distance, most of
+  all in a headset.
 - **Collision is boxes,** as in the rest of Seiza: houses, posts, the
   lines (walk round the ends, not through the art), boards, and the rack.
 

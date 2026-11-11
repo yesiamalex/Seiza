@@ -395,7 +395,7 @@ export function useRoomSocket(
             setEnvironmentUrl(msg.environmentUrl);
             // Older room servers predate skyboxes and omit the field.
             setSkyboxUrl(msg.skyboxUrl ?? null);
-            setRoomSkyState(msg.roomSky ?? null);
+            setRoomSkyState((previous) => sameSky(previous, msg.roomSky ?? null));
             setWorldStateMap(msg.worldState ?? {});
             setLights({ ...DEFAULT_LIGHTS, ...(msg.lights ?? {}) });
             break;
@@ -404,7 +404,7 @@ export function useRoomSocket(
             setPasswordRequired(true);
             break;
           case "roomSkyChanged":
-            setRoomSkyState(msg.sky);
+            setRoomSkyState((previous) => sameSky(previous, msg.sky));
             break;
           case "worldStateChanged":
             setWorldStateMap((previous) => ({ ...previous, [msg.key]: msg.value }));
@@ -617,4 +617,13 @@ export function useRoomSocket(
     lights,
     setLight,
   };
+}
+
+/**
+ * The room sky to keep: the previous object when the new one says the
+ * same thing. A reconnect's welcome sends the room sky again, and a new
+ * object, even an identical one, restarted the sky's clock (SkyDriver).
+ */
+function sameSky(previous: RoomSky | null, next: RoomSky | null): RoomSky | null {
+  return JSON.stringify(previous) === JSON.stringify(next) ? previous : next;
 }

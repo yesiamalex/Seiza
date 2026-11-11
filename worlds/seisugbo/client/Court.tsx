@@ -8,12 +8,12 @@ import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { PooledLight } from "../../../src/scene/LightPool";
-import { nightNeed, roomLights } from "../../../src/scene/roomLights";
+import { roomLights } from "../../../src/scene/roomLights";
 import type { Obstacle } from "../../../src/scene/layout";
 import { addBacking, dims, Labels, Picture, Pins, type LabelPlacement, type Placement } from "./art";
 import { GROUP_COLORS, PIECE_BY_ID, PIECES, type Group } from "./collection";
 import { GROUP_BLURB, TITLE } from "./info";
-import { Builder, canvasTexture, Clickable, FONT, noRaycast, paint, useDrawDistance, useNight, washed, type Vec3 } from "./kit";
+import { Builder, canvasTexture, Clickable, FONT, lampNeed, noRaycast, paint, useDrawDistance, useNight, washed, type Vec3 } from "./kit";
 import { COURT, COURT_CENTRE, Y } from "./plan";
 import { openPiece } from "./viewer";
 
@@ -308,7 +308,7 @@ export function Court() {
   // switch, so the court is lit at night without adding lights.
   const light = useRef(0);
   useFrame((_, delta) => {
-    const target = roomLights.pond ? 7 * nightNeed() : 0;
+    const target = roomLights.pond ? 7 * lampNeed() : 0;
     light.current += (target - light.current) * (1 - Math.exp(-delta / 0.2));
   });
 
@@ -337,7 +337,8 @@ export function Court() {
       <mesh geometry={geometry.roof} material={m.roof} castShadow raycast={noRaycast} userData={{ navIgnore: true }} />
       <mesh geometry={geometry.lines} material={m.lines} raycast={noRaycast} userData={{ navIgnore: true }} />
       <mesh geometry={geometry.lamps} material={m.lamps} raycast={noRaycast} userData={{ navIgnore: true }} />
-      <mesh position={[COURT_CENTRE[0], Y - 0.035, COURT_CENTRE[1]]} material={m.slab} receiveShadow userData={{ navIgnore: true }}>
+      {/* Its top 4 cm above the grass: a real step, not a coplanar flicker. */}
+      <mesh position={[COURT_CENTRE[0], Y - 0.01, COURT_CENTRE[1]]} material={m.slab} receiveShadow userData={{ navIgnore: true }}>
         <boxGeometry args={[COURT.x1 - COURT.x0 + 0.6, 0.1, COURT.z1 - COURT.z0 + 0.6]} />
       </mesh>
       <mesh position={[COURT_CENTRE[0], Y + EAVE + 0.2, POST_Z[1] + 0.55]} material={m.fascia} userData={{ navIgnore: true }}>

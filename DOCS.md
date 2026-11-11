@@ -193,15 +193,27 @@ guarantee yet.
   move to stand up.
 - **Voice chat.** Voice uses a peer-to-peer WebRTC mesh, signaled through the
   room server that also syncs positions. A 3D indicator shows who is
-  speaking, and volume falls off with distance. There's no separate media
+  speaking. Voices play at full volume within 3 m, talking range, then
+  fade smoothly to silence at 16 m. Every voice is boosted and held under a
+  limiter, so a quiet microphone is easy to hear and a loud one doesn't
+  distort (`voiceVolume` in `src/media/meshPolicy.ts`). There's no separate media
   server; see [Known limitations](#known-limitations) for the scaling limit
   this sets. Voice is on unless you turn it off with `voiceEnabled` in
   `world.json` or the `VITE_SEIZA_VOICE_ENABLED=false` build flag.
 
-  You don't need to turn on your own microphone to hear others. Browsers
-  keep audio paused until you interact with the page, so your first tap,
-  click, or key press after joining starts it (on iPhone and iPad, this is
-  required).
+  You don't need to turn on your own microphone to hear others. You hear
+  the room as soon as you join: browsers keep audio paused until a user
+  gesture, and pressing **Join** is that gesture
+  (`src/media/audioContext.ts`). If a browser still holds audio back, or
+  pauses it later (a phone call, switching apps), a **Tap to hear the
+  room** button appears while someone is talking, and any tap, click, or
+  key press also starts it again.
+
+  Voice is sent continuously while your microphone is on and unmuted.
+  Opus's discontinuous transmission (DTX), which stops sending during
+  silence, is turned off: it clipped the start of words and dropped quiet
+  speech, so voices popped in and out (`tuneOpus` in
+  `src/media/meshPolicy.ts`). A muted microphone still sends nothing.
 - **Reconnecting.** If your connection drops and comes back, Seiza rejoins
   automatically. Each page load has a private session ID, so the room
   replaces your old connection instead of showing a frozen copy of you
@@ -647,7 +659,7 @@ Approximate usage for one relayed stream to one receiving peer for one hour:
 
 | Stream | Cap when relayed | Per hour, per receiving peer |
 | --- | --- | --- |
-| Voice | 24 kbps, near zero while silent or muted | about 11 MB at most |
+| Voice | 24 kbps while the mic is on, nothing while muted | about 11 MB |
 | Camera | 120 kbps | about 54 MB |
 | Screen share | 600 kbps | about 270 MB |
 
@@ -943,9 +955,12 @@ a world with `"cycle": "realtime"`, `src/sky/` moves it:
 - **The engine** (`weather.ts`) is plain TypeScript with no DOM or 3D code.
   It gives the sun's position for a Philippine site and time, clear-sky and
   cloudy irradiance, a weather state that eases between types over about
-  25 simulated minutes, and sky colours that change continuously through
+  25 simulated minutes, and sky colors that change continuously through
   twilight and the golden hour. Other code can use it too: Seizora's solar
-  simulation reads the same numbers.
+  simulation reads the same numbers. The weather carries over when the sky's
+  clock restarts (a reconnect, or an editor setting the room's sky), so the
+  sky eases on instead of jumping to the new weather in one frame
+  (`skyState.ts`).
 - **The schedule** (`scheduledWeather`) picks the weather for each
   three-hour block from a hash of the date, with fair weather more likely
   from December to May and rain more likely from June to November. Every
@@ -1527,8 +1542,13 @@ materials, textures drawn in code, and detail where people look.
 - **Only four lamps are lit at a time.** three.js shades every point light on
   every pixel, near or far. The lamps share a pool of four lights, which are
   assigned each frame to the fixtures whose light reaches what the camera
-  sees (`src/scene/LightPool.tsx`). Changes fade in, and a light stays on
-  briefly after leaving view, so looking away and back shows no change. The
+  sees (`src/scene/LightPool.tsx`). Changes fade over about a third of a
+  second, and a light stays on briefly after leaving view, so looking away
+  and back shows no change. Lamps are ranked on their brightness smoothed
+  over a second, so a campfire's flicker doesn't reshuffle them. A lamp
+  keeps its light for at least 3 seconds, and against a rival unless the
+  rival matters twice as much, so walking past lamps of similar weight
+  doesn't make them trade lights back and forth. The
   garden's lampposts are two more fixtures in the same pool, so they cost
   no extra lighting; their metal is one merged mesh and their lamps another.
 - **Text boards are washed, not lit.** At night each text board and note

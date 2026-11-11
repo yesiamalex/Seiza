@@ -17,12 +17,20 @@ import { useFrame, useThree } from "@react-three/fiber";
  * sphere it meaningfully lights touches the view (with a margin), and the
  * nearest, brightest of those win.
  *
- * Three things keep this from being noticed:
+ * Five things keep this from being noticed:
  * - The pool never grows or shrinks. A light that isn't needed sits at
  *   intensity 0; adding or removing one would recompile every material's
  *   shader, which is a visible hitch.
  * - Handing a light from one fixture to another fades it out and the next
- *   one in, over a few frames, instead of jumping.
+ *   one in, over about a third of a second, instead of jumping.
+ * - Fixtures are ranked on their brightness smoothed over a second or so,
+ *   not this frame's: a campfire's flicker would otherwise reshuffle the
+ *   ranking every frame against the lamps round it, and the lights would
+ *   trade back and forth, which reads as the whole place flickering.
+ * - A fixture keeps its light for at least MIN_HOLD_SECONDS once it has
+ *   it, and against a rival unless the rival matters HOLD_BONUS times
+ *   more, so walking or turning past two lamps of similar weight doesn't
+ *   swap them back and forth.
  * - A fixture stays lit for LINGER_SECONDS after it leaves the view, and
  *   the margin brings one in before it enters, so glancing away and back
  *   shows no fade at all.
@@ -40,12 +48,19 @@ const LINGER_SECONDS = 2;
  *  light's reach: dimmer than this reads as nothing against the sky light. */
 const REACH_THRESHOLD = 0.15;
 /** Fade rates, per second, for a fixture gaining and losing its light. */
-const FADE_IN = 10;
-const FADE_OUT = 12;
+const FADE_IN = 4;
+const FADE_OUT = 4;
 /** A fixture already holding a light keeps it against a rival unless the
  *  rival matters this much more, so two near-equal lamps don't trade a
- *  light back and forth every frame. */
-const HOLD_BONUS = 1.5;
+ *  light back and forth. */
+const HOLD_BONUS = 2;
+/** Once lit, a fixture keeps its light at least this long while it's
+ *  still in (or lingering near) the view and switched on. */
+const MIN_HOLD_SECONDS = 3;
+/** How quickly the brightness used for ranking follows the real one, in
+ *  seconds: slow enough to ignore a fire's flicker, quick enough for a
+ *  switch. */
+const RANK_SMOOTHING = 0.8;
 
 interface Fixture {
   anchor: THREE.Object3D | null;
@@ -58,6 +73,10 @@ interface Fixture {
   weight: number;
   slot: number;
   lastSeen: number;
+  /** When it last got a light, for MIN_HOLD_SECONDS. */
+  heldSince: number;
+  /** Its brightness, smoothed, for ranking (RANK_SMOOTHING). */
+  smoothed: number;
   position: THREE.Vector3;
 }
 
@@ -88,6 +107,8 @@ export function PooledLight({ position, color, intensity = 0, intensityRef, dist
       weight: 0,
       slot: -1,
       lastSeen: -Infinity,
+      heldSince: -Infinity,
+      smoothed: -1,
       position: new THREE.Vector3(),
     }),
     // One fixture for the component's life; its fields update below.
@@ -140,17 +161,26 @@ export function LightPool() {
       const intensity = fixture.intensityRef ? fixture.intensityRef.current : fixture.intensity;
       if (intensity <= 0) {
         fixture.lastSeen = -Infinity;
+        fixture.smoothed = 0;
         continue;
       }
+      fixture.smoothed = fixture.smoothed < 0 ? intensity : fixture.smoothed + (intensity - fixture.smoothed) * (1 - Math.exp(-step / RANK_SMOOTHING));
       const reach = Math.min(fixture.distance, Math.sqrt(intensity / REACH_THRESHOLD));
       sphere.set(fixture.position, reach + VIEW_MARGIN);
       if (frustum.intersectsSphere(sphere)) fixture.lastSeen = now;
       if (now - fixture.lastSeen > LINGER_SECONDS) continue;
       const distanceSq = Math.max(1, fixture.position.distanceToSquared(cameraPosition));
-      ranked.push({ fixture, score: (intensity / distanceSq) * (fixture.slot >= 0 ? HOLD_BONUS : 1) });
+      ranked.push({ fixture, score: (fixture.smoothed / distanceSq) * (fixture.slot >= 0 ? HOLD_BONUS : 1) });
     }
     ranked.sort((a, b) => b.score - a.score);
-    const chosen = new Set(ranked.slice(0, POOL_SIZE).map((r) => r.fixture));
+    // Fixtures that got their light only moments ago keep it; the rest of
+    // the pool goes by rank.
+    const chosen = new Set<Fixture>();
+    for (const { fixture } of ranked) if (fixture.slot >= 0 && now - fixture.heldSince < MIN_HOLD_SECONDS && chosen.size < POOL_SIZE) chosen.add(fixture);
+    for (const { fixture } of ranked) {
+      if (chosen.size >= POOL_SIZE) break;
+      chosen.add(fixture);
+    }
 
     // Fade every lit fixture toward chosen or not, and free the lights of
     // those that have faded out.
@@ -179,6 +209,7 @@ export function LightPool() {
       owners.current[free] = fixture;
       fixture.slot = free;
       fixture.weight = 0;
+      fixture.heldSince = now;
     }
 
     for (let slot = 0; slot < POOL_SIZE; slot++) {

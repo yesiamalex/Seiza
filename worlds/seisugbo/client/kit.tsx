@@ -296,13 +296,29 @@ export function useDrawDistance(ref: React.RefObject<THREE.Object3D | null>, cen
 
 // --- night ---------------------------------------------------------------------------------------
 
+/** 0 by day, rising through dusk to 1 at night: how much a lamp's real
+ *  light is wanted. Off by day, a lamp doesn't take one of Seiza's few
+ *  shared lights (LightPool) away from the lamps that need it. */
+export function lampNeed(): number {
+  return Math.min(1, Math.max(0, (nightNeed() - 0.3) / 0.7));
+}
+
+/**
+ * Drawn in front of whatever it lies flat against, however far away: a
+ * picture on its backing, a label on its plaque, paving on the grass. A few
+ * millimetres of real gap isn't enough at a distance, least of all with a
+ * headset's coarser depth buffer, and the two surfaces flicker through each
+ * other.
+ */
+export const ON_TOP: THREE.MeshLambertMaterialParameters = { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 };
+
 /**
  * A face washed from the top at night while the garden's lights are on, as
  * Seiza's own text boards are (src/scene/roomLights.ts): a light map, not a
- * light, so it costs nothing.
+ * light, so it costs nothing. Always a surface on something, so ON_TOP.
  */
 export function washed(map: THREE.Texture | null, extra: THREE.MeshLambertMaterialParameters = {}) {
-  return new THREE.MeshLambertMaterial({ map, lightMap: signWashTexture(), lightMapIntensity: 0, ...extra });
+  return new THREE.MeshLambertMaterial({ map, lightMap: signWashTexture(), lightMapIntensity: 0, ...ON_TOP, ...extra });
 }
 
 /** Turns the wash of `faces` up at night, and the glow of `glows` (window

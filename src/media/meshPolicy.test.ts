@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PlayerMedia } from "../multiplayer/types";
-import { BUSY_BACKOFF_MS, PEER_MIN_LIFETIME_MS, planPeers, rankPeers, tuneOpus, VOICE_MESH_SOFT_CAP, type PeerPlanInput } from "./meshPolicy";
+import { BUSY_BACKOFF_MS, PEER_MIN_LIFETIME_MS, planPeers, rankPeers, tuneOpus, VOICE_FULL_DISTANCE, VOICE_MESH_SOFT_CAP, VOICE_SILENT_DISTANCE, voiceVolume, type PeerPlanInput } from "./meshPolicy";
 
 const MIC: PlayerMedia = { mic: "m" };
 const MUTED: PlayerMedia = { mic: "m", micMuted: true };
@@ -122,9 +122,15 @@ describe("tuneOpus", () => {
     "",
   ].join("\r\n");
 
-  it("asks for discontinuous transmission and 24 kbps in every audio section", () => {
+  it("turns off discontinuous transmission and caps at 24 kbps in every audio section", () => {
     const tuned = tuneOpus(sdp);
-    expect(tuned.match(/a=fmtp:111 minptime=10;useinbandfec=1;usedtx=1;maxaveragebitrate=24000/g)).toHaveLength(2);
+    expect(tuned.match(/a=fmtp:111 minptime=10;useinbandfec=1;usedtx=0;maxaveragebitrate=24000/g)).toHaveLength(2);
+  });
+
+  it("overrides discontinuous transmission when the browser offered it", () => {
+    const tuned = tuneOpus(sdp.replace(/useinbandfec=1/g, "useinbandfec=1;usedtx=1"));
+    expect(tuned).not.toContain("usedtx=1");
+    expect(tuned.match(/usedtx=0/g)).toHaveLength(2);
   });
 
   it("is idempotent", () => {
@@ -132,11 +138,25 @@ describe("tuneOpus", () => {
   });
 
   it("adds an fmtp line when there is none", () => {
-    expect(tuneOpus("m=audio 9 X 111\r\na=rtpmap:111 opus/48000/2\r\n")).toContain("a=rtpmap:111 opus/48000/2\r\na=fmtp:111 usedtx=1;maxaveragebitrate=24000");
+    expect(tuneOpus("m=audio 9 X 111\r\na=rtpmap:111 opus/48000/2\r\n")).toContain("a=rtpmap:111 opus/48000/2\r\na=fmtp:111 useinbandfec=1;maxaveragebitrate=24000;usedtx=0");
   });
 
   it("leaves a description without Opus untouched", () => {
     const video = "m=video 9 X 96\r\na=rtpmap:96 VP8/90000\r\n";
     expect(tuneOpus(video)).toBe(video);
+  });
+});
+
+describe("voiceVolume", () => {
+  it("is full within talking range", () => {
+    expect(voiceVolume(0, 0)).toBe(1);
+    expect(voiceVolume(VOICE_FULL_DISTANCE, 0)).toBe(1);
+  });
+
+  it("fades gently, then to silence", () => {
+    expect(voiceVolume(5, 0)).toBeGreaterThan(0.9);
+    expect(voiceVolume(9.5, 0)).toBeCloseTo(0.5, 1);
+    expect(voiceVolume(0, VOICE_SILENT_DISTANCE)).toBe(0);
+    expect(voiceVolume(40, 0)).toBe(0);
   });
 });

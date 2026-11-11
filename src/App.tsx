@@ -1618,6 +1618,17 @@ export default function App() {
           not inside it: on a phone the HUD's controls fold into a drawer,
           which hid every world card until the drawer was opened. */}
       <WorldOverlay />
+      {/* Someone is talking but the browser still holds audio back (the
+          Join click usually unlocks it; see src/media/audioContext.ts). */}
+      {media.audioBlocked && (
+        <button
+          type="button"
+          onClick={media.unlockAudio}
+          style={{ ...pillButtonStyle, position: "fixed", top: 64, left: "50%", transform: "translateX(-50%)", zIndex: 45, pointerEvents: "auto", fontWeight: 600 }}
+        >
+          🔈 Tap to hear the room
+        </button>
+      )}
       <TogetherPrompt
         nameOf={nameOfPlayer}
         near={nearby[0] ? { id: nearby[0].id, name: nearby[0].displayName } : null}

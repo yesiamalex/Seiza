@@ -12,6 +12,7 @@ import { AvatarPreview } from "./AvatarPreview";
 import { AvatarChooser, avatarUrlForChoice, initialAvatarChoice, type AvatarSelection } from "./AvatarChooser";
 import { ACCENT_COLOR, inputStyle, primaryButtonStyle } from "./styles";
 import { Credit } from "./Credit";
+import { unlockAudio } from "../media/audioContext";
 
 export interface JoinedIdentity extends AvatarSelection {
   displayName: string;
@@ -102,6 +103,9 @@ export function JoinScreen({ world, onJoin }: JoinScreenProps) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit) return;
+    // Inside the Join click or Enter, before anything awaits: the gesture
+    // that lets voices play as soon as you're in (src/media/audioContext.ts).
+    unlockAudio();
     setError(null);
     setJoining(true);
     try {

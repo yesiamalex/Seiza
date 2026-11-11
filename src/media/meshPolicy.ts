@@ -18,8 +18,8 @@ export const PEER_MIN_LIFETIME_MS = 5_000;
 export const SPEAKER_PRIORITY_METRES = 4;
 /** After a peer answers "busy", it isn't asked again for this long. */
 export const BUSY_BACKOFF_MS = 15_000;
-/** Voice is speech, not music: mono Opus at this rate stays clear, and
- *  with discontinuous transmission a silent mic sends almost nothing. */
+/** Voice is speech, not music: mono Opus at this rate stays clear. A muted
+ *  mic sends nothing at all (its sender has no track). */
 export const VOICE_MAX_BITRATE = 24_000;
 
 /** Whether someone has any media on at all, muted mic included. */
@@ -124,25 +124,59 @@ export function planPeers(input: PeerPlanInput): PeerPlan {
 }
 
 /**
- * Asks the other side to send voice with discontinuous transmission and a
- * bitrate ceiling. Both are receiver preferences in Opus's SDP parameters,
- * so each side writes them into its own offer or answer and the other
- * side's encoder honours them. Browsers that don't support one ignore it.
+ * Asks the other side to send voice with a bitrate ceiling, forward error
+ * correction, and no discontinuous transmission. These are receiver
+ * preferences in Opus's SDP parameters, so each side writes them into its
+ * own offer or answer and the other side's encoder honours them. Browsers
+ * that don't support one ignore it.
+ *
+ * Discontinuous transmission (usedtx) is turned off on purpose. It stops
+ * sending while the encoder judges the input to be silence, and that
+ * judgement clips the start of words, drops quiet speech, and pumps
+ * comfort noise in and out: a voice that pops in and out. It is also the
+ * one setting here that overrides what the browser offered.
  */
 export function tuneOpus(sdp: string): string {
   const rtpmap = /a=rtpmap:(\d+) opus\/48000[^\r\n]*/i.exec(sdp);
   if (!rtpmap) return sdp;
   const payload = rtpmap[1];
-  const wanted: Record<string, string> = { usedtx: "1", maxaveragebitrate: String(VOICE_MAX_BITRATE) };
+  /** Set when missing, left alone when the browser chose a value. */
+  const defaults: Record<string, string> = { useinbandfec: "1", maxaveragebitrate: String(VOICE_MAX_BITRATE) };
+  /** Always set, replacing whatever the browser offered. */
+  const forced: Record<string, string> = { usedtx: "0" };
   if (!new RegExp(`a=fmtp:${payload} `).test(sdp)) {
-    const line = `a=fmtp:${payload} usedtx=1;maxaveragebitrate=${VOICE_MAX_BITRATE}`;
+    const params = Object.entries({ ...defaults, ...forced }).map(([key, value]) => `${key}=${value}`);
+    const line = `a=fmtp:${payload} ${params.join(";")}`;
     return sdp.replace(new RegExp(`(a=rtpmap:${payload} opus\\/48000[^\\r\\n]*)`, "g"), `$1\r\n${line}`);
   }
   return sdp.replace(new RegExp(`a=fmtp:${payload} ([^\\r\\n]*)`, "g"), (_line, params: string) => {
     const parts = params.split(";").map((part) => part.trim()).filter(Boolean);
-    for (const [key, value] of Object.entries(wanted)) {
+    for (const [key, value] of Object.entries(forced)) {
+      const at = parts.findIndex((part) => part.startsWith(`${key}=`));
+      if (at >= 0) parts[at] = `${key}=${value}`;
+      else parts.push(`${key}=${value}`);
+    }
+    for (const [key, value] of Object.entries(defaults)) {
       if (!parts.some((part) => part.startsWith(`${key}=`))) parts.push(`${key}=${value}`);
     }
     return `a=fmtp:${payload} ${parts.join(";")}`;
   });
+}
+
+/** Within this distance a voice plays at full volume: talking range. */
+export const VOICE_FULL_DISTANCE = 3;
+/** Beyond this distance a voice is silent. */
+export const VOICE_SILENT_DISTANCE = 16;
+
+/**
+ * How loud someone sounds at a distance, 0 to 1: full within talking
+ * range, then an S-curve down to silence, so a voice fades gently as you
+ * walk off rather than starting to drop the moment you step away. Measured
+ * on the floor plan: standing on a step or the tatami doesn't quieten
+ * anyone.
+ */
+export function voiceVolume(dx: number, dz: number): number {
+  const d = Math.hypot(dx, dz);
+  const t = Math.min(1, Math.max(0, (d - VOICE_FULL_DISTANCE) / (VOICE_SILENT_DISTANCE - VOICE_FULL_DISTANCE)));
+  return 1 - t * t * (3 - 2 * t);
 }

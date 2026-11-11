@@ -104,6 +104,14 @@ function urlOverrides(): { hour?: number; date?: number; weather?: WeatherType; 
 }
 
 /**
+ * The weather the last clock left off with. A new clock (a reconnect, or
+ * the room's sky being set) carries on from it instead of starting the
+ * weather over: starting over snapped the cloud, rain, and light to the
+ * new weather's settled values in one frame, a visible flash.
+ */
+let carried: { weather: WeatherState; simMs: number } | null = null;
+
+/**
  * Keeps skyState in step with a world's sky settings, or with the room's
  * own sky (set from the edit panel) when there is one. Priority: the
  * ?sky… URL preview, then the room sky, then world.json.
@@ -149,13 +157,21 @@ export class SkyClock {
     const date = this.now();
     const simMs = date.getTime();
     const type = this.fixedWeather ?? scheduledWeather(date);
-    if (!this.weather) {
+    if (!this.weather && carried) {
+      // Ease from where the sky was toward the (possibly new) weather.
+      this.weather = carried.weather;
+      this.weather.setType(type);
+      this.weather.step(Math.min(Math.max(0, (simMs - carried.simMs) / 60000), 24 * 60), simMs / 60000);
+    } else if (!this.weather) {
       this.weather = new WeatherState(type);
+      // Seeds the passing clouds now, so they don't pop in on frame two.
+      this.weather.step(0, simMs / 60000);
     } else {
       this.weather.setType(type);
       this.weather.step(Math.max(0, (simMs - this.lastSimMs) / 60000), simMs / 60000);
     }
     this.lastSimMs = simMs;
+    carried = { weather: this.weather, simMs };
 
     const { dayOfYear, hour } = philippineTime(date);
     const sun = sunPosition(dayOfYear, hour, this.site);
