@@ -25,12 +25,23 @@ export interface SentState {
   headPitch: number;
   /** When it was sent, in ms. */
   at: number;
+  /** Whether it was sent because the player had moved. */
+  moved?: boolean;
+}
+
+/** Whether `position` is a move away from what was last sent. */
+export function hasMoved(last: SentState | null, position: [number, number, number]): boolean {
+  if (!last) return false;
+  return Math.hypot(position[0] - last.position[0], position[1] - last.position[1], position[2] - last.position[2]) > MOVE_EPSILON;
 }
 
 /**
  * Whether this tick's position should go out: always the first time, then
  * whenever it moved or turned noticeably, and otherwise only as a
- * heartbeat.
+ * heartbeat. Plus once more on the first still tick after moving: the same
+ * position again tells everyone else the player has stopped, so their
+ * view stops carrying the avatar on (remoteMotion.ts). One small message
+ * per stop.
  */
 export function shouldSendState(last: SentState | null, current: Omit<SentState, "at">, now: number, hidden: boolean): boolean {
   if (!last) return true;
@@ -38,7 +49,8 @@ export function shouldSendState(last: SentState | null, current: Omit<SentState,
   const moved = Math.hypot(x - last.position[0], y - last.position[1], z - last.position[2]) > MOVE_EPSILON;
   const turned = Math.abs(current.rotationY - last.rotationY) > TURN_EPSILON || Math.abs(current.headPitch - last.headPitch) > TURN_EPSILON;
   const heartbeat = hidden ? HIDDEN_HEARTBEAT_MS : HEARTBEAT_MS;
-  return moved || turned || now - last.at > heartbeat;
+  const stopped = last.moved === true && !moved;
+  return moved || turned || stopped || now - last.at > heartbeat;
 }
 
 /**

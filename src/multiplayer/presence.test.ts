@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AWAY_AFTER_MS, HEARTBEAT_MS, HIDDEN_HEARTBEAT_MS, shouldSendState, shouldStepAway, type SentState } from "./presence";
+import { AWAY_AFTER_MS, HEARTBEAT_MS, HIDDEN_HEARTBEAT_MS, hasMoved, shouldSendState, shouldStepAway, type SentState } from "./presence";
 
 const at = (seconds: number) => seconds * 1000;
 const sent: SentState = { position: [1, 0, 2], rotationY: 0.5, headPitch: 0, at: at(100) };
@@ -66,3 +66,18 @@ describe("shouldStepAway", () => {
     expect(shouldStepAway({ hiddenSince: 1000, lastInputAt: 0, sendingMedia: false, now: AWAY_AFTER_MS })).toBe(false);
   });
 });
+
+describe("the stop signal", () => {
+  const moving: SentState = { position: [1, 0, 2], rotationY: 0, headPitch: 0, at: 1000, moved: true };
+
+  it("sends the same position once more on the first still tick", () => {
+    expect(shouldSendState(moving, moving, 1200, false)).toBe(true);
+  });
+
+  it("then goes quiet", () => {
+    const stopped = { ...moving, at: 1200, moved: hasMoved(moving, moving.position) };
+    expect(stopped.moved).toBe(false);
+    expect(shouldSendState(stopped, stopped, 1400, false)).toBe(false);
+  });
+});
+

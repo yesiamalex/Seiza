@@ -15,6 +15,7 @@ import { NameTag } from "./NameTag";
 import { avatarUpdateEvery } from "./avatarDetail";
 import { isPlayerHidden } from "./playerFilter";
 import type { PlayerState } from "./types";
+import { RemoteMotion } from "./remoteMotion";
 
 interface RemotePlayersProps {
   players: Record<string, PlayerState>;
@@ -37,11 +38,12 @@ interface RemotePlayersProps {
 const MAX_VISIBLE_CAMERAS = 4;
 
 const SPEAKING_THRESHOLD = 0.05;
-// Position updates arrive ~5 times a second. Following them with an
-// exponential ease instead of jumping keeps motion smooth, gives the
-// animator a believable ground speed, and stops spring-bone hair from
-// whipping every 200ms.
-const FOLLOW_RATE = 10;
+// Position updates arrive ~5 times a second. Between them the avatar is
+// carried on at its player's pace (remoteMotion.ts), and drawn following
+// that with an exponential ease rather than jumping, which gives the
+// animator a steady ground speed and stops spring-bone hair from whipping
+// on each update.
+const FOLLOW_RATE = 12;
 /** Inside this radius (metres, horizontal) a remote avatar is hidden so
  *  the camera never ends up inside its mesh; it reappears a little
  *  further out so the two thresholds can't oscillate. */
@@ -162,6 +164,11 @@ function RemotePlayerAvatar({
   const targetRef = useRef(player);
   targetRef.current = player;
   const smoothed = useRef<THREE.Vector3 | null>(null);
+  const motion = useRef(new RemoteMotion()).current;
+  // A new update arrives as a new position array; anything else about the
+  // player changing (media, avatar) keeps the old one.
+  const lastSample = useRef<[number, number, number] | null>(null);
+  const predicted = useRef<[number, number, number]>([0, 0, 0]).current;
   const yaw = useRef(player.rotationY);
   const layerWeightsRef = useRef<AnimatorLayerWeights>({ gesture: 0, posture: 0 });
   const tooClose = useRef(false);
@@ -170,10 +177,18 @@ function RemotePlayerAvatar({
     const group = groupRef.current;
     if (!group) return;
     const target = targetRef.current;
-    const goal = new THREE.Vector3(target.position[0], target.position[1], target.position[2]);
+    const nowS = performance.now() / 1000;
+    if (target.position !== lastSample.current) {
+      lastSample.current = target.position;
+      motion.observe(target.position[0], target.position[1], target.position[2], nowS);
+    }
+    motion.predict(nowS, predicted);
+    const goal = new THREE.Vector3(predicted[0], predicted[1], predicted[2]);
     const t = 1 - Math.exp(-FOLLOW_RATE * Math.min(delta, 0.1));
     if (!smoothed.current || smoothed.current.distanceTo(goal) > SNAP_DISTANCE) {
-      smoothed.current = goal;
+      // A warp or a respawn: jump there, and start the pace afresh.
+      motion.reset();
+      smoothed.current = new THREE.Vector3(target.position[0], target.position[1], target.position[2]);
     } else {
       smoothed.current.lerp(goal, t);
     }

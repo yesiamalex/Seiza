@@ -1175,9 +1175,16 @@ Two rules apply to every frame:
   a capped time step and are reset after teleports, which stops hair from
   flying away.
 
-Remote players ease toward their latest network position
-(`src/multiplayer/RemotePlayers.tsx`) instead of jumping five times a second.
-This gives their animator a realistic speed and keeps their hair steady.
+Remote players move smoothly between their position updates, which arrive
+about five times a second. Each avatar keeps its player's velocity from the
+updates it has already received, carries on at that pace for up to a
+quarter of a second past the last one, and is drawn easing toward that
+point (`src/multiplayer/remoteMotion.ts`, used by `RemotePlayers.tsx`). It
+walks at an even pace instead of lurching to each update and pausing. This
+gives their animator a steady speed and keeps their hair still. When a
+player stops, their client sends the same position once more, which tells
+everyone else to stop the avatar there. A jump of more than 6 m (a warp or
+a respawn) snaps instead.
 
 #### Grounding resting poses
 
@@ -1526,7 +1533,10 @@ materials, textures drawn in code, and detail where people look.
 
 - **Sky and stars** are one shader on one sphere. Each star is calculated per
   pixel from a hash, with no texture, and is at least one screen pixel wide,
-  so stars stay still instead of shimmering when you move.
+  so stars stay still instead of shimmering when you move. A star sits in
+  the middle of its grid cell and never grows past a quarter of it, so it's
+  never clipped by the cell's walls. On a phone's wider, lower-resolution
+  view, the finest layer of stars fades out instead of growing into squares.
 - **Pond water** is one shader on one flat disc. Waves, sky reflections, sun
   glints, and ripples are a few lines of math each. So is the glow of the
   pool lights (switched from the hall's garden-side wall), which adds one
@@ -1570,11 +1580,12 @@ materials, textures drawn in code, and detail where people look.
   a day, and the FPS counter updates its text twice a second without React.
 - Menus and panels are regular HTML on top of the 3D canvas, so opening chat
   or the gesture menu never re-renders the 3D scene.
-- Remote players ease toward their latest network position, rather than each
-  network update triggering work of its own.
+- Remote players move on at their own pace between network updates, rather
+  than each update triggering work of its own. Nothing extra is sent for
+  this: the velocity comes from the updates already arriving.
 - Your position goes out only when it changes, plus a heartbeat every 5
-  seconds (30 in a hidden tab). A seated class costs the room a fraction of
-  a moving one.
+  seconds (30 in a hidden tab), and once more when you stop. A seated class
+  costs the room a fraction of a moving one.
 - The room server sends everyone's movement as one message per 200 ms tick
   instead of one message per player per update, which grew with the square
   of the room's size. It also keeps each connection's details in memory

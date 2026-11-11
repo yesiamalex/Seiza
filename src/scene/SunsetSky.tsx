@@ -133,12 +133,18 @@ const fragmentShader = /* glsl */ `
 
     if (hash31(cell) > density) return 0.0;
 
-    vec3 offset = vec3(hash31(cell + 11.3), hash31(cell + 23.7), hash31(cell + 41.1));
+    // Kept in the middle half of the cell, and never wider than a quarter
+    // of it, so a star is never cut off by its cell's walls. On a phone's
+    // lower-resolution, wider view a pixel spans much more of a cell, and
+    // stars grown to a pixel were clipped into squares and polygons that
+    // touched their neighbours. A layer whose stars would be that big is
+    // finer than the screen can show, so it fades out instead.
+    vec3 offset = 0.25 + 0.5 * vec3(hash31(cell + 11.3), hash31(cell + 23.7), hash31(cell + 41.1));
     float dist = length(f - offset);
 
     float pixel = length(fwidth(p)) * 0.6;
-    float r = max(radius, pixel);
-    float energy = pow(radius / r, 0.45);
+    float r = min(max(radius, pixel), 0.24);
+    float energy = pow(radius / r, 0.45) * (1.0 - smoothstep(0.16, 0.3, pixel));
 
     // A soft point, then a magnitude: most stars are faint and a few are
     // bright, which is what stops a uniform grid reading as noise.

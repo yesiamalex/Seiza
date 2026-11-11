@@ -74,7 +74,7 @@ import { FpsCounter } from "./ui/FpsCounter";
 import { Toast } from "./ui/Toast";
 import { ControlsGuide, hasSeenControlsGuide } from "./ui/ControlsGuide";
 import { TopCenterCluster } from "./ui/TopCenterCluster";
-import { NETWORK_TICK_MS, shouldSendState, shouldStepAway, type SentState } from "./multiplayer/presence";
+import { hasMoved, NETWORK_TICK_MS, shouldSendState, shouldStepAway, type SentState } from "./multiplayer/presence";
 import { JoinScreen, type JoinedIdentity } from "./ui/JoinScreen";
 import { CameraViewToggle } from "./ui/CameraViewToggle";
 import { AvatarChooser } from "./ui/AvatarChooser";
@@ -418,7 +418,7 @@ export default function App() {
       const now = Date.now();
       if (shouldSendState(last, { position, rotationY, headPitch }, now, document.hidden)) {
         send({ type: "state", position, rotationY, headPitch });
-        last = { position: [position[0], position[1], position[2]], rotationY, headPitch, at: now };
+        last = { position: [position[0], position[1], position[2]], rotationY, headPitch, at: now, moved: hasMoved(last, position) };
       }
       updateSpatialRef.current(position);
     }, NETWORK_TICK_MS);
