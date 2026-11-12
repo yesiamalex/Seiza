@@ -10,6 +10,8 @@ import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 import { registerGazeTarget } from "../xr/hud/gaze";
 import { ask, goTo, lastReply, lead, openGuide, useGuides } from "./store";
+import { wrapLines } from "../ui/wrapLines";
+import { L, useLang } from "../i18n/lang";
 
 const PX = 900;
 const W = 0.9; // metres
@@ -25,24 +27,13 @@ interface Button {
   onPress: () => void;
 }
 
-function wrap(ctx: CanvasRenderingContext2D, text: string, width: number): string[] {
-  const lines: string[] = [];
-  let line = "";
-  for (const word of text.split(" ")) {
-    const test = line ? `${line} ${word}` : word;
-    if (ctx.measureText(test).width > width && line) {
-      lines.push(line);
-      line = word;
-    } else line = test;
-  }
-  if (line) lines.push(line);
-  return lines;
-}
+const wrap = wrapLines;
 
 export function GuideXr({ guideId }: { guideId: string }) {
   const { threads, guides } = useGuides();
   const messages = threads[guideId];
-  const name = guides.find((g) => g.id === guideId)?.name ?? "Guide";
+  const lang = useLang();
+  const name = guides.find((g) => g.id === guideId)?.name ?? L("Guide", "ガイド");
   const camera = useThree((s) => s.camera);
   const mesh = useRef<THREE.Mesh>(null);
   const canvas = useMemo(() => document.createElement("canvas"), []);
@@ -85,9 +76,9 @@ export function GuideXr({ guideId }: { guideId: string }) {
       y += 12;
       const choices: { key: string; label: string; onPress: () => void }[] = [
         ...reply.suggestions.slice(0, 4).map((s) => ({ key: `q:${s}`, label: s, onPress: () => ask(guideId, s) })),
-        ...(reply.place && reply.place.walk !== false ? [{ key: "lead", label: "Walk me there", onPress: () => lead(guideId, reply.place!) }] : []),
-        ...(reply.place ? [{ key: "go", label: "Take me there now", onPress: () => goTo(reply.place!) }] : []),
-        { key: "close", label: "Close", onPress: () => openGuide(null) },
+        ...(reply.place && reply.place.walk !== false ? [{ key: "lead", label: L("Walk me there", "そこまで案内して"), onPress: () => lead(guideId, reply.place!) }] : []),
+        ...(reply.place ? [{ key: "go", label: L("Take me there now", "今すぐ連れて行って"), onPress: () => goTo(reply.place!) }] : []),
+        { key: "close", label: L("Close", "閉じる"), onPress: () => openGuide(null) },
       ];
       ctx.font = `600 28px ${FONT}`;
       for (const c of choices) {
@@ -114,7 +105,7 @@ export function GuideXr({ guideId }: { guideId: string }) {
     layout.current = draw(false);
     texture.needsUpdate = true;
     setHeight((W * measured.height) / PX);
-  }, [messages, name, guideId, canvas, texture]);
+  }, [messages, name, guideId, canvas, texture, lang]);
 
   // Beside the guide, toward you, at eye height, turned to face you.
   const world = useMemo(() => new THREE.Vector3(), []);

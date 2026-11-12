@@ -8,6 +8,7 @@
  */
 import { useSyncExternalStore } from "react";
 import type { Brain, Place, Reply } from "./brain";
+import { getLang, onLangChange } from "../i18n/lang";
 
 export interface GuideInfo {
   id: string;
@@ -51,11 +52,25 @@ function say(guide: string, messages: Message[]) {
 export function registerGuides(guides: GuideInfo[] | null) {
   state = { guides: guides ?? [], open: null, threads: {}, leading: null };
   for (const g of guides ?? []) {
-    const hello = g.brain.greeting();
+    const hello = g.brain.greeting(getLang());
     state.threads[g.id] = [{ id: nextId++, from: "guide", text: hello.text, reply: hello }];
   }
   for (const l of listeners) l();
 }
+
+// A chat nobody has said anything in yet greets again in the new language.
+onLangChange(() => {
+  const threads = { ...state.threads };
+  let changed = false;
+  for (const g of state.guides) {
+    const thread = threads[g.id];
+    if (thread?.length !== 1 || thread[0].from !== "guide") continue;
+    const hello = g.brain.greeting(getLang());
+    threads[g.id] = [{ id: nextId++, from: "guide", text: hello.text, reply: hello }];
+    changed = true;
+  }
+  if (changed) set({ threads });
+});
 
 export function openGuide(id: string | null) {
   if (id !== state.open) set({ open: id });
@@ -65,7 +80,7 @@ export function ask(guideId: string, question: string) {
   const guide = state.guides.find((g) => g.id === guideId);
   const q = question.trim().slice(0, MAX_QUESTION);
   if (!guide || !q) return;
-  const reply = guide.brain.answer(q);
+  const reply = guide.brain.answer(q, getLang());
   say(guideId, [
     { id: nextId++, from: "you", text: q },
     { id: nextId++, from: "guide", text: reply.text, reply },

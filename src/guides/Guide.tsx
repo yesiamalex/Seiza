@@ -31,6 +31,7 @@ import { registerGazeTarget } from "../xr/hud/gaze";
 import { GuideXr } from "./GuideXr";
 import { measure, pointAlong, Route, type Point, type RoutePosition, type Stop } from "./route";
 import { guideSays, openGuide, stopLeading, useGuides } from "./store";
+import { L, useLang } from "../i18n/lang";
 
 export interface GuideProps {
   id: string;
@@ -76,7 +77,7 @@ function tagTexture() {
   ctx.fillStyle = "#ffd58a";
   ctx.textAlign = "center";
   ctx.font = "600 24px system-ui, sans-serif";
-  ctx.fillText("Click to ask me!", 128, 36);
+  ctx.fillText(L("Click to ask me!", "クリックして質問してね!"), 128, 36);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
@@ -99,7 +100,8 @@ export function Guide({ id, name, avatarUrl, stops, speed = 1, pathsOnPatrol = f
   const talking = open === id;
   const myLead = leading?.guide === id ? leading.place : null;
   const [vrm, setVrm] = useState<VRM | null>(null);
-  const tagMaterial = useMemo(() => new THREE.SpriteMaterial({ map: tagTexture(), depthWrite: false, transparent: true }), []);
+  const lang = useLang();
+  const tagMaterial = useMemo(() => new THREE.SpriteMaterial({ map: tagTexture(), depthWrite: false, transparent: true }), [lang]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(
     () => () => {
       tagMaterial.map?.dispose();
@@ -211,7 +213,7 @@ export function Guide({ id, name, avatarUrl, stops, speed = 1, pathsOnPatrol = f
         walk.current = null;
         if (w.kind === "lead" && myLead) {
           stopLeading();
-          guideSays(id, { text: `Here we are: ${myLead.label}.`, gesture: "point", mood: "happy", suggestions: [], via: "chat" });
+          guideSays(id, { text: L(`Here we are: ${myLead.label}.`, `着きました。${myLead.labelJa ?? myLead.label}です。`), gesture: "point", mood: "happy", suggestions: [], via: "chat" });
           openGuide(id);
         } else if (w.kind === "return" && Math.hypot(onRoute.x - pos.x, onRoute.z - pos.z) > 2) {
           // The patrol moved on while walking back: catch it up.
