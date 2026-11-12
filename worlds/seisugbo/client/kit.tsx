@@ -8,6 +8,7 @@ import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { nightNeed, roomLights, signWashTexture } from "../../../src/scene/roomLights";
+import { drawWrapped } from "../../../src/ui/wrapLines";
 
 export const FONT = "system-ui, -apple-system, 'Segoe UI', 'Hiragino Sans', 'Noto Sans CJK JP', 'Yu Gothic', sans-serif";
 
@@ -155,20 +156,7 @@ export function canvasTexture(width: number, height: number, draw: (ctx: CanvasR
 /** Wraps `text` to `maxWidth`, draws it from (x, y), and returns the y
  *  after the last line. Breaks between words, or anywhere in Japanese. */
 export function wrapText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, lineHeight: number): number {
-  const tokens = text.split(/(\s+)/).flatMap((t) => (/[　-鿿]/.test(t) ? [...t] : [t]));
-  let line = "";
-  for (const token of tokens) {
-    const test = line + token;
-    if (ctx.measureText(test).width > maxWidth && line.trim()) {
-      ctx.fillText(line.trim(), x, y);
-      y += lineHeight;
-      line = token.trimStart();
-    } else {
-      line = test;
-    }
-  }
-  if (line.trim()) ctx.fillText(line.trim(), x, y);
-  return y + lineHeight;
+  return drawWrapped(ctx, text, x, y, maxWidth, lineHeight);
 }
 
 // --- clickable parts --------------------------------------------------------------------------

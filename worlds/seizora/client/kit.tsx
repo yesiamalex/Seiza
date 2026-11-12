@@ -8,6 +8,7 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import type { LightZone } from "../../../src/multiplayer/types";
 import { nightNeed as darkness, signWashTexture } from "../../../src/scene/roomLights";
 import { live } from "./live";
+import { drawWrapped } from "../../../src/ui/wrapLines";
 
 // --- live canvas displays --------------------------------------------------------------
 
@@ -61,22 +62,9 @@ export function useCanvasTexture(
 export const FONT = "system-ui, -apple-system, 'Segoe UI', sans-serif";
 
 /** Wraps `text` to `maxWidth`, draws it from (x, y), and returns the y
- *  after the last line. */
+ *  after the last line. Breaks between words, or anywhere in Japanese. */
 export function wrapText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, lineHeight: number): number {
-  const words = text.split(" ");
-  let line = "";
-  for (const word of words) {
-    const test = line ? `${line} ${word}` : word;
-    if (ctx.measureText(test).width > maxWidth && line) {
-      ctx.fillText(line, x, y);
-      y += lineHeight;
-      line = word;
-    } else {
-      line = test;
-    }
-  }
-  if (line) ctx.fillText(line, x, y);
-  return y + lineHeight;
+  return drawWrapped(ctx, text, x, y, maxWidth, lineHeight);
 }
 
 export function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {

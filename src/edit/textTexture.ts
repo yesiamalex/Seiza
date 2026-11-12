@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { wrapLines } from "../ui/wrapLines";
 
 /**
  * Draws a board or note's text onto a canvas and hands back a texture.
@@ -36,20 +37,7 @@ const SURFACES = {
 const FONT_STACK = `system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`;
 
 function wrap(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
-  const words = text.split(/\s+/).filter(Boolean);
-  if (words.length === 0) return [""];
-  const lines: string[] = [];
-  let line = words[0];
-  for (const word of words.slice(1)) {
-    const candidate = `${line} ${word}`;
-    if (ctx.measureText(candidate).width <= maxWidth) line = candidate;
-    else {
-      lines.push(line);
-      line = word;
-    }
-  }
-  lines.push(line);
-  return lines;
+  return wrapLines(ctx, text.replace(/\s+/g, " ").trim(), maxWidth);
 }
 
 export function createTextTexture(text: string, surface: TextSurface, accent: string): TextTextureResult | null {
