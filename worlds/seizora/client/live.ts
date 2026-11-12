@@ -8,6 +8,7 @@ import type { LightZone, WorldStateValue } from "../../../src/multiplayer/types"
 import { DEFAULT_CONTROLS, GRID_EMISSION_FACTOR, Microgrid, PLANT, type BatteryMode, type Controls, type Encapsulation, type Snapshot } from "../sim/energy";
 import { cloudyGhi } from "../../../src/sky/weather";
 import { TOWN, townLoad } from "../sim/town";
+import { L } from "../../../src/i18n/lang";
 
 /** Matches "site" in worlds/seizora/world/world.json. */
 export const SITE = SITES.cebu;
@@ -56,19 +57,28 @@ export function controlsFrom(state: Record<string, WorldStateValue>): Controls {
 // --- the scenario, in words -------------------------------------------------------
 
 /** The town, in one line for a display. */
-export const TOWN_LINE = `${TOWN.homes.toLocaleString("en")} homes · about ${Math.round((TOWN.homes * TOWN.peoplePerHome) / 1000)},000 people · school, clinic, shops`;
+export function townLine(): string {
+  const people = Math.round((TOWN.homes * TOWN.peoplePerHome) / 1000);
+  return L(
+    `${TOWN.homes.toLocaleString("en")} homes · about ${people},000 people · school, clinic, shops`,
+    `${TOWN.homes.toLocaleString("en")}世帯 · 約${people},000人 · 学校、診療所、店`
+  );
+}
 
 /** The scenario the plant is running: the climate and the weather now. */
 export function scenarioLabel(): string {
   const s = live.now;
-  const climate = live.controls.elNino ? "El Niño 2026" : "Normal year";
+  const climate = live.controls.elNino ? L("El Niño 2026", "エルニーニョ2026") : L("Normal year", "平年");
   if (!s) return climate;
   const weather = skyState.weatherState ? weatherName(skyState.weatherState.type) : "";
   return `${climate} · ${weather} · ${s.ambient.toFixed(0)} °C`;
 }
 
 function weatherName(type: WeatherType): string {
-  return { clear: "clear", partly: "partly cloudy", overcast: "overcast", rain: "rain", typhoon: "typhoon" }[type];
+  return L(
+    { clear: "clear", partly: "partly cloudy", overcast: "overcast", rain: "rain", typhoon: "typhoon" }[type],
+    { clear: "晴れ", partly: "晴れ時々曇り", overcast: "曇り", rain: "雨", typhoon: "台風" }[type]
+  );
 }
 
 /** What one average home is drawing now, and how many homes are dark in a
@@ -207,35 +217,53 @@ export function rotorRpm(): number {
  */
 export function lessonNow(): string {
   const s = live.now;
-  if (!s) return "Waiting for the sky.";
+  if (!s) return L("Waiting for the sky.", "空の準備を待っています。");
   const c = live.controls;
   const solar = s.siliconMw + s.perovskiteMw;
   if (!c.gridConnected && s.unservedMw > 0.05)
-    return `Island mode: ${s.unservedMw.toFixed(2)} MW of homes are dark. Only sun, wind, and the battery can serve them now.`;
-  if (!c.gridConnected) return "Island mode: cut off from the main grid, the plant must match the load by itself.";
+    return L(
+      `Island mode: ${s.unservedMw.toFixed(2)} MW of homes are dark. Only sun, wind, and the battery can serve them now.`,
+      `自立運転:${s.unservedMw.toFixed(2)} MW分の家が停電しています。今は太陽と風と蓄電池だけが頼りです。`
+    );
+  if (!c.gridConnected) return L("Island mode: cut off from the main grid, the plant must match the load by itself.", "自立運転:本線の系統から切り離され、発電所だけで需要に合わせなければなりません。");
   if (s.gridAlert && s.unservedMw > 0.01)
-    return `El Niño grid alert: the main grid can give only ${s.gridLimitMw.toFixed(2)} MW, so about ${homesNow().dark.toLocaleString("en")} homes are in a rotating brownout. Stored sunlight in the battery is what keeps the rest lit.`;
+    return L(
+      `El Niño grid alert: the main grid can give only ${s.gridLimitMw.toFixed(2)} MW, so about ${homesNow().dark.toLocaleString("en")} homes are in a rotating brownout. Stored sunlight in the battery is what keeps the rest lit.`,
+      `エルニーニョの系統警報:本線の系統は${s.gridLimitMw.toFixed(2)} MWしか送れないので、約${homesNow().dark.toLocaleString("en")}世帯が計画停電中です。残りの明かりを保っているのは、蓄電池にためた太陽の光です。`
+    );
   if (s.gridAlert)
-    return `El Niño grid alert: the main grid is short in the heat and can give only ${s.gridLimitMw.toFixed(2)} MW. Solar and the battery are covering the rest, so no home is dark.`;
-  if (s.turbinesFeathered) return "Typhoon winds: the turbines feather their blades and brake to survive. They make nothing in a storm.";
-  if (s.sunElevation <= 0 && s.batteryMw > 0.05) return "Night: no solar at all. The battery is covering the evening peak with sunlight stored earlier.";
-  if (s.sunElevation <= 0) return "Night: no solar at all. Wind, the battery, and the main grid carry the load.";
-  if (s.batteryMw < -0.05 && solar > s.loadMw) return "Surplus sun: what the town can't use right now is charging the battery for the evening.";
+    return L(
+      `El Niño grid alert: the main grid is short in the heat and can give only ${s.gridLimitMw.toFixed(2)} MW. Solar and the battery are covering the rest, so no home is dark.`,
+      `エルニーニョの系統警報:暑さで本線の系統が足りず、${s.gridLimitMw.toFixed(2)} MWしか送れません。残りは太陽光と蓄電池がまかなっているので、停電している家はありません。`
+    );
+  if (s.turbinesFeathered) return L("Typhoon winds: the turbines feather their blades and brake to survive. They make nothing in a storm.", "台風の風:タービンは羽根を風に沿わせ、ブレーキをかけて身を守ります。嵐の中では発電しません。");
+  if (s.sunElevation <= 0 && s.batteryMw > 0.05) return L("Night: no solar at all. The battery is covering the evening peak with sunlight stored earlier.", "夜:太陽光はゼロです。昼にためた太陽の光で、蓄電池が夕方のピークを支えています。");
+  if (s.sunElevation <= 0) return L("Night: no solar at all. Wind, the battery, and the main grid carry the load.", "夜:太陽光はゼロです。風と蓄電池と本線の系統が需要を支えています。");
+  if (s.batteryMw < -0.05 && solar > s.loadMw) return L("Surplus sun: what the town can't use right now is charging the battery for the evening.", "太陽の余り:町が今使いきれない分で、夕方のために蓄電池を充電しています。");
   if (s.cellTemp > 50 && s.poa > 600)
-    return `Hot panels: the cells are at ${s.cellTemp.toFixed(0)} °C. Silicon loses about 0.35% of its output per degree; perovskite about half that.`;
+    return L(
+      `Hot panels: the cells are at ${s.cellTemp.toFixed(0)} °C. Silicon loses about 0.35% of its output per degree; perovskite about half that.`,
+      `熱いパネル:セルは${s.cellTemp.toFixed(0)} °Cです。シリコンは1度ごとに出力が約0.35%下がり、ペロブスカイトはその約半分です。`
+    );
   if (s.cloud > 0.7) {
     // Kasten and Czeplak's cloud factor, the same one the sky uses.
     const share = Math.round(cloudyGhi(100, s.cloud));
-    return `Heavy cloud: about ${share}% of the clear-sky sunlight gets through (a quarter under full overcast), and solar output falls with it.`;
+    return L(
+      `Heavy cloud: about ${share}% of the clear-sky sunlight gets through (a quarter under full overcast), and solar output falls with it.`,
+      `厚い雲:晴天時の日射の約${share}%しか届かず(全面の曇りでは4分の1)、太陽光の出力もそれに合わせて下がります。`
+    );
   }
-  if (s.sunElevation < 15) return "Low sun: its light crosses more air and strikes the panels at a slant, so output is small.";
+  if (s.sunElevation < 15) return L("Low sun: its light crosses more air and strikes the panels at a slant, so output is small.", "低い太陽:光がより多くの空気を通り、パネルに斜めに当たるので、出力は小さくなります。");
   const windRating = PLANT.turbines * PLANT.turbineMw;
   if (s.windMw > 0.5 * windRating && s.windMw < 0.98 * windRating)
-    return "Strong wind: the power in the wind grows with the cube of its speed, so a little more wind means much more power.";
+    return L("Strong wind: the power in the wind grows with the cube of its speed, so a little more wind means much more power.", "強い風:風のエネルギーは風速の3乗で増えるので、風が少し強まるだけで電力はぐっと増えます。");
   if (s.windMw >= 0.98 * windRating)
-    return "Full wind power: past 12 m/s the turbines pitch their blades to hold their rating, so more wind adds nothing.";
-  if (s.gridMw < -0.05) return "Exporting: the plant makes more than the town needs and sends the rest to the main grid.";
+    return L("Full wind power: past 12 m/s the turbines pitch their blades to hold their rating, so more wind adds nothing.", "風力が定格に:12 m/sを超えるとタービンは羽根の角度を変えて定格を保つので、風が強まっても増えません。");
+  if (s.gridMw < -0.05) return L("Exporting: the plant makes more than the town needs and sends the rest to the main grid.", "送電中:町が必要とする以上に発電していて、残りを本線の系統に送っています。");
   if (c.elNino && s.ambient >= 32)
-    return `El Niño heat: at ${s.ambient.toFixed(0)} °C, fans and aircon run longer, and the town draws more than on a cooler day.`;
-  return "A normal hour: sun, wind, and the battery share the load, and the main grid fills any gap.";
+    return L(
+      `El Niño heat: at ${s.ambient.toFixed(0)} °C, fans and aircon run longer, and the town draws more than on a cooler day.`,
+      `エルニーニョの暑さ:${s.ambient.toFixed(0)} °Cでは扇風機とエアコンが長く動き、涼しい日より町の需要が増えます。`
+    );
+  return L("A normal hour: sun, wind, and the battery share the load, and the main grid fills any gap.", "ふだんの時間:太陽と風と蓄電池で需要を分け合い、足りない分は本線の系統が補います。");
 }

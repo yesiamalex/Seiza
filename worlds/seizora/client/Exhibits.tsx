@@ -30,6 +30,7 @@ import {
 } from "./kit";
 import { homesNow, live, rotorRpm } from "./live";
 import { TOWN } from "../sim/town";
+import { L } from "../../../src/i18n/lang";
 
 // --- where everything stands ----------------------------------------------------------
 
@@ -505,81 +506,115 @@ interface BoardSpec {
 const solarNow = () => {
   const s = live.now;
   if (!s) return "";
-  return `Now: silicon ${fmt(s.siliconMw)} MW, perovskite ${fmt(s.perovskiteMw)} MW. ${fmt(s.poa, 0)} W/m² on the panels, cells at ${fmt(s.cellTemp, 0)} °C.`;
+  return L(
+    `Now: silicon ${fmt(s.siliconMw)} MW, perovskite ${fmt(s.perovskiteMw)} MW. ${fmt(s.poa, 0)} W/m² on the panels, cells at ${fmt(s.cellTemp, 0)} °C.`,
+    `現在:シリコン ${fmt(s.siliconMw)} MW、ペロブスカイト ${fmt(s.perovskiteMw)} MW。パネル面の日射 ${fmt(s.poa, 0)} W/m²、セル温度 ${fmt(s.cellTemp, 0)} °C。`
+  );
 };
 const windNow = () => {
   const s = live.now;
   if (!s) return "";
-  if (s.turbinesFeathered) return `Now: ${fmt(s.windSpeed, 1)} m/s, past cut-out. Blades feathered, rotors braked: 0 MW.`;
-  if (!live.controls.wind) return "Now: the wind breaker is open in the control room, so the rotors are braked.";
-  return `Now: ${fmt(s.windSpeed, 1)} m/s of wind gives ${fmt(s.windMw)} MW from both turbines.`;
+  if (s.turbinesFeathered)
+    return L(`Now: ${fmt(s.windSpeed, 1)} m/s, past cut-out. Blades feathered, rotors braked: 0 MW.`, `現在:風速 ${fmt(s.windSpeed, 1)} m/s で停止風速超え。羽根をフェザリングし、ブレーキ中:0 MW。`);
+  if (!live.controls.wind) return L("Now: the wind breaker is open in the control room, so the rotors are braked.", "現在:コントロールルームで風力のブレーカーが開いているので、ローターは止まっています。");
+  return L(`Now: ${fmt(s.windSpeed, 1)} m/s of wind gives ${fmt(s.windMw)} MW from both turbines.`, `現在:風速 ${fmt(s.windSpeed, 1)} m/s で、2基合わせて ${fmt(s.windMw)} MW。`);
 };
 const batteryNow = () => {
   const s = live.now;
   if (!s) return "";
-  const state = s.batteryMw < -0.01 ? `charging at ${fmt(-s.batteryMw)} MW` : s.batteryMw > 0.01 ? `discharging at ${fmt(s.batteryMw)} MW` : "idle";
-  return `Now: ${fmt(s.soc * 100, 0)}% full (${fmt(s.soc * PLANT.batteryMwh, 1)} MWh), ${state}.`;
+  const state =
+    s.batteryMw < -0.01
+      ? L(`charging at ${fmt(-s.batteryMw)} MW`, `${fmt(-s.batteryMw)} MWで充電中`)
+      : s.batteryMw > 0.01
+        ? L(`discharging at ${fmt(s.batteryMw)} MW`, `${fmt(s.batteryMw)} MWで放電中`)
+        : L("idle", "待機中");
+  return L(`Now: ${fmt(s.soc * 100, 0)}% full (${fmt(s.soc * PLANT.batteryMwh, 1)} MWh), ${state}.`, `現在:充電率 ${fmt(s.soc * 100, 0)}%(${fmt(s.soc * PLANT.batteryMwh, 1)} MWh)、${state}。`);
 };
 const cellNow = () => {
   const s = live.now;
   if (!s) return "";
-  return `The pilot row outside is at ${fmt(s.perovskiteHealth * 100, 2)}% health with a ${live.controls.encapsulation} seal, at ${fmt(s.humidity, 0)}% humidity.`;
+  const seal = { none: ["no", "封止なし"], edge: ["an edge", "端面封止"], glass: ["a glass", "ガラス封止"] }[live.controls.encapsulation] ?? [live.controls.encapsulation, live.controls.encapsulation];
+  return L(
+    `The pilot row outside is at ${fmt(s.perovskiteHealth * 100, 2)}% health with ${seal[0]} seal, at ${fmt(s.humidity, 0)}% humidity.`,
+    `外の試験列は健全度 ${fmt(s.perovskiteHealth * 100, 2)}%(${seal[1]}、湿度 ${fmt(s.humidity, 0)}%)。`
+  );
 };
 const welcomeNow = () => {
   const s = live.now;
   if (!s) return "";
-  const scenario = live.controls.elNino ? "El Niño 2026" : "a normal year";
+  const scenario = live.controls.elNino ? L("El Niño 2026", "エルニーニョ2026") : L("a normal year", "平年");
   const dark = homesNow().dark;
-  return `Now (${scenario}, ${s.ambient.toFixed(0)} °C): the plant makes ${fmt(s.siliconMw + s.perovskiteMw + s.windMw)} MW for a town using ${fmt(s.loadMw)} MW${dark > 0 ? `, and ${dark.toLocaleString("en")} homes are dark` : ""}.`;
+  return L(
+    `Now (${scenario}, ${s.ambient.toFixed(0)} °C): the plant makes ${fmt(s.siliconMw + s.perovskiteMw + s.windMw)} MW for a town using ${fmt(s.loadMw)} MW${dark > 0 ? `, and ${dark.toLocaleString("en")} homes are dark` : ""}.`,
+    `現在(${scenario}、${s.ambient.toFixed(0)} °C):発電 ${fmt(s.siliconMw + s.perovskiteMw + s.windMw)} MW、町の需要 ${fmt(s.loadMw)} MW${dark > 0 ? `、${dark.toLocaleString("en")}世帯が停電中` : ""}。`
+  );
 };
 
 export const BOARDS: BoardSpec[] = [
   {
-    title: "Welcome to Seizora",
+    get title() {
+      return L("Welcome to Seizora", "Seizoraへようこそ");
+    },
     glow: "#ffb35c",
     zone: "hall",
     color: "#e8913a",
     art: "sun",
     info: "sky",
-    lines: [
-      `A solar, wind, and storage microgrid for a town in Cebu: ${TOWN.homes.toLocaleString("en")} homes, a school, a clinic, and shops.`,
-      "Garden: the solar farm, a perovskite pilot row, wind turbines, and a battery.",
-      "Classroom: the control room, and a perovskite solar cell, layer by layer.",
-      "The sky follows real Philippine time and weather, and so does the plant.",
-    ],
+    get lines() {
+      return [
+        L(
+          `A solar, wind, and storage microgrid for a town in Cebu: ${TOWN.homes.toLocaleString("en")} homes, a school, a clinic, and shops.`,
+          `セブの町のための、太陽光・風力・蓄電のマイクログリッド:${TOWN.homes.toLocaleString("en")}世帯、学校、診療所、店。`
+        ),
+        L("Garden: the solar farm, a perovskite pilot row, wind turbines, and a battery.", "庭:太陽光発電所、ペロブスカイトの試験列、風力タービン、蓄電池。"),
+        L("Classroom: the control room, and a perovskite solar cell, layer by layer.", "教室:コントロールルームと、層ごとに見るペロブスカイト太陽電池。"),
+        L("The sky follows real Philippine time and weather, and so does the plant.", "空はフィリピンの実際の時刻と天気に合わせて動き、発電所もそれに従います。"),
+      ];
+    },
     now: welcomeNow,
     // The hall's free front-right corner, turned toward the spawn point.
     position: [6.2, 0, 14.2],
     rotationY: -2.17,
   },
   {
-    title: "The solar farm",
+    get title() {
+      return L("The solar farm", "太陽光発電所");
+    },
     glow: "#6fa8ff",
     zone: "pond",
     color: "#3b7bff",
     art: "panels",
     info: "silicon",
-    lines: [
-      "3.6 MW of silicon and a 0.6 MW perovskite pilot (the brown back row). These rows stand in for a farm of about 4 to 5 hectares.",
-      "Tilted 15° to the south to face the sun's path at this latitude.",
-      "Panels lose output as they heat up, so a bright cool morning can beat a hot afternoon.",
-    ],
+    get lines() {
+      return [
+        L(
+          "3.6 MW of silicon and a 0.6 MW perovskite pilot (the brown back row). These rows stand in for a farm of about 4 to 5 hectares.",
+          "シリコン3.6 MWと、ペロブスカイトの試験列0.6 MW(奥の茶色い列)。この列は約4〜5ヘクタールの発電所の代わりです。"
+        ),
+        L("Tilted 15° to the south to face the sun's path at this latitude.", "この緯度の太陽の通り道に向くよう、南へ15°傾けてあります。"),
+        L("Panels lose output as they heat up, so a bright cool morning can beat a hot afternoon.", "パネルは熱くなると出力が下がるので、明るく涼しい朝が暑い午後に勝つこともあります。"),
+      ];
+    },
     now: solarNow,
     position: [SOLAR.x, 0, 28.3],
     rotationY: Math.PI,
   },
   {
-    title: "Wind turbines",
+    get title() {
+      return L("Wind turbines", "風力タービン");
+    },
     glow: "#45e8c0",
     zone: "pond",
     color: "#1d9f80",
     art: "turbine",
     info: "wind",
-    lines: [
-      "Scale models of two 1.5 MW turbines: real ones stand about 80 m to the hub, with 77 m rotors.",
-      "The power in the wind rises with the cube of its speed: double the wind, eight times the power.",
-      "They start at about 3.5 m/s, reach full power at 12 m/s, and stop above 25 m/s.",
-    ],
+    get lines() {
+      return [
+        L("Scale models of two 1.5 MW turbines: real ones stand about 80 m to the hub, with 77 m rotors.", "1.5 MW機2基の縮尺模型。本物はハブまでの高さ約80 m、ローター直径77 mです。"),
+        L("The power in the wind rises with the cube of its speed: double the wind, eight times the power.", "風のエネルギーは風速の3乗で増えます。風が2倍なら8倍です。"),
+        L("They start at about 3.5 m/s, reach full power at 12 m/s, and stop above 25 m/s.", "約3.5 m/sで回りはじめ、12 m/sで定格に達し、25 m/sを超えると止まります。"),
+      ];
+    },
     now: windNow,
     // Beside the steps down to the meadow (GARDEN_STEPS), the turbines
     // beyond them.
@@ -587,33 +622,41 @@ export const BOARDS: BoardSpec[] = [
     rotationY: Math.PI,
   },
   {
-    title: "Battery storage",
+    get title() {
+      return L("Battery storage", "蓄電池");
+    },
     glow: "#b58cff",
     zone: "pond",
     color: "#8a5fe0",
     art: "battery",
     info: "battery",
-    lines: [
-      "6 MWh of batteries that charge or discharge at up to 3 MW. The strip on the container shows the charge.",
-      "They store the midday surplus for the evening peak, when homes light up after sunset.",
-      "Cut off from the main grid, the battery decides how long the lights stay on.",
-    ],
+    get lines() {
+      return [
+        L("6 MWh of batteries that charge or discharge at up to 3 MW. The strip on the container shows the charge.", "容量6 MWh、最大3 MWで充放電できる蓄電池。コンテナの帯が充電率を示します。"),
+        L("They store the midday surplus for the evening peak, when homes light up after sunset.", "昼の余りをためて、日が沈み家々に明かりがともる夕方のピークに使います。"),
+        L("Cut off from the main grid, the battery decides how long the lights stay on.", "本線の系統から切り離されたとき、明かりがどれだけもつかは蓄電池しだいです。"),
+      ];
+    },
     now: batteryNow,
     position: [5.6, 0, 25.6],
     rotationY: Math.PI,
   },
   {
-    title: "Inside a perovskite solar cell",
+    get title() {
+      return L("Inside a perovskite solar cell", "ペロブスカイト太陽電池の中");
+    },
     glow: "#ff8f5c",
     zone: "classroom",
     color: "#a8492b",
     art: "layers",
     info: "layers",
-    lines: [
-      "The perovskite layer is thinner than a thousandth of a millimetre, yet absorbs sunlight strongly.",
-      "It can be printed on glass or flexible film: Japan is developing it for walls and roofs.",
-      "Moisture, heat, and light break it down, turning it yellow. Watch the model's absorber.",
-    ],
+    get lines() {
+      return [
+        L("The perovskite layer is thinner than a thousandth of a millimetre, yet absorbs sunlight strongly.", "ペロブスカイト層は1000分の1ミリより薄いのに、日光を強く吸収します。"),
+        L("It can be printed on glass or flexible film: Japan is developing it for walls and roofs.", "ガラスや曲がるフィルムに印刷できます。日本は壁や屋根に使うために開発しています。"),
+        L("Moisture, heat, and light break it down, turning it yellow. Watch the model's absorber.", "水分、熱、光で劣化し、黄色くなります。模型の吸収層を見てみましょう。"),
+      ];
+    },
     now: cellNow,
     position: [7.4, 0, -15.4],
     rotationY: -Math.PI / 2,
@@ -665,10 +708,18 @@ function drawBoard(ctx: CanvasRenderingContext2D, w: number, h: number, b: Board
   }
   ctx.fillStyle = "#6a7080";
   ctx.font = `400 20px ${FONT}`;
-  ctx.fillText("Click for more and sources · A learning model: the plant is invented and the weather is synthetic.", 36, h - 34);
+  ctx.fillText(
+    L(
+      "Click for more and sources · A learning model: the plant is invented and the weather is synthetic.",
+      "クリックで詳しい説明と出典 · 学習用モデル:発電所は架空、天気は合成です。"
+    ),
+    36,
+    h - 34
+  );
 }
 
-function Board(b: BoardSpec) {
+/** `spec` is read on every redraw, so its getters follow the language. */
+function Board({ spec: b }: { spec: BoardSpec }) {
   const anchor = useRef<THREE.Mesh>(null);
   const texture = useCanvasTexture(1200, 750, (ctx, w, h) => drawBoard(ctx, w, h, b), { hz: 1, anchor, range: 16 });
   const frame = useMerged(BOARD_FRAME);
@@ -707,7 +758,7 @@ export function Exhibits() {
       ))}
       <PerovskiteCell />
       {BOARDS.map((b) => (
-        <Board key={b.title} {...b} />
+        <Board key={b.info} spec={b} />
       ))}
     </>
   );

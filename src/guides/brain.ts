@@ -359,7 +359,7 @@ const PATTERNS: { test: RegExp; topic: string }[] = [
     test: /\b(who|what) (are|r) (you|u)\b|\byour name\b|\bsino ka\b|\banata wa\b|\bare you (an? )?(ai|robot|human|real|chatgpt)\b|(あなたは(誰|だれ|何|なに)|お名前|名前は|自己紹介|(ai|ロボット|人間)(です|なの))/,
     topic: "self",
   },
-  { test: /\bhow (do|does) (you|it) work\b|\bare you (listening|recording)\b|\bdo you save\b|(仕組み|どうやって(動|答)|保存して|録音)/, topic: "how" },
+  { test: /\bhow (do|does) (you|it) work\b|\bare you (listening|recording)\b|\bdo you save\b|((あなた|きみ|君)の仕組み|どうやって(動いて|答え)|保存して|録音)/, topic: "how" },
   { test: /\bwhere am i\b|\bwhat is this( place)?\b|\bano ito\b|(ここはどこ|ここは(何|なに)|この場所は)/, topic: "world" },
 ];
 

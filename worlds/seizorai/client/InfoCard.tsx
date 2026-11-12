@@ -2,6 +2,7 @@
 // an illustration, a short explanation, and something to try.
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { panelStyle, pillButtonStyle } from "../../../src/ui/styles";
+import { L, useLang } from "../../../src/i18n/lang";
 import { INFO, type InfoKey, type LiveContext, type Trend } from "../sim/info";
 import { REFERENCES } from "../sim/references";
 import { dayTotals, live, rotorRpm, SAMPLE_MINUTES } from "./live";
@@ -30,6 +31,7 @@ export function InfoCardHost() {
 }
 
 function InfoCard({ infoKey }: { infoKey: InfoKey }) {
+  useLang();
   const card = INFO[infoKey];
   const close = () => openInfo(null);
   // A card with live parts redraws them once a second while it's open, and
@@ -57,8 +59,8 @@ function InfoCard({ infoKey }: { infoKey: InfoKey }) {
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
           <strong style={{ fontSize: 16 }}>{card.title}</strong>
-          <button style={pillButtonStyle} onClick={close} aria-label="Close">
-            Close
+          <button style={pillButtonStyle} onClick={close} aria-label={L("Close", "閉じる")}>
+            {L("Close", "閉じる")}
           </button>
         </div>
         {/* Our own static SVG from sim/info.ts, never user content. */}
@@ -81,12 +83,12 @@ function InfoCard({ infoKey }: { infoKey: InfoKey }) {
         ))}
         {card.try && (
           <p style={{ margin: "10px 0 0", padding: "8px 10px", borderRadius: 8, background: "rgba(124,255,158,0.1)", border: "1px solid rgba(124,255,158,0.3)" }}>
-            <strong>Try this:</strong> {card.try}
+            <strong>{L("Try this:", "やってみよう:")}</strong> {card.try}
           </p>
         )}
         {card.sources.length > 0 && (
           <p style={{ margin: "10px 0 0", fontSize: 12, opacity: 0.75 }}>
-            <strong>Sources:</strong>{" "}
+            <strong>{L("Sources:", "出典:")}</strong>{" "}
             {card.sources.map((key, i) => {
               const ref = REFERENCES[key];
               return (
@@ -102,7 +104,7 @@ function InfoCard({ infoKey }: { infoKey: InfoKey }) {
                 </span>
               );
             })}
-            . Full list in Seizorai's README.
+            {L(". Full list in Seizorai's README.", "。全一覧はSeizoraiのREADMEにあります。")}
           </p>
         )}
       </div>
@@ -145,9 +147,9 @@ function Sparkline({ trend, live: c }: { trend: Trend; live: LiveContext }) {
   return (
     <div style={{ margin: "0 0 10px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, opacity: 0.75, marginBottom: 2 }}>
-        <span>{trend.label}, last 24 h</span>
+        <span>{L(`${trend.label}, last 24 h`, `${trend.label}(過去24時間)`)}</span>
         <span style={{ fontVariantNumeric: "tabular-nums" }}>
-          now {latest.toFixed(digits)}
+          {L("now", "現在")} {latest.toFixed(digits)}
           {trend.unit === "%" ? "%" : ` ${trend.unit}`}
         </span>
       </div>
@@ -156,8 +158,8 @@ function Sparkline({ trend, live: c }: { trend: Trend; live: LiveContext }) {
         <polyline points={points} fill="none" stroke={trend.color} strokeWidth={2} vectorEffect="non-scaling-stroke" />
       </svg>
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, opacity: 0.6 }}>
-        <span>24 h ago</span>
-        <span>now</span>
+        <span>{L("24 h ago", "24時間前")}</span>
+        <span>{L("now", "現在")}</span>
       </div>
     </div>
   );

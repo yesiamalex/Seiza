@@ -155,3 +155,24 @@ describe("Ilaw-san's gestures", () => {
     expect(reply.mood).toBe("sad");
   });
 });
+
+describe("Ilaw-san in Japanese", () => {
+  const brain = createBrain(seizoraiKnowledge(live), ILAW);
+  it.each([
+    ["ペロブスカイトって何?", "card:perovskite"],
+    ["風力タービンの仕組みは?", "card:wind"],
+    ["エルニーニョって何?", "card:elnino"],
+    ["電気を節約するには?", "save"],
+    ["マイクログリッドって何", "microgrid"],
+    ["台風のときはどうなるの", "typhoon"],
+    ["案内して", "tour"],
+  ])("answers %j from %s, in Japanese", (question, topic) => {
+    const reply = brain.answer(question);
+    expect(reply.topic).toBe(topic);
+    expect(reply.text).toMatch(/[ぁ-ん]/);
+  });
+
+  it("introduces herself in Japanese", () => {
+    expect(brain.answer("あなたは誰?").text).toContain("イラウさん");
+  });
+});

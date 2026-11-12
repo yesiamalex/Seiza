@@ -18,6 +18,7 @@
  * - A 1 HP non-inverter air conditioner draws about 850 to 1,000 W (Teko,
  *   2024), and one home in four has one.
  */
+import { L } from "../../../src/i18n/lang";
 
 export type Use = "cooling" | "lighting" | "refrigeration" | "cooking" | "media" | "chores" | "community";
 
@@ -30,6 +31,21 @@ export const USE_LABELS: Record<Use, string> = {
   chores: "Laundry, iron, pumps",
   community: "School, clinic, shops, water, street lights",
 };
+
+const USE_LABELS_JA: Record<Use, string> = {
+  cooling: "扇風機とエアコン",
+  lighting: "照明",
+  refrigeration: "冷蔵庫",
+  cooking: "炊飯器",
+  media: "テレビ、スマホ、Wi-Fi",
+  chores: "洗濯、アイロン、ポンプ",
+  community: "学校、診療所、店、水道、街灯",
+};
+
+/** A use's label in the visitor's language. */
+export function useLabel(use: Use): string {
+  return L(USE_LABELS[use], USE_LABELS_JA[use]);
+}
 
 /** The temperature the schedules below describe; hotter hours run more of
  *  the heat-sensitive appliances, cooler ones fewer. */

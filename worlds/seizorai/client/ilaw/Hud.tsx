@@ -9,7 +9,7 @@ export function SeizoraiHud() {
   return (
     <>
       <InfoCardHost />
-      <GuideHud onOpenCard={(card) => openInfo(card as InfoKey)} cardTitle={(card) => INFO[card as InfoKey]?.title ?? card} tagline="answers only from this world, offline" />
+      <GuideHud onOpenCard={(card) => openInfo(card as InfoKey)} cardTitle={(card) => INFO[card as InfoKey]?.title ?? card} />
     </>
   );
 }

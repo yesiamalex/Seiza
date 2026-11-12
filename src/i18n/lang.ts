@@ -74,3 +74,18 @@ export function Lf<A extends unknown[]>(en: (...a: A) => string, ja: (...a: A) =
 }
 
 if (typeof document !== "undefined") document.documentElement.lang = lang;
+
+/**
+ * Runs `fn` as if the language were `next`, for code that needs both
+ * versions of text written with L() (a guide indexing a card in English and
+ * Japanese). Nothing redraws.
+ */
+export function withLang<T>(next: Lang, fn: () => T): T {
+  const was = lang;
+  lang = next;
+  try {
+    return fn();
+  } finally {
+    lang = was;
+  }
+}

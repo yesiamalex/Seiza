@@ -11,9 +11,13 @@ import { PLANT, type Controls } from "../sim/energy";
 import type { InfoKey } from "../sim/info";
 import { openInfo } from "./InfoCard";
 import { FONT, fmt, GlowLines, hhmm, roundRect, standard, useCanvasTexture, useMerged, usePrismX, useSignLamp, wrapText, type BoxSpec } from "./kit";
-import { dayTotals, homesNow, KEYS, lessonNow, live, SITE, TOWN_LINE } from "./live";
+import { dayTotals, homesNow, KEYS, lessonNow, live, SITE, townLine } from "./live";
 import { EL_NINO } from "../sim/energy";
 import { TOWN } from "../sim/town";
+import { L, useLang } from "../../../src/i18n/lang";
+
+/** The battery's modes in Japanese. */
+const MODE_JA: Record<string, string> = { auto: "自動", charge: "充電", hold: "保持", discharge: "放電" };
 
 export const COLORS = {
   silicon: "#4f8bff",
@@ -42,9 +46,9 @@ interface Region {
 }
 
 function skyLabel(room: RoomSky | null): { text: string; color: string } {
-  if (!room || room.mode === "realtime") return { text: "LIVE · real Philippine time", color: "#7CFF9E" };
-  if (room.mode === "fixed") return { text: `ROOM SKY · held at ${hhmm(room.hour ?? 12)}`, color: "#ffc35c" };
-  return { text: `ROOM SKY · running ${room.scale ?? 1}×`, color: "#ffc35c" };
+  if (!room || room.mode === "realtime") return { text: L("LIVE · real Philippine time", "ライブ · フィリピンの実時間"), color: "#7CFF9E" };
+  if (room.mode === "fixed") return { text: L(`ROOM SKY · held at ${hhmm(room.hour ?? 12)}`, `部屋の空 · ${hhmm(room.hour ?? 12)}で固定`), color: "#ffc35c" };
+  return { text: L(`ROOM SKY · running ${room.scale ?? 1}×`, `部屋の空 · ${room.scale ?? 1}倍速`), color: "#ffc35c" };
 }
 
 function drawDisplay(ctx: CanvasRenderingContext2D, w: number, h: number, room: RoomSky | null, regions: Region[]) {
@@ -61,10 +65,10 @@ function drawDisplay(ctx: CanvasRenderingContext2D, w: number, h: number, room: 
   ctx.fillStyle = "#ffcf6e";
   ctx.font = `700 30px ${FONT}`;
   ctx.textBaseline = "middle";
-  ctx.fillText("☀ SEIZORA CONTROL ROOM", 28, 25);
+  ctx.fillText(L("☀ SEIZORA CONTROL ROOM", "☀ SEIZORA コントロールルーム"), 28, 25);
   ctx.fillStyle = COLORS.muted;
   ctx.font = `500 19px ${FONT}`;
-  ctx.fillText(`Serving a town in ${SITE.label}: ${TOWN_LINE}`, 28, 56);
+  ctx.fillText(L(`Serving a town in ${SITE.label}: ${townLine()}`, `${SITE.labelJa}の町に送電中:${townLine()}`), 28, 56);
   regions.push({ x: 28, y: 42, w: 600, h: 30, info: "load" });
   const tag = skyLabel(room);
   ctx.textAlign = "right";
@@ -74,12 +78,12 @@ function drawDisplay(ctx: CanvasRenderingContext2D, w: number, h: number, room: 
   if (s) {
     ctx.fillStyle = COLORS.text;
     ctx.font = `600 26px ${FONT}`;
-    const weather = skyState.weatherState ? WEATHER[skyState.weatherState.type].label : "";
+    const weather = skyState.weatherState ? L(WEATHER[skyState.weatherState.type].label, WEATHER[skyState.weatherState.type].labelJa) : "";
     ctx.fillText(`${hhmm(s.hour)} PHT · ${weather} · ${fmt(s.ambient, 0)} °C`, w - 28 - ctx.measureText(tag.text).width - 50, 25);
   }
   const scenario = c.elNino
-    ? `EL NIÑO 2026 · clear skies, +${EL_NINO.warmingC} °C · grid alerts 2–4 & 6–9 p.m.`
-    : "NORMAL YEAR · weather from the shared schedule";
+    ? L(`EL NIÑO 2026 · clear skies, +${EL_NINO.warmingC} °C · grid alerts 2–4 & 6–9 p.m.`, `エルニーニョ2026 · 晴天、+${EL_NINO.warmingC} °C · 系統警報 14〜16時・18〜21時`)
+    : L("NORMAL YEAR · weather from the shared schedule", "平年 · 共通スケジュールの天気");
   ctx.font = `700 19px ${FONT}`;
   ctx.fillStyle = c.elNino ? "#ffb347" : COLORS.muted;
   ctx.fillText(scenario, w - 28, 56);
@@ -88,7 +92,7 @@ function drawDisplay(ctx: CanvasRenderingContext2D, w: number, h: number, room: 
   if (!s) {
     ctx.fillStyle = COLORS.muted;
     ctx.font = `500 32px ${FONT}`;
-    ctx.fillText("Starting the plant…", 40, h / 2);
+    ctx.fillText(L("Starting the plant…", "発電所を起動中…"), 40, h / 2);
     return;
   }
 
@@ -106,27 +110,53 @@ function drawDisplay(ctx: CanvasRenderingContext2D, w: number, h: number, room: 
     ctx.fillText(label, x + 14, y + 24);
     ctx.fillStyle = on ? color : "#777";
     ctx.font = `700 44px ${FONT}`;
-    ctx.fillText(on ? fmt(mw) : "OFF", x + 14, y + 70);
+    ctx.fillText(on ? fmt(mw) : L("OFF", "オフ"), x + 14, y + 70);
     ctx.font = `500 18px ${FONT}`;
     ctx.fillStyle = on ? COLORS.muted : "#666";
-    ctx.fillText(on ? `MW · ${sub}` : "breaker open", x + 14, y + 108);
+    ctx.fillText(on ? `MW · ${sub}` : L("breaker open", "ブレーカー開"), x + 14, y + 108);
     regions.push({ x, y, w: nw, h: nh, info });
   };
   const top = 96;
-  node(28, top, "SILICON PV", s.siliconMw, `${PLANT.siliconMwp} MWp`, COLORS.silicon, c.silicon, "silicon");
-  node(222, top, "PEROVSKITE", s.perovskiteMw, `${fmt(s.perovskiteHealth * 100, 1)}% health`, COLORS.perovskite, c.perovskite, "perovskite");
-  node(416, top, "WIND × 2", s.windMw, s.turbinesFeathered ? "feathered" : `${fmt(s.windSpeed, 1)} m/s`, COLORS.wind, c.wind, "wind");
+  node(28, top, L("SILICON PV", "シリコン太陽光"), s.siliconMw, `${PLANT.siliconMwp} MWp`, COLORS.silicon, c.silicon, "silicon");
+  node(222, top, L("PEROVSKITE", "ペロブスカイト"), s.perovskiteMw, L(`${fmt(s.perovskiteHealth * 100, 1)}% health`, `健全度 ${fmt(s.perovskiteHealth * 100, 1)}%`), COLORS.perovskite, c.perovskite, "perovskite");
+  node(416, top, L("WIND × 2", "風力 × 2"), s.windMw, s.turbinesFeathered ? L("feathered", "フェザリング") : `${fmt(s.windSpeed, 1)} m/s`, COLORS.wind, c.wind, "wind");
   // The bus.
   ctx.fillStyle = "#2b3550";
   ctx.fillRect(28, top + 146, 568, 14);
   ctx.fillStyle = COLORS.muted;
   ctx.font = `600 16px ${FONT}`;
-  ctx.fillText("13.8 kV BUS", 260, top + 186);
+  ctx.fillText(L("13.8 kV BUS", "13.8 kV 母線"), 260, top + 186);
   const low = top + 204;
   const { perHomeKw, dark } = homesNow();
-  node(28, low, "TOWN LOAD", s.loadMw - s.unservedMw, dark > 0 ? `${dark.toLocaleString("en")} homes dark` : `${TOWN.homes.toLocaleString("en")} homes lit`, COLORS.load, true, "load");
-  node(222, low, "BATTERY", s.batteryMw, s.batteryMw > 0.01 ? "discharging" : s.batteryMw < -0.01 ? "charging" : "idle", COLORS.battery, c.battery, "battery");
-  node(416, low, "MAIN GRID", s.gridMw, !c.gridConnected ? "island mode" : s.gridAlert ? `ALERT, ${fmt(s.gridLimitMw)} max` : s.gridMw > 0.01 ? "importing" : s.gridMw < -0.01 ? "exporting" : "balanced", s.gridAlert ? "#ff6b6b" : COLORS.grid, c.gridConnected, s.gridAlert ? "elnino" : "grid");
+  node(
+    28,
+    low,
+    L("TOWN LOAD", "町の需要"),
+    s.loadMw - s.unservedMw,
+    dark > 0 ? L(`${dark.toLocaleString("en")} homes dark`, `${dark.toLocaleString("en")}世帯が停電`) : L(`${TOWN.homes.toLocaleString("en")} homes lit`, `${TOWN.homes.toLocaleString("en")}世帯に点灯`),
+    COLORS.load,
+    true,
+    "load"
+  );
+  node(222, low, L("BATTERY", "蓄電池"), s.batteryMw, s.batteryMw > 0.01 ? L("discharging", "放電中") : s.batteryMw < -0.01 ? L("charging", "充電中") : L("idle", "待機中"), COLORS.battery, c.battery, "battery");
+  node(
+    416,
+    low,
+    L("MAIN GRID", "本線の系統"),
+    s.gridMw,
+    !c.gridConnected
+      ? L("island mode", "自立運転")
+      : s.gridAlert
+        ? L(`ALERT, ${fmt(s.gridLimitMw)} max`, `警報 最大${fmt(s.gridLimitMw)}`)
+        : s.gridMw > 0.01
+          ? L("importing", "受電中")
+          : s.gridMw < -0.01
+            ? L("exporting", "送電中")
+            : L("balanced", "均衡"),
+    s.gridAlert ? "#ff6b6b" : COLORS.grid,
+    c.gridConnected,
+    s.gridAlert ? "elnino" : "grid"
+  );
   // Battery charge.
   const socY = low + 146;
   roundRect(ctx, 28, socY, 568, 34, 10);
@@ -137,23 +167,30 @@ function drawDisplay(ctx: CanvasRenderingContext2D, w: number, h: number, room: 
   ctx.fill();
   ctx.fillStyle = "#fff";
   ctx.font = `600 20px ${FONT}`;
-  ctx.fillText(`Battery ${fmt(s.soc * 100, 0)}% · ${fmt(s.soc * PLANT.batteryMwh, 1)} of ${PLANT.batteryMwh} MWh · ${c.batteryMode}`, 40, socY + 18);
+  ctx.fillText(
+    L(
+      `Battery ${fmt(s.soc * 100, 0)}% · ${fmt(s.soc * PLANT.batteryMwh, 1)} of ${PLANT.batteryMwh} MWh · ${c.batteryMode}`,
+      `蓄電池 ${fmt(s.soc * 100, 0)}% · ${fmt(s.soc * PLANT.batteryMwh, 1)} / ${PLANT.batteryMwh} MWh · ${MODE_JA[c.batteryMode] ?? c.batteryMode}`
+    ),
+    40,
+    socY + 18
+  );
   regions.push({ x: 28, y: socY, w: 568, h: 34, info: "battery" });
 
   // Conditions.
   const cx = 630;
   ctx.fillStyle = COLORS.muted;
   ctx.font = `700 20px ${FONT}`;
-  ctx.fillText("CONDITIONS", cx, top + 10);
+  ctx.fillText(L("CONDITIONS", "現在の状況"), cx, top + 10);
   const rows: [string, string][] = [
-    ["Sun", s.sunElevation > 0 ? `${fmt(s.sunElevation, 0)}° up` : "below horizon"],
-    ["Sunlight", `${fmt(s.ghi, 0)} W/m²`],
-    ["On panels", `${fmt(s.poa, 0)} W/m²`],
-    ["Air / cells", `${fmt(s.ambient, 0)} / ${fmt(s.cellTemp, 0)} °C`],
-    ["Wind", `${fmt(s.windSpeed, 1)} m/s`],
-    ["Cloud", `${fmt(s.cloud * 100, 0)}%`],
-    ["Humidity", `${fmt(s.humidity, 0)}%`],
-    ["One home", `${fmt(perHomeKw * 1000, 0)} W now`],
+    [L("Sun", "太陽"), s.sunElevation > 0 ? L(`${fmt(s.sunElevation, 0)}° up`, `高度 ${fmt(s.sunElevation, 0)}°`) : L("below horizon", "地平線の下")],
+    [L("Sunlight", "日射"), `${fmt(s.ghi, 0)} W/m²`],
+    [L("On panels", "パネル面"), `${fmt(s.poa, 0)} W/m²`],
+    [L("Air / cells", "気温 / セル"), `${fmt(s.ambient, 0)} / ${fmt(s.cellTemp, 0)} °C`],
+    [L("Wind", "風"), `${fmt(s.windSpeed, 1)} m/s`],
+    [L("Cloud", "雲"), `${fmt(s.cloud * 100, 0)}%`],
+    [L("Humidity", "湿度"), `${fmt(s.humidity, 0)}%`],
+    [L("One home", "1世帯"), L(`${fmt(perHomeKw * 1000, 0)} W now`, `現在 ${fmt(perHomeKw * 1000, 0)} W`)],
   ];
   rows.forEach(([k, v], i) => {
     const y = top + 50 + i * 42;
@@ -171,7 +208,7 @@ function drawDisplay(ctx: CanvasRenderingContext2D, w: number, h: number, room: 
   const gx = 960, gy = top, gw = w - gx - 28, gh = 250;
   ctx.fillStyle = COLORS.muted;
   ctx.font = `700 20px ${FONT}`;
-  ctx.fillText("LAST 24 HOURS", gx, gy + 10);
+  ctx.fillText(L("LAST 24 HOURS", "過去24時間"), gx, gy + 10);
   const plotY = gy + 30, plotH = gh - 30;
   roundRect(ctx, gx, plotY, gw, plotH, 10);
   ctx.fillStyle = "#0f1626";
@@ -206,7 +243,13 @@ function drawDisplay(ctx: CanvasRenderingContext2D, w: number, h: number, room: 
     ctx.stroke();
   }
   ctx.font = `500 17px ${FONT}`;
-  const legend: [string, string][] = [["Silicon", COLORS.silicon], ["Perovskite", COLORS.perovskite], ["Wind", COLORS.wind], ["Battery out", COLORS.battery], ["Load", "#fff"]];
+  const legend: [string, string][] = [
+    [L("Silicon", "シリコン"), COLORS.silicon],
+    [L("Perovskite", "ペロブスカイト"), COLORS.perovskite],
+    [L("Wind", "風力"), COLORS.wind],
+    [L("Battery out", "蓄電池放電"), COLORS.battery],
+    [L("Load", "需要"), "#fff"],
+  ];
   let lx = gx;
   for (const [label, color] of legend) {
     ctx.fillStyle = color;
@@ -220,11 +263,11 @@ function drawDisplay(ctx: CanvasRenderingContext2D, w: number, h: number, room: 
   // Totals over those 24 hours.
   const t = dayTotals();
   const tiles: [string, string][] = [
-    ["Generated", `${fmt(t.generatedMwh, 1)} MWh`],
-    ["From the plant", `${fmt(t.renewableShare * 100, 0)}%`],
-    ["CO₂ avoided", `${fmt(t.co2AvoidedT, 1)} t`],
-    ["In / out of grid", `${fmt(t.importedMwh, 1)} / ${fmt(t.exportedMwh, 1)}`],
-    ["Unserved", `${fmt(t.unservedMwh, 2)} MWh`],
+    [L("Generated", "発電量"), `${fmt(t.generatedMwh, 1)} MWh`],
+    [L("From the plant", "発電所から"), `${fmt(t.renewableShare * 100, 0)}%`],
+    [L("CO₂ avoided", "CO₂削減"), `${fmt(t.co2AvoidedT, 1)} t`],
+    [L("In / out of grid", "系統 受電 / 送電"), `${fmt(t.importedMwh, 1)} / ${fmt(t.exportedMwh, 1)}`],
+    [L("Unserved", "供給不足"), `${fmt(t.unservedMwh, 2)} MWh`],
   ];
   const tw = (gw - 4 * 10) / 5;
   tiles.forEach(([k, v], i) => {
@@ -340,50 +383,50 @@ function useRows({ roomSky, setRoomSky, controls, setWorldState }: ConsoleProps)
   const toggle = (label: string, key: string, on: boolean): Action => ({ label, active: on, tone: "toggle", run: () => setWorldState(key, !on) });
   return [
     {
-      title: "BREAKERS",
+      title: L("BREAKERS", "ブレーカー"),
       buttons: [
-        toggle("Silicon PV", KEYS.silicon, controls.silicon),
-        toggle("Perovskite", KEYS.perovskite, controls.perovskite),
-        toggle("Wind", KEYS.wind, controls.wind),
-        toggle("Battery", KEYS.battery, controls.battery),
-        toggle("Grid tie", KEYS.grid, controls.gridConnected),
+        toggle(L("Silicon PV", "シリコン"), KEYS.silicon, controls.silicon),
+        toggle(L("Perovskite", "ペロブスカイト"), KEYS.perovskite, controls.perovskite),
+        toggle(L("Wind", "風力"), KEYS.wind, controls.wind),
+        toggle(L("Battery", "蓄電池"), KEYS.battery, controls.battery),
+        toggle(L("Grid tie", "系統連系"), KEYS.grid, controls.gridConnected),
       ],
     },
     {
-      title: "BATTERY · SEAL",
+      title: L("BATTERY · SEAL", "蓄電池 · 封止"),
       buttons: [
         ...(["auto", "charge", "hold", "discharge"] as const).map((mode) => ({
-          label: mode[0].toUpperCase() + mode.slice(1),
+          label: L(mode[0].toUpperCase() + mode.slice(1), MODE_JA[mode]),
           active: controls.batteryMode === mode,
           run: () => setWorldState(KEYS.batteryMode, mode),
         })),
         ...(["glass", "edge", "none"] as const).map((seal) => ({
-          label: seal === "glass" ? "Glass seal" : seal === "edge" ? "Edge seal" : "No seal",
+          label: seal === "glass" ? L("Glass seal", "ガラス封止") : seal === "edge" ? L("Edge seal", "端面封止") : L("No seal", "封止なし"),
           active: controls.encapsulation === seal,
           run: () => setWorldState(KEYS.seal, seal),
         })),
       ],
     },
     {
-      title: "TIME",
+      title: L("TIME", "時刻"),
       buttons: [
-        { label: "Real time", active: !roomSky || roomSky.mode === "realtime", run: () => sky({ mode: "realtime", weather }) },
+        { label: L("Real time", "実時間"), active: !roomSky || roomSky.mode === "realtime", run: () => sky({ mode: "realtime", weather }) },
         ...[6, 10, 12, 14, 18, 0].map((hour) => ({ label: hhmm(hour), active: fixedHour === hour, run: () => holdAt(hour) })),
-        { label: "Run 360×", active: roomSky?.mode === "running", run: () => sky({ mode: "running", hour: skyState.hour, scale: 360, weather }) },
+        { label: L("Run 360×", "360倍速"), active: roomSky?.mode === "running", run: () => sky({ mode: "running", hour: skyState.hour, scale: 360, weather }) },
       ],
     },
     {
-      title: "WEATHER",
+      title: L("WEATHER", "天気"),
       buttons: [
         ...(["auto", "clear", "partly", "overcast", "rain", "typhoon"] as const).map((w) => ({
-          label: w === "auto" ? "Auto" : w === "partly" ? "Cloudy" : WEATHER[w].label,
+          label: w === "auto" ? L("Auto", "自動") : w === "partly" ? L("Cloudy", "くもり") : L(WEATHER[w].label, WEATHER[w].labelJa),
           active: weather === w,
           run: () => setWeather(w),
         })),
         // The El Niño 2026 scenario: its dry, clear skies on the sky
         // everyone sees, and its heat and grid alerts in the plant.
         {
-          label: "El Niño",
+          label: L("El Niño", "エルニーニョ"),
           active: controls.elNino,
           tone: "toggle" as const,
           run: () => {
@@ -422,7 +465,7 @@ function drawConsole(ctx: CanvasRenderingContext2D, w: number, h: number, rows: 
   ctx.fillStyle = "#ffcf6e";
   ctx.font = `700 30px ${FONT}`;
   ctx.textBaseline = "middle";
-  ctx.fillText("PLANT AND SKY CONSOLE", 24, 32);
+  ctx.fillText(L("PLANT AND SKY CONSOLE", "発電所と空の操作盤"), 24, 32);
   ctx.textAlign = "right";
   ctx.fillStyle = enabled ? "#9fb0d6" : "#ffb347";
   ctx.font = `500 22px ${FONT}`;
@@ -447,7 +490,7 @@ function drawConsole(ctx: CanvasRenderingContext2D, w: number, h: number, rows: 
     ctx.fillStyle = enabled ? "#fff" : "#9aa0ad";
     ctx.font = `600 ${rect.w < 140 ? 22 : 25}px ${FONT}`;
     ctx.textAlign = "center";
-    const label = action.tone === "toggle" ? `${action.label} ${action.active ? "ON" : "OFF"}` : action.label;
+    const label = action.tone === "toggle" ? `${action.label} ${action.active ? L("ON", "入") : L("OFF", "切")}` : action.label;
     ctx.fillText(label, rect.x + rect.w / 2, rect.y + rect.h / 2);
     ctx.textAlign = "left";
   });
@@ -459,9 +502,14 @@ function Console(props: ConsoleProps) {
   const rects = useMemo(() => layout(rows), [rows]);
   const [hovered, setHovered] = useState(-1);
   const enabled = canEdit && connected;
-  const note = !connected ? "Not connected" : canEdit ? "Changes are shared with everyone here" : "Only editors can change the plant";
+  const lang = useLang();
+  const note = !connected
+    ? L("Not connected", "未接続")
+    : canEdit
+      ? L("Changes are shared with everyone here", "変更はここにいる全員に共有されます")
+      : L("Only editors can change the plant", "発電所を操作できるのは編集者だけです");
   const texture = useCanvasTexture(TOP_W, TOP_H, (ctx, w, h) => drawConsole(ctx, w, h, rows, rects, enabled, hovered, note), {
-    deps: [controls, roomSky, hovered, enabled, note],
+    deps: [controls, roomSky, hovered, enabled, note, lang],
   });
   const half = CONSOLE.depth / 2;
   const body = usePrismX(
