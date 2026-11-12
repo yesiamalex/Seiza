@@ -261,7 +261,9 @@ guarantee yet.
 - **Dance.** A solo dance in the Gestures menu, on and off like seiza: press
   to start, press again (or move) to stop.
 - **Text chat.** A room-wide chat panel, relayed through the room server. Chat
-  isn't saved between connections.
+  isn't saved between connections. In browsers that translate on the device
+  (Chrome on a computer), chat can translate between English and Japanese;
+  see [Language](#language).
 - **English and 日本語.** Every menu, panel, and prompt comes in English and
   Japanese, switched with the language button. See [Language](#language).
 - **Name tags** above every player, highlighted while that player speaks.
@@ -933,6 +935,21 @@ The language changes only what you see: menus, panels, prompts, the VR
 menu, gesture names, and the world's name (`displayNameJa` in `world.json`).
 Text people write, such as chat and notes on boards, stays as they wrote
 it.
+
+#### Chat translation
+
+In the chat panel, **Translate messages into English** (or
+**メッセージを日本語に翻訳**) adds a translation under each message that's in
+the other language. The **→あ** or **→A** button beside the message box
+translates what you've typed before you send it: English into Japanese, or
+Japanese into English.
+
+Translation uses the browser's own Translator API, which runs on the device.
+Nothing is sent to Seiza or to any other service. The first time, the
+browser downloads a small language pack. The controls appear only in
+browsers that have the API (Chrome 138 and later on a computer); elsewhere,
+chat has no translation controls. Only the latest 30 messages are
+translated, and your own messages aren't.
 
 #### Add text in both languages
 
