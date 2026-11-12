@@ -50,10 +50,13 @@ const OUT = join(HERE, "..", "world", "models");
 const HEAVY = [
   [/^Mesh_0$/, 0.12, true], // the Oblation: 437k triangles for an 8 m figure; the campus centrepiece, so kept fairly detailed
   [/^Cube\.047$/, 0.06, true, 0.004], // 170k triangles of plain grey, kept in shape
-  [/^AR_Bldg$/, 0.35, false],
+  [/^AR_Bldg$/, 0.6, false, 0.01], // gently: harder left gaps in its walls
 ];
-/** Left out of the walkable surface: doors stand open. */
+/** Left out of the walkable surface, so they stand open: doors (whole
+ *  objects, or parts of one, like the AR building's, by material), and
+ *  the lettering on the Main Building. */
 const NOT_SOLID = /^(Door|Text)/;
+const NOT_SOLID_MATERIAL = /door|elevator glass/i;
 
 /** Where people can walk, for a 1.6 to 1.8 m person (src/player/PlayerRig.tsx). */
 const NAV = {
@@ -63,9 +66,10 @@ const NAV = {
   // Stairs modelled as ramps are steep, and some steps are tall: generous,
   // so every floor connects. Players can't climb walls either way: walls
   // are vertical.
-  walkableSlopeAngle: 52,
-  walkableHeight: Math.ceil(1.6 / 0.1),
-  walkableClimb: Math.floor(0.5 / 0.1),
+  walkableSlopeAngle: 60,
+  // Low enough for the headroom under a stair's landing.
+  walkableHeight: Math.ceil(1.4 / 0.1),
+  walkableClimb: Math.floor(0.6 / 0.1),
   walkableRadius: 1,
   maxEdgeLen: 24,
   maxSimplificationError: 1.2,
@@ -100,6 +104,7 @@ function worldTriangles(doc) {
     const m = node.getWorldMatrix();
     for (const prim of mesh.listPrimitives()) {
       if (prim.getMode() !== 4) continue; // triangles only
+      if (NOT_SOLID_MATERIAL.test(prim.getMaterial()?.getName() ?? "")) continue;
       const pos = prim.getAttribute("POSITION");
       const base = positions.length / 3;
       const v = [0, 0, 0];
@@ -193,6 +198,75 @@ for (const [name, [x, y, z]] of Object.entries(CHECKS)) {
   const short = end ? Math.hypot(end.x - goal.x, end.y - goal.y, end.z - goal.z) : Infinity;
   log(`  plaza → ${name}: ${short < 0.5 ? `reached (y ${goal.y.toFixed(1)})` : `not reached (${short.toFixed(1)} m short)`}`);
 }
+
+// Each building's floors, for the lifts (client/Lifts.tsx) and the guides:
+// the levels the navmesh has inside its footprint, where to stand on each,
+// and whether you can walk there from the plaza.
+const BUILDINGS = {
+  main: { name: "Main Building", box: [104, 126, -23, 23] },
+  tlh: { name: "Teaching and Learning Hub", box: [116, 148, 44, 82] },
+  ccdl: { name: "CCDL", box: [263, 291, -113, -79] },
+  ar: { name: "Academic Residences", box: [308, 364, -125, -71] },
+  wcmpb: { name: "World-Class Multi-Purpose Building", box: [192, 258, 120, 184] },
+};
+const floors = {};
+for (const [id, { name, box: [x0, x1, z0, z1] }] of Object.entries(BUILDINGS)) {
+  const points = [];
+  for (let x = x0 + 1; x < x1; x += 1.5)
+    for (let z = z0 + 1; z < z1; z += 1.5)
+      for (let y = -0.5; y < 25; y += 0.5) {
+        const r = query.findClosestPoint({ x, y, z }, { halfExtents: { x: 0.3, y: 0.25, z: 0.3 } });
+        if (r.success && r.polyRef && Math.abs(r.point.x - x) < 0.05 && Math.abs(r.point.z - z) < 0.05) points.push(r.point);
+      }
+  // Levels: heights shared by enough floor, merged when closer than a
+  // storey (2.4 m): a stair landing or a step is part of its floor.
+  const bins = new Map();
+  for (const p of points) {
+    const k = Math.round(p.y * 2) / 2;
+    bins.set(k, [...(bins.get(k) ?? []), p]);
+  }
+  const levels = [];
+  for (const [y, pts] of [...bins.entries()].sort((a, b) => a[0] - b[0])) {
+    const last = levels[levels.length - 1];
+    if (last && y - last.y < 2.4) {
+      last.points.push(...pts);
+      if (pts.length > last.top) Object.assign(last, { y, top: pts.length });
+    } else levels.push({ y, top: pts.length, points: [...pts] });
+  }
+  const unique = new Set();
+  floors[id] = {
+    name,
+    floors: levels
+      // A floor, not a landing or a ledge: at least about 110 m².
+      .filter((l) => l.points.length >= 50)
+      .map((l) => {
+        // Where to stand: near the middle of the level, and somewhere you
+        // can walk to from the plaza if anywhere on this level is.
+        const cx = l.points.reduce((a, p) => a + p.x, 0) / l.points.length;
+        const cz = l.points.reduce((a, p) => a + p.z, 0) / l.points.length;
+        const byMiddle = [...l.points].sort((a, b) => Math.hypot(a.x - cx, a.z - cz) - Math.hypot(b.x - cx, b.z - cz));
+        const reaches = (p) => {
+          const path = query.computePath(plaza, p, { halfExtents: { x: 1, y: 1, z: 1 } });
+          const end = path.path?.[path.path.length - 1];
+          return !!end && Math.hypot(end.x - p.x, end.y - p.y, end.z - p.z) < 0.6;
+        };
+        const step = Math.max(1, Math.floor(byMiddle.length / 24));
+        let at = byMiddle[0];
+        let walk = false;
+        for (let i = 0; i < byMiddle.length; i += step) {
+          if (reaches(byMiddle[i])) {
+            at = byMiddle[i];
+            walk = true;
+            break;
+          }
+        }
+        return { at: [+at.x.toFixed(2), +at.y.toFixed(2), +at.z.toFixed(2)], walk };
+      })
+      .filter((f) => !unique.has(Math.round(f.at[1])) && unique.add(Math.round(f.at[1]))),
+  };
+  log(`  ${name}: ${floors[id].floors.map((f, i) => `${i === 0 ? "G" : i + 1} y${f.at[1].toFixed(1)}${f.walk ? "" : " (lift)"}`).join(", ")}`);
+}
+writeFileSync(join(OUT, "floors.json"), JSON.stringify(floors, null, 1));
 
 // 4–6. Textures, draw calls, and compression.
 await doc.transform(

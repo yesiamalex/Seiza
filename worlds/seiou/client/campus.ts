@@ -24,7 +24,7 @@ export const PLACES = {
   wcmpb: place("wcmpb", "the ground floor of the World-Class Multi-Purpose Building", [226, 1.6, 154]),
   wcmpb2F: place("wcmpb2F", "the second floor of the World-Class Multi-Purpose Building", [226, 8.2, 150], false),
   wcmpbRoof: place("wcmpbRoof", "the roof deck of the World-Class Multi-Purpose Building", [226, 14.8, 150], false),
-  ar: place("ar", "the AR building", [336, 1.1, -98]),
+  ar: place("ar", "the Academic Residences", [336, 1.1, -98]),
 };
 
 const TOPICS: Topic[] = [
@@ -56,7 +56,7 @@ const TOPICS: Topic[] = [
     id: "faculties",
     title: "The faculties",
     answer:
-      "UPOU's teaching is in three faculties: the Faculty of Education, the Faculty of Information and Communication Studies, and the Faculty of Management and Development Studies. Their offices are in the Teaching and Learning Hub.",
+      "UPOU's teaching is in three faculties. The Faculty of Education covers areas such as distance education, language and literacy, and science and mathematics teaching. The Faculty of Information and Communication Studies covers communication, information systems, computer science, and multimedia. The Faculty of Management and Development Studies, formed in 2004, covers areas such as environment and natural resources management, public management, social work, and nursing. Their offices are in the Teaching and Learning Hub.",
     asks: ["what faculties are there", "what can i study", "programs", "courses offered", "faculty of education", "fics", "fmds", "fed", "degrees"],
     place: PLACES.tlh,
   },
@@ -110,7 +110,7 @@ const TOPICS: Topic[] = [
     id: "ccdl",
     title: "The CCDL Auditorium",
     answer:
-      "The Centennial Center for Digital Learning's auditorium seats up to 150, with a stage for talks, launches, and ceremonies. UPOU also lends it out for events. It's in the northeast of the campus, next to the AR building.",
+      "The Centennial Center for Digital Learning (CCDL) has UPOU's auditorium: a large air-conditioned hall with a stage, for conferences, seminars, and events of about 120 to 200 people. It's in the northeast of the campus, next to the Academic Residences.",
     asks: ["ccdl", "centennial center for digital learning", "auditorium", "where are events held", "the stage", "the hall for events", "seminar venue"],
     place: PLACES.ccdl,
   },
@@ -126,15 +126,15 @@ const TOPICS: Topic[] = [
     title: "The World-Class Multi-Purpose Building",
     answer:
       "The World-Class Multi-Purpose Building (WCMPB) is the large two-storey building in the south of the campus, with wide main stairs and a ramp at the front, a balcony and glass panels on the second floor, and a roof deck. I can take you up to the second floor or the roof deck too.",
-    asks: ["wcmpb", "wpcmb", "world class multi purpose building", "world-class multipurpose building", "multipurpose building", "multi-purpose hall", "the big building in the south", "the building with the roof deck", "two storey building", "the ramp", "pwd ramp"],
+    asks: ["wcmpb", "wpcmb", "world class multi purpose building", "world-class multipurpose building", "the big building in the south", "the building with the roof deck", "two storey building", "the ramp", "pwd ramp"],
     place: PLACES.wcmpb,
   },
   {
     id: "upstairs",
     title: "Going upstairs",
     answer:
-      "The model of the World-Class Multi-Purpose Building doesn't include its inside stairs yet, so I can take you up instead: to its second floor, or to its roof deck, where you can see the whole campus.",
-    asks: ["how do i go upstairs", "second floor", "2nd floor", "take me upstairs", "roof deck", "rooftop", "the view", "elevator", "stairs"],
+      "Every building has a lift kiosk on each floor: click a floor on it and you're there. Some floors you can also reach by the stairs, but the model doesn't include every staircase. I can take you up too: try the World-Class Multi-Purpose Building's roof deck, which looks out over the whole campus.",
+    asks: ["how do i go upstairs", "second floor", "2nd floor", "third floor", "upper floors", "take me upstairs", "elevator", "lift", "stairs"],
     place: PLACES.wcmpb2F,
     gesture: "raisehand",
     mood: "happy",
@@ -150,11 +150,25 @@ const TOPICS: Topic[] = [
   },
   {
     id: "ar",
-    title: "The AR building",
+    title: "The Academic Residences",
     answer:
-      "The AR building is the long building in the northeast corner, with solar panels on its roof, beside the CCDL Auditorium. UPOU has been building its Academic Residences; this may be them.",
-    asks: ["ar building", "academic residences", "dormitory", "dorm", "where do people stay", "the building with solar panels", "housing"],
+      "The Academic Residences (AR) is the long building in the northeast corner, with solar panels on its roof, beside the CCDL. It's guest lodging for people visiting on official UP System business or for academic reasons, and some UPOU staff rent rooms there long-term. Its cafeteria seats up to 60, for catered meals and meetings.",
+    asks: ["ar building", "academic residences", "where do guests stay", "where can i stay", "lodging", "accommodation", "the building with solar panels", "cafeteria", "where can i eat", "canteen", "dormitory", "dorm"],
     place: PLACES.ar,
+  },
+  {
+    id: "rooms",
+    title: "Rooms for events",
+    answer:
+      "UPOU lends out its rooms for events: the CCDL Auditorium for about 120 to 200 people; the Oblation Hall for round-table meetings and conferences of up to 100; the Audio-Visual Room for 100 to 150; the Sandbox, a small room for meetings, live streams, and podcasts; the Academic Residences' cafeteria for up to 60; and the Multi-Purpose Hall for sports and big gatherings. Bookings go through UPOU's office in the CCDL building.",
+    asks: ["can i rent a room", "venue", "event venue", "book a room", "facilities for rent", "oblation hall", "sandbox", "audio visual room", "avr", "where can we hold an event"],
+  },
+  {
+    id: "mph",
+    title: "The Multi-Purpose Hall",
+    answer:
+      "UPOU's Multi-Purpose Hall is a spacious venue for recreation and community activities: the university's anniversaries, staff and student sports matches, and big gatherings. It was inaugurated during UPOU's 22nd anniversary.",
+    asks: ["multi purpose hall", "multipurpose hall", "mph", "sports", "where do they play basketball", "gym", "anniversary venue"],
   },
   {
     id: "icc",
@@ -215,13 +229,13 @@ export function seiouKnowledge(): Knowledge {
 
 export const CHANCY: Persona = {
   name: "Chancy Joan",
-  self: "I'm Chancy Joan, one of SeiOU's guides. I walk between the Oblation, the Main Building, and the Teaching and Learning Hub, and I can walk you anywhere on campus. Everything I say was written for this world, so if I don't know something, I'll tell you.",
+  self: "I'm Chancy Joan, one of SeiOU's guides. You'll usually find me here where visitors arrive, and I can walk you anywhere on campus. Everything I say was written for this world, so if I don't know something, I'll tell you.",
   invite: "Ask me about UPOU, or where anything is on campus. I can walk you there.",
 };
 
 export const DEAN_ROB: Persona = {
   name: "Dean Rob",
-  self: "I'm Dean Rob, one of SeiOU's guides. I make the long round: the Main Building, the CCDL Auditorium, the AR building, and the World-Class Multi-Purpose Building. Ask me about UPOU or the way anywhere, and I'll walk you there. If I don't know something, I'll say so.",
+  self: "I'm Dean Rob, one of SeiOU's guides. You'll usually find me here where visitors arrive. Ask me about UPOU or the way anywhere, and I'll walk you there. If I don't know something, I'll say so.",
   invite: "Ask me about UPOU, its buildings, or the way anywhere on campus.",
 };
 
@@ -233,8 +247,10 @@ export const DEAN_ROB_AVATAR = "/avatars/vroid/sample-male.vrm";
 
 const stop = (at: [number, number, number], wait: number): Stop => ({ at, wait });
 
-/** Chancy Joan's round, near where visitors arrive. */
-export const CHANCY_ROUTE: Stop[] = [stop([92, 0.2, 2], 35), stop([128, 0.2, 56], 30), stop([22, 0.2, -4], 30)];
+/** Where visitors arrive (world.json), which the guides face. */
+export const SPAWN: [number, number] = [66, 0];
 
-/** Dean Rob's long round of the far buildings. */
-export const DEAN_ROB_ROUTE: Stop[] = [stop([104, 0.2, -6], 30), stop([272, 1.3, -90], 40), stop([326, 1.1, -96], 25), stop([210, 1.6, 132], 40)];
+/** Each guide's day: mostly at home, in front of where visitors arrive,
+ *  with a short stroll now and then. Home is the first stop. */
+export const CHANCY_ROUTE: Stop[] = [stop([71.5, 0.2, -1.8], 300), stop([95, 0.2, -3], 20), stop([71.5, 0.2, -1.8], 300), stop([30, 0.2, -6], 20)];
+export const DEAN_ROB_ROUTE: Stop[] = [stop([71.5, 0.2, 1.8], 360), stop([124, 0.2, 52], 25), stop([71.5, 0.2, 1.8], 360), stop([58, 0.2, 16], 15)];

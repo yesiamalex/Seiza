@@ -1,0 +1,187 @@
+{
+ "main": {
+  "name": "Main Building",
+  "floors": [
+   {
+    "at": [
+     115.5,
+     0.2,
+     0.5
+    ],
+    "walk": true
+   },
+   {
+    "at": [
+     115.5,
+     3.9,
+     -2.5
+    ],
+    "walk": true
+   },
+   {
+    "at": [
+     115.5,
+     7,
+     0.5
+    ],
+    "walk": true
+   },
+   {
+    "at": [
+     115.5,
+     10.24,
+     0.5
+    ],
+    "walk": false
+   }
+  ]
+ },
+ "tlh": {
+  "name": "Teaching and Learning Hub",
+  "floors": [
+   {
+    "at": [
+     132,
+     0.2,
+     63
+    ],
+    "walk": true
+   },
+   {
+    "at": [
+     133.5,
+     3.54,
+     60
+    ],
+    "walk": false
+   },
+   {
+    "at": [
+     129,
+     8.86,
+     73.5
+    ],
+    "walk": false
+   }
+  ]
+ },
+ "ccdl": {
+  "name": "CCDL",
+  "floors": [
+   {
+    "at": [
+     276,
+     1.3,
+     -95.5
+    ],
+    "walk": true
+   },
+   {
+    "at": [
+     277.5,
+     4.7,
+     -95.5
+    ],
+    "walk": true
+   },
+   {
+    "at": [
+     277.5,
+     10.05,
+     -97
+    ],
+    "walk": false
+   }
+  ]
+ },
+ "ar": {
+  "name": "Academic Residences",
+  "floors": [
+   {
+    "at": [
+     325.5,
+     1.1,
+     -92.5
+    ],
+    "walk": true
+   },
+   {
+    "at": [
+     339,
+     6.86,
+     -100
+    ],
+    "walk": false
+   },
+   {
+    "at": [
+     337.5,
+     9.5,
+     -95.5
+    ],
+    "walk": false
+   },
+   {
+    "at": [
+     337.5,
+     14.2,
+     -98.5
+    ],
+    "walk": false
+   }
+  ]
+ },
+ "wcmpb": {
+  "name": "World-Class Multi-Purpose Building",
+  "floors": [
+   {
+    "at": [
+     223,
+     1.6,
+     151
+    ],
+    "walk": true
+   },
+   {
+    "at": [
+     226,
+     4.68,
+     142
+    ],
+    "walk": true
+   },
+   {
+    "at": [
+     238,
+     8.2,
+     163
+    ],
+    "walk": true
+   },
+   {
+    "at": [
+     251.5,
+     11.4,
+     173.5
+    ],
+    "walk": false
+   },
+   {
+    "at": [
+     226,
+     14.8,
+     154
+    ],
+    "walk": false
+   },
+   {
+    "at": [
+     230.5,
+     19.31,
+     157
+    ],
+    "walk": false
+   }
+  ]
+ }
+}
