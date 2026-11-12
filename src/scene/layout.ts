@@ -727,6 +727,9 @@ export interface Ground {
   /** Keeps a third-person camera at `camera` on this side of any wall
    *  between it and `from` (the walker), moving it in front of the wall. */
   limitView?(from: THREE.Vector3, camera: THREE.Vector3): void;
+  /** Whether (x, z) is under cover at about height `y`: a floor or a roof
+   *  above it. For keeping rain out of buildings. */
+  covered?(x: number, y: number, z: number): boolean;
 }
 
 let ground: Ground | null = null;
@@ -885,6 +888,16 @@ export function surfaceAt(x: number, z: number): FloorSurface {
  * one, so without this the camera simply floated out over the top of the
  * walls and showed a roofless set.
  */
+/**
+ * Whether rain reaches (x, z) at about height `y`: not inside the hall, the
+ * corridor, or the classroom, or, in a model world, under a floor or a
+ * roof its ground knows about.
+ */
+export function sheltered(x: number, y: number, z: number): boolean {
+  if (ground) return ground.covered?.(x, y, z) ?? false;
+  return contains(HALL, x, z) || contains(CORRIDOR, x, z) || contains(CLASSROOM, x, z);
+}
+
 export function ceilingHeightAt(x: number, z: number): number {
   // A model world's buildings aren't known here: no ceiling for the camera.
   if (ground) return Infinity;

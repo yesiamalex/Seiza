@@ -11,6 +11,7 @@ import { deriveObstaclesFromObject, OBSTACLES, setActiveObstacles } from "./layo
 import type { Seat } from "./layout";
 import { LightPool } from "./LightPool";
 import { SkyDriver } from "../sky/SkyDriver";
+import { Rain } from "./Rain";
 import type { SkyConfig } from "../sky/skyState";
 import type { RoomSky } from "../multiplayer/types";
 
@@ -262,7 +263,10 @@ export const Scene = memo(function Scene({
       {/* A moving sky brings its own lights, which follow the sun (see
           SkyDriver); the fixed sunset keeps these. */}
       {moving ? (
-        <SkyDriver config={skyConfig} room={roomSky} />
+        <>
+          <SkyDriver config={skyConfig} room={roomSky} />
+          <Rain />
+        </>
       ) : (
         <>
           <hemisphereLight args={["#ffe3c2", "#d9b48a", 1.05]} />

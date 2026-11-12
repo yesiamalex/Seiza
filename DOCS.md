@@ -1173,6 +1173,11 @@ a world with `"cycle": "realtime"`, `src/sky/` moves it:
   clock restarts (a reconnect), so the sky doesn't jump in one frame; when
   the weather setting changes (an editor's weather buttons, or Seizora's
   console), the new weather eases in over a few seconds (`skyState.ts`).
+- **Rain** (`src/scene/Rain.tsx`) falls as thin streaks around the
+  viewer, as heavy as the weather's rain and slanted by its wind: a shower
+  in Rain, a downpour in a Typhoon. It stays out of the hall, the corridor,
+  and the classroom, and, in a world made of its own model, from under any
+  floor or roof its navmesh has overhead. Nothing is drawn while it's dry.
 - **The schedule** (`scheduledWeather`) picks the weather for each
   three-hour block from a hash of the date, with fair weather more likely
   from December to May and rain more likely from June to November. Every

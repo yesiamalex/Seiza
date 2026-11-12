@@ -117,6 +117,16 @@ export class NavGround implements Ground {
     camera.z = from.z + dz * keep;
   }
 
+  /** Under cover: walkable floor (an upper storey, a roof) between 2 and
+   *  12 m above. A pitched roof nobody can walk on isn't known. */
+  covered(x: number, y: number, z: number): boolean {
+    this.scratch.x = x;
+    this.scratch.y = y + 7;
+    this.scratch.z = z;
+    const found = this.query.findClosestPoint(this.scratch, { halfExtents: { x: 0.4, y: 5, z: 0.4 } });
+    return found.success && !!found.polyRef && found.point.y > y + 2 && Math.hypot(found.point.x - x, found.point.z - z) < 0.5;
+  }
+
   /** A walking route, for click-to-walk and for guides. */
   path(from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3[] | null {
     const result = this.query.computePath({ x: from.x, y: from.y, z: from.z }, { x: to.x, y: to.y, z: to.z }, { halfExtents: FIND_NEAR });
