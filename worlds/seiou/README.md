@@ -188,4 +188,5 @@ npx wrangler deploy --config worlds/seiou/wrangler.jsonc
 - UPOU Office of the Vice Chancellor for Finance and Administration. *CDMO services*: the Academic Residences and its cafeteria, the CCDL Auditorium, the Sandbox, the Oblation Hall, the Audio-Visual Room, and the Multi-Purpose Hall. https://ovcfa.upou.edu.ph/cdmo-home/cdmo-services/
 - UPOU Helpdesk. *UPOU Faculties of Studies*. https://helpdesk.upou.edu.ph/support/solutions/articles/48001149034-upou-faculties-of-studies
 - UPOU. *UPOU's 29th Commencement: A Historic First at the UPOU International Convention Center*. https://www.upou.edu.ph/tag/commencement-exercises
+- UPOU. *Global immersive learning experts converge at UPOU for WILLS 2026*: the World Class Multimedia Production Building, soon the Digital Futures Hub. https://www.upou.edu.ph/news/global-immersive-learning-experts-converge-at-upou-for-wills-2026/
 - Republic of the Philippines. (2014). *Republic Act No. 10650: Open Distance Learning Act*.

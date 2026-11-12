@@ -50,8 +50,8 @@ function body(key: CardKey): { title: string; paragraphs: string[] } {
     title: L("Campus solar, hypothetically", "キャンパスの太陽光(仮想)"),
     paragraphs: [
       L(
-        `${modules} panels of about 400 W each sit on the flat roofs of the Main Building, the Teaching and Learning Hub, the CCDL, and the top of the World-Class Multi-Purpose Building: about ${kwp} kW at their peak, tilted 15° to the south. A script placed them wherever a whole panel fits on open roof in the campus model.`,
-        `約400 Wのパネル${modules}枚が、本館、ティーチング・アンド・ラーニング・ハブ、CCDL、ワールドクラス多目的ビル最上部の平らな屋根にあり、合計で最大約${kwp} kW、南へ15°傾いています。キャンパスのモデルで、パネルが1枚まるごと開けた屋根に収まる場所に、スクリプトで配置しました。`
+        `${modules} panels of about 400 W each sit on the flat roofs of the Main Building, the Teaching and Learning Hub, the CCDL, and the top of the World-Class Multimedia Production Building: about ${kwp} kW at their peak, tilted 15° to the south. A script placed them wherever a whole panel fits on open roof in the campus model.`,
+        `約400 Wのパネル${modules}枚が、本館、ティーチング・アンド・ラーニング・ハブ、CCDL、ワールドクラス・マルチメディア制作棟最上部の平らな屋根にあり、合計で最大約${kwp} kW、南へ15°傾いています。キャンパスのモデルで、パネルが1枚まるごと開けた屋根に収まる場所に、スクリプトで配置しました。`
       ),
       L(
         "They run on the sky you see, with Seizora's plant model: the sun's position over Los Baños, clouds from the shared weather, panels losing about 0.35% per degree above 25 °C, and about 17% lost to wiring, dust, and the inverter.",

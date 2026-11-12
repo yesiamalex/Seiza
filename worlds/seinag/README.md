@@ -17,7 +17,7 @@ could do, so students and staff can see and talk about it.
   drift apart.
 - **Rooftop panels:** 264 modules of about 400 W each on the flat roofs of
   the Main Building, the Teaching and Learning Hub, the CCDL, and the top
-  of the World-Class Multi-Purpose Building: about 106 kW at their peak,
+  of the World-Class Multimedia Production Building: about 106 kW at their peak,
   tilted 15° to the south. The WCMPB's roof deck stays clear for visitors,
   and the Academic Residences already has panels in the model. A script
   (`scripts/place-panels.mjs`) placed them wherever a whole module fits on

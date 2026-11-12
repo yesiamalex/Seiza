@@ -206,7 +206,7 @@ const BUILDINGS = {
   tlh: { name: "Teaching and Learning Hub", box: [116, 148, 44, 82] },
   ccdl: { name: "CCDL", box: [263, 291, -113, -79] },
   ar: { name: "Academic Residences", box: [308, 364, -125, -71] },
-  wcmpb: { name: "World-Class Multi-Purpose Building", box: [192, 258, 120, 184] },
+  wcmpb: { name: "World-Class Multimedia Production Building", box: [192, 258, 120, 184] },
 };
 
 /**

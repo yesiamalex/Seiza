@@ -21,9 +21,9 @@ export const PLACES = {
   tlh: place("tlh", "the Teaching and Learning Hub", "ティーチング・アンド・ラーニング・ハブ", [132, 0.2, 63]),
   ccdl: place("ccdl", "the CCDL Auditorium", "CCDL講堂", [277, 1.3, -95]),
   ccdlStage: place("ccdlStage", "the stage of the CCDL Auditorium", "CCDL講堂のステージ", [281, 5.7, -103], false),
-  wcmpb: place("wcmpb", "the ground floor of the World-Class Multi-Purpose Building", "ワールドクラス多目的ビルの1階", [226, 1.6, 154]),
-  wcmpb2F: place("wcmpb2F", "the second floor of the World-Class Multi-Purpose Building", "ワールドクラス多目的ビルの2階", [226, 8.2, 150], false),
-  wcmpbRoof: place("wcmpbRoof", "the roof deck of the World-Class Multi-Purpose Building", "ワールドクラス多目的ビルの屋上デッキ", [226, 14.8, 150], false),
+  wcmpb: place("wcmpb", "the ground floor of the World-Class Multimedia Production Building", "ワールドクラス・マルチメディア制作棟の1階", [226, 1.6, 154]),
+  wcmpb2F: place("wcmpb2F", "the second floor of the World-Class Multimedia Production Building", "ワールドクラス・マルチメディア制作棟の2階", [226, 8.2, 150], false),
+  wcmpbRoof: place("wcmpbRoof", "the roof deck of the World-Class Multimedia Production Building", "ワールドクラス・マルチメディア制作棟の屋上デッキ", [226, 14.8, 150], false),
   ar: place("ar", "the Academic Residences", "アカデミック・レジデンス", [336, 1.1, -98]),
 };
 
@@ -195,23 +195,23 @@ const TOPICS: Topic[] = [
   },
   {
     id: "wcmpb",
-    title: "The World-Class Multi-Purpose Building",
+    title: "The World-Class Multimedia Production Building",
     answer:
-      "The World-Class Multi-Purpose Building (WCMPB) is the large two-storey building in the south of the campus, with wide main stairs and a ramp at the front, a balcony and glass panels on the second floor, and a roof deck. I can take you up to the second floor or the roof deck too.",
-    asks: ["wcmpb", "wpcmb", "world class multi purpose building", "world-class multipurpose building", "the big building in the south", "the building with the roof deck", "two storey building", "the ramp", "pwd ramp"],
+      "The World-Class Multimedia Production Building (WCMPB) is the large building in the south of the campus, soon to be named the Digital Futures Hub; the exhibits of the World Immersive Learning Labs Symposium (WILLS) 2026 were held there. It has wide main stairs and a ramp at the front, a balcony and glass panels on the second floor, and a roof deck. I can take you up to the second floor or the roof deck too.",
+    asks: ["wcmpb", "wpcmb", "world class multimedia production building", "multimedia production building", "digital futures hub", "world class multi purpose building", "wills exhibits", "the big building in the south", "the building with the roof deck", "two storey building", "the ramp", "pwd ramp"],
     place: PLACES.wcmpb,
     ja: {
-      title: "ワールドクラス多目的ビル",
+      title: "ワールドクラス・マルチメディア制作棟",
       answer:
-        "ワールドクラス多目的ビル(WCMPB)は、キャンパスの南にある大きな2階建ての建物です。正面に広い階段とスロープ、2階にバルコニーとガラスのパネル、そして屋上デッキがあります。2階や屋上デッキにもお連れできます。",
-      asks: ["WCMPB", "多目的ビル", "南の大きな建物", "屋上デッキのある建物", "2階建ての建物", "スロープ"],
+        "ワールドクラス・マルチメディア制作棟(WCMPB)は、キャンパスの南にある大きな建物で、まもなく「デジタル・フューチャーズ・ハブ」と名づけられます。2026年の世界イマーシブ・ラーニング・ラボ・シンポジウム(WILLS)の展示はここで行われました。正面に広い階段とスロープ、2階にバルコニーとガラスのパネル、そして屋上デッキがあります。2階や屋上デッキにもお連れできます。",
+      asks: ["WCMPB", "マルチメディア制作棟", "デジタル・フューチャーズ・ハブ", "南の大きな建物", "屋上デッキのある建物", "2階建ての建物", "スロープ"],
     },
   },
   {
     id: "upstairs",
     title: "Going upstairs",
     answer:
-      "Every building has a lift kiosk on each floor: click a floor on it and you're there. Some floors you can also reach by the stairs, but the model doesn't include every staircase. I can take you up too: try the World-Class Multi-Purpose Building's roof deck, which looks out over the whole campus.",
+      "Every building has a lift kiosk on each floor: click a floor on it and you're there. Some floors you can also reach by the stairs, but the model doesn't include every staircase. I can take you up too: try the World-Class Multimedia Production Building's roof deck, which looks out over the whole campus.",
     asks: ["how do i go upstairs", "second floor", "2nd floor", "third floor", "upper floors", "take me upstairs", "elevator", "lift", "stairs"],
     place: PLACES.wcmpb2F,
     gesture: "raisehand",
@@ -219,14 +219,14 @@ const TOPICS: Topic[] = [
     ja: {
       title: "上の階へ",
       answer:
-        "どの建物も各階にエレベーターの案内板があり、階をクリックするとすぐその階に行けます。階段で行ける階もありますが、モデルにはすべての階段が入っているわけではありません。わたしがお連れすることもできます。キャンパス全体が見渡せる、ワールドクラス多目的ビルの屋上デッキがおすすめです。",
+        "どの建物も各階にエレベーターの案内板があり、階をクリックするとすぐその階に行けます。階段で行ける階もありますが、モデルにはすべての階段が入っているわけではありません。わたしがお連れすることもできます。キャンパス全体が見渡せる、ワールドクラス・マルチメディア制作棟の屋上デッキがおすすめです。",
       asks: ["上の階に行くには", "2階", "3階", "上の階", "上に連れて行って", "エレベーター", "階段"],
     },
   },
   {
     id: "roof",
     title: "The roof deck",
-    answer: "The roof deck of the World-Class Multi-Purpose Building looks out over the whole campus. I'll take you up.",
+    answer: "The roof deck of the World-Class Multimedia Production Building looks out over the whole campus. I'll take you up.",
     asks: ["take me to the roof", "roof deck", "best view", "view of the campus", "rooftop"],
     place: PLACES.wcmpbRoof,
     gesture: "cheer",
@@ -234,7 +234,7 @@ const TOPICS: Topic[] = [
     ja: {
       title: "屋上デッキ",
       answer:
-        "ワールドクラス多目的ビルの屋上デッキからは、キャンパス全体が見渡せます。お連れしますね。",
+        "ワールドクラス・マルチメディア制作棟の屋上デッキからは、キャンパス全体が見渡せます。お連れしますね。",
       asks: ["屋上に連れて行って", "屋上デッキ", "いちばんの眺め", "キャンパスの眺め", "屋上"],
     },
   },
@@ -269,12 +269,12 @@ const TOPICS: Topic[] = [
     id: "mph",
     title: "The Multi-Purpose Hall",
     answer:
-      "UPOU's Multi-Purpose Hall is a spacious venue for recreation and community activities: the university's anniversaries, staff and student sports matches, and big gatherings. It was inaugurated during UPOU's 22nd anniversary.",
+      "UPOU's Multi-Purpose Hall is a spacious venue for recreation and community activities: the university's anniversaries, staff and student sports matches, and big gatherings. It was inaugurated during UPOU's 22nd anniversary. It's a different building from the World-Class Multimedia Production Building (WCMPB).",
     asks: ["multi purpose hall", "multipurpose hall", "mph", "sports", "where do they play basketball", "gym", "anniversary venue"],
     ja: {
       title: "多目的ホール",
       answer:
-        "UPOUの多目的ホールは、レクリエーションや地域の活動のための広い会場です。大学の記念行事、職員や学生のスポーツの試合、大きな集まりに使われます。UPOUの創立22周年のときに開館しました。",
+        "UPOUの多目的ホールは、レクリエーションや地域の活動のための広い会場です。大学の記念行事、職員や学生のスポーツの試合、大きな集まりに使われます。UPOUの創立22周年のときに開館しました。ワールドクラス・マルチメディア制作棟(WCMPB)とは別の建物です。",
       asks: ["多目的ホール", "スポーツ", "バスケットボールはどこでする", "体育館", "記念行事の会場"],
     },
   },
@@ -295,7 +295,7 @@ const TOPICS: Topic[] = [
     id: "tour",
     title: "A tour",
     answer:
-      "Start at the Oblation in the roundabout, then the Main Building under the arch. South of it are the four pods of the Teaching and Learning Hub. Northeast are the CCDL Auditorium and the AR building, and south is the World-Class Multi-Purpose Building, whose roof deck has the best view. Ask me to walk you to any of them.",
+      "Start at the Oblation in the roundabout, then the Main Building under the arch. South of it are the four pods of the Teaching and Learning Hub. Northeast are the CCDL Auditorium and the AR building, and south is the World-Class Multimedia Production Building, whose roof deck has the best view. Ask me to walk you to any of them.",
     asks: ["give me a tour", "show me around", "where should i go", "what should i see", "what buildings are there", "campus map", "list of buildings", "pasyal"],
     place: PLACES.oblation,
     gesture: "raisehand",
@@ -303,7 +303,7 @@ const TOPICS: Topic[] = [
     ja: {
       title: "キャンパスめぐり",
       answer:
-        "まずロータリーのオブレーション像から。次にアーチの下の本館へ。その南にティーチング・アンド・ラーニング・ハブの4つの棟があります。北東にCCDL講堂とAR棟、南にワールドクラス多目的ビルがあり、その屋上デッキからの眺めがいちばんです。どこへでも歩いてご案内しますよ。",
+        "まずロータリーのオブレーション像から。次にアーチの下の本館へ。その南にティーチング・アンド・ラーニング・ハブの4つの棟があります。北東にCCDL講堂とAR棟、南にワールドクラス・マルチメディア制作棟があり、その屋上デッキからの眺めがいちばんです。どこへでも歩いてご案内しますよ。",
       asks: ["案内して", "キャンパスを見せて", "どこに行けばいい", "何を見ればいい", "どんな建物がある", "キャンパスマップ", "建物の一覧"],
     },
   },

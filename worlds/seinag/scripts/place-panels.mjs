@@ -35,7 +35,7 @@ const BUILDINGS = {
   tlh: { name: "Teaching and Learning Hub", box: [116, 148, 44, 82], minY: 8.5 },
   ccdl: { name: "CCDL", box: [263, 291, -113, -79] },
   // Above the roof deck (14.8 m) only: the deck is for people.
-  wcmpb: { name: "World-Class Multi-Purpose Building", box: [192, 258, 120, 184], minY: 17 },
+  wcmpb: { name: "World-Class Multimedia Production Building", box: [192, 258, 120, 184], minY: 17 },
 };
 
 await init();

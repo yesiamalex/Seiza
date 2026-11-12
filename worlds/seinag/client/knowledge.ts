@@ -43,12 +43,12 @@ const TOPICS: Topic[] = [
   {
     id: "rooftops",
     title: "The rooftop panels",
-    answer: `The panels sit on the flat roofs of the Main Building, the Teaching and Learning Hub's pods, the CCDL, and the top of the World-Class Multi-Purpose Building, tilted 15° to the south. The WCMPB's roof deck stays clear for visitors, and the Academic Residences already has panels of its own. A script placed them wherever a whole panel fits on open roof.`,
+    answer: `The panels sit on the flat roofs of the Main Building, the Teaching and Learning Hub's pods, the CCDL, and the top of the World-Class Multimedia Production Building, tilted 15° to the south. The WCMPB's roof deck stays clear for visitors, and the Academic Residences already has panels of its own. A script placed them wherever a whole panel fits on open roof.`,
     asks: ["where are the solar panels", "which roofs have panels", "how many panels", "rooftop solar", "show me the panels", "take me to the panels"],
     place: SOLAR_PLACES.mainRoof,
     ja: {
       title: "屋根のパネル",
-      answer: "パネルは、本館、ティーチング・アンド・ラーニング・ハブの棟、CCDL、ワールドクラス多目的ビルの最上部の平らな屋根に、南へ15°傾けて置いてあります。WCMPBの屋上デッキは見学者のために空けてあり、アカデミック・レジデンスにはもともとパネルがあります。パネルが1枚まるごと開けた屋根に収まる場所に、スクリプトで配置しました。",
+      answer: "パネルは、本館、ティーチング・アンド・ラーニング・ハブの棟、CCDL、ワールドクラス・マルチメディア制作棟の最上部の平らな屋根に、南へ15°傾けて置いてあります。WCMPBの屋上デッキは見学者のために空けてあり、アカデミック・レジデンスにはもともとパネルがあります。パネルが1枚まるごと開けた屋根に収まる場所に、スクリプトで配置しました。",
       asks: ["太陽光パネルはどこ", "どの屋根にパネルがある", "パネルは何枚", "屋根の太陽光", "パネルを見せて", "パネルに連れて行って"],
     },
   },

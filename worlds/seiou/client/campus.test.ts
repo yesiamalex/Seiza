@@ -13,6 +13,8 @@ describe("SeiOU's guides", () => {
     ["how do I apply", "programs"],
     ["take me to the roof deck", "roof"],
     ["where is the world class multi purpose building", "wcmpb"],
+    ["where is the multimedia production building", "wcmpb"],
+    ["take me to the digital futures hub", "wcmpb"],
     ["where is the wcmpb", "wcmpb"],
     ["saan ang auditorium", "ccdl"],
     ["give me a tour", "tour"],

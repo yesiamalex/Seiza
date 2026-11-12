@@ -20,7 +20,7 @@ const BUILDING_JA: Record<string, string> = {
   tlh: "ティーチング・アンド・ラーニング・ハブ",
   ccdl: "CCDL",
   ar: "アカデミック・レジデンス",
-  wcmpb: "ワールドクラス多目的ビル",
+  wcmpb: "ワールドクラス・マルチメディア制作棟",
 };
 
 export interface Floor {
