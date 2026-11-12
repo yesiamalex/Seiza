@@ -62,8 +62,9 @@ export class NavGround implements Ground {
 
   constrain(position: THREE.Vector3): number {
     if (!this.ref || Math.hypot(position.x - this.at.x, position.z - this.at.z) > TELEPORT) {
-      // Feet are below the eyes (the camera's position): search from the
-      // level the walker was last on, so a warp lands on the right floor.
+      // A jump nothing placed (a warp goes through place() first): search
+      // from the level the walker was last on, or, at the start, from the
+      // feet, which are below the eyes (the camera's position).
       this.place(position.x, this.ref ? this.at.y : position.y - 1.6, position.z);
       position.x = this.at.x;
       position.z = this.at.z;

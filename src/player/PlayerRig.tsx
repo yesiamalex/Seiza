@@ -614,6 +614,12 @@ export function PlayerRig({
     if (warpTargetRef?.current) {
       const target = warpTargetRef.current;
       warpTargetRef.current = null;
+      // A model world's ground puts the walker on the level nearest the
+      // target's height. Left to find it on the next step, it would search
+      // from the level the walker left: a lift would go nowhere, and a
+      // warp from the plaza could pick a pocket under a building's floor.
+      const ground = getGround();
+      if (ground) target.y = ground.place(target.x, target.y, target.z);
       moveTargetRef.current = null; // cancel any in-flight click-to-walk
       if (movePathRef) movePathRef.current = null;
       verticalVelocityRef.current = 0;

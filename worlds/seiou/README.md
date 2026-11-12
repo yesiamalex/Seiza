@@ -19,15 +19,16 @@ campus model is the whole world (`"environment": "model"` in
   waiting in front of them.
 - **Walking:** along the paths and roads, through doorways (doors stand
   open), into the buildings, and up the stairs the model has: the Main
-  Building's upper floors, CCDL's upper level, and the WCMPB's second
-  floor. Double-click the ground to walk there along the paths.
+  Building's upper floors and CCDL's upper level. Double-click the ground to walk there along the paths.
 - **Lifts:** every building has a lift kiosk on each floor (`client/Lifts.tsx`):
   click a floor to go there. They're the way up where the model has no
-  stairs: the Academic Residences, the Teaching and Learning Hub's pods,
-  and the roofs. The floors come from `world/models/floors.json`, which the
-  build script works out from the navmesh, so they follow the model; they're
-  labelled by height (Ground, Level 2, …, Roof), and a level may be a
-  mezzanine or a roof rather than a full storey.
+  stairs: the Academic Residences' upper floors, the Teaching and Learning
+  Hub's pods, the WCMPB's upper level, and the roofs. A lift puts you on
+  the floor you chose, wherever you came from. The floors come from
+  `world/models/floors.json`, which the build script works out from the
+  navmesh, so they follow the model. They're labelled by height (Ground,
+  Level 2, …, Roof), and a level may be a mezzanine or a roof rather than a
+  full storey.
 - **The guides:** Chancy Joan and Dean Rob wait where visitors arrive,
   facing them, and now and then take a short stroll. Click one, or press
   **Ask Chancy Joan** or **Ask Dean Rob** at the top left. They answer
@@ -70,10 +71,23 @@ plain gray mesh 170,000); textures shrunk to WebP; meshes joined by
 material; geometry quantized and meshopt-compressed, which three.js decodes
 with a decoder bundled in the app. The navmesh is baked from the same
 geometry with doors left out (door objects, and door materials inside a
-building like the Academic Residences), so every doorway is open. Steps
-up to 0.6 m and slopes up to 60° count as walkable, so modelled stairs
-connect. The script then checks that you can walk from the plaza into each
-building, and writes each building's floors to `floors.json`.
+building like the Academic Residences), so every doorway is open. A
+material counts as a door only by the word: "Indoor Floor Tiles" is a
+floor. Floors modelled facing down, as some of the Academic Residences'
+are, are turned to face up first. Steps up to 0.6 m and slopes up to 60°
+count as walkable, so modelled stairs connect.
+
+After baking, the script turns off any walkable pocket under a floor: an
+island of the navmesh where the model is less than 1.5 m overhead. Nobody
+could stand there, and a warp that landed in one would leave you under the
+floor. It then logs whether you can walk from the plaza into each
+building, and writes each building's floors to `floors.json`: the heights
+under its roof (or on it) with the most floor, at least a storey apart.
+
+To redo those last steps on the committed navmesh without the original
+model, run `node worlds/seiou/scripts/fix-navmesh.mjs` (add `--dry-run` to
+only see what it would change). Both scripts share
+`scripts/nav-tools.mjs`.
 
 The model is in metres, so it needs no scaling. To use an updated model,
 put it in `media-src/` and run the script again; if building positions
@@ -114,12 +128,15 @@ worlds/seiou/
   world/models/campus.navmesh   Where people can walk (committed)
   media-src/                    The original model (gitignored, local only)
   scripts/build-campus.mjs      media-src/ → world/models/
+  scripts/fix-navmesh.mjs       Pockets and floors, redone on the committed navmesh
+  scripts/nav-tools.mjs         What both scripts share
   world/models/floors.json      Each building's floors, for the lifts (generated)
   client/
     index.tsx                   Registers and places the two guides and the lifts
     Lifts.tsx                   The lift kiosks
     campus.ts                   What the guides know, the places, the guides
     campus.test.ts              What they answer
+    navmesh.test.ts             Every place and lift lands on its own floor
   favicon.svg, build.mjs, wrangler.jsonc
 ```
 

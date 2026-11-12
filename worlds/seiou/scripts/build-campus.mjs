@@ -37,6 +37,7 @@ import { MeshoptEncoder, MeshoptSimplifier } from "meshoptimizer";
 import sharp from "sharp";
 import { exportNavMesh, init, NavMeshQuery } from "recast-navigation";
 import { generateTiledNavMesh } from "recast-navigation/generators";
+import { checkReach, dropBuriedIslands, findFloors, overhead, worldTriangles } from "./nav-tools.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SRC = resolve(process.argv[2] ?? join(HERE, "..", "media-src", "UPOU_Campus_Layout.glb"));
@@ -56,7 +57,12 @@ const HEAVY = [
  *  objects, or parts of one, like the AR building's, by material), and
  *  the lettering on the Main Building. */
 const NOT_SOLID = /^(Door|Text)/;
-const NOT_SOLID_MATERIAL = /door|elevator glass/i;
+// "door" as a word: "Indoor Floor Tiles" is a floor.
+const NOT_SOLID_MATERIAL = /\bdoor\b|elevator glass/i;
+/** Floors, by material. Some are modelled facing down (the Academic
+ *  Residences' upper storeys), which the navmesh would take for a ceiling;
+ *  these are turned to face up first. */
+const FLOOR_MATERIAL = /floor/i;
 
 /** Where people can walk, for a 1.6 to 1.8 m person (src/player/PlayerRig.tsx). */
 const NAV = {
@@ -92,32 +98,6 @@ function stats(doc, label) {
       tris += (idx ? idx.getCount() : prim.getAttribute("POSITION").getCount()) / 3;
     }
   log(`${label}: ${root.listMeshes().length} meshes, ${root.listMaterials().length} materials, ${root.listTextures().length} textures, ${Math.round(tris).toLocaleString("en")} triangles`);
-}
-
-/** All triangles in world space, for the navmesh. */
-function worldTriangles(doc) {
-  const positions = [];
-  const indices = [];
-  for (const node of doc.getRoot().listNodes()) {
-    const mesh = node.getMesh();
-    if (!mesh || NOT_SOLID.test(node.getName())) continue;
-    const m = node.getWorldMatrix();
-    for (const prim of mesh.listPrimitives()) {
-      if (prim.getMode() !== 4) continue; // triangles only
-      if (NOT_SOLID_MATERIAL.test(prim.getMaterial()?.getName() ?? "")) continue;
-      const pos = prim.getAttribute("POSITION");
-      const base = positions.length / 3;
-      const v = [0, 0, 0];
-      for (let i = 0; i < pos.getCount(); i++) {
-        pos.getElement(i, v);
-        positions.push(m[0] * v[0] + m[4] * v[1] + m[8] * v[2] + m[12], m[1] * v[0] + m[5] * v[1] + m[9] * v[2] + m[13], m[2] * v[0] + m[6] * v[1] + m[10] * v[2] + m[14]);
-      }
-      const idx = prim.getIndices();
-      if (idx) for (let i = 0; i < idx.getCount(); i++) indices.push(base + idx.getScalar(i));
-      else for (let i = 0; i < pos.getCount(); i++) indices.push(base + i);
-    }
-  }
-  return { positions: new Float32Array(positions), indices: new Uint32Array(indices) };
 }
 
 await MeshoptEncoder.ready;
@@ -166,106 +146,27 @@ stats(doc, "Simplified");
 
 // 3. The navmesh, from the geometry as it now stands (before quantizing).
 await init();
-const { positions, indices } = worldTriangles(doc);
+const { positions, indices } = worldTriangles(doc, (node, material) => NOT_SOLID.test(node) || NOT_SOLID_MATERIAL.test(material), (material) => FLOOR_MATERIAL.test(material));
 log(`Baking the navmesh from ${(indices.length / 3).toLocaleString("en")} triangles…`);
 const started = Date.now();
 const nav = generateTiledNavMesh(positions, indices, NAV);
 if (!nav.success) throw new Error(`Navmesh failed: ${nav.error}`);
 mkdirSync(OUT, { recursive: true });
+log(`Navmesh baked in ${((Date.now() - started) / 1000).toFixed(0)} s`);
+
+// Pockets under floors, which nobody could stand in, are turned off.
+const above = overhead(positions, indices);
+const { dropped, total } = dropBuriedIslands(nav.navMesh, above, log);
+log(`Turned off ${dropped} of ${total} polygons under floors.`);
 const navBytes = exportNavMesh(nav.navMesh);
 writeFileSync(join(OUT, "campus.navmesh"), navBytes);
-log(`Navmesh: ${mb(navBytes.length)} in ${((Date.now() - started) / 1000).toFixed(0)} s`);
+log(`Navmesh: ${mb(navBytes.length)}`);
 
-// A check worth failing loudly on: can you walk from the Oblation into
-// each building? (The same spots as client/campus.ts's PLACES.)
+// Worth a look after every build: can you walk from the Oblation into
+// each building? And each building's floors, for the lifts.
 const query = new NavMeshQuery(nav.navMesh);
-const CHECKS = {
-  "Main Building": [118, 0.2, 10],
-  "Teaching and Learning Hub": [132, 0.2, 63],
-  "TLH pod": [124, 0.5, 70],
-  "CCDL auditorium": [277, 1, -96],
-  "CCDL stage": [281, 5, -103],
-  "WCMPB ground floor": [226, 1, 154],
-  "WCMPB second floor": [226, 8.5, 150],
-  "WCMPB roof deck": [226, 14.5, 150],
-  "Academic Residences": [336, 0.2, -98],
-};
-const plaza = query.findClosestPoint({ x: 0, y: 0, z: 12 }, { halfExtents: { x: 4, y: 4, z: 4 } }).point;
-for (const [name, [x, y, z]] of Object.entries(CHECKS)) {
-  const goal = query.findClosestPoint({ x, y, z }, { halfExtents: { x: 2, y: 1.5, z: 2 } }).point;
-  const path = query.computePath(plaza, goal, { halfExtents: { x: 4, y: 4, z: 4 } });
-  const end = path.path?.[path.path.length - 1];
-  const short = end ? Math.hypot(end.x - goal.x, end.y - goal.y, end.z - goal.z) : Infinity;
-  log(`  plaza → ${name}: ${short < 0.5 ? `reached (y ${goal.y.toFixed(1)})` : `not reached (${short.toFixed(1)} m short)`}`);
-}
-
-// Each building's floors, for the lifts (client/Lifts.tsx) and the guides:
-// the levels the navmesh has inside its footprint, where to stand on each,
-// and whether you can walk there from the plaza.
-const BUILDINGS = {
-  main: { name: "Main Building", box: [104, 126, -23, 23] },
-  tlh: { name: "Teaching and Learning Hub", box: [116, 148, 44, 82] },
-  ccdl: { name: "CCDL", box: [263, 291, -113, -79] },
-  ar: { name: "Academic Residences", box: [308, 364, -125, -71] },
-  wcmpb: { name: "World-Class Multi-Purpose Building", box: [192, 258, 120, 184] },
-};
-const floors = {};
-for (const [id, { name, box: [x0, x1, z0, z1] }] of Object.entries(BUILDINGS)) {
-  const points = [];
-  for (let x = x0 + 1; x < x1; x += 1.5)
-    for (let z = z0 + 1; z < z1; z += 1.5)
-      for (let y = -0.5; y < 25; y += 0.5) {
-        const r = query.findClosestPoint({ x, y, z }, { halfExtents: { x: 0.3, y: 0.25, z: 0.3 } });
-        if (r.success && r.polyRef && Math.abs(r.point.x - x) < 0.05 && Math.abs(r.point.z - z) < 0.05) points.push(r.point);
-      }
-  // Levels: heights shared by enough floor, merged when closer than a
-  // storey (2.4 m): a stair landing or a step is part of its floor.
-  const bins = new Map();
-  for (const p of points) {
-    const k = Math.round(p.y * 2) / 2;
-    bins.set(k, [...(bins.get(k) ?? []), p]);
-  }
-  const levels = [];
-  for (const [y, pts] of [...bins.entries()].sort((a, b) => a[0] - b[0])) {
-    const last = levels[levels.length - 1];
-    if (last && y - last.y < 2.4) {
-      last.points.push(...pts);
-      if (pts.length > last.top) Object.assign(last, { y, top: pts.length });
-    } else levels.push({ y, top: pts.length, points: [...pts] });
-  }
-  const unique = new Set();
-  floors[id] = {
-    name,
-    floors: levels
-      // A floor, not a landing or a ledge: at least about 110 m².
-      .filter((l) => l.points.length >= 50)
-      .map((l) => {
-        // Where to stand: near the middle of the level, and somewhere you
-        // can walk to from the plaza if anywhere on this level is.
-        const cx = l.points.reduce((a, p) => a + p.x, 0) / l.points.length;
-        const cz = l.points.reduce((a, p) => a + p.z, 0) / l.points.length;
-        const byMiddle = [...l.points].sort((a, b) => Math.hypot(a.x - cx, a.z - cz) - Math.hypot(b.x - cx, b.z - cz));
-        const reaches = (p) => {
-          const path = query.computePath(plaza, p, { halfExtents: { x: 1, y: 1, z: 1 } });
-          const end = path.path?.[path.path.length - 1];
-          return !!end && Math.hypot(end.x - p.x, end.y - p.y, end.z - p.z) < 0.6;
-        };
-        const step = Math.max(1, Math.floor(byMiddle.length / 24));
-        let at = byMiddle[0];
-        let walk = false;
-        for (let i = 0; i < byMiddle.length; i += step) {
-          if (reaches(byMiddle[i])) {
-            at = byMiddle[i];
-            walk = true;
-            break;
-          }
-        }
-        return { at: [+at.x.toFixed(2), +at.y.toFixed(2), +at.z.toFixed(2)], walk };
-      })
-      .filter((f) => !unique.has(Math.round(f.at[1])) && unique.add(Math.round(f.at[1]))),
-  };
-  log(`  ${name}: ${floors[id].floors.map((f, i) => `${i === 0 ? "G" : i + 1} y${f.at[1].toFixed(1)}${f.walk ? "" : " (lift)"}`).join(", ")}`);
-}
+checkReach(query, log);
+const floors = findFloors(query, above, log);
 writeFileSync(join(OUT, "floors.json"), JSON.stringify(floors, null, 1));
 
 // 4–6. Textures, draw calls, and compression.
