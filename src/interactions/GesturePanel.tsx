@@ -4,6 +4,9 @@ import { useExclusiveMenu } from "../ui/exclusiveMenu";
 import { BAR_LABEL_CLASS, barButtonActiveStyle, barButtonStyle, panelStyle, pillButtonActiveStyle, pillButtonStyle, popoverStyle } from "../ui/styles";
 import { WaveIcon } from "../ui/icons";
 import type { TogetherGesture } from "../multiplayer/types";
+import { togetherLabel } from "./together";
+import { L, useLang } from "../i18n/lang";
+import { gestureLabel } from "../i18n/gestureLabels";
 
 interface GesturePanelProps {
   gestures: GestureDefinition[];
@@ -47,6 +50,7 @@ export function GesturePanel({
   showShortcuts,
   together = null,
 }: GesturePanelProps) {
+  useLang();
   const [open, setOpen] = useState(false);
   useExclusiveMenu("gestures", open, () => setOpen(false));
   const [practice, setPractice] = useState(false);
@@ -70,7 +74,10 @@ export function GesturePanel({
     }
   }, [lastGesture, practice, target, gestures]);
 
-  const labelOf = (name: string | null) => gestures.find((g) => g.name === name)?.label ?? name;
+  const labelOf = (name: string | null) => {
+    const g = gestures.find((x) => x.name === name);
+    return g ? gestureLabel(g) : name;
+  };
 
   const renderButton = (g: GestureDefinition) => {
     const index = gestures.indexOf(g);
@@ -96,17 +103,17 @@ export function GesturePanel({
         style={{ ...(isActive ? pillButtonActiveStyle : pillButtonStyle), padding: "7px 12px", fontSize: 12, touchAction: "none" }}
         title={
           g.overridesBuiltin
-            ? "Custom clip replacing the built-in gesture of the same name"
+            ? L("Custom clip replacing the built-in gesture of the same name", "同じ名前の標準ジェスチャーを置き換えるカスタムクリップ")
             : g.hold && g.fullBody
-              ? "Stays until you press again or move"
+              ? L("Stays until you press again or move", "もう一度押すか動くまで続きます")
               : g.hold
-                ? "Press and hold to keep the pose"
+                ? L("Press and hold to keep the pose", "押している間ポーズを保ちます")
                 : undefined
         }
         {...holdHandlers}
       >
-        {g.label}
-        {g.overridesBuiltin && <span style={{ fontSize: 10, opacity: 0.7 }}>custom</span>}
+        {gestureLabel(g)}
+        {g.overridesBuiltin && <span style={{ fontSize: 10, opacity: 0.7 }}>{L("custom", "カスタム")}</span>}
         {showShortcuts && shortcut && <kbd style={{ fontSize: 10, opacity: 0.55 }}>{shortcut}</kbd>}
       </button>
     );
@@ -120,11 +127,11 @@ export function GesturePanel({
         style={open ? barButtonActiveStyle : barButtonStyle}
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        aria-label="Gestures"
-        title="Gestures"
+        aria-label={L("Gestures", "ジェスチャー")}
+        title={L("Gestures", "ジェスチャー")}
       >
         <WaveIcon />
-        <span className={BAR_LABEL_CLASS}>Gestures</span>
+        <span className={BAR_LABEL_CLASS}>{L("Gestures", "ジェスチャー")}</span>
         {practice && score > 0 && <span style={{ fontSize: 11, opacity: 0.75 }}>{score}</span>}
       </button>
       {open && (
@@ -143,19 +150,22 @@ export function GesturePanel({
           }}
         >
           {gestures.length === 0 ? (
-            <p style={{ margin: 0 }}>This deployment has turned off every gesture.</p>
+            <p style={{ margin: 0 }}>{L("This deployment has turned off every gesture.", "このデプロイではすべてのジェスチャーがオフになっています。")}</p>
           ) : (
             <>
               {together && (
-                <Section title="Together">
+                <Section title={L("Together", "いっしょに")}>
                   {together.nearby.length === 0 ? (
                     <small style={{ opacity: 0.7, lineHeight: 1.4 }}>
-                      Stand near someone to ask for a handshake, fist bump, hug, slow dance, and more. It only happens if they say yes.
+                      {L(
+                        "Stand near someone to ask for a handshake, fist bump, hug, slow dance, and more. It only happens if they say yes.",
+                        "誰かの近くに立つと、握手、グータッチ、ハグ、スローダンスなどを頼めます。相手が「はい」と言ったときだけ行われます。"
+                      )}
                     </small>
                   ) : (
                     together.nearby.slice(0, 3).map((person) => (
                       <div key={person.id} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                        <span style={{ fontSize: 12, opacity: 0.85 }}>Ask {person.name} for</span>
+                        <span style={{ fontSize: 12, opacity: 0.85 }}>{L(`Ask ${person.name} for`, `${person.name}さんに頼む`)}</span>
                         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                           {together.gestures.map((g) => (
                             <button
@@ -165,7 +175,7 @@ export function GesturePanel({
                               style={{ ...pillButtonStyle, padding: "7px 12px", fontSize: 12, opacity: together.waiting ? 0.5 : 1 }}
                               onClick={() => together.onAsk(person.id, g.name)}
                             >
-                              {g.label}
+                              {togetherLabel(g.name)}
                             </button>
                           ))}
                         </div>
@@ -174,26 +184,29 @@ export function GesturePanel({
                   )}
                   <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}>
                     <input type="checkbox" checked={together.allow} onChange={(e) => together.onAllowChange(e.target.checked)} />
-                    Others may ask me
+                    {L("Others may ask me", "ほかの人からのリクエストを受ける")}
                   </label>
                 </Section>
               )}
               {builtin.length > 0 && (
-                <Section title="Built-in">
+                <Section title={L("Built-in", "標準")}>
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{builtin.map(renderButton)}</div>
                 </Section>
               )}
               {custom.length > 0 && (
-                <Section title="Custom for this world">
+                <Section title={L("Custom for this world", "このワールド専用")}>
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{custom.map(renderButton)}</div>
                 </Section>
               )}
               {gestures.some((g) => g.hold) && (
                 <small style={{ opacity: 0.6 }}>
-                  A raised hand stays up while you hold its key. Seiza and Dance stay until you press them again, or move.
+                  {L(
+                    "A raised hand stays up while you hold its key. Seiza and Dance stay until you press them again, or move.",
+                    "挙げた手はキーを押している間上がったままです。正座とダンスは、もう一度押すか動くまで続きます。"
+                  )}
                 </small>
               )}
-              <small style={{ opacity: 0.6 }}>Click a chair or bench in the world to sit down.</small>
+              <small style={{ opacity: 0.6 }}>{L("Click a chair or bench in the world to sit down.", "ワールドの椅子やベンチをクリックすると座れます。")}</small>
               <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
                 <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}>
                   <input
@@ -205,11 +218,12 @@ export function GesturePanel({
                       setTarget(null);
                     }}
                   />
-                  Practice mode
+                  {L("Practice mode", "練習モード")}
                 </label>
                 {practice && target && (
                   <p style={{ margin: 0, fontSize: 13 }}>
-                    Do this gesture: <strong>{labelOf(target)}</strong>. Score {score}.
+                    {L("Do this gesture: ", "このジェスチャーをしてください:")}<strong>{labelOf(target)}</strong>
+                    {L(`. Score ${score}.`, `。スコア ${score}。`)}
                   </p>
                 )}
               </div>

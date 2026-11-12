@@ -1,3 +1,5 @@
+import { L } from "../i18n/lang";
+
 /**
  * A world's name, with the project's pun spelled out when the name begins
  * with "Seiza": 正座 (seiza, formal kneeling) and 星座 (seiza, a
@@ -12,7 +14,10 @@ export function WorldName({ name }: { name: string }) {
     <>
       Seiza
       <span
-        title="正座 (seiza): kneeling formally. 星座 (seiza): a constellation. Same sound, hence a kneeling figure under the stars."
+        title={L(
+          "正座 (seiza): kneeling formally. 星座 (seiza): a constellation. Same sound, hence a kneeling figure under the stars.",
+          "正座(せいざ):改まった座り方。星座(せいざ):星の並び。同じ読みなので、星空の下で正座する姿がロゴです。"
+        )}
         style={{ fontWeight: 500, fontSize: "0.86em", margin: "0 0.35em", letterSpacing: "0.03em" }}
       >
         <span style={{ color: "#e8c37a" }}>正座</span>

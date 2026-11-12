@@ -26,7 +26,9 @@ import {
   onTogetherStart,
   setAllowRequests,
   setTogetherConnection,
-  TOGETHER_LABELS,
+  togetherAskingLine,
+  togetherAskLine,
+  togetherLabel,
   useTogether,
 } from "./interactions/together";
 import { TogetherPrompt } from "./interactions/TogetherPrompt";
@@ -63,6 +65,9 @@ import { MediaControls } from "./media/MediaControls";
 import { CameraBadge } from "./media/CameraBadge";
 import { ScreenZoomOverlay } from "./media/ScreenZoomOverlay";
 import { ImageViewer } from "./edit/ImageViewer";
+import { L, useLang } from "./i18n/lang";
+import { LangToggle } from "./i18n/LangToggle";
+import { gestureLabel } from "./i18n/gestureLabels";
 import { PresentSourceChooser } from "./media/PresentSourceChooser";
 import { WorldObjects } from "./edit/WorldObjects";
 import { EditToolbar } from "./edit/EditToolbar";
@@ -148,6 +153,8 @@ const isTypingTarget = (target: EventTarget | null) =>
   (target instanceof HTMLElement && target.isContentEditable);
 
 export default function App() {
+  // Everything in the HUD redraws in the visitor's language (src/i18n/).
+  useLang();
   const [world, setWorld] = useState<WorldConfig | null>(null);
   const [worldError, setWorldError] = useState<Error | null>(null);
   const [joined, setJoined] = useState<JoinedIdentity | null>(null);
@@ -478,7 +485,7 @@ export default function App() {
   const wasAwayRef = useRef(false);
   useEffect(() => {
     if (wasAwayRef.current && !away) {
-      setNotice("You were away for over an hour, so Seiza stepped you out of the room to save bandwidth. You're back in now.");
+      setNotice(L("You were away for over an hour, so Seiza stepped you out of the room to save bandwidth. You're back in now.", "1時間以上離れていたため、通信量を節約するために部屋から一時退出していました。いま戻りました。"));
     }
     wasAwayRef.current = away;
   }, [away]);
@@ -516,7 +523,7 @@ export default function App() {
           Math.hypot(player.position[0] - sx, player.position[2] - sz) < SEAT_TAKEN_RADIUS
       );
       if (taken) {
-        setNotice(`Someone's already in the ${target.label.toLowerCase()}.`);
+        setNotice(L(`Someone's already in the ${target.label.toLowerCase()}.`, "そこにはもう誰かがいます。"));
         return;
       }
       seatRef.current = target;
@@ -787,9 +794,9 @@ export default function App() {
     if (seconds >= NUMB_AFTER) {
       setNumbLegs(true);
       window.setTimeout(() => setNumbLegs(false), NUMB_DURATION * 1000);
-      setNotice(`${time} in seiza, and your legs have fallen asleep. しびれた… ${record ? "New personal best." : ""}`.trim());
+      setNotice(L(`${time} in seiza, and your legs have fallen asleep. しびれた… ${record ? "New personal best." : ""}`, `正座 ${time}、足がしびれました… ${record ? "自己ベスト更新!" : ""}`).trim());
     } else if (record && seconds >= 60) {
-      setNotice(`${time} in seiza. New personal best.`);
+      setNotice(L(`${time} in seiza. New personal best.`, `正座 ${time}。自己ベスト更新!`));
     }
     // seizaBest is read for the comparison only; re-running on it would
     // score the same sit twice.
@@ -865,7 +872,7 @@ export default function App() {
       // only thing that can withhold it is a world with editing switched
       // off wholesale in its config.
       if (!canParticipate) {
-        setNotice("Writing on boards is turned off in this world.");
+        setNotice(L("Writing on boards is turned off in this world.", "このワールドではボードへの書き込みはできません。"));
         return;
       }
       setEditingText(object);
@@ -918,7 +925,7 @@ export default function App() {
    *  free display. */
   const shareOnNearestScreen = useCallback((source: PresentSource = "screen"): string | null => {
     const free = screens.filter((screen) => !screen.presenterId || screen.presenterId === selfId);
-    if (free.length === 0) return "There's no screen in this world yet. Place one from Edit world, then click it.";
+    if (free.length === 0) return L("There's no screen in this world yet. Place one from Edit world, then click it.", "このワールドにはまだスクリーンがありません。ワールド編集で置いてから、クリックしてください。");
     const [px, py, pz] = positionRef.current;
     const nearest = free
       .map((screen) => ({
@@ -926,7 +933,7 @@ export default function App() {
         distance: Math.hypot(screen.position[0] - px, screen.position[1] - py, screen.position[2] - pz),
       }))
       .sort((a, b) => a.distance - b.distance)[0];
-    if (nearest.distance > SHARE_REACH) return "Walk closer to a screen, then click it to present.";
+    if (nearest.distance > SHARE_REACH) return L("Walk closer to a screen, then click it to present.", "スクリーンに近づいてから、クリックして発表してください。");
     void presentOn(nearest.screen, source);
     return null;
   }, [presentOn, screens, selfId]);
@@ -984,8 +991,8 @@ export default function App() {
   const zoomedStream = zoomedScreen ? resolveScreenStream(zoomedScreen) : null;
   const zoomedPresenterName =
     zoomedScreen?.presenterId === selfId
-      ? "Your screen"
-      : `${players[zoomedScreen?.presenterId ?? ""]?.displayName ?? "Someone"}'s screen`;
+      ? L("Your screen", "あなたの画面")
+      : L(`${players[zoomedScreen?.presenterId ?? ""]?.displayName ?? "Someone"}'s screen`, `${players[zoomedScreen?.presenterId ?? ""]?.displayName ?? "だれか"} さんの画面`);
   useEffect(() => {
     if (zoomedScreenId && !zoomedStream) setZoomedScreenId(null);
   }, [zoomedScreenId, zoomedStream]);
@@ -1068,7 +1075,7 @@ export default function App() {
 
   const playersForNames = useRef(players);
   playersForNames.current = players;
-  const nameOfPlayer = useCallback((id: string) => playersForNames.current[id]?.displayName ?? "Someone", []);
+  const nameOfPlayer = useCallback((id: string) => playersForNames.current[id]?.displayName ?? L("Someone", "だれか"), []);
   // Together gestures (src/interactions/together.ts): the store reaches the
   // room server through `send`; on a mutual yes, turn to the partner and play.
   useEffect(() => setTogetherConnection(send, nameOfPlayer), [send, nameOfPlayer]);
@@ -1153,10 +1160,10 @@ export default function App() {
   }, [togetherOffered]);
   const waitingRequest = together.incoming[0] ?? null;
 
-  if (worldError) return <CenteredMessage text={`Couldn't load world: ${worldError.message}`} />;
-  if (!world) return <CenteredMessage text="Loading world…" />;
-  if (roomFull) return <CenteredMessage text={`This world is currently full (${roomFull} people). Please try again later.`} />;
-  if (wasKicked) return <CenteredMessage text="An admin removed you from this room. Reload the page if you'd like to rejoin." />;
+  if (worldError) return <CenteredMessage text={L(`Couldn't load world: ${worldError.message}`, `ワールドを読み込めませんでした:${worldError.message}`)} />;
+  if (!world) return <CenteredMessage text={L("Loading world…", "ワールドを読み込み中…")} />;
+  if (roomFull) return <CenteredMessage text={L(`This world is currently full (${roomFull} people). Please try again later.`, `このワールドは満員です(${roomFull}人)。しばらくしてからもう一度お試しください。`)} />;
+  if (wasKicked) return <CenteredMessage text={L("An admin removed you from this room. Reload the page if you'd like to rejoin.", "管理者によって部屋から退出させられました。もう一度入るにはページを再読み込みしてください。")} />;
   if (passwordRequired) return <RoomPasswordGate onSubmit={joinWithPassword} />;
   if (!joined) return <JoinScreen world={world} onJoin={setJoined} />;
 
@@ -1167,14 +1174,14 @@ export default function App() {
   async function enterVR() {
     setXrError(null);
     if (!("xr" in navigator)) {
-      setXrError("WebXR is not available in this browser or device.");
+      setXrError(L("WebXR is not available in this browser or device.", "このブラウザまたは端末ではWebXRを使えません。"));
       return;
     }
     try {
       await xrStore.enterVR();
     } catch (error) {
       console.warn("Unable to start immersive VR:", error);
-      setXrError("This device cannot start immersive VR. Try a WebXR-compatible browser or continue in desktop mode.");
+      setXrError(L("This device cannot start immersive VR. Try a WebXR-compatible browser or continue in desktop mode.", "この端末ではVRを開始できません。WebXR対応のブラウザを使うか、このまま画面で続けてください。"));
     }
   }
 
@@ -1182,7 +1189,7 @@ export default function App() {
   // bar, handed over as data so that module knows nothing about rooms or
   // media.
   const xrHudModel: XrHudModel = {
-    title: currentWorld.displayName,
+    title: L(currentWorld.displayName, currentWorld.displayNameJa ?? currentWorld.displayName),
     people: Math.max(1, Object.keys(players).length),
     voice: !(VOICE_ENABLED && voiceVisible)
       ? "unavailable"
@@ -1201,7 +1208,7 @@ export default function App() {
       .filter((g) => g.name !== SEIZA_GESTURE_NAME)
       // A held full-body pose (the dance) toggles, like seiza: press to
       // start, press again to stop, lit while it's on.
-      .map((g) => ({ name: g.name, label: g.label, hold: g.hold && !g.fullBody })),
+      .map((g) => ({ name: g.name, label: gestureLabel(g), hold: g.hold && !g.fullBody })),
     activeGesture: localGesture?.gesture.name ?? posture?.name ?? null,
     onGestureStart: requestGesture,
     onGestureEnd: (name) => releaseGesture(name),
@@ -1216,7 +1223,7 @@ export default function App() {
     onExit: () => void xrStore.getState().session?.end(),
     request: waitingRequest
       ? {
-          text: `${nameOfPlayer(waitingRequest.peer)} would like ${TOGETHER_LABELS[waitingRequest.gesture].ask}`,
+          text: togetherAskLine(nameOfPlayer(waitingRequest.peer), waitingRequest.gesture),
           accept: () => answerTogether(waitingRequest.id, true),
           decline: () => answerTogether(waitingRequest.id, false),
         }
@@ -1225,10 +1232,10 @@ export default function App() {
       nearby[0] && togetherGestures.length
         ? {
             name: nearby[0].displayName,
-            gestures: togetherGestures.map((name) => ({ name, label: TOGETHER_LABELS[name].label })),
+            gestures: togetherGestures.map((name) => ({ name, label: togetherLabel(name) })),
             onAsk: (gesture) => askTogether(nearby[0].id, gesture as TogetherGesture),
             waiting: together.outgoing
-              ? `Asking ${nameOfPlayer(together.outgoing.peer)} for ${TOGETHER_LABELS[together.outgoing.gesture].ask}…`
+              ? togetherAskingLine(nameOfPlayer(together.outgoing.peer), together.outgoing.gesture)
               : null,
           }
         : null,
@@ -1248,7 +1255,7 @@ export default function App() {
         // weaker GPUs into dropped frames and lost contexts.
         dpr={[1, 1.5]}
         gl={{ powerPreference: "high-performance" }}
-        fallback={<CenteredMessage text="3D graphics are unavailable in this browser." />}
+        fallback={<CenteredMessage text={L("3D graphics are unavailable in this browser.", "このブラウザでは3Dグラフィックスを使えません。")} />}
         onCreated={({ gl }) => {
           gl.domElement.addEventListener("webglcontextlost", (event) => {
             event.preventDefault();
@@ -1406,12 +1413,12 @@ export default function App() {
 
       <HUD
         connectionState={connectionState}
-        worldName={world.displayName}
+        worldName={L(world.displayName, world.displayNameJa ?? world.displayName)}
         touchControlsVisible={showTouchControls}
         editing={editMode}
         topLeft={(
           <ParticipantRoster
-            worldName={world.displayName}
+            worldName={L(world.displayName, world.displayNameJa ?? world.displayName)}
             connectionState={connectionState}
             players={players}
             selfId={selfId}
@@ -1443,8 +1450,8 @@ export default function App() {
               )}
               <button
                 type="button"
-                aria-label="Controls guide"
-                title="Controls (?)"
+                aria-label={L("Controls guide", "操作ガイド")}
+                title={L("Controls (?)", "操作方法 (?)")}
                 aria-expanded={guideOpen}
                 // Opens only. While the guide is open, a press here already
                 // closes it as an outside press (on pointerdown), so a toggle
@@ -1454,6 +1461,7 @@ export default function App() {
               >
                 ?
               </button>
+              <LangToggle style={{ height: 36, flexShrink: 0, pointerEvents: "auto" }} />
             </TopCenterCluster>
             <div style={{ position: "relative", pointerEvents: "auto", flexShrink: 0 }}>
             <button
@@ -1461,15 +1469,15 @@ export default function App() {
               aria-expanded={avatarMenuOpen}
               style={avatarMenuOpen ? { ...pillButtonStyle, background: "rgba(232,195,122,0.24)", borderColor: "rgba(232,195,122,0.7)" } : pillButtonStyle}
               onClick={() => setAvatarMenuOpen((open) => !open)}
-              title="Avatar (C)"
+              title={L("Avatar (C)", "アバター (C)")}
             >
-              Avatar {hasHoverPointer && <kbd style={{ opacity: 0.7, fontSize: 10 }}>C</kbd>}
+              {L("Avatar", "アバター")} {hasHoverPointer && <kbd style={{ opacity: 0.7, fontSize: 10 }}>C</kbd>}
             </button>
             {avatarMenuOpen && (
               <div
                 className="seiza-popover-down"
                 role="dialog"
-                aria-label="Avatar"
+                aria-label={L("Avatar", "アバター")}
                 style={{
                   ...panelStyle,
                   position: "absolute",
@@ -1486,8 +1494,8 @@ export default function App() {
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <strong>Avatar</strong>
-                  <button type="button" aria-label="Close" onClick={() => setAvatarMenuOpen(false)} style={{ ...pillButtonStyle, padding: 6 }}>
+                  <strong>{L("Avatar", "アバター")}</strong>
+                  <button type="button" aria-label={L("Close", "閉じる")} onClick={() => setAvatarMenuOpen(false)} style={{ ...pillButtonStyle, padding: 6 }}>
                     <CloseIcon size={14} />
                   </button>
                 </div>
@@ -1498,7 +1506,7 @@ export default function App() {
                   onChange={(selection) => {
                     setJoined((identity) => (identity ? { ...identity, ...selection } : identity));
                     if (joined.remember) void saveProfile(currentWorld.id, { displayName: joined.displayName, avatar: selection.choice });
-                    setAvatarMessage("Avatar updated for everyone in the room.");
+                    setAvatarMessage(L("Avatar updated for everyone in the room.", "部屋の全員にアバターが更新されました。"));
                   }}
                 />
                 {avatarMessage && <small style={{ color: "#7CFF9E" }}>{avatarMessage}</small>}
@@ -1510,9 +1518,12 @@ export default function App() {
                     style={{ marginTop: 2, accentColor: "#e8c37a" }}
                   />
                   <span style={{ display: "grid", gap: 2 }}>
-                    <span>Seiza reactions</span>
+                    <span>{L("Seiza reactions", "正座のリアクション")}</span>
                     <small style={{ opacity: 0.6, lineHeight: 1.4 }}>
-                      Your avatar dozes off and winces the longer it kneels. Turn off to keep it composed for meetings; you still see everyone else's.
+                      {L(
+                        "Your avatar dozes off and winces the longer it kneels. Turn off to keep it composed for meetings; you still see everyone else's.",
+                        "正座が長くなるとアバターが居眠りしたり、しびれて顔をしかめたりします。会議では落ち着いたままにするにはオフにしてください。ほかの人のリアクションは見えます。"
+                      )}
                     </small>
                   </span>
                 </label>
@@ -1528,11 +1539,11 @@ export default function App() {
             className="seiza-bar-btn"
             style={barButtonActiveStyle}
             onClick={standUp}
-            aria-label="Stand up"
-            title="Stand up (or just move)"
+            aria-label={L("Stand up", "立つ")}
+            title={L("Stand up (or just move)", "立つ(または移動する)")}
           >
             <PersonIcon />
-            <span className={BAR_LABEL_CLASS}>Stand up</span>
+            <span className={BAR_LABEL_CLASS}>{L("Stand up", "立つ")}</span>
           </button>
         )}
         <button
@@ -1540,8 +1551,8 @@ export default function App() {
           className="seiza-bar-btn"
           style={barButtonStyle}
           onClick={() => void enterVR()}
-          aria-label="Enter VR"
-          title="Enter VR"
+          aria-label={L("Enter VR", "VRに入る")}
+          title={L("Enter VR", "VRに入る")}
         >
           <VrHeadsetIcon />
           <span className={BAR_LABEL_CLASS}>VR</span>
@@ -1564,7 +1575,7 @@ export default function App() {
           together={
             togetherGestures.length
               ? {
-                  gestures: togetherGestures.map((name) => ({ name, label: TOGETHER_LABELS[name].label })),
+                  gestures: togetherGestures.map((name) => ({ name, label: togetherLabel(name) })),
                   nearby: nearby.map((p) => ({ id: p.id, name: p.displayName })),
                   allow: together.allow,
                   onAllowChange: setAllowRequests,
@@ -1642,14 +1653,14 @@ export default function App() {
           onClick={media.unlockAudio}
           style={{ ...pillButtonStyle, position: "fixed", top: 64, left: "50%", transform: "translateX(-50%)", zIndex: 45, pointerEvents: "auto", fontWeight: 600 }}
         >
-          🔈 Tap to hear the room
+          🔈 {L("Tap to hear the room", "タップして音声を聞く")}
         </button>
       )}
       <TogetherPrompt
         nameOf={nameOfPlayer}
         near={nearby[0] ? { id: nearby[0].id, name: nearby[0].displayName } : null}
         busy={!!localGesture || !!posture || !!seat}
-        gestures={togetherGestures.map((name) => ({ name, label: TOGETHER_LABELS[name].label }))}
+        gestures={togetherGestures.map((name) => ({ name, label: togetherLabel(name) }))}
       />
       {showTouchControls && !webglLost && (
         <TouchControls
@@ -1679,8 +1690,8 @@ export default function App() {
       {webglLost && (
         <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", pointerEvents: "auto", background: "rgba(6,7,9,0.86)", color: "white", fontFamily: "system-ui, sans-serif", padding: 24, textAlign: "center" }}>
           <div style={{ maxWidth: 420 }}>
-            <h2>3D graphics paused</h2>
-            <p>The browser lost its graphics context. We are waiting for it to recover. Reload this page if the scene does not return.</p>
+            <h2>{L("3D graphics paused", "3D表示が一時停止しています")}</h2>
+            <p>{L("The browser lost its graphics context. We are waiting for it to recover. Reload this page if the scene does not return.", "ブラウザがグラフィックスを失いました。回復を待っています。画面が戻らない場合はページを再読み込みしてください。")}</p>
           </div>
         </div>
       )}
@@ -1696,7 +1707,7 @@ export default function App() {
           onViewChange={setSeizaView}
           onTurnOff={() => {
             setSeizaReactions(false);
-            setNotice("Your avatar will now kneel composed, for everyone. Others' reactions still show. Turn yours back on in the Avatar menu.");
+            setNotice(L("Your avatar will now kneel composed, for everyone. Others' reactions still show. Turn yours back on in the Avatar menu.", "あなたのアバターは落ち着いて正座するようになりました。ほかの人のリアクションは表示されます。アバターメニューで元に戻せます。"));
           }}
         />
       )}
@@ -1762,18 +1773,18 @@ function RoomPasswordGate({ onSubmit }: { onSubmit: (password: string) => void }
         style={{ ...panelStyle, width: "min(320px, 90vw)", padding: 20, display: "flex", flexDirection: "column", gap: 12 }}
       >
         <strong style={{ fontSize: 15, display: "flex", alignItems: "center", gap: 8 }}>
-          <LockIcon size={16} /> This room requires a password
+          <LockIcon size={16} /> {L("This room requires a password", "この部屋にはパスワードが必要です")}
         </strong>
         <input
           type="password"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
-          placeholder="Room password"
+          placeholder={L("Room password", "部屋のパスワード")}
           style={inputStyle}
           autoFocus
         />
         <button type="submit" style={primaryButtonStyle} disabled={!password}>
-          Join
+          {L("Join", "参加")}
         </button>
       </form>
     </div>

@@ -43,6 +43,7 @@ any:
 |---|---|
 | `id` | Room ID. Must match this folder's name and `VITE_SEIZA_WORLD_ID`. |
 | `displayName` | Shown on the join screen and in the HUD. |
+| `displayNameJa` | The name in Japanese, for visitors who chose 日本語. Optional; defaults to `displayName`. |
 | `sceneUrl` | Optional. A glTF environment that replaces the built-in rooms. |
 | `environmentCollision` | Optional. Set to `false` to stop `sceneUrl` environments from blocking movement. Defaults to `true`. |
 | `sky` | Optional. `{ "cycle": "realtime", "site", "weather", "timeScale"? }` moves the sky with Philippine time and a shared weather schedule; `"cycle": "fixed"`, or leaving it out, keeps the still sunset. Editors can override the time and weather for one room from the edit panel. See DOCS.md, "Sky and weather". |

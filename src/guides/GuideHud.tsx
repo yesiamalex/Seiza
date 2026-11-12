@@ -7,6 +7,7 @@
  */
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { panelStyle, pillButtonStyle } from "../ui/styles";
+import { L, useLang } from "../i18n/lang";
 import { ask, goTo, lead, MAX_QUESTION, openGuide, useGuides, type Message } from "./store";
 
 export interface GuideHudProps {
@@ -17,7 +18,9 @@ export interface GuideHudProps {
   tagline?: string;
 }
 
-export function GuideHud({ onOpenCard, cardTitle, tagline = "Answers only from this world, offline" }: GuideHudProps) {
+export function GuideHud({ onOpenCard, cardTitle, tagline }: GuideHudProps) {
+  useLang();
+  tagline ??= L("Answers only from this world, offline", "このワールドのことだけ、オフラインで答えます");
   const { guides, open, threads } = useGuides();
   const guide = guides.find((g) => g.id === open);
   return (
@@ -25,8 +28,8 @@ export function GuideHud({ onOpenCard, cardTitle, tagline = "Answers only from t
       {!guide && guides.length > 0 && (
         <div style={{ position: "fixed", top: 64, left: 16, zIndex: 30, display: "flex", flexDirection: "column", gap: 6, pointerEvents: "auto" }}>
           {guides.map((g) => (
-            <button key={g.id} type="button" onClick={() => openGuide(g.id)} style={askButton} aria-label={`Ask ${g.name}, a guide`}>
-              <span aria-hidden>💬</span> Ask {g.name}
+            <button key={g.id} type="button" onClick={() => openGuide(g.id)} style={askButton} aria-label={L(`Ask ${g.name}, a guide`, `ガイドの${g.name}に質問`)}>
+              <span aria-hidden>💬</span> {L(`Ask ${g.name}`, `${g.name}に質問`)}
             </button>
           ))}
         </div>
@@ -72,7 +75,7 @@ function Chat({
   return (
     <div
       role="dialog"
-      aria-label={`Chat with ${name}`}
+      aria-label={L(`Chat with ${name}`, `${name}とのチャット`)}
       style={{
         ...panelStyle,
         position: "fixed",
@@ -95,10 +98,10 @@ function Chat({
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
         <div style={{ flex: 1 }}>
           <strong>{name}</strong>
-          <div style={{ fontSize: 11, opacity: 0.65 }}>Guide · {tagline}</div>
+          <div style={{ fontSize: 11, opacity: 0.65 }}>{L("Guide", "ガイド")} · {tagline}</div>
         </div>
-        <button type="button" style={pillButtonStyle} onClick={() => openGuide(null)} aria-label="Close the chat">
-          Close
+        <button type="button" style={pillButtonStyle} onClick={() => openGuide(null)} aria-label={L("Close the chat", "チャットを閉じる")}>
+          {L("Close", "閉じる")}
         </button>
       </div>
       <div ref={list} style={{ flex: 1, overflowY: "auto", padding: "10px 12px", display: "grid", gap: 8, alignContent: "start" }} aria-live="polite">
@@ -121,17 +124,17 @@ function Chat({
                 <div style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
                   {r.card && onOpenCard && (
                     <button type="button" style={small} onClick={() => onOpenCard(r.card!)}>
-                      Open “{cardTitle?.(r.card) ?? r.card}”
+                      {L(`Open “${cardTitle?.(r.card) ?? r.card}”`, `「${cardTitle?.(r.card) ?? r.card}」を開く`)}
                     </button>
                   )}
                   {r.place && r.place.walk !== false && (
                     <button type="button" style={small} onClick={() => lead(guideId, r.place!)}>
-                      Walk me there
+                      {L("Walk me there", "そこまで案内して")}
                     </button>
                   )}
                   {r.place && (
                     <button type="button" style={small} onClick={() => goTo(r.place!)}>
-                      Take me there now
+                      {L("Take me there now", "今すぐ連れて行って")}
                     </button>
                   )}
                 </div>
@@ -161,12 +164,12 @@ function Chat({
           value={text}
           maxLength={MAX_QUESTION}
           onChange={(event) => setText(event.target.value)}
-          placeholder={`Ask ${name}…`}
-          aria-label="Your question"
+          placeholder={L(`Ask ${name}…`, `${name}に質問…`)}
+          aria-label={L("Your question", "あなたの質問")}
           style={{ flex: 1, minWidth: 0, borderRadius: 999, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(0,0,0,0.25)", color: "inherit", padding: "8px 12px", font: "inherit" }}
         />
         <button type="submit" style={pillButtonStyle} disabled={!text.trim()}>
-          Ask
+          {L("Ask", "質問")}
         </button>
       </form>
     </div>

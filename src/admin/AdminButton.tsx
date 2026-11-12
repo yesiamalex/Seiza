@@ -3,6 +3,7 @@ import { useExclusiveMenu } from "../ui/exclusiveMenu";
 import { useDismissOnOutside } from "../ui/useDismissOnOutside";
 import { panelStyle, pillButtonActiveStyle, pillButtonStyle, primaryButtonStyle, inputStyle } from "../ui/styles";
 import { ShieldIcon, CloseIcon, LockIcon } from "../ui/icons";
+import { L, useLang } from "../i18n/lang";
 
 interface AdminButtonProps {
   isAdmin: boolean;
@@ -26,6 +27,7 @@ interface AdminButtonProps {
  * rather than reusing the admin key or the editor password.
  */
 export function AdminButton({ isAdmin, authPending, authFailed, onSubmit, roomPasswordSet, onSetRoomPassword }: AdminButtonProps) {
+  useLang();
   const [open, setOpen] = useState(false);
   useExclusiveMenu("admin", open, () => setOpen(false));
   // Dismiss on an outside press without a backdrop in front of the
@@ -60,8 +62,8 @@ export function AdminButton({ isAdmin, authPending, authFailed, onSubmit, roomPa
         onClick={() => setOpen((v) => !v)}
         style={{ ...(isAdmin ? pillButtonActiveStyle : pillButtonStyle), width: 36, height: 36, padding: 0, justifyContent: "center", flexShrink: 0 }}
         aria-expanded={open}
-        aria-label={isAdmin ? "Signed in as admin" : "Sign in as admin"}
-        title={isAdmin ? "Signed in as admin" : "Sign in as admin"}
+        aria-label={isAdmin ? L("Signed in as admin", "管理者としてサインイン中") : L("Sign in as admin", "管理者としてサインイン")}
+        title={isAdmin ? L("Signed in as admin", "管理者としてサインイン中") : L("Sign in as admin", "管理者としてサインイン")}
       >
         <ShieldIcon size={16} />
       </button>
@@ -89,40 +91,42 @@ export function AdminButton({ isAdmin, authPending, authFailed, onSubmit, roomPa
           >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <strong style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
-                <ShieldIcon size={14} /> Admin
+                <ShieldIcon size={14} /> {L("Admin", "管理者")}
               </strong>
-              <button type="button" onClick={() => setOpen(false)} style={{ ...pillButtonStyle, padding: 4 }} aria-label="Close">
+              <button type="button" onClick={() => setOpen(false)} style={{ ...pillButtonStyle, padding: 4 }} aria-label={L("Close", "閉じる")}>
                 <CloseIcon size={13} />
               </button>
             </div>
 
             {!isAdmin ? (
               <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <small style={{ opacity: 0.8 }}>Enter the admin key to unlock world editing and moderation for this session.</small>
+                <small style={{ opacity: 0.8 }}>{L("Enter the admin key to unlock world editing and moderation for this session.", "管理キーを入力すると、このセッションでワールドの編集とモデレーションができます。")}</small>
                 <input
                   type="password"
                   value={draft}
                   onChange={(event) => setDraft(event.target.value)}
-                  placeholder="Admin key"
+                  placeholder={L("Admin key", "管理キー")}
                   autoComplete="current-password"
                   style={fieldStyle}
                   autoFocus
                 />
-                {authFailed && <small style={{ color: "#ff8a80" }}>Wrong key.</small>}
+                {authFailed && <small style={{ color: "#ff8a80" }}>{L("Wrong key.", "キーが違います。")}</small>}
                 <button type="submit" style={primaryButtonStyle} disabled={authPending || !draft}>
-                  {authPending ? "Checking…" : "Unlock"}
+                  {authPending ? L("Checking…", "確認中…") : L("Unlock", "解除")}
                 </button>
               </form>
             ) : (
               <>
                 <small style={{ opacity: 0.8 }}>
-                  You're signed in as admin for this session. This isn't remembered after you reload the page — see ADMIN.md
-                  if that surprises you.
+                  {L(
+                    "You're signed in as admin for this session. This isn't remembered after you reload the page — see ADMIN.md if that surprises you.",
+                    "このセッションでは管理者としてサインインしています。ページを再読み込みすると解除されます(詳しくは ADMIN.md)。"
+                  )}
                 </small>
 
                 <div style={{ borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
                   <strong style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 6 }}>
-                    <LockIcon size={13} /> Room entry password
+                    <LockIcon size={13} /> {L("Room entry password", "入室パスワード")}
                   </strong>
                   <div
                     style={{
@@ -141,7 +145,7 @@ export function AdminButton({ isAdmin, authPending, authFailed, onSubmit, roomPa
                       style={{ width: 7, height: 7, borderRadius: "50%", flexShrink: 0, background: roomPasswordSet ? "#7CFF9E" : "rgba(255,255,255,0.4)" }}
                     />
                     <span style={{ minWidth: 0 }}>
-                      {roomPasswordSet ? "On: people need the password to join." : "Off: anyone with the link can join."}
+                      {roomPasswordSet ? L("On: people need the password to join.", "オン:参加にはパスワードが必要です。") : L("Off: anyone with the link can join.", "オフ:リンクを知っていれば誰でも参加できます。")}
                     </span>
                   </div>
                   {/* Field above, buttons below, rather than side by side: an
@@ -152,8 +156,8 @@ export function AdminButton({ isAdmin, authPending, authFailed, onSubmit, roomPa
                       type="text"
                       value={roomPasswordDraft}
                       onChange={(event) => setRoomPasswordDraft(event.target.value)}
-                      placeholder={roomPasswordSet ? "New password" : "Choose a password"}
-                      aria-label={roomPasswordSet ? "New room password" : "Room password"}
+                      placeholder={roomPasswordSet ? L("New password", "新しいパスワード") : L("Choose a password", "パスワードを決める")}
+                      aria-label={roomPasswordSet ? L("New room password", "新しい入室パスワード") : L("Room password", "入室パスワード")}
                       autoComplete="off"
                       spellCheck={false}
                       style={fieldStyle}
@@ -164,13 +168,13 @@ export function AdminButton({ isAdmin, authPending, authFailed, onSubmit, roomPa
                         disabled={!roomPasswordDraft}
                         style={{ ...primaryButtonStyle, flex: "1 1 auto", padding: "8px 12px", fontSize: 13, opacity: roomPasswordDraft ? 1 : 0.5 }}
                       >
-                        {roomPasswordSet ? "Change password" : "Require password"}
+                        {roomPasswordSet ? L("Change password", "パスワードを変更") : L("Require password", "パスワードを設定")}
                       </button>
                       {/* Removing is its own button rather than "submit an
                           empty field", which nobody would guess. */}
                       {roomPasswordSet && (
                         <button type="button" onClick={removeRoomPassword} style={{ ...pillButtonStyle, ...dangerStyle, flex: "1 1 auto", justifyContent: "center", padding: "8px 12px", fontSize: 13 }}>
-                          Remove password
+                          {L("Remove password", "パスワードを外す")}
                         </button>
                       )}
                     </div>

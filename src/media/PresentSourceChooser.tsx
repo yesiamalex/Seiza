@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { CameraIcon, CloseIcon, ScreenShareIcon } from "../ui/icons";
 import { panelStyle, pillButtonStyle, primaryButtonStyle } from "../ui/styles";
 import type { PresentSource } from "../multiplayer/types";
+import { L, useLang } from "../i18n/lang";
 
 interface PresentSourceChooserProps {
   /** True when a camera is already running, so the label can say so. */
@@ -24,6 +25,7 @@ interface PresentSourceChooserProps {
  * unambiguous and shouldn't grow a prompt.
  */
 export function PresentSourceChooser({ cameraOn, onChoose, onCancel }: PresentSourceChooserProps) {
+  useLang();
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onCancel();
@@ -36,7 +38,7 @@ export function PresentSourceChooser({ cameraOn, onChoose, onCancel }: PresentSo
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Choose what to show on this screen"
+      aria-label={L("Choose what to show on this screen", "このスクリーンに映すものを選ぶ")}
       onClick={onCancel}
       style={{
         position: "absolute",
@@ -62,11 +64,11 @@ export function PresentSourceChooser({ cameraOn, onChoose, onCancel }: PresentSo
         }}
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-          <strong style={{ fontSize: 14 }}>Show on this screen</strong>
+          <strong style={{ fontSize: 14 }}>{L("Show on this screen", "このスクリーンに映す")}</strong>
           <button
             type="button"
             onClick={onCancel}
-            aria-label="Cancel"
+            aria-label={L("Cancel", "キャンセル")}
             style={{ ...pillButtonStyle, padding: 5 }}
           >
             <CloseIcon size={13} />
@@ -78,19 +80,19 @@ export function PresentSourceChooser({ cameraOn, onChoose, onCancel }: PresentSo
           style={{ ...primaryButtonStyle, justifyContent: "flex-start", gap: 8, padding: "11px 14px", fontSize: 13 }}
           onClick={() => onChoose("screen")}
         >
-          <ScreenShareIcon size={16} /> My screen
+          <ScreenShareIcon size={16} /> {L("My screen", "自分の画面")}
         </button>
         <button
           type="button"
           style={{ ...pillButtonStyle, justifyContent: "flex-start", gap: 8, padding: "11px 14px" }}
           onClick={() => onChoose("camera")}
         >
-          <CameraIcon size={16} /> My camera
+          <CameraIcon size={16} /> {L("My camera", "自分のカメラ")}
         </button>
         <small style={{ opacity: 0.6 }}>
           {cameraOn
-            ? "Your camera is already on; it will move onto this screen."
-            : "Picking a camera turns yours on first."}
+            ? L("Your camera is already on; it will move onto this screen.", "カメラはすでにオンです。このスクリーンに映ります。")
+            : L("Picking a camera turns yours on first.", "カメラを選ぶと、まずカメラがオンになります。")}
         </small>
       </div>
     </div>

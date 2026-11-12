@@ -2,16 +2,32 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { phaseFor, SEIZA_CLOCK_SPEED, SEIZA_PHASES, seizaSeconds, type SeizaPhase } from "../avatar/seizaEndurance";
 import { ChevronDownIcon, ChevronUpIcon, MinimizeIcon, PowerIcon } from "./icons";
 import { panelStyle, pillButtonStyle } from "./styles";
+import { L, useLang } from "../i18n/lang";
 
 const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 
 /** Small things worth knowing, shown one at a time while you kneel. */
-const TIDBITS = [
-  "正座 means \"proper sitting\": the formal posture of tea ceremony, calligraphy and the dojo.",
-  "Its sound twin 星座 means \"constellation\", hence the kneeling figure under a starry sky.",
-  "Everyone in the room sees your avatar doze off and wince as the minutes pass.",
-  "Move or jump to stand up. After two minutes, your legs will be asleep for a few steps.",
-  "In real seiza, numb feet are normal. Stand up slowly and let them wake.",
+const TIDBITS: [string, string][] = [
+  [
+    "正座 means \"proper sitting\": the formal posture of tea ceremony, calligraphy and the dojo.",
+    "正座は「正しい座り方」。茶道、書道、道場での改まった姿勢です。",
+  ],
+  [
+    "Its sound twin 星座 means \"constellation\", hence the kneeling figure under a starry sky.",
+    "同じ読みの「星座」にちなんで、星空の下で正座する姿がロゴになっています。",
+  ],
+  [
+    "Everyone in the room sees your avatar doze off and wince as the minutes pass.",
+    "時間がたつと、あなたのアバターがうとうとしたり顔をしかめたりするのが部屋の全員に見えます。",
+  ],
+  [
+    "Move or jump to stand up. After two minutes, your legs will be asleep for a few steps.",
+    "動くかジャンプで立ち上がります。2分を過ぎると、数歩のあいだ足がしびれています。",
+  ],
+  [
+    "In real seiza, numb feet are normal. Stand up slowly and let them wake.",
+    "本物の正座でも足がしびれるのは普通です。ゆっくり立って、しびれが取れるのを待ちましょう。",
+  ],
 ];
 const TIDBIT_SECONDS = 7;
 
@@ -104,6 +120,7 @@ interface SeizaTimerProps {
  * feature off. Gone the moment you stand.
  */
 export function SeizaTimer({ startedAt, best, view, onViewChange, onTurnOff }: SeizaTimerProps) {
+  const lang = useLang();
   const seconds = useSeizaClock(startedAt);
   const [tidbit, setTidbit] = useState(0);
   // Real seconds, not the seiza clock: a tip should stay up long enough to
@@ -121,7 +138,7 @@ export function SeizaTimer({ startedAt, best, view, onViewChange, onTurnOff }: S
   return (
     <div
       role="group"
-      aria-label={`Seiza timer: ${fmt(seconds)}, ${phase.label}`}
+      aria-label={L(`Seiza timer: ${fmt(seconds)}, ${phase.label}`, `正座タイマー:${fmt(seconds)}、${phase.jp}`)}
       className="seiza-fade-in"
       style={{
         ...panelStyle,
@@ -149,19 +166,19 @@ export function SeizaTimer({ startedAt, best, view, onViewChange, onTurnOff }: S
         )}
         <span style={{ flex: 1 }} />
         {compact ? (
-          <IconButton label="Show details" onClick={() => onViewChange("full")}>
+          <IconButton label={L("Show details", "詳しく表示")} onClick={() => onViewChange("full")}>
             <ChevronDownIcon size={16} />
           </IconButton>
         ) : (
-          <IconButton label="Show the time only" onClick={() => onViewChange("compact")}>
+          <IconButton label={L("Show the time only", "時間だけ表示")} onClick={() => onViewChange("compact")}>
             <ChevronUpIcon size={16} />
           </IconButton>
         )}
-        <IconButton label="Minimise to the top bar" onClick={() => onViewChange("badge")}>
+        <IconButton label={L("Minimise to the top bar", "上のバーにしまう")} onClick={() => onViewChange("badge")}>
           <MinimizeIcon size={16} />
         </IconButton>
         {!compact && (
-          <IconButton label="Turn off reactions for my avatar" onClick={onTurnOff}>
+          <IconButton label={L("Turn off reactions for my avatar", "自分のアバターのリアクションをオフ")} onClick={onTurnOff}>
             <PowerIcon size={15} />
           </IconButton>
         )}
@@ -174,9 +191,9 @@ export function SeizaTimer({ startedAt, best, view, onViewChange, onTurnOff }: S
             <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
               <PhaseDot phase={phase.id} />
               <span style={{ fontWeight: 600 }}>{phase.jp}</span>
-              <span style={{ color: muted }}>{phase.label}</span>
+              {lang === "en" && <span style={{ color: muted }}>{phase.label}</span>}
               <span style={{ flex: 1 }} />
-              {best > 0 && <span style={{ color: muted, fontSize: 11, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>Best {fmt(best)}</span>}
+              {best > 0 && <span style={{ color: muted, fontSize: 11, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{L("Best", "最高")} {fmt(best)}</span>}
             </div>
             <div aria-hidden style={{ height: 3, borderRadius: 2, background: "rgba(255,255,255,0.1)", overflow: "hidden" }}>
               <div style={{ height: "100%", width: `${Math.min(1, progress) * 100}%`, background: PHASE_COLOR[next?.id ?? phase.id], transition: "width 0.4s linear" }} />
@@ -184,10 +201,11 @@ export function SeizaTimer({ startedAt, best, view, onViewChange, onTurnOff }: S
             <div style={{ fontSize: 12, color: muted, fontVariantNumeric: "tabular-nums" }}>
               {next ? (
                 <>
-                  {next.label} in <span style={{ color: "rgba(255,255,255,0.85)" }}>{fmt(next.at - seconds)}</span>
+                  {L(`${next.label} in `, `「${next.jp}」まで `)}
+                  <span style={{ color: "rgba(255,255,255,0.85)" }}>{fmt(next.at - seconds)}</span>
                 </>
               ) : (
-                "The final phase. How long can you hold it?"
+                L("The final phase. How long can you hold it?", "最後の段階です。どこまで耐えられますか?")
               )}
             </div>
           </div>
@@ -195,7 +213,7 @@ export function SeizaTimer({ startedAt, best, view, onViewChange, onTurnOff }: S
           {/* A rotating tip, set apart from the readout. */}
           <div style={{ marginTop: 10, marginRight: 8, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", color: "#e8c37a" }}>TIP</span>
+              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", color: "#e8c37a" }}>{L("TIP", "豆知識")}</span>
               <span aria-hidden style={{ display: "inline-flex", gap: 3 }}>
                 {TIDBITS.map((_, i) => (
                   <span key={i} style={{ width: 4, height: 4, borderRadius: "50%", background: i === tidbit ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.2)" }} />
@@ -203,7 +221,7 @@ export function SeizaTimer({ startedAt, best, view, onViewChange, onTurnOff }: S
               </span>
             </div>
             <div key={tidbit} className="seiza-tabpanel" style={{ fontSize: 12, color: "rgba(255,255,255,0.72)", lineHeight: 1.45 }}>
-              {TIDBITS[tidbit]}
+              {L(...TIDBITS[tidbit])}
             </div>
           </div>
         </>
@@ -220,8 +238,9 @@ export function SeizaTimer({ startedAt, best, view, onViewChange, onTurnOff }: S
 export function SeizaTimerBadge({ startedAt, onOpen }: { startedAt: number; onOpen: () => void }) {
   const seconds = useSeizaClock(startedAt);
   const { phase, next, progress } = phaseProgress(seconds);
+  useLang();
   const ring = PHASE_COLOR[next?.id ?? phase.id];
-  const label = `In seiza ${fmt(seconds)}, ${phase.label}. Show the seiza timer`;
+  const label = L(`In seiza ${fmt(seconds)}, ${phase.label}. Show the seiza timer`, `正座中 ${fmt(seconds)}、${phase.jp}。正座タイマーを表示`);
   return (
     <button
       type="button"

@@ -4,6 +4,55 @@ import { useDismissOnOutside } from "./useDismissOnOutside";
 import { CloseIcon } from "./icons";
 import { ACCENT_COLOR, panelStyle, pillButtonStyle, primaryButtonStyle } from "./styles";
 import { Credit } from "./Credit";
+import { L, useLang } from "../i18n/lang";
+
+/** The guide's words in Japanese, looked up by their English. */
+const JA: Record<string, string> = {
+  Move: "移動",
+  Interact: "操作",
+  Shortcuts: "ショートカット",
+  "In a headset": "VRヘッドセット",
+  "With a keyboard": "キーボード",
+  "Walk (or arrow keys)": "歩く(矢印キーでも可)",
+  "Hold to run": "押したままで走る",
+  "Hold to crouch (slower, quieter)": "押したままでしゃがむ(ゆっくり、静かに)",
+  "Jump, or stand up": "ジャンプ、または立ち上がる",
+  "Look around": "見回す",
+  Zoom: "ズーム",
+  "Walk to a spot on the floor": "床の場所まで歩く",
+  "Sit, open doors, use screens": "座る、ドアを開ける、スクリーンを使う",
+  Gestures: "ジェスチャー",
+  "Kneel in seiza. Stay a minute and see what happens": "正座する。1分そのままでいると…",
+  "Avatar menu, and seiza reactions on or off": "アバターメニュー、正座リアクションのオン・オフ",
+  "First / third person": "一人称 / 三人称",
+  "Move tool (while editing)": "移動ツール(編集中)",
+  "Rotate tool (while editing)": "回転ツール(編集中)",
+  "Close a menu": "メニューを閉じる",
+  "This guide": "このガイド",
+  "Turn it toward you for the menu": "自分に向けるとメニューが開く",
+  "Pin the menu in front of you": "メニューを目の前に固定",
+  "Move; push it to stand up from a seat": "移動。倒すと席から立ち上がる",
+  "Walk; slide your thumb to turn": "歩く。親指をすべらせて向きを変える",
+  "Double-tap forward to run": "前を2回タップで走る",
+  "Hold the pad's centre; slide onto an arrow to sneak": "パッドの中央を長押し。矢印へすべらせて忍び足",
+  "Kneel; stay a minute and see what happens": "正座する。1分そのままでいると…",
+  Drag: "ドラッグ",
+  Scroll: "スクロール",
+  Space: "スペース",
+  "Double-click": "ダブルクリック",
+  Click: "クリック",
+  "Left palm": "左の手のひら",
+  Stick: "スティック",
+  Pad: "パッド",
+  "Tap ↑↑": "↑↑ をタップ",
+  Jump: "ジャンプ",
+  Crouch: "しゃがむ",
+  Seiza: "正座",
+  Pinch: "ピンチ",
+  "Double-tap": "ダブルタップ",
+  Tap: "タップ",
+};
+const tr = (text: string) => L(text, JA[text] ?? text);
 
 const SEEN_KEY = "seiza:controls-guide-seen";
 
@@ -129,6 +178,7 @@ interface ControlsGuideProps {
  * so it doesn't greet a returning visitor every time.
  */
 export function ControlsGuide({ open, onClose, touch }: ControlsGuideProps) {
+  useLang();
   const rootRef = useRef<HTMLDivElement>(null);
   const close = () => {
     markControlsGuideSeen();
@@ -193,9 +243,9 @@ export function ControlsGuide({ open, onClose, touch }: ControlsGuideProps) {
       <style>{GUIDE_CSS}</style>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
         <strong id="seiza-guide-title" style={{ fontSize: 15 }}>
-          Controls
+          {L("Controls", "操作方法")}
         </strong>
-        <button type="button" aria-label="Close" onClick={close} style={{ ...pillButtonStyle, padding: 6 }}>
+        <button type="button" aria-label={L("Close", "閉じる")} onClick={close} style={{ ...pillButtonStyle, padding: 6 }}>
           <CloseIcon size={14} />
         </button>
       </div>
@@ -203,7 +253,7 @@ export function ControlsGuide({ open, onClose, touch }: ControlsGuideProps) {
       {sections.map((section) => (
         <section key={section.title} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <h3 style={{ margin: 0, fontSize: 11, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: ACCENT_COLOR, opacity: 0.85 }}>
-            {section.title}
+            {tr(section.title)}
           </h3>
           <dl style={{ margin: 0, display: "grid", gridTemplateColumns: "auto 1fr", columnGap: 12, rowGap: 6, alignItems: "center" }}>
             {section.rows.map(([keys, action]) => (
@@ -211,11 +261,11 @@ export function ControlsGuide({ open, onClose, touch }: ControlsGuideProps) {
                 <dt style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
                   {keys.map((key) => (
                     <kbd key={key} style={kbdStyle}>
-                      {key}
+                      {tr(key)}
                     </kbd>
                   ))}
                 </dt>
-                <dd style={{ margin: 0, fontSize: 13, opacity: 0.85, minWidth: 0 }}>{action}</dd>
+                <dd style={{ margin: 0, fontSize: 13, opacity: 0.85, minWidth: 0 }}>{tr(action)}</dd>
               </div>
             ))}
           </dl>
@@ -223,10 +273,10 @@ export function ControlsGuide({ open, onClose, touch }: ControlsGuideProps) {
       ))}
 
       <button type="button" onClick={close} style={{ ...primaryButtonStyle, padding: "9px 14px", fontSize: 13 }} ref={gotItRef}>
-        Got it
+        {L("Got it", "わかった")}
       </button>
       <small style={{ opacity: 0.55, textAlign: "center", marginTop: -4 }}>
-        Press ? or the ? button to see this again.
+        {L("Press ? or the ? button to see this again.", "? キーか ? ボタンでもう一度表示できます。")}
       </small>
       <Credit />
     </div>

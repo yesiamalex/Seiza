@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import type { TouchMoveInput } from "./touchInput";
 import { CrouchIcon, JumpIcon, SeizaIcon } from "../ui/icons";
+import { L, useLang } from "../i18n/lang";
 import {
   PAD_BUTTON_SIZE,
   PAD_CENTER_SIZE,
@@ -40,13 +41,13 @@ const CELL_VECTORS: Record<Cell, [number, number]> = {
   right: [1, 0],
   down: [0, -1],
 };
-const CELL_LABELS: Record<Cell, string> = {
-  up: "Forward",
-  upleft: "Forward left",
-  upright: "Forward right",
-  left: "Left",
-  right: "Right",
-  down: "Back",
+const CELL_LABELS: Record<Cell, [string, string]> = {
+  up: ["Forward", "前"],
+  upleft: ["Forward left", "左前"],
+  upright: ["Forward right", "右前"],
+  left: ["Left", "左"],
+  right: ["Right", "右"],
+  down: ["Back", "後ろ"],
 };
 /** Grid position of each cell, [column, row], top-left origin. The centre
  *  holds the crouch button and the two bottom corners are dead zones.
@@ -82,6 +83,7 @@ export function TouchControls({
   onCrouchEnd,
   crouching = false,
 }: TouchControlsProps) {
+  useLang();
   const lastForwardTapRef = useRef(0);
   const padRef = useRef<HTMLDivElement>(null);
   const padPointerRef = useRef<number | null>(null);
@@ -146,7 +148,7 @@ export function TouchControls({
       <div
         ref={padRef}
         role="group"
-        aria-label="Movement pad. Double-tap forward to run; slide to change direction."
+        aria-label={L("Movement pad. Double-tap forward to run; slide to change direction.", "移動パッド。前を2回タップで走り、すべらせて向きを変えます。")}
         style={padGridStyle}
         onPointerDown={(e) => {
           e.preventDefault();
@@ -169,7 +171,7 @@ export function TouchControls({
           <span
             key={cell}
             aria-hidden
-            title={CELL_LABELS[cell]}
+            title={L(...CELL_LABELS[cell])}
             style={{
               ...padButtonStyle,
               gridArea: cell,
@@ -184,7 +186,7 @@ export function TouchControls({
         ))}
         {onCrouchStart && (
           <button
-            aria-label={crouching ? "Stand up from crouch" : "Crouch (hold, and slide onto a direction to sneak)"}
+            aria-label={crouching ? L("Stand up from crouch", "しゃがみから立つ") : L("Crouch (hold, and slide onto a direction to sneak)", "しゃがむ(長押しして方向へすべらせると忍び足)")}
             aria-pressed={crouching}
             style={{ ...crouchButtonStyle, ...(crouching ? padButtonPressedStyle : null) }}
             onPointerDown={(e) => {
@@ -221,7 +223,7 @@ export function TouchControls({
             <CrouchIcon size={24} style={{ width: `calc(${CROUCH_BUTTON_SIZE} * 0.8)`, height: `calc(${CROUCH_BUTTON_SIZE} * 0.8)` }} />
           </button>
         )}
-        {sprinting && <span style={sprintBadgeStyle}>RUN</span>}
+        {sprinting && <span style={sprintBadgeStyle}>{L("RUN", "ダッシュ")}</span>}
       </div>
 
       {/* Jump and seiza share a column, with a deliberate gap. See
@@ -229,7 +231,7 @@ export function TouchControls({
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: SEIZA_JUMP_GAP_PX }}>
         {onToggleSeiza && (
           <button
-            aria-label={seizaActive ? "Stand up" : "Kneel in seiza"}
+            aria-label={seizaActive ? L("Stand up", "立つ") : L("Kneel in seiza", "正座する")}
             aria-pressed={seizaActive}
             style={{ ...seizaButtonStyle, ...(seizaActive ? padButtonPressedStyle : null) }}
             onPointerDown={(e) => {
@@ -242,7 +244,7 @@ export function TouchControls({
           </button>
         )}
         <button
-          aria-label="Jump"
+          aria-label={L("Jump", "ジャンプ")}
           style={{ ...jumpButtonStyle, ...(jumpPressed ? padButtonPressedStyle : null) }}
           onPointerDown={(e) => {
             e.preventDefault();

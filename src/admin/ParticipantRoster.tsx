@@ -6,6 +6,7 @@ import type { PlayerState } from "../multiplayer/types";
 import type { ConnectionState } from "../multiplayer/useRoomSocket";
 import { panelStyle, pillButtonStyle } from "../ui/styles";
 import { CloseIcon, GatherIcon, KickIcon, LocationIcon, MicOffIcon, ShieldIcon, UsersIcon } from "../ui/icons";
+import { L, useLang } from "../i18n/lang";
 
 interface ParticipantRosterProps {
   worldName: string;
@@ -62,6 +63,7 @@ export function ParticipantRoster({
   onTeleportTo,
   onGatherAll,
 }: ParticipantRosterProps) {
+  useLang();
   const [open, setOpen] = useState(false);
   useExclusiveMenu("roster", open, () => setOpen(false));
   // Dismiss on an outside press without a backdrop in front of the
@@ -71,7 +73,13 @@ export function ParticipantRoster({
   const statusColor =
     connectionState === "connected" ? "#7CFF9E" : connectionState === "connecting" ? "#8ab4ff" : connectionState === "away" ? "#9aa0aa" : "#ffb347";
   const statusLabel =
-    connectionState === "connected" ? "connected" : connectionState === "connecting" ? "connecting…" : connectionState === "away" ? "away" : "reconnecting…";
+    connectionState === "connected"
+      ? L("connected", "接続中")
+      : connectionState === "connecting"
+        ? L("connecting…", "接続しています…")
+        : connectionState === "away"
+          ? L("away", "離席中")
+          : L("reconnecting…", "再接続中…");
   const roster = Object.values(players).sort((a, b) => a.displayName.localeCompare(b.displayName));
 
   return (
@@ -101,7 +109,10 @@ export function ParticipantRoster({
           border: open ? "1px solid rgba(232,195,122,0.7)" : (panelStyle.border as string),
         }}
         aria-expanded={open}
-        aria-label={`${worldName}, ${statusLabel}. ${roster.length} ${roster.length === 1 ? "person" : "people"} here. Click to see who's in this room.`}
+        aria-label={L(
+          `${worldName}, ${statusLabel}. ${roster.length} ${roster.length === 1 ? "person" : "people"} here. Click to see who's in this room.`,
+          `${worldName}、${statusLabel}。${roster.length}人がいます。クリックすると部屋にいる人を表示します。`
+        )}
       >
         <span aria-hidden title={statusLabel} style={{ width: 8, height: 8, borderRadius: "50%", background: statusColor, flexShrink: 0 }} />
         <WorldTitle name={worldName} />
@@ -151,9 +162,9 @@ export function ParticipantRoster({
           >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <strong style={{ fontSize: 13 }}>
-                {roster.length} {roster.length === 1 ? "person" : "people"} here
+                {L(`${roster.length} ${roster.length === 1 ? "person" : "people"} here`, `${roster.length}人がいます`)}
               </strong>
-              <button type="button" onClick={() => setOpen(false)} style={{ ...pillButtonStyle, padding: 4 }} aria-label="Close">
+              <button type="button" onClick={() => setOpen(false)} style={{ ...pillButtonStyle, padding: 4 }} aria-label={L("Close", "閉じる")}>
                 <CloseIcon size={13} />
               </button>
             </div>
@@ -163,9 +174,9 @@ export function ParticipantRoster({
                 type="button"
                 onClick={onGatherAll}
                 style={{ ...pillButtonStyle, justifyContent: "center", gap: 6, display: "flex" }}
-                title="Teleport everyone else in the room to your current position"
+                title={L("Teleport everyone else in the room to your current position", "部屋のほかの全員を自分の位置へ移動させる")}
               >
-                <GatherIcon size={14} /> Gather everyone here
+                <GatherIcon size={14} /> {L("Gather everyone here", "全員をここに集める")}
               </button>
             )}
 
@@ -205,7 +216,7 @@ export function ParticipantRoster({
                     </span>
                     <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 13 }}>
                       {player.displayName}
-                      {isSelf && <span style={{ opacity: 0.55 }}> (you)</span>}
+                      {isSelf && <span style={{ opacity: 0.55 }}>{L(" (you)", "(あなた)")}</span>}
                     </span>
                     {!speaking && !isSelf && <MicOffIcon size={13} style={{ opacity: 0.4, flexShrink: 0 }} />}
 
@@ -215,27 +226,27 @@ export function ParticipantRoster({
                           type="button"
                           onClick={() => onMute(player.id, speaking)}
                           style={{ ...pillButtonStyle, padding: "4px 8px", fontSize: 11 }}
-                          title={speaking ? "Mute this person's mic" : "Ask this person's client to unmute their mic"}
+                          title={speaking ? L("Mute this person's mic", "この人のマイクをミュート") : L("Ask this person's client to unmute their mic", "この人にマイクのミュート解除を求める")}
                         >
-                          {speaking ? "Mute" : "Unmute"}
+                          {speaking ? L("Mute", "ミュート") : L("Unmute", "解除")}
                         </button>
                         <button
                           type="button"
                           onClick={() => onTeleportTo(player.id)}
                           style={{ ...pillButtonStyle, padding: "4px 6px" }}
-                          title="Teleport yourself to this person"
-                          aria-label="Teleport to this person"
+                          title={L("Teleport yourself to this person", "この人のところへ移動")}
+                          aria-label={L("Teleport to this person", "この人のところへ移動")}
                         >
                           <LocationIcon size={13} />
                         </button>
                         <button
                           type="button"
                           onClick={() => {
-                            if (window.confirm(`Remove ${player.displayName} from this room?`)) onKick(player.id);
+                            if (window.confirm(L(`Remove ${player.displayName} from this room?`, `${player.displayName}さんをこの部屋から退出させますか?`))) onKick(player.id);
                           }}
                           style={{ ...pillButtonStyle, padding: "4px 6px", borderColor: "rgba(255,138,128,0.5)", color: "#ff8a80" }}
-                          title="Remove this person from the room"
-                          aria-label="Kick this person"
+                          title={L("Remove this person from the room", "この人を部屋から退出させる")}
+                          aria-label={L("Kick this person", "この人を退出させる")}
                         >
                           <KickIcon size={13} />
                         </button>

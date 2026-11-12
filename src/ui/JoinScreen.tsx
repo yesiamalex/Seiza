@@ -13,6 +13,8 @@ import { AvatarChooser, avatarUrlForChoice, initialAvatarChoice, type AvatarSele
 import { ACCENT_COLOR, inputStyle, primaryButtonStyle } from "./styles";
 import { Credit } from "./Credit";
 import { unlockAudio } from "../media/audioContext";
+import { L, useLang } from "../i18n/lang";
+import { LangToggle } from "../i18n/LangToggle";
 
 export interface JoinedIdentity extends AvatarSelection {
   displayName: string;
@@ -54,6 +56,7 @@ const STAR_DOTS_NEAR = [
  * re-uploaded if the deployment's copy has expired.
  */
 export function JoinScreen({ world, onJoin }: JoinScreenProps) {
+  const lang = useLang();
   const [loaded, setLoaded] = useState(false);
   const [returning, setReturning] = useState(false);
   const [displayName, setDisplayName] = useState(() => `guest-${Math.random().toString(36).slice(2, 7)}`);
@@ -123,13 +126,13 @@ export function JoinScreen({ world, onJoin }: JoinScreenProps) {
       else await forgetProfile(world.id);
       onJoin({ displayName: name, choice, url, localUrl: selection.localUrl, remember });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't join.");
+      setError(err instanceof Error ? err.message : L("Couldn't join.", "参加できませんでした。"));
       setJoining(false);
     }
   }
 
   return (
-    <div className="seiza-join-screen">
+    <div className="seiza-join-screen" lang={lang}>
       <style>{`
         .seiza-join-screen {
           position: relative; width: 100%; height: 100vh; height: 100svh; box-sizing: border-box;
@@ -156,12 +159,13 @@ export function JoinScreen({ world, onJoin }: JoinScreenProps) {
       <div aria-hidden style={{ position: "absolute", inset: 0, backgroundImage: STAR_DOTS_FAR, opacity: 0.9, pointerEvents: "none" }} />
       <div aria-hidden style={{ position: "absolute", inset: 0, backgroundImage: STAR_DOTS_NEAR, pointerEvents: "none" }} />
 
+      <LangToggle style={{ position: "absolute", top: 16, right: 16, zIndex: 2 }} />
       <form onSubmit={handleSubmit} className="seiza-join-form seiza-rise-in">
         <div className="seiza-join-col">
           <div>
             <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: ACCENT_COLOR, opacity: 0.85 }}>Seiza · 星座</div>
             <h1 className="seiza-join-title" style={{ margin: "2px 0 0", fontSize: 26, fontWeight: 600, letterSpacing: "-0.01em" }}>
-              {world.displayName}
+              {L(world.displayName, world.displayNameJa ?? world.displayName)}
             </h1>
             <div style={{ width: 40, height: 2, marginTop: 10, background: `linear-gradient(90deg, ${ACCENT_COLOR}, transparent)` }} />
           </div>
@@ -169,9 +173,9 @@ export function JoinScreen({ world, onJoin }: JoinScreenProps) {
         </div>
 
         <div className="seiza-join-col">
-          {returning && <small style={{ color: ACCENT_COLOR }}>Welcome back. Your name and avatar were remembered on this device.</small>}
+          {returning && <small style={{ color: ACCENT_COLOR }}>{L("Welcome back. Your name and avatar were remembered on this device.", "おかえりなさい。名前とアバターはこの端末に保存されています。")}</small>}
           <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, opacity: 0.9 }}>
-            Display name
+            {L("Display name", "表示名")}
             <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} maxLength={32} required autoComplete="nickname" style={inputStyle} />
           </label>
 
@@ -190,18 +194,18 @@ export function JoinScreen({ world, onJoin }: JoinScreenProps) {
               }}
             />
           ) : (
-            <small style={{ opacity: 0.6 }}>Loading your saved profile…</small>
+            <small style={{ opacity: 0.6 }}>{L("Loading your saved profile…", "保存したプロフィールを読み込み中…")}</small>
           )}
 
           <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 12, opacity: 0.85 }}>
             <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} style={{ marginTop: 2 }} />
-            <span>Remember my name and avatar on this device. Turn off on shared computers.</span>
+            <span>{L("Remember my name and avatar on this device. Turn off on shared computers.", "名前とアバターをこの端末に保存する。共用のパソコンではオフにしてください。")}</span>
           </label>
 
           {error && <p style={{ color: "#ff8a80", margin: 0, fontSize: 12 }}>{error}</p>}
 
           <button type="submit" style={{ ...primaryButtonStyle, opacity: canSubmit ? 1 : 0.6 }} disabled={!canSubmit}>
-            {joining ? "Joining…" : "Enter world"}
+            {joining ? L("Joining…", "参加中…") : L("Enter world", "ワールドに入る")}
           </button>
           <Credit />
         </div>

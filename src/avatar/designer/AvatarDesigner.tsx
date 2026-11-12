@@ -16,27 +16,40 @@ import {
   type TopStyle,
 } from "./avatarSpec";
 import { FACE_EXPRESSIONS } from "../gestures";
+import { L, useLang } from "../../i18n/lang";
 import { AvatarPreview } from "../../ui/AvatarPreview";
 import { ACCENT_COLOR, panelStyle, pillButtonStyle, primaryButtonStyle } from "../../ui/styles";
 
-const HAIR_LABELS: Record<HairStyle, string> = {
-  short: "Short",
-  bob: "Bob",
-  long: "Long",
-  ponytail: "Ponytail",
-  bun: "Bun",
-  buzz: "Buzz",
-  none: "Bald",
+// Each label in English and Japanese; `pick` gives the current language's.
+type Bilingual<T extends string> = Record<T, [string, string]>;
+const pick = <T extends string>(labels: Bilingual<T>) => Object.fromEntries(Object.entries(labels).map(([k, v]) => [k, L(...(v as [string, string]))])) as Record<T, string>;
+const HAIR_LABELS: Bilingual<HairStyle> = {
+  short: ["Short", "ショート"],
+  bob: ["Bob", "ボブ"],
+  long: ["Long", "ロング"],
+  ponytail: ["Ponytail", "ポニーテール"],
+  bun: ["Bun", "おだんご"],
+  buzz: ["Buzz", "坊主"],
+  none: ["Bald", "スキンヘッド"],
 };
-const TOP_LABELS: Record<TopStyle, string> = {
-  tshirt: "T-shirt",
-  longsleeve: "Long sleeve",
-  hoodie: "Hoodie",
-  blazer: "Blazer",
-  dress: "Dress",
+const TOP_LABELS: Bilingual<TopStyle> = {
+  tshirt: ["T-shirt", "Tシャツ"],
+  longsleeve: ["Long sleeve", "長袖"],
+  hoodie: ["Hoodie", "パーカー"],
+  blazer: ["Blazer", "ブレザー"],
+  dress: ["Dress", "ワンピース"],
 };
-const BOTTOM_LABELS: Record<BottomStyle, string> = { pants: "Pants", shorts: "Shorts", skirt: "Skirt" };
-const ACCESSORY_LABELS: Record<Accessory, string> = { glasses: "Glasses", cap: "Cap", headphones: "Headphones", tie: "Tie" };
+const BOTTOM_LABELS: Bilingual<BottomStyle> = { pants: ["Pants", "パンツ"], shorts: ["Shorts", "ショートパンツ"], skirt: ["Skirt", "スカート"] };
+const ACCESSORY_LABELS: Bilingual<Accessory> = { glasses: ["Glasses", "メガネ"], cap: ["Cap", "キャップ"], headphones: ["Headphones", "ヘッドホン"], tie: ["Tie", "ネクタイ"] };
+const EXPRESSION_LABELS: Record<string, [string, string]> = {
+  neutral: ["neutral", "ふつう"],
+  happy: ["happy", "うれしい"],
+  sad: ["sad", "かなしい"],
+  angry: ["angry", "おこる"],
+  surprised: ["surprised", "おどろき"],
+  relaxed: ["relaxed", "リラックス"],
+};
+const PRESET_LABELS: Record<string, string> = { Businessman: "ビジネスマン", Businesswoman: "ビジネスウーマン", Casual: "カジュアル", Student: "学生", Creative: "クリエイティブ" };
 
 /**
  * Controls for the built-in avatar designer. Everything it produces is an
@@ -44,6 +57,7 @@ const ACCESSORY_LABELS: Record<Accessory, string> = { glasses: "Glasses", cap: "
  * than a file, and buildDesignerVrm.ts for how it becomes a VRM.
  */
 export function AvatarDesignerControls({ value, onChange }: { value: AvatarSpec; onChange: (spec: AvatarSpec) => void }) {
+  useLang();
   const set = <K extends keyof AvatarSpec>(key: K, next: AvatarSpec[K]) => onChange({ ...value, [key]: next });
   const toggleAccessory = (accessory: Accessory) =>
     set(
@@ -55,11 +69,11 @@ export function AvatarDesignerControls({ value, onChange }: { value: AvatarSpec;
     <div className="seiza-designer-controls">
       <style>{DESIGNER_CSS}</style>
 
-      <Section title="Start from">
+      <Section title={L("Start from", "ベース")}>
         <div className="seiza-chip-row">
           {AVATAR_DESIGN_PRESETS.map((preset) => (
             <button key={preset.id} type="button" style={chipStyle(false)} onClick={() => onChange({ ...preset.spec })}>
-              {preset.label}
+              {L(preset.label, PRESET_LABELS[preset.label] ?? preset.label)}
             </button>
           ))}
           <button type="button" style={chipStyle(false)} onClick={() => onChange(randomAvatarSpec())}>
@@ -68,48 +82,48 @@ export function AvatarDesignerControls({ value, onChange }: { value: AvatarSpec;
         </div>
       </Section>
 
-      <Section title="Skin">
-        <Swatches colors={SKIN_TONES} value={value.skin} onChange={(c) => set("skin", c)} label="Skin tone" />
+      <Section title={L("Skin", "肌")}>
+        <Swatches colors={SKIN_TONES} value={value.skin} onChange={(c) => set("skin", c)} label={L("Skin tone", "肌の色")} />
       </Section>
 
-      <Section title="Body">
-        <Slider label="Height" min={0.88} max={1.12} value={value.height} onChange={(v) => set("height", v)} />
-        <Slider label="Build" min={0.85} max={1.2} value={value.build} onChange={(v) => set("build", v)} />
+      <Section title={L("Body", "体型")}>
+        <Slider label={L("Height", "身長")} min={0.88} max={1.12} value={value.height} onChange={(v) => set("height", v)} />
+        <Slider label={L("Build", "体格")} min={0.85} max={1.2} value={value.build} onChange={(v) => set("build", v)} />
         {/* Shoulders and waist are separate from Build on purpose: one
             "thickness" control can only scale the whole torso at once,
             which is what made these figures read as tubes. These two are
             also what let a body be shaped without picking from a short
             list of gendered presets. */}
-        <Slider label="Shoulders" min={0.82} max={1.25} value={value.shoulders} onChange={(v) => set("shoulders", v)} />
-        <Slider label="Waist" min={0.75} max={1.3} value={value.waist} onChange={(v) => set("waist", v)} />
+        <Slider label={L("Shoulders", "肩幅")} min={0.82} max={1.25} value={value.shoulders} onChange={(v) => set("shoulders", v)} />
+        <Slider label={L("Waist", "ウエスト")} min={0.75} max={1.3} value={value.waist} onChange={(v) => set("waist", v)} />
       </Section>
 
-      <Section title="Hair">
-        <Choices options={HAIR_LABELS} value={value.hairStyle} onChange={(v) => set("hairStyle", v)} />
-        <Swatches colors={HAIR_COLORS} value={value.hairColor} onChange={(c) => set("hairColor", c)} label="Hair color" />
+      <Section title={L("Hair", "髪")}>
+        <Choices options={pick(HAIR_LABELS)} value={value.hairStyle} onChange={(v) => set("hairStyle", v)} />
+        <Swatches colors={HAIR_COLORS} value={value.hairColor} onChange={(c) => set("hairColor", c)} label={L("Hair color", "髪の色")} />
       </Section>
 
-      <Section title="Eyes">
-        <Swatches colors={EYE_COLORS} value={value.eyeColor} onChange={(c) => set("eyeColor", c)} label="Eye color" />
+      <Section title={L("Eyes", "目")}>
+        <Swatches colors={EYE_COLORS} value={value.eyeColor} onChange={(c) => set("eyeColor", c)} label={L("Eye color", "目の色")} />
       </Section>
 
-      <Section title="Top">
-        <Choices options={TOP_LABELS} value={value.top} onChange={(v) => set("top", v)} />
-        <Swatches colors={CLOTHING_COLORS} value={value.topColor} onChange={(c) => set("topColor", c)} label="Top color" />
+      <Section title={L("Top", "トップス")}>
+        <Choices options={pick(TOP_LABELS)} value={value.top} onChange={(v) => set("top", v)} />
+        <Swatches colors={CLOTHING_COLORS} value={value.topColor} onChange={(c) => set("topColor", c)} label={L("Top color", "トップスの色")} />
       </Section>
 
       {value.top !== "dress" && (
-        <Section title="Bottom">
-          <Choices options={BOTTOM_LABELS} value={value.bottom} onChange={(v) => set("bottom", v)} />
-          <Swatches colors={CLOTHING_COLORS} value={value.bottomColor} onChange={(c) => set("bottomColor", c)} label="Bottom color" />
+        <Section title={L("Bottom", "ボトムス")}>
+          <Choices options={pick(BOTTOM_LABELS)} value={value.bottom} onChange={(v) => set("bottom", v)} />
+          <Swatches colors={CLOTHING_COLORS} value={value.bottomColor} onChange={(c) => set("bottomColor", c)} label={L("Bottom color", "ボトムスの色")} />
         </Section>
       )}
 
-      <Section title="Shoes">
-        <Swatches colors={CLOTHING_COLORS} value={value.shoeColor} onChange={(c) => set("shoeColor", c)} label="Shoe color" />
+      <Section title={L("Shoes", "くつ")}>
+        <Swatches colors={CLOTHING_COLORS} value={value.shoeColor} onChange={(c) => set("shoeColor", c)} label={L("Shoe color", "くつの色")} />
       </Section>
 
-      <Section title="Accessories">
+      <Section title={L("Accessories", "アクセサリー")}>
         <div className="seiza-chip-row">
           {ACCESSORIES.map((accessory) => (
             <button
@@ -119,12 +133,12 @@ export function AvatarDesignerControls({ value, onChange }: { value: AvatarSpec;
               style={chipStyle(value.accessories.includes(accessory))}
               onClick={() => toggleAccessory(accessory)}
             >
-              {ACCESSORY_LABELS[accessory]}
+              {pick(ACCESSORY_LABELS)[accessory]}
             </button>
           ))}
         </div>
         {value.accessories.length > 0 && (
-          <Swatches colors={CLOTHING_COLORS} value={value.accessoryColor} onChange={(c) => set("accessoryColor", c)} label="Accessory color" />
+          <Swatches colors={CLOTHING_COLORS} value={value.accessoryColor} onChange={(c) => set("accessoryColor", c)} label={L("Accessory color", "アクセサリーの色")} />
         )}
       </Section>
     </div>
@@ -144,6 +158,7 @@ export function AvatarDesignerDialog({
   onSave: (spec: AvatarSpec) => void;
   onCancel: () => void;
 }) {
+  useLang();
   const [spec, setSpec] = useState(initial);
   // Rebuilding the model is cheap but not free — let slider drags stay
   // responsive and catch the preview up a beat later.
@@ -174,7 +189,7 @@ export function AvatarDesignerDialog({
               world: they are the main reason the face has structure at
               all, and there is no other place to see one on demand. */}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 5, alignItems: "center" }}>
-            <small style={{ opacity: 0.6, marginRight: 2 }}>Try a face:</small>
+            <small style={{ opacity: 0.6, marginRight: 2 }}>{L("Try a face:", "表情を試す:")}</small>
             {FACE_EXPRESSIONS.map((name) => {
               const active = tryExpression === name || (name === "neutral" && tryExpression === null);
               return (
@@ -185,7 +200,7 @@ export function AvatarDesignerDialog({
                   style={chipStyle(active)}
                   onClick={() => setTryExpression(name === "neutral" ? null : name)}
                 >
-                  {name}
+                  {EXPRESSION_LABELS[name] ? L(...EXPRESSION_LABELS[name]) : name}
                 </button>
               );
             })}
@@ -193,18 +208,18 @@ export function AvatarDesignerDialog({
         </div>
         <div className="seiza-designer-side">
           <div className="seiza-designer-header">
-            <strong style={{ fontSize: 16 }}>Design your avatar</strong>
-            <small style={{ opacity: 0.65 }}>Generated in your browser — nothing is uploaded.</small>
+            <strong style={{ fontSize: 16 }}>{L("Design your avatar", "アバターをデザイン")}</strong>
+            <small style={{ opacity: 0.65 }}>{L("Generated in your browser — nothing is uploaded.", "ブラウザで作成します。何もアップロードされません。")}</small>
           </div>
           <div className="seiza-designer-scroll">
             <AvatarDesignerControls value={spec} onChange={setSpec} />
           </div>
           <div className="seiza-designer-footer">
             <button type="button" style={pillButtonStyle} onClick={onCancel}>
-              Cancel
+              {L("Cancel", "キャンセル")}
             </button>
             <button type="button" style={primaryButtonStyle} onClick={() => onSave(spec)}>
-              Use this avatar
+              {L("Use this avatar", "このアバターを使う")}
             </button>
           </div>
         </div>

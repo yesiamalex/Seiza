@@ -5,6 +5,8 @@ import type { SkyConfig } from "../sky/skyState";
 export interface WorldConfig {
   id: string;
   displayName: string;
+  /** The world's name in Japanese, for visitors who chose 日本語. */
+  displayNameJa?: string;
   /** Optional deployer-supplied glTF scene, layered over BaseEnvironment
    *  (see src/scene/Scene.tsx). Omit to use just the procedural base. */
   sceneUrl?: string;

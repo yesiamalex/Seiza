@@ -18,6 +18,8 @@ const DEG = Math.PI / 180;
 
 export interface Site {
   label: string;
+  /** The label in Japanese. */
+  labelJa: string;
   /** Degrees north. */
   lat: number;
   /** Degrees east. */
@@ -29,10 +31,10 @@ export interface Site {
 /** Philippine sites. All share UTC+8. Mean temperatures are rounded annual
  *  means for each city; the daily swing is a simple ±4 °C. */
 export const SITES: Record<string, Site> = {
-  cebu: { label: "Cebu", lat: 10.31, lon: 123.89, meanTemp: 28 },
-  manila: { label: "Metro Manila", lat: 14.6, lon: 120.98, meanTemp: 28 },
-  davao: { label: "Davao", lat: 7.07, lon: 125.61, meanTemp: 27.5 },
-  baguio: { label: "Baguio", lat: 16.41, lon: 120.6, meanTemp: 19 },
+  cebu: { label: "Cebu", labelJa: "セブ", lat: 10.31, lon: 123.89, meanTemp: 28 },
+  manila: { label: "Metro Manila", labelJa: "マニラ首都圏", lat: 14.6, lon: 120.98, meanTemp: 28 },
+  davao: { label: "Davao", labelJa: "ダバオ", lat: 7.07, lon: 125.61, meanTemp: 27.5 },
+  baguio: { label: "Baguio", labelJa: "バギオ", lat: 16.41, lon: 120.6, meanTemp: 19 },
 };
 const TZ_MERIDIAN = 120; // UTC+8
 
@@ -130,6 +132,8 @@ export type WeatherType = "clear" | "partly" | "overcast" | "rain" | "typhoon";
 
 export interface WeatherProfile {
   label: string;
+  /** The label in Japanese. */
+  labelJa: string;
   /** Cloud cover, 0 to 1. */
   cloud: number;
   /** Mean wind at turbine hub height, m/s. */
@@ -145,11 +149,11 @@ export interface WeatherProfile {
 }
 
 export const WEATHER: Record<WeatherType, WeatherProfile> = {
-  clear: { label: "Clear", cloud: 0.05, wind: 5, gust: 1.5, rain: 0, humidity: 65, tempOffset: 1.5 },
-  partly: { label: "Partly cloudy", cloud: 0.4, wind: 6.5, gust: 2.5, rain: 0, humidity: 72, tempOffset: 0.5 },
-  overcast: { label: "Overcast", cloud: 0.85, wind: 7, gust: 2.5, rain: 0.05, humidity: 82, tempOffset: -1 },
-  rain: { label: "Rain", cloud: 0.95, wind: 9, gust: 4, rain: 0.7, humidity: 92, tempOffset: -2.5 },
-  typhoon: { label: "Typhoon", cloud: 1, wind: 28, gust: 9, rain: 1, humidity: 97, tempOffset: -3.5 },
+  clear: { label: "Clear", labelJa: "晴れ", cloud: 0.05, wind: 5, gust: 1.5, rain: 0, humidity: 65, tempOffset: 1.5 },
+  partly: { label: "Partly cloudy", labelJa: "晴れ時々曇り", cloud: 0.4, wind: 6.5, gust: 2.5, rain: 0, humidity: 72, tempOffset: 0.5 },
+  overcast: { label: "Overcast", labelJa: "曇り", cloud: 0.85, wind: 7, gust: 2.5, rain: 0.05, humidity: 82, tempOffset: -1 },
+  rain: { label: "Rain", labelJa: "雨", cloud: 0.95, wind: 9, gust: 4, rain: 0.7, humidity: 92, tempOffset: -2.5 },
+  typhoon: { label: "Typhoon", labelJa: "台風", cloud: 1, wind: 28, gust: 9, rain: 1, humidity: 97, tempOffset: -3.5 },
 };
 
 // Deterministic smooth noise, so gusts and passing clouds look alive and a

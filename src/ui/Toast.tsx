@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useMediaQuery } from "./useMediaQuery";
+import { L, useLang } from "../i18n/lang";
 
 /**
  * A transient message over the world: an error the app needs to admit to
@@ -34,6 +35,7 @@ export interface ToastProps {
 const FADE_MS = 220;
 
 export function Toast({ message, tone = "info", onDismiss, durationMs, bottom = 82 }: ToastProps) {
+  useLang();
   const [leaving, setLeaving] = useState(false);
   // Held in a ref so the effect below doesn't need it as a dependency:
   // callers routinely pass an inline arrow, and depending on it would
@@ -93,7 +95,7 @@ export function Toast({ message, tone = "info", onDismiss, durationMs, bottom = 
       <button
         type="button"
         onClick={dismissNow}
-        aria-label="Dismiss this message"
+        aria-label={L("Dismiss this message", "このメッセージを閉じる")}
         style={{
           flexShrink: 0,
           width: 22,

@@ -4,6 +4,7 @@ import { optimizeVrmAvatar } from "../avatar/optimizeVrm";
 import { compressImage } from "./compressImage";
 import { editAuthHeaders } from "./editAuth";
 import { SkyControls } from "./SkyControls";
+import { L, useLang } from "../i18n/lang";
 import type { RoomSky } from "../multiplayer/types";
 import type { SkyConfig } from "../sky/skyState";
 import { BAR_LABEL_CLASS, barButtonActiveStyle, barButtonStyle, inputStyle, panelStyle, pillButtonActiveStyle, pillButtonStyle, popoverStyle } from "../ui/styles";
@@ -102,6 +103,8 @@ export function EditToolbar({
   onMinimize,
   onExit,
 }: EditToolbarProps) {
+  useLang();
+  const authName = authLabel === "admin key" ? L("admin key", "管理キー") : L("editor password", "編集パスワード");
   const [modelUrl, setModelUrl] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
   const [passwordDraft, setPasswordDraft] = useState("");
@@ -120,11 +123,11 @@ export function EditToolbar({
           assets?: Array<{ id: string; url: string; name: string; kind?: "model" | "image" | null }>;
           error?: string;
         };
-        if (!response.ok) throw new Error(result.error ?? `Asset library failed to load (${response.status}).`);
+        if (!response.ok) throw new Error(result.error ?? `${L("Asset library failed to load", "アセットライブラリを読み込めませんでした")} (${response.status}).`);
         if (!cancelled) setAssets(result.assets ?? []);
       })
       .catch((error) => {
-        if (!cancelled) setAssetMessage(error instanceof Error ? error.message : "Asset library failed to load.");
+        if (!cancelled) setAssetMessage(error instanceof Error ? error.message : L("Asset library failed to load.", "アセットライブラリを読み込めませんでした。"));
       });
     return () => {
       cancelled = true;
@@ -138,19 +141,19 @@ export function EditToolbar({
   async function postAsset(file: File): Promise<{ id: string; url: string; name: string }> {
     const extension = file.name.toLowerCase().split(".").pop();
     if (extension !== "glb" && extension !== "gltf") {
-      throw new Error("Choose a .glb or .gltf model.");
+      throw new Error(L("Choose a .glb or .gltf model.", ".glb か .gltf のモデルを選んでください。"));
     }
     if (file.size > 60 * 1024 * 1024) {
-      throw new Error("That model is over 60MB. Choose a smaller export.");
+      throw new Error(L("That model is over 60MB. Choose a smaller export.", "モデルが60MBを超えています。もっと小さく書き出してください。"));
     }
     let body: Blob = file;
     if (optimizeAsset && extension === "glb" && file.size > 8 * 1024 * 1024) {
       const result = await optimizeVrmAvatar(file);
       body = result.blob;
-      if (!result.applied) setAssetMessage(result.reason ?? "Optimization was skipped; uploading the original.");
+      if (!result.applied) setAssetMessage(result.reason ?? L("Optimization was skipped; uploading the original.", "最適化をスキップし、元のファイルをアップロードします。"));
     }
     if (body.size > 24 * 1024 * 1024) {
-      throw new Error("This model is over the 24MB deployment limit, even after optimization.");
+      throw new Error(L("This model is over the 24MB deployment limit, even after optimization.", "最適化してもモデルが24MBの上限を超えています。"));
     }
     const response = await fetch("/api/assets", {
       method: "POST",
@@ -161,7 +164,7 @@ export function EditToolbar({
       },
     });
     const result = (await response.json().catch(() => ({}))) as { id?: string; url?: string; name?: string; error?: string };
-    if (!response.ok || !result.id || !result.url) throw new Error(result.error ?? `Upload failed (${response.status}).`);
+    if (!response.ok || !result.id || !result.url) throw new Error(result.error ?? `${L("Upload failed", "アップロードに失敗しました")} (${response.status}).`);
     return { id: result.id, url: result.url, name: result.name ?? file.name };
   }
 
@@ -172,9 +175,9 @@ export function EditToolbar({
       const asset = await postAsset(file);
       setAssets((previous) => [...previous, asset]);
       onSpawn("model", asset.url);
-      setAssetMessage(`${asset.name} uploaded and placed.`);
+      setAssetMessage(L(`${asset.name} uploaded and placed.`, `${asset.name} をアップロードして配置しました。`));
     } catch (error) {
-      setAssetMessage(error instanceof Error ? error.message : "Model upload failed.");
+      setAssetMessage(error instanceof Error ? error.message : L("Model upload failed.", "モデルのアップロードに失敗しました。"));
     } finally {
       setAssetUploading(false);
     }
@@ -204,14 +207,14 @@ export function EditToolbar({
         name?: string;
         error?: string;
       };
-      if (!response.ok || !result.id || !result.url) throw new Error(result.error ?? `Upload failed (${response.status}).`);
+      if (!response.ok || !result.id || !result.url) throw new Error(result.error ?? `${L("Upload failed", "アップロードに失敗しました")} (${response.status}).`);
       const asset = { id: result.id, url: result.url, name: result.name ?? compressed.name, kind: "image" as const };
       setAssets((previous) => [...previous, asset]);
       onSpawn("image", asset.url);
       const kb = Math.max(1, Math.round(compressed.blob.size / 1024));
-      setAssetMessage(`${asset.name} uploaded and placed (${kb}KB after compression).`);
+      setAssetMessage(L(`${asset.name} uploaded and placed (${kb}KB after compression).`, `${asset.name} をアップロードして配置しました(圧縮後 ${kb}KB)。`));
     } catch (error) {
-      setAssetMessage(error instanceof Error ? error.message : "Image upload failed.");
+      setAssetMessage(error instanceof Error ? error.message : L("Image upload failed.", "画像のアップロードに失敗しました。"));
     } finally {
       setAssetUploading(false);
     }
@@ -224,9 +227,9 @@ export function EditToolbar({
       const asset = await postAsset(file);
       setAssets((previous) => [...previous, asset]);
       onSetEnvironment(asset.url);
-      setAssetMessage(`${asset.name} is now this room's environment for everyone.`);
+      setAssetMessage(L(`${asset.name} is now this room's environment for everyone.`, `${asset.name} がこの部屋の全員の環境になりました。`));
     } catch (error) {
-      setAssetMessage(error instanceof Error ? error.message : "Environment upload failed.");
+      setAssetMessage(error instanceof Error ? error.message : L("Environment upload failed.", "環境のアップロードに失敗しました。"));
     } finally {
       setAssetUploading(false);
     }
@@ -252,13 +255,13 @@ export function EditToolbar({
         name?: string;
         error?: string;
       };
-      if (!response.ok || !result.id || !result.url) throw new Error(result.error ?? `Upload failed (${response.status}).`);
+      if (!response.ok || !result.id || !result.url) throw new Error(result.error ?? `${L("Upload failed", "アップロードに失敗しました")} (${response.status}).`);
       const asset = { id: result.id, url: result.url, name: result.name ?? compressed.name, kind: "image" as const };
       setAssets((previous) => [...previous, asset]);
       onSetSkybox(asset.url);
-      setAssetMessage(`${asset.name} is now the room skybox for everyone.`);
+      setAssetMessage(L(`${asset.name} is now the room skybox for everyone.`, `${asset.name} がこの部屋の全員のスカイボックスになりました。`));
     } catch (error) {
-      setAssetMessage(error instanceof Error ? error.message : "Skybox upload failed.");
+      setAssetMessage(error instanceof Error ? error.message : L("Skybox upload failed.", "スカイボックスのアップロードに失敗しました。"));
     } finally {
       setAssetUploading(false);
     }
@@ -270,24 +273,24 @@ export function EditToolbar({
       headers: editAuthHeaders(),
     });
     if (!response.ok) {
-      setAssetMessage("The asset could not be deleted.");
+      setAssetMessage(L("The asset could not be deleted.", "アセットを削除できませんでした。"));
       return;
     }
     setAssets((previous) => previous.filter((item) => item.id !== asset.id));
   }
 
   const minimised = editMode && !panelOpen;
-  const buttonLabel = minimised ? "Show edit tools (still editing)" : editMode ? "Exit edit mode" : "Edit world";
+  const buttonLabel = minimised ? L("Show edit tools (still editing)", "編集ツールを表示(編集中)") : editMode ? L("Exit edit mode", "編集モードを終了") : L("Edit world", "ワールドを編集");
   /** Title, minimise and close, at the top of whichever panel is showing. */
   const panelHeader = (
     <div style={{ display: "flex", alignItems: "center", gap: 4, margin: "-2px -4px 2px 0" }}>
       <strong style={{ display: "flex", alignItems: "center", gap: 6, flex: 1 }}>
-        <EditIcon size={15} /> Edit world
+        <EditIcon size={15} /> {L("Edit world", "ワールドを編集")}
       </strong>
-      <button type="button" className="seiza-icon-btn" style={headerIconButton} onClick={onMinimize} aria-label="Minimise, keep editing" title="Minimise, keep editing">
+      <button type="button" className="seiza-icon-btn" style={headerIconButton} onClick={onMinimize} aria-label={L("Minimise, keep editing", "最小化(編集は続ける)")} title={L("Minimise, keep editing", "最小化(編集は続ける)")}>
         <MinimizeIcon size={16} />
       </button>
-      <button type="button" className="seiza-icon-btn" style={headerIconButton} onClick={onExit} aria-label="Close edit mode" title="Close edit mode">
+      <button type="button" className="seiza-icon-btn" style={headerIconButton} onClick={onExit} aria-label={L("Close edit mode", "編集モードを閉じる")} title={L("Close edit mode", "編集モードを閉じる")}>
         <CloseIcon size={15} />
       </button>
     </div>
@@ -305,7 +308,7 @@ export function EditToolbar({
         title={buttonLabel}
       >
         <EditIcon />
-        <span className={BAR_LABEL_CLASS}>{minimised ? "Editing" : editMode ? "Done" : "Edit"}</span>
+        <span className={BAR_LABEL_CLASS}>{minimised ? L("Editing", "編集中") : editMode ? L("Done", "完了") : L("Edit", "編集")}</span>
       </button>
       {editMode && panelOpen && needsAuth && (
         <form
@@ -317,18 +320,18 @@ export function EditToolbar({
           style={{ ...panelStyle, ...popoverStyle, display: "flex", flexDirection: "column", gap: 8, width: 240 }}
         >
           {panelHeader}
-          <small style={{ opacity: 0.8 }}>This world requires {authLabel === "editor password" ? "an" : "the"} {authLabel}.</small>
+          <small style={{ opacity: 0.8 }}>{L(`This world requires ${authLabel === "editor password" ? "an" : "the"} ${authName}.`, `このワールドの編集には${authName}が必要です。`)}</small>
           <input
             type="password"
             value={passwordDraft}
             onChange={(e) => setPasswordDraft(e.target.value)}
-            placeholder={authLabel[0].toUpperCase() + authLabel.slice(1)}
+            placeholder={authName[0].toUpperCase() + authName.slice(1)}
             style={inputStyle}
             autoFocus
           />
-          {editorAuthFailed && <small style={{ color: "#ff8a80" }}>{authLabel === "editor password" ? "Wrong password." : "Wrong key."}</small>}
+          {editorAuthFailed && <small style={{ color: "#ff8a80" }}>{authLabel === "editor password" ? L("Wrong password.", "パスワードが違います。") : L("Wrong key.", "キーが違います。")}</small>}
           <button type="submit" style={pillButtonStyle} disabled={editorAuthPending || !passwordDraft}>
-            {editorAuthPending ? "Checking…" : "Unlock editing"}
+            {editorAuthPending ? L("Checking…", "確認中…") : L("Unlock editing", "編集を解除")}
           </button>
         </form>
       )}
@@ -337,11 +340,11 @@ export function EditToolbar({
           {panelHeader}
           {!connected && (
             <small style={{ color: "#ffb347" }}>
-              Not connected to the room server — placing/moving objects won't do anything until you reconnect.
+              {L("Not connected to the room server — placing/moving objects won't do anything until you reconnect.", "ルームサーバーに接続していません。再接続するまで、オブジェクトの配置や移動は反映されません。")}
             </small>
           )}
-          <small style={{ opacity: 0.8 }}>Click an object to select it, then use Move or Rotate.</small>
-          <small style={{ opacity: 0.7 }}>Only upload models you have permission to use. Seiza does not review or take responsibility for user-provided assets.</small>
+          <small style={{ opacity: 0.8 }}>{L("Click an object to select it, then use Move or Rotate.", "オブジェクトをクリックして選び、「移動」か「回転」を使います。")}</small>
+          <small style={{ opacity: 0.7 }}>{L("Only upload models you have permission to use. Seiza does not review or take responsibility for user-provided assets.", "使用許可のあるモデルだけをアップロードしてください。Seizaはユーザーが提供したアセットを審査せず、責任も負いません。")}</small>
           {/* Everything that acts on the selected object, in one place.
               Move and Rotate used to sit here while Snap, Delete and
               Deselect sat below the whole spawn list and asset library,
@@ -359,61 +362,61 @@ export function EditToolbar({
                 border: "1px solid rgba(232,195,122,0.35)",
               }}
             >
-              <strong style={{ fontSize: 12 }}>Selected object</strong>
+              <strong style={{ fontSize: 12 }}>{L("Selected object", "選択中のオブジェクト")}</strong>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 <button
                   style={transformMode === "translate" ? pillButtonActiveStyle : pillButtonStyle}
                   onClick={() => onTransformModeChange("translate")}
                 >
-                  Move
+                  {L("Move", "移動")}
                 </button>
                 <button
                   style={transformMode === "rotate" ? pillButtonActiveStyle : pillButtonStyle}
                   onClick={() => onTransformModeChange("rotate")}
                 >
-                  Rotate
+                  {L("Rotate", "回転")}
                 </button>
                 <button style={pillButtonStyle} onClick={onSnapToFloor}>
-                  Snap to floor
+                  {L("Snap to floor", "床に合わせる")}
                 </button>
               </div>
               {selectedImage && onSetLink && <ImageLinkField key={selectedImage.id} image={selectedImage} connected={connected} onSetLink={onSetLink} />}
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 <button style={pillButtonStyle} onClick={onDeselect}>
-                  Deselect
+                  {L("Deselect", "選択解除")}
                 </button>
                 <button
                   style={{ ...pillButtonStyle, borderColor: "rgba(255,138,128,0.5)", color: "#ff8a80" }}
                   disabled={!connected}
                   onClick={onDeleteSelected}
                 >
-                  Delete
+                  {L("Delete", "削除")}
                 </button>
               </div>
             </div>
           )}
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             <button style={pillButtonStyle} disabled={!connected} onClick={() => onSpawn("box")}>
-              + Box
+              {L("+ Box", "+ 箱")}
             </button>
             <button style={pillButtonStyle} disabled={!connected} onClick={() => onSpawn("sphere")}>
-              + Sphere
+              {L("+ Sphere", "+ 球")}
             </button>
             <button style={pillButtonStyle} disabled={!connected} onClick={() => onSpawn("cylinder")}>
-              + Cylinder
+              {L("+ Cylinder", "+ 円柱")}
             </button>
           </div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            <button style={pillButtonStyle} disabled={!connected} onClick={() => onSpawn("text")} title="A board to write on">
-              <TextBoardIcon /> Board
+            <button style={pillButtonStyle} disabled={!connected} onClick={() => onSpawn("text")} title={L("A board to write on", "書き込めるボード")}>
+              <TextBoardIcon /> {L("Board", "ボード")}
             </button>
             <button
               style={pillButtonStyle}
               disabled={!connected}
               onClick={() => onSpawn("sign")}
-              title="A sign on a post. Raise it onto a wall and the post drops away."
+              title={L("A sign on a post. Raise it onto a wall and the post drops away.", "支柱つきの看板。壁まで上げると支柱が消えます。")}
             >
-              <SignIcon /> Sign
+              <SignIcon /> {L("Sign", "看板")}
             </button>
             <button
               style={pillButtonStyle}
@@ -421,34 +424,36 @@ export function EditToolbar({
               // Laid flat, which is what makes it a sheet of paper rather
               // than a board (see WorldObjects.tsx).
               onClick={() => onSpawn("text", undefined, -Math.PI / 2)}
-              title="A sheet of paper for a desk"
+              title={L("A sheet of paper for a desk", "机に置く紙")}
             >
-              <TextBoardIcon /> Note
+              <TextBoardIcon /> {L("Note", "メモ")}
             </button>
-            <button style={pillButtonStyle} disabled={!connected} onClick={() => onSpawn("screen")} title="A display to present on">
-              <ScreenShareIcon /> Screen
+            <button style={pillButtonStyle} disabled={!connected} onClick={() => onSpawn("screen")} title={L("A display to present on", "発表用のディスプレイ")}>
+              <ScreenShareIcon /> {L("Screen", "スクリーン")}
             </button>
             <button
               style={pillButtonStyle}
               disabled={!connected}
               onClick={() => onSpawn("chair")}
-              title="A chair anyone can sit on"
+              title={L("A chair anyone can sit on", "誰でも座れる椅子")}
             >
-              <ChairIcon /> Chair
+              <ChairIcon /> {L("Chair", "椅子")}
             </button>
-            <button style={pillButtonStyle} disabled={!connected} onClick={() => onSpawn("bed")} title="A bed anyone can lie down on">
-              <BedIcon /> Bed
+            <button style={pillButtonStyle} disabled={!connected} onClick={() => onSpawn("bed")} title={L("A bed anyone can lie down on", "誰でも横になれるベッド")}>
+              <BedIcon /> {L("Bed", "ベッド")}
             </button>
           </div>
           <small style={{ opacity: 0.7 }}>
-            Leave edit mode to use them: click a board or note to write on it, a screen to present on it, a chair to
-            sit on it, a bed to lie down on it.
+            {L(
+              "Leave edit mode to use them: click a board or note to write on it, a screen to present on it, a chair to sit on it, a bed to lie down on it.",
+              "使うときは編集モードを終えます。ボードやメモをクリックすると書き込み、スクリーンで発表、椅子に座り、ベッドで横になれます。"
+            )}
           </small>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 5, borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 8 }}>
-            <strong>Pictures and video</strong>
+            <strong>{L("Pictures and video", "写真と動画")}</strong>
             <label style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-              Hang a picture (PNG, JPEG, WebP or GIF)
+              {L("Hang a picture (PNG, JPEG, WebP or GIF)", "写真を飾る(PNG、JPEG、WebP、GIF)")}
               <input
                 type="file"
                 accept="image/png,image/jpeg,image/webp,image/gif"
@@ -461,8 +466,10 @@ export function EditToolbar({
               />
             </label>
             <small style={{ opacity: 0.7 }}>
-              Resized and re-encoded in your browser before upload, so a photo costs this deployment a few hundred
-              kilobytes rather than several megabytes.
+              {L(
+                "Resized and re-encoded in your browser before upload, so a photo costs this deployment a few hundred kilobytes rather than several megabytes.",
+                "アップロード前にブラウザで縮小・再エンコードするので、写真1枚は数MBではなく数百KBで済みます。"
+              )}
             </small>
 
             <div style={{ display: "flex", gap: 6 }}>
@@ -479,26 +486,27 @@ export function EditToolbar({
                   onSpawn("video", videoUrl.trim());
                   setVideoUrl("");
                 }}
-                title="Place a looping video panel"
+                title={L("Place a looping video panel", "ループ再生する動画パネルを置く")}
               >
-                + Video
+                {L("+ Video", "+ 動画")}
               </button>
             </div>
             <small style={{ opacity: 0.7 }}>
-              Video is placed by link, not uploaded: a clip would take a large share of this deployment's storage, and
-              Workers KV serves whole files with no seeking. Use any https URL that serves an MP4 or WebM with CORS
-              allowed. Plays muted and looping, and only while someone is nearby.
+              {L(
+                "Video is placed by link, not uploaded: a clip would take a large share of this deployment's storage, and Workers KV serves whole files with no seeking. Use any https URL that serves an MP4 or WebM with CORS allowed. Plays muted and looping, and only while someone is nearby.",
+                "動画はアップロードせずリンクで置きます。動画はストレージを大きく使い、Workers KVはシークなしでファイル全体を送るためです。CORSが許可されたMP4かWebMのhttps URLを使ってください。消音・ループで、近くに人がいるときだけ再生されます。"
+              )}
             </small>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 5, borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 8 }}>
-            <strong>Environment</strong>
+            <strong>{L("Environment", "環境")}</strong>
             <small style={{ opacity: 0.7 }}>
               {environmentUrl
-                ? "A custom environment is active for everyone in this room."
-                : "Using this deployment's default environment."}
+                ? L("A custom environment is active for everyone in this room.", "この部屋の全員にカスタム環境が適用されています。")
+                : L("Using this deployment's default environment.", "このデプロイの標準の環境を使っています。")}
             </small>
             <label style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-              Replace with a .glb / .gltf world
+              {L("Replace with a .glb / .gltf world", ".glb / .gltf のワールドに置き換える")}
               <input
                 type="file"
                 accept=".glb,.gltf,model/gltf-binary,model/gltf+json"
@@ -517,26 +525,28 @@ export function EditToolbar({
                   style={{ ...pillButtonStyle, maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis" }}
                   disabled={!connected}
                   onClick={() => onSetEnvironment(asset.url)}
-                  title={`Use ${asset.name} as the environment`}
+                  title={L(`Use ${asset.name} as the environment`, `${asset.name} を環境にする`)}
                 >
-                  Use {asset.name}
+                  {L(`Use ${asset.name}`, `${asset.name} を使う`)}
                 </button>
               ))}
               {environmentUrl && (
                 <button style={pillButtonStyle} disabled={!connected} onClick={() => onSetEnvironment(null)}>
-                  Reset to default
+                  {L("Reset to default", "標準に戻す")}
                 </button>
               )}
             </div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 5, borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 8 }}>
-            <strong>Skybox</strong>
+            <strong>{L("Skybox", "スカイボックス")}</strong>
             <small style={{ opacity: 0.7 }}>
-              {skyboxUrl ? "A custom panorama is visible outside the room for everyone." : "Using the built-in sunset sky."}
-              {" "}Use a wide 2:1 equirectangular image for the cleanest wrap.
+              {skyboxUrl
+                ? L("A custom panorama is visible outside the room for everyone.", "部屋の外に、全員にカスタムのパノラマが見えています。")
+                : L("Using the built-in sunset sky.", "標準の夕焼け空を使っています。")}
+              {L(" Use a wide 2:1 equirectangular image for the cleanest wrap.", "きれいに包むには、横長2:1の正距円筒図法の画像を使ってください。")}
             </small>
             <label style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-              Upload panorama image
+              {L("Upload panorama image", "パノラマ画像をアップロード")}
               <input
                 type="file"
                 accept="image/png,image/jpeg,image/webp"
@@ -555,30 +565,30 @@ export function EditToolbar({
                   style={{ ...pillButtonStyle, maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis" }}
                   disabled={!connected}
                   onClick={() => onSetSkybox(asset.url)}
-                  title={`Use ${asset.name} as the skybox`}
+                  title={L(`Use ${asset.name} as the skybox`, `${asset.name} をスカイボックスにする`)}
                 >
-                  Use {asset.name}
+                  {L(`Use ${asset.name}`, `${asset.name} を使う`)}
                 </button>
               ))}
               {skyboxUrl && (
                 <button style={pillButtonStyle} disabled={!connected} onClick={() => onSetSkybox(null)}>
-                  Use sunset
+                  {L("Use sunset", "夕焼けに戻す")}
                 </button>
               )}
             </div>
           </div>
           <label style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-            Upload model (.glb or .gltf, max 24MB)
+            {L("Upload model (.glb or .gltf, max 24MB)", "モデルをアップロード(.glb か .gltf、最大24MB)")}
             <input type="file" accept=".glb,.gltf,model/gltf-binary,model/gltf+json" disabled={!connected || assetUploading} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAsset(file); event.currentTarget.value = ""; }} />
           </label>
           <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, opacity: 0.8 }}>
             <input type="checkbox" checked={optimizeAsset} onChange={(event) => setOptimizeAsset(event.target.checked)} />
-            Optimize large binary models before upload
+            {L("Optimize large binary models before upload", "大きなバイナリモデルはアップロード前に最適化する")}
           </label>
-          {assetMessage && <small style={{ color: assetMessage.includes("uploaded") ? "#7CFF9E" : "#ffb347" }}>{assetMessage}</small>}
+          {assetMessage && <small style={{ color: /uploaded|アップロードして/.test(assetMessage) ? "#7CFF9E" : "#ffb347" }}>{assetMessage}</small>}
           {assets.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 5, borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 8 }}>
-              <strong>Deployment asset library</strong>
+              <strong>{L("Deployment asset library", "デプロイのアセットライブラリ")}</strong>
               {assets.map((asset) => {
                 // Older deployments stored models before there was a kind to
                 // record, so an absent kind means model.
@@ -589,12 +599,12 @@ export function EditToolbar({
                       style={{ ...pillButtonStyle, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}
                       disabled={!connected}
                       onClick={() => onSpawn(isImage ? "image" : "model", asset.url)}
-                      title={isImage ? `Hang ${asset.name}` : `Place ${asset.name}`}
+                      title={isImage ? L(`Hang ${asset.name}`, `${asset.name} を飾る`) : L(`Place ${asset.name}`, `${asset.name} を置く`)}
                     >
                       {isImage ? "🖼 " : ""}
                       {asset.name}
                     </button>
-                    <button style={pillButtonStyle} onClick={() => void deleteAsset(asset)}>Delete</button>
+                    <button style={pillButtonStyle} onClick={() => void deleteAsset(asset)}>{L("Delete", "削除")}</button>
                   </div>
                 );
               })}
@@ -615,7 +625,7 @@ export function EditToolbar({
                 setModelUrl("");
               }}
             >
-              + Model
+              {L("+ Model", "+ モデル")}
             </button>
           </div>
           <SkyControls
@@ -662,7 +672,7 @@ function ImageLinkField({ image, connected, onSetLink }: { image: WorldObject; c
       style={{ display: "flex", flexDirection: "column", gap: 4 }}
     >
       <label style={{ fontSize: 12, opacity: 0.85 }} htmlFor="seiza-image-link">
-        Link (optional): opens from the picture
+        {L("Link (optional): opens from the picture", "リンク(任意):写真から開けます")}
       </label>
       <div style={{ display: "flex", gap: 6 }}>
         <input
@@ -674,10 +684,10 @@ function ImageLinkField({ image, connected, onSetLink }: { image: WorldObject; c
           style={{ ...inputStyle, flex: 1, minWidth: 0 }}
         />
         <button type="submit" style={pillButtonStyle} disabled={!connected || !valid || value.trim() === (image.link ?? "")}>
-          {value.trim() ? "Save" : "Remove"}
+          {value.trim() ? L("Save", "保存") : L("Remove", "削除")}
         </button>
       </div>
-      {!valid && <small style={{ color: "#ff8a80" }}>Use a full https:// address.</small>}
+      {!valid && <small style={{ color: "#ff8a80" }}>{L("Use a full https:// address.", "https:// から始まる完全なアドレスを入力してください。")}</small>}
     </form>
   );
 }

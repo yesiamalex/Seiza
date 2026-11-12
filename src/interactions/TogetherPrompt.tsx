@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ACCENT_COLOR, panelStyle, pillButtonStyle, primaryButtonStyle } from "../ui/styles";
-import { answerTogether, askTogether, cancelTogether, onTogetherStart, TOGETHER_LABELS, useTogether } from "./together";
+import { answerTogether, askTogether, cancelTogether, onTogetherStart, togetherAskingLine, togetherAskLine, togetherLabel, useTogether } from "./together";
+import { L, useLang } from "../i18n/lang";
 import type { TogetherGesture } from "../multiplayer/types";
 import { TOGETHER } from "../multiplayer/types";
 
@@ -27,6 +28,7 @@ export function TogetherPrompt({
   near?: { id: string; name: string } | null;
   gestures?: { name: TogetherGesture; label: string }[];
 }) {
+  useLang();
   const t = useTogether();
   const request = t.incoming[0];
   const [open, setOpen] = useState(false);
@@ -45,30 +47,30 @@ export function TogetherPrompt({
     <>
       <style>{CSS}</style>
       {request ? (
-        <div role="alertdialog" aria-label="A request" className="seiza-together" style={{ ...panelStyle, flexDirection: "column", gap: 8, width: "min(360px, calc(100vw - 32px))" }}>
+        <div role="alertdialog" aria-label={L("A request", "リクエスト")} className="seiza-together" style={{ ...panelStyle, flexDirection: "column", gap: 8, width: "min(360px, calc(100vw - 32px))" }}>
           <span style={{ fontSize: 14 }}>
-            <strong>{nameOf(request.peer)}</strong> would like {TOGETHER_LABELS[request.gesture].ask}.
+            {togetherAskLine(nameOf(request.peer), request.gesture)}{L(".", "。")}
           </span>
           <div style={{ display: "flex", gap: 8 }}>
             <button type="button" style={{ ...primaryButtonStyle, flex: 1, padding: "8px 12px" }} onClick={() => answerTogether(request.id, true)}>
-              Yes
+              {L("Yes", "はい")}
             </button>
             <button type="button" style={{ ...pillButtonStyle, flex: 1, justifyContent: "center" }} onClick={() => answerTogether(request.id, false)}>
-              No thanks
+              {L("No thanks", "遠慮します")}
             </button>
           </div>
           <div style={{ height: 3, borderRadius: 2, background: "rgba(255,255,255,0.12)", overflow: "hidden" }}>
             <div key={request.id} style={{ height: "100%", background: ACCENT_COLOR, animation: `seiza-together-drain ${TOGETHER.requestSeconds}s linear forwards` }} />
           </div>
-          <span style={{ fontSize: 11, opacity: 0.7 }}>No answer means no. You can turn off requests in the Gestures menu.</span>
+          <span style={{ fontSize: 11, opacity: 0.7 }}>{L("No answer means no. You can turn off requests in the Gestures menu.", "返事がなければ「いいえ」になります。リクエストはジェスチャーメニューでオフにできます。")}</span>
         </div>
       ) : t.outgoing ? (
         <div className="seiza-together" style={{ ...panelStyle, gap: 10, alignItems: "center", padding: "8px 12px", maxWidth: "calc(100vw - 32px)" }}>
           <span>
-            Asking {nameOf(t.outgoing.peer)} for {TOGETHER_LABELS[t.outgoing.gesture].ask}…
+            {togetherAskingLine(nameOf(t.outgoing.peer), t.outgoing.gesture)}
           </span>
           <button type="button" style={{ ...pillButtonStyle, padding: "5px 10px", fontSize: 12 }} onClick={cancelTogether}>
-            Cancel
+            {L("Cancel", "取り消す")}
           </button>
         </div>
       ) : t.notices.length > 0 ? (
@@ -82,22 +84,22 @@ export function TogetherPrompt({
               <span style={{ fontSize: 13, flex: 1, whiteSpace: open ? undefined : "nowrap" }}>
                 {open ? (
                   <>
-                    Ask <strong>{offer.name}</strong> for
+                    {L("Ask ", "")}<strong>{offer.name}</strong>{L(" for", "さんに頼む")}
                   </>
                 ) : (
                   <>
-                    <strong>{offer.name}</strong> is close
+                    <strong>{offer.name}</strong>{L(" is close", "さんが近くにいます")}
                   </>
                 )}
               </span>
               {!open && (
                 <button type="button" style={{ ...pillButtonStyle, padding: "5px 10px", fontSize: 12 }} onClick={() => setOpen(true)}>
-                  Together…
+                  {L("Together…", "いっしょに…")}
                 </button>
               )}
               <button
                 type="button"
-                aria-label="Dismiss"
+                aria-label={L("Dismiss", "閉じる")}
                 style={{ ...pillButtonStyle, padding: "5px 9px", fontSize: 12 }}
                 onClick={() => setDismissed(offer.id)}
               >
@@ -113,7 +115,7 @@ export function TogetherPrompt({
                     style={{ ...pillButtonStyle, padding: "7px 12px", fontSize: 12 }}
                     onClick={() => askTogether(offer.id, g.name)}
                   >
-                    {g.label}
+                    {togetherLabel(g.name)}
                   </button>
                 ))}
               </div>

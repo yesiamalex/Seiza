@@ -6,6 +6,7 @@ import { trackingStore } from "../body/trackingStore";
 import { hitTest, layoutHud, type HudButton, type XrHudModel } from "./hudPanel";
 import { gazeMode, LazyYaw, registerGazeTarget } from "./gaze";
 import { GazeCursor } from "./GazeCursor";
+import { getLang, L, useLang } from "../../i18n/lang";
 
 export type { XrHudModel } from "./hudPanel";
 
@@ -76,6 +77,7 @@ export function XrHud({ model }: { model: XrHudModel }) {
  *  second, and re-uploading a texture each time would be waste. */
 function signatureOf(model: XrHudModel): string {
   return JSON.stringify([
+    getLang(),
     model.title,
     model.people,
     model.voice,
@@ -158,8 +160,9 @@ function XrHudPanel({ model, session }: { model: XrHudModel; session: XRSession 
   redrawRef.current = redraw;
   useEffect(() => redraw(), [layout]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const hint = useMemo(() => makeHintTexture(gaze), [gaze]);
-  const gazeLabel = useMemo(() => makeGazeButtonTexture(open), [open]);
+  const lang = useLang();
+  const hint = useMemo(() => makeHintTexture(gaze), [gaze, lang]); // eslint-disable-line react-hooks/exhaustive-deps
+  const gazeLabel = useMemo(() => makeGazeButtonTexture(open), [open, lang]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => texture.dispose(), [texture]);
   useEffect(() => () => hint.dispose(), [hint]);
   useEffect(() => () => gazeLabel.dispose(), [gazeLabel]);
@@ -472,7 +475,7 @@ function makeGazeButtonTexture(open: boolean): THREE.CanvasTexture {
     ctx.fillStyle = "#ffffff";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    fitText(ctx, open ? "Close" : "Menu", GAZE_WIDTH / 2, GAZE_HEIGHT / 2 + 2, GAZE_WIDTH - 60, "600", 64);
+    fitText(ctx, open ? L("Close", "閉じる") : L("Menu", "メニュー"), GAZE_WIDTH / 2, GAZE_HEIGHT / 2 + 2, GAZE_WIDTH - 60, "600", 64);
   }
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
@@ -498,13 +501,13 @@ function makeHintTexture(gaze: boolean): THREE.CanvasTexture {
     ctx.textBaseline = "middle";
     const room = HINT_WIDTH - 90;
     if (gaze) {
-      fitText(ctx, "Look at Menu, below right, and tap the screen", HINT_WIDTH / 2, 72, room, "600", 44);
+      fitText(ctx, L("Look at Menu, below right, and tap the screen", "右下の「メニュー」を見て画面をタップ"), HINT_WIDTH / 2, 72, room, "600", 44);
       ctx.fillStyle = "rgba(255,255,255,0.6)";
-      fitText(ctx, "Look at any button and tap to press it", HINT_WIDTH / 2, 130, room, "400", 36);
+      fitText(ctx, L("Look at any button and tap to press it", "ボタンを見てタップすると押せます"), HINT_WIDTH / 2, 130, room, "400", 36);
     } else {
-      fitText(ctx, "Turn your left palm toward you for the menu", HINT_WIDTH / 2, 72, room, "600", 44);
+      fitText(ctx, L("Turn your left palm toward you for the menu", "左の手のひらを自分に向けるとメニュー"), HINT_WIDTH / 2, 72, room, "600", 44);
       ctx.fillStyle = "rgba(255,255,255,0.6)";
-      fitText(ctx, "Or press X to pin it in front of you", HINT_WIDTH / 2, 130, room, "400", 36);
+      fitText(ctx, L("Or press X to pin it in front of you", "Xボタンで目の前に固定"), HINT_WIDTH / 2, 130, room, "400", 36);
     }
   }
   const texture = new THREE.CanvasTexture(canvas);

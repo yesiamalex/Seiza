@@ -262,6 +262,8 @@ guarantee yet.
   to start, press again (or move) to stop.
 - **Text chat.** A room-wide chat panel, relayed through the room server. Chat
   isn't saved between connections.
+- **English and 日本語.** Every menu, panel, and prompt comes in English and
+  Japanese, switched with the language button. See [Language](#language).
 - **Name tags** above every player, highlighted while that player speaks.
 - **Four ways to choose an avatar**, on the join screen and in the in-world
   Avatar menu (`C`), each with a rotatable 3D preview:
@@ -470,7 +472,8 @@ Each deployment serves one world. To customize it:
 2. Set `VITE_SEIZA_WORLD_ID` to the same ID.
 
 You don't need to change application code. For the full list of fields, see
-`public/worlds/default/README.md`. For example, you can turn off in-world
+`public/worlds/default/README.md`. `displayNameJa` is the world's name for
+visitors who've chosen Japanese; without it, they see `displayName`. For example, you can turn off in-world
 editing with `editingEnabled: false`, or avatar uploads with
 `allowAvatarUpload: false`.
 
@@ -918,6 +921,27 @@ menus and notifications.
   the D-pad and the jump button.
 - Opening any menu (chat, gestures, media, edit, avatar, roster, or admin)
   closes the others.
+
+### Language
+
+Seiza's own words come in English and Japanese. The language button
+(**日本語** or **EN**) is at the top right of the join screen and in the
+top bar. The choice is kept on this device. A browser set to Japanese starts
+in Japanese.
+
+The language changes only what you see: menus, panels, prompts, the VR
+menu, gesture names, and the world's name (`displayNameJa` in `world.json`).
+Text people write, such as chat and notes on boards, stays as they wrote
+it.
+
+#### Add text in both languages
+
+Text in code is written with both versions side by side, English first:
+`L("Join", "参加")` from `src/i18n/lang.ts`. A component that shows text
+calls `useLang()` once, so it redraws when the language changes. Text drawn
+on a canvas, such as the VR menu, includes the language in what triggers a
+redraw. Built-in gesture names are in `src/i18n/gestureLabels.ts`; a
+deployment's custom gestures keep the label `world.json` gives them.
 
 ### In a VR headset
 

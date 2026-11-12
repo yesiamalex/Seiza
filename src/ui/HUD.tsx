@@ -6,6 +6,7 @@ import { ChevronRightIcon, CloseIcon, MenuIcon, SignalIcon, SignalOffIcon } from
 import type { ConnectionState } from "../multiplayer/useRoomSocket";
 import { TOUCH_CONTROLS_CLEARANCE_CSS, TOUCH_CONTROLS_RIGHT_CLEARANCE_CSS, TOUCH_CONTROLS_SIDE_CLEARANCE_CSS } from "../player/touchControlsMetrics";
 import { useMediaQuery } from "./useMediaQuery";
+import { L, useLang } from "../i18n/lang";
 
 interface HUDProps {
   connectionState: ConnectionState;
@@ -87,6 +88,7 @@ const DRAWER_GAP_PX = 8;
 const DRAWER_EDGE_PX = 10;
 
 export function HUD({ connectionState, worldName, topRight, topLeft, touchControlsVisible, editing = false, children }: HUDProps) {
+  useLang();
   const connected = connectionState === "connected";
 
   // Portrait phones get a drawer on the right edge. A landscape phone is
@@ -380,7 +382,7 @@ export function HUD({ connectionState, worldName, topRight, topLeft, touchContro
           <div
             className={`seiza-control-bar ${drawerOpen ? "seiza-bar-reveal" : "seiza-bar-conceal"}`}
             role="group"
-            aria-label="World controls"
+            aria-label={L("World controls", "ワールドの操作")}
             aria-hidden={!drawerOpen}
             style={{
               ...BAR_STYLE,
@@ -398,7 +400,7 @@ export function HUD({ connectionState, worldName, topRight, topLeft, touchContro
             type="button"
             onClick={() => setDrawerOpen(!drawerOpen)}
             aria-expanded={drawerOpen}
-            aria-label={drawerOpen ? "Hide controls" : editing ? "Show controls (editing)" : "Show controls"}
+            aria-label={drawerOpen ? L("Hide controls", "操作を隠す") : editing ? L("Show controls (editing)", "操作を表示(編集中)") : L("Show controls", "操作を表示")}
             style={{ ...LAUNCHER_STYLE, position: "relative", ...(editing && !drawerOpen ? LAUNCHER_EDITING_STYLE : null) }}
           >
             {drawerOpen ? <CloseIcon size={18} /> : <MenuIcon size={20} />}
@@ -519,7 +521,7 @@ function ControlDrawer({
         type="button"
         onClick={() => onOpenChange(!open)}
         aria-expanded={open}
-        aria-label={open ? "Close controls" : editing ? "Open controls (editing)" : "Open controls"}
+        aria-label={open ? L("Close controls", "操作を閉じる") : editing ? L("Open controls (editing)", "操作を開く(編集中)") : L("Open controls", "操作を開く")}
         className="seiza-drawer"
         data-open="true"
         style={{
@@ -554,7 +556,7 @@ function ControlDrawer({
         className="seiza-control-bar seiza-control-bar--drawer seiza-drawer"
         data-open={open}
         role="group"
-        aria-label="World controls"
+        aria-label={L("World controls", "ワールドの操作")}
         aria-hidden={!open}
         style={{
           position: "fixed",

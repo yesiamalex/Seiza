@@ -3,12 +3,13 @@ import { ROOM_SKY_SCALES, ROOM_SKY_WEATHER, type RoomSky, type RoomSkyWeather } 
 import { roomSkyNow } from "../sky/roomSky";
 import type { SkyConfig } from "../sky/skyState";
 import { philippineTime, WEATHER } from "../sky/weather";
+import { L, useLang } from "../i18n/lang";
 import { inputStyle, pillButtonActiveStyle, pillButtonStyle } from "../ui/styles";
 
-const SCALE_LABELS: Record<number, string> = {
-  1: "Real speed",
-  60: "1 hour a minute",
-  360: "1 day in 4 min",
+const SCALE_LABELS: Record<number, [string, string]> = {
+  1: ["Real speed", "実際の速さ"],
+  60: ["1 hour a minute", "1分で1時間"],
+  360: ["1 day in 4 min", "4分で1日"],
 };
 
 /** Hour slider changes are sent once the slider rests this long. */
@@ -33,7 +34,7 @@ function runningHour(sky: RoomSky): number {
 }
 
 function weatherLabel(weather: RoomSkyWeather): string {
-  return weather === "auto" ? "Auto (shared schedule)" : WEATHER[weather].label;
+  return weather === "auto" ? L("Auto (shared schedule)", "自動(共通スケジュール)") : L(WEATHER[weather].label, WEATHER[weather].labelJa);
 }
 
 interface SkyControlsProps {
@@ -53,6 +54,7 @@ interface SkyControlsProps {
  * run it from an hour at a chosen speed. Reset goes back to world.json.
  */
 export function SkyControls({ worldSky, roomSky, onSetRoomSky, connected, skyboxInUse }: SkyControlsProps) {
+  useLang();
   const synced = roomSky ? roomSky.mode === "realtime" : worldSky?.cycle === "realtime";
   const mode: "fixed" | "running" = roomSky?.mode === "running" ? "running" : "fixed";
   const scale = roomSky?.scale ?? 60;
@@ -80,10 +82,15 @@ export function SkyControls({ worldSky, roomSky, onSetRoomSky, connected, skybox
 
   const nowHour = synced ? phtHourNow() : roomSky?.mode === "running" ? runningHour(roomSky) : roomSky?.hour;
   const status = stillSunset
-    ? "World default: the still sunset."
-    : `${roomSky ? "Room sky" : "World default"}: ${formatHour(nowHour ?? 0)} PHT${
-        synced ? ", real time" : mode === "running" ? `, running at ${scale}×` : ", held"
-      }, ${weatherLabel(weather).toLowerCase()}.`;
+    ? L("World default: the still sunset.", "ワールドの標準:止まった夕焼け。")
+    : L(
+        `${roomSky ? "Room sky" : "World default"}: ${formatHour(nowHour ?? 0)} PHT${
+          synced ? ", real time" : mode === "running" ? `, running at ${scale}×` : ", held"
+        }, ${weatherLabel(weather).toLowerCase()}.`,
+        `${roomSky ? "部屋の空" : "ワールドの標準"}:フィリピン時間 ${formatHour(nowHour ?? 0)}${
+          synced ? "、実時間" : mode === "running" ? `、${scale}倍速` : "、固定"
+        }、${weatherLabel(weather)}。`
+      );
 
   /** Where the clock is now, so a speed or weather change carries on from
    *  there instead of jumping back to the start hour. */
@@ -120,14 +127,14 @@ export function SkyControls({ worldSky, roomSky, onSetRoomSky, connected, skybox
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6, borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 8 }}>
-      <strong>Sky and time</strong>
+      <strong>{L("Sky and time", "空と時間")}</strong>
       <small style={{ opacity: 0.7 }}>
-        {status} Changes here are shared with everyone in the room.
-        {skyboxInUse && " The uploaded skybox image covers the sky, but the light still follows these settings."}
+        {status} {L("Changes here are shared with everyone in the room.", "ここでの変更は部屋の全員に共有されます。")}
+        {skyboxInUse && L(" The uploaded skybox image covers the sky, but the light still follows these settings.", "アップロードしたスカイボックスが空を覆いますが、光はこの設定に従います。")}
       </small>
       <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
         <input type="checkbox" checked={synced} disabled={!connected} onChange={(event) => setSynced(event.target.checked)} />
-        Sync with real time in the Philippines (PHT)
+        {L("Sync with real time in the Philippines (PHT)", "フィリピンの実時間(PHT)に合わせる")}
       </label>
       <div style={{ display: "flex", flexDirection: "column", gap: 6, ...greyed }} aria-disabled={synced}>
         <div style={{ display: "flex", gap: 6 }}>
@@ -135,22 +142,22 @@ export function SkyControls({ worldSky, roomSky, onSetRoomSky, connected, skybox
             style={!synced && mode === "fixed" ? pillButtonActiveStyle : pillButtonStyle}
             disabled={timeDisabled}
             onClick={() => send({ mode: "fixed", hour: currentHour() })}
-            title="Hold the sky at one time of day"
+            title={L("Hold the sky at one time of day", "空をある時刻で止める")}
           >
-            Hold
+            {L("Hold", "固定")}
           </button>
           <button
             style={!synced && mode === "running" ? pillButtonActiveStyle : pillButtonStyle}
             disabled={timeDisabled}
             onClick={() => send({ mode: "running", hour: draftHour, scale })}
-            title="Run the clock from the chosen time"
+            title={L("Run the clock from the chosen time", "選んだ時刻から時計を進める")}
           >
-            Run
+            {L("Run", "進める")}
           </button>
         </div>
         <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <span>
-            {mode === "running" && !synced ? "Start from" : "Time"}: {formatHour(draftHour)}
+            {mode === "running" && !synced ? L("Start from", "開始時刻") : L("Time", "時刻")}: {formatHour(draftHour)}
           </span>
           <input
             type="range"
@@ -169,7 +176,7 @@ export function SkyControls({ worldSky, roomSky, onSetRoomSky, connected, skybox
               style={!synced && mode === "running" && scale === option ? pillButtonActiveStyle : pillButtonStyle}
               disabled={timeDisabled || mode !== "running"}
               onClick={() => send({ mode: "running", scale: option })}
-              title={SCALE_LABELS[option]}
+              title={SCALE_LABELS[option] && L(...SCALE_LABELS[option])}
             >
               {option}×
             </button>
@@ -177,7 +184,7 @@ export function SkyControls({ worldSky, roomSky, onSetRoomSky, connected, skybox
         </div>
       </div>
       <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        Weather
+        {L("Weather", "天気")}
         <select
           value={weather}
           disabled={!connected}
@@ -193,7 +200,7 @@ export function SkyControls({ worldSky, roomSky, onSetRoomSky, connected, skybox
       </label>
       {roomSky && (
         <button style={pillButtonStyle} disabled={!connected} onClick={() => onSetRoomSky(null)}>
-          Reset to world default
+          {L("Reset to world default", "ワールドの標準に戻す")}
         </button>
       )}
     </div>

@@ -9,6 +9,7 @@
 import { useSyncExternalStore } from "react";
 import { isPlayerBlocked } from "../multiplayer/playerFilter";
 import { isTogetherGesture, TOGETHER, type ClientMessage, type ServerMessage, type TogetherGesture } from "../multiplayer/types";
+import { L } from "../i18n/lang";
 
 export interface TogetherRequest {
   /** Server-assigned; empty until the server has confirmed an ask. */
@@ -26,14 +27,32 @@ export interface TogetherStart {
   role: "lead" | "follow";
 }
 
-export const TOGETHER_LABELS: Record<TogetherGesture, { label: string; ask: string }> = {
-  handshake: { label: "Handshake", ask: "a handshake" },
-  highfive: { label: "High five", ask: "a high five" },
-  hug: { label: "Hug", ask: "a hug" },
-  fistbump: { label: "Fist bump", ask: "a fist bump" },
-  dap: { label: "Dap", ask: "a dap" },
-  slowdance: { label: "Slow dance", ask: "a slow dance" },
+export const TOGETHER_LABELS: Record<TogetherGesture, { label: string; ask: string; labelJa: string }> = {
+  handshake: { label: "Handshake", ask: "a handshake", labelJa: "握手" },
+  highfive: { label: "High five", ask: "a high five", labelJa: "ハイタッチ" },
+  hug: { label: "Hug", ask: "a hug", labelJa: "ハグ" },
+  fistbump: { label: "Fist bump", ask: "a fist bump", labelJa: "グータッチ" },
+  dap: { label: "Dap", ask: "a dap", labelJa: "ダップ" },
+  slowdance: { label: "Slow dance", ask: "a slow dance", labelJa: "スローダンス" },
 };
+
+/** A together gesture's button label, in the visitor's language. */
+export function togetherLabel(gesture: TogetherGesture): string {
+  const w = TOGETHER_LABELS[gesture];
+  return L(w.label, w.labelJa);
+}
+
+/** "Ana would like a hug" / 「Anaさんがハグをしたいそうです」. */
+export function togetherAskLine(name: string, gesture: TogetherGesture): string {
+  const w = TOGETHER_LABELS[gesture];
+  return L(`${name} would like ${w.ask}`, `${name}さんが${w.labelJa}を求めています`);
+}
+
+/** "Asking Ana for a hug…" / 「Anaさんにハグを頼んでいます…」. */
+export function togetherAskingLine(name: string, gesture: TogetherGesture): string {
+  const w = TOGETHER_LABELS[gesture];
+  return L(`Asking ${name} for ${w.ask}…`, `${name}さんに${w.labelJa}を頼んでいます…`);
+}
 
 /** A world's own say over requests (Seilaya: a refuge, a facilitator's
  *  pause). "unavailable" turns a request away without a prompt. */
@@ -142,7 +161,7 @@ export function askTogether(peer: string, gesture: TogetherGesture) {
   outgoingTimer = setTimeout(() => {
     if (!state.outgoing || state.outgoing.peer !== peer) return;
     state.outgoing = null;
-    notify(`No answer from ${nameOf(peer)}.`);
+    notify(L(`No answer from ${nameOf(peer)}.`, `${nameOf(peer)}さんから返事がありませんでした。`));
   }, (TOGETHER.requestSeconds + 3) * 1000);
   emit();
 }
@@ -208,10 +227,10 @@ export function receiveTogether(message: ServerMessage): boolean {
         if (outgoingTimer) clearTimeout(outgoingTimer);
         notify(
           message.reason === "declined"
-            ? `${nameOf(peer)} said no thanks. That's okay.`
+            ? L(`${nameOf(peer)} said no thanks. That's okay.`, `${nameOf(peer)}さんは遠慮しました。大丈夫ですよ。`)
             : message.reason === "expired"
-              ? `No answer from ${nameOf(peer)}.`
-              : `${nameOf(peer)} isn't available for that right now.`
+              ? L(`No answer from ${nameOf(peer)}.`, `${nameOf(peer)}さんから返事がありませんでした。`)
+              : L(`${nameOf(peer)} isn't available for that right now.`, `${nameOf(peer)}さんは今それができません。`)
         );
       } else if (state.incoming.length !== before) emit();
       return true;

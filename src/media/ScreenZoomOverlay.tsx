@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { CloseIcon } from "../ui/icons";
+import { L, useLang } from "../i18n/lang";
 
 interface ScreenZoomOverlayProps {
   stream: MediaStream;
@@ -24,6 +25,7 @@ interface ScreenZoomOverlayProps {
  * do differently.
  */
 export function ScreenZoomOverlay({ stream, label, onClose }: ScreenZoomOverlayProps) {
+  useLang();
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -77,7 +79,7 @@ export function ScreenZoomOverlay({ stream, label, onClose }: ScreenZoomOverlayP
     <div
       role="dialog"
       aria-modal="true"
-      aria-label={`${label} — shared screen`}
+      aria-label={L(`${label} — shared screen`, `${label} — 共有画面`)}
       onClick={onClose}
       style={{
         position: "absolute",
@@ -119,7 +121,7 @@ export function ScreenZoomOverlay({ stream, label, onClose }: ScreenZoomOverlayP
             event.stopPropagation();
             onClose();
           }}
-          aria-label="Close the enlarged screen"
+          aria-label={L("Close the enlarged screen", "拡大した画面を閉じる")}
           style={{
             flexShrink: 0,
             display: "inline-flex",
@@ -158,7 +160,10 @@ export function ScreenZoomOverlay({ stream, label, onClose }: ScreenZoomOverlayP
         }}
       />
       <small style={{ color: "white", opacity: 0.5, fontFamily: "system-ui, sans-serif" }}>
-        Audio still comes from the room, so it stays positioned where the presenter is standing.
+        {L(
+          "Audio still comes from the room, so it stays positioned where the presenter is standing.",
+          "音声は部屋から聞こえるので、発表者が立っている場所から聞こえ続けます。"
+        )}
       </small>
     </div>
   );

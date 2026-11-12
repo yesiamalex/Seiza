@@ -14,6 +14,7 @@ import {
 import { AvatarPicker } from "./AvatarPicker";
 import { AvatarPreview } from "./AvatarPreview";
 import { AvaturnNotice, AvaturnSteps } from "./AvaturnSteps";
+import { L, useLang } from "../i18n/lang";
 import { ACCENT_COLOR, pillButtonActiveStyle, pillButtonStyle, primaryButtonStyle } from "./styles";
 
 // KV's real ceiling is 25 MiB per value, so this is a hard block. Keep in
@@ -54,11 +55,11 @@ function labelForChoice(choice: StoredAvatarChoice, presets: WorldConfig["defaul
     case "upload":
       return choice.fileName;
     case "preset":
-      return presets?.find((p) => p.url === choice.url)?.label ?? "A preset from this deployment";
+      return presets?.find((p) => p.url === choice.url)?.label ?? L("A preset from this deployment", "このサイトのプリセット");
     case "designer":
-      return AVATAR_DESIGN_PRESETS.find((p) => JSON.stringify(p.spec) === JSON.stringify(choice.spec))?.label ?? "Designed in the browser";
+      return AVATAR_DESIGN_PRESETS.find((p) => JSON.stringify(p.spec) === JSON.stringify(choice.spec))?.label ?? L("Designed in the browser", "ブラウザでデザイン");
     default:
-      return "Designed in the browser";
+      return L("Designed in the browser", "ブラウザでデザイン");
   }
 }
 
@@ -122,6 +123,7 @@ interface Pending {
  *   uploaded the same way (see AvaturnSteps.tsx).
  */
 export function AvatarChooser({ world, value, onChange, rememberLocally, onStagedPreview }: AvatarChooserProps) {
+  useLang();
   const presets = world.defaultAvatars ?? [];
   const allowUpload = world.allowAvatarUpload !== false;
   const [tab, setTab] = useState<Tab>(() =>
@@ -145,9 +147,9 @@ export function AvatarChooser({ world, value, onChange, rememberLocally, onStage
   }, []);
 
   const tabs: { id: Tab; label: string }[] = [
-    { id: "design", label: "Design" },
-    ...(presets.length ? [{ id: "presets" as const, label: "Presets" }] : []),
-    ...(allowUpload ? [{ id: "upload" as const, label: "Upload VRM" }] : []),
+    { id: "design", label: L("Design", "デザイン") },
+    ...(presets.length ? [{ id: "presets" as const, label: L("Presets", "プリセット") }] : []),
+    ...(allowUpload ? [{ id: "upload" as const, label: L("Upload VRM", "VRMをアップロード") }] : []),
     ...(allowUpload ? [{ id: "avaturn" as const, label: "Avaturn" }] : []),
   ];
 
@@ -169,7 +171,7 @@ export function AvatarChooser({ world, value, onChange, rememberLocally, onStage
       setApplying(true);
       const url = await ensureUploadedAvatarAvailable(world.id, choice.remoteUrl || undefined, localBlob);
       setApplying(false);
-      if (!url) return setApplyError("Couldn't upload that file again. Check your connection and try once more.");
+      if (!url) return setApplyError(L("Couldn't upload that file again. Check your connection and try once more.", "ファイルを再アップロードできませんでした。接続を確認して、もう一度お試しください。"));
       choice = { ...choice, remoteUrl: url };
       if (sessionUpload?.worldId === world.id && sessionUpload.fileName === choice.fileName) sessionUpload.remoteUrl = url;
       if (rememberLocally) void saveUploadedAvatarFile(world.id, localBlob, choice.fileName, url);
@@ -211,7 +213,7 @@ export function AvatarChooser({ world, value, onChange, rememberLocally, onStage
               rather than swapping a prop under a live scene. */}
           <AvatarPreview key={shownUrl} url={shownUrl} height="clamp(150px, 26svh, 230px)" />
           <small style={{ opacity: 0.7, display: "flex", gap: 5, minWidth: 0 }}>
-            <span style={{ opacity: 0.7, flexShrink: 0 }}>{pending ? "Previewing:" : "Wearing now:"}</span>
+            <span style={{ opacity: 0.7, flexShrink: 0 }}>{pending ? L("Previewing:", "プレビュー中:") : L("Wearing now:", "現在のアバター:")}</span>
             <strong style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 600 }}>
               {labelForChoice(shown, presets)}
             </strong>
@@ -224,7 +226,7 @@ export function AvatarChooser({ world, value, onChange, rememberLocally, onStage
                 style={{ ...primaryButtonStyle, flex: 1, padding: "8px 12px", fontSize: 13, opacity: applying ? 0.6 : 1 }}
                 onClick={() => void wear(pending.choice, pending.localUrl, pendingBlob.current)}
               >
-                {applying ? "Uploading…" : "Wear this"}
+                {applying ? L("Uploading…", "アップロード中…") : L("Wear this", "これを使う")}
               </button>
               <button type="button" disabled={applying} style={{ ...pillButtonStyle, padding: "8px 12px", fontSize: 13 }} onClick={() => setPending(null)}>
                 Keep current
@@ -236,7 +238,7 @@ export function AvatarChooser({ world, value, onChange, rememberLocally, onStage
       {applyError && <small style={{ color: "#ff8a80" }}>{applyError}</small>}
 
       {tabs.length > 1 && (
-        <div role="tablist" aria-label="Avatar source" style={{ display: "flex", gap: 4, padding: 3, borderRadius: 10, background: "rgba(255,255,255,0.05)" }}>
+        <div role="tablist" aria-label={L("Avatar source", "アバターの種類")} style={{ display: "flex", gap: 4, padding: 3, borderRadius: 10, background: "rgba(255,255,255,0.05)" }}>
           {tabs.map((t) => (
             <button
               key={t.id}
@@ -289,9 +291,9 @@ export function AvatarChooser({ world, value, onChange, rememberLocally, onStage
             })}
           </div>
           <button type="button" style={{ ...primaryButtonStyle, padding: "9px 14px", fontSize: 13 }} onClick={() => setDesignerOpen(true)}>
-            {shown.kind === "designer" ? "Customize this look" : "Design an avatar"}
+            {shown.kind === "designer" ? L("Customize this look", "この見た目をカスタマイズ") : L("Design an avatar", "アバターをデザイン")}
           </button>
-          <small style={{ opacity: 0.6 }}>Made in your browser. Nothing is uploaded, and it works with every gesture.</small>
+          <small style={{ opacity: 0.6 }}>{L("Made in your browser. Nothing is uploaded, and it works with every gesture.", "ブラウザで作成します。何もアップロードされず、すべてのジェスチャーに対応します。")}</small>
           {designerOpen && (
             <AvatarDesignerDialog
               initial={designerSpec}
@@ -312,7 +314,7 @@ export function AvatarChooser({ world, value, onChange, rememberLocally, onStage
             selectedUrl={shown.kind === "preset" ? shown.url : null}
             onSelect={(url) => choose({ kind: "preset", url })}
           />
-          <small style={{ opacity: 0.6 }}>Provided by this deployment.</small>
+          <small style={{ opacity: 0.6 }}>{L("Provided by this deployment.", "このサイトが用意したアバターです。")}</small>
         </div>
       )}
 
@@ -361,6 +363,7 @@ function UploadPanel({
   /** Wear (or, in the world, preview) a file uploaded before. */
   onRestore: (previous: PreviousUpload) => void;
 }) {
+  useLang();
   const [file, setFile] = useState<File | null>(null);
   const [stagedUrl, setStagedUrl] = useState<string | null>(null);
   const [optimize, setOptimize] = useState(true);
@@ -412,14 +415,14 @@ function UploadPanel({
     if (avaturn) return void convertPicked(picked);
     if (!picked.name.toLowerCase().endsWith(".vrm")) {
       setFile(null);
-      return setError("Choose a .vrm file.");
+      return setError(L("Choose a .vrm file.", ".vrm ファイルを選んでください。"));
     }
     if (picked.size > PICK_TIME_CEILING_BYTES) {
       setFile(null);
-      return setError(`That file is too large (max ${formatMB(PICK_TIME_CEILING_BYTES)}, even before optimization).`);
+      return setError(L(`That file is too large (max ${formatMB(PICK_TIME_CEILING_BYTES)}, even before optimization).`, `ファイルが大きすぎます(最適化前でも最大 ${formatMB(PICK_TIME_CEILING_BYTES)})。`));
     }
     if (picked.size > HARD_MAX_AVATAR_BYTES) {
-      setWarning(`This is ${formatMB(picked.size)}, over the ${formatMB(HARD_MAX_AVATAR_BYTES)} limit. Optimization has to shrink it first, so keep "Optimize" on.`);
+      setWarning(L(`This is ${formatMB(picked.size)}, over the ${formatMB(HARD_MAX_AVATAR_BYTES)} limit. Optimization has to shrink it first, so keep "Optimize" on.`, `このファイルは ${formatMB(picked.size)} で、上限の ${formatMB(HARD_MAX_AVATAR_BYTES)} を超えています。最適化で小さくする必要があるので、「最適化」をオンのままにしてください。`));
     } else if (picked.size > LARGE_FILE_WARNING_BYTES) {
       setWarning(`${formatMB(picked.size)} is a large avatar. It will take everyone in the room longer to load.`);
     }
@@ -431,22 +434,22 @@ function UploadPanel({
   async function convertPicked(picked: File) {
     if (!picked.name.toLowerCase().endsWith(".glb")) {
       setFile(null);
-      return setError("Choose the .glb file you downloaded from Avaturn.");
+      return setError(L("Choose the .glb file you downloaded from Avaturn.", "Avaturnからダウンロードした .glb ファイルを選んでください。"));
     }
     if (picked.size > PICK_TIME_CEILING_BYTES) {
       setFile(null);
-      return setError(`That file is too large (max ${formatMB(PICK_TIME_CEILING_BYTES)}).`);
+      return setError(L(`That file is too large (max ${formatMB(PICK_TIME_CEILING_BYTES)}).`, `ファイルが大きすぎます(最大 ${formatMB(PICK_TIME_CEILING_BYTES)})。`));
     }
     setBusy(true);
     setFile(null);
-    setStatus("Converting to VRM and shrinking it…");
+    setStatus(L("Converting to VRM and shrinking it…", "VRMに変換して軽量化しています…"));
     try {
       // Loaded only here, so nobody else downloads the converter.
       const { convertGlbToVrm } = await import("../avatar/import/glbToVrm");
       const name = picked.name.replace(/\.glb$/i, "") || "Avaturn avatar";
       const result = await convertGlbToVrm(picked, { name });
       setFile(new File([result.blob], `${name}.vrm`, { type: "model/gltf-binary" }));
-      setStatus(`Converted to VRM: ${formatMB(result.originalBytes)} down to ${formatMB(result.vrmBytes)}.`);
+      setStatus(L(`Converted to VRM: ${formatMB(result.originalBytes)} down to ${formatMB(result.vrmBytes)}.`, `VRMに変換しました: ${formatMB(result.originalBytes)} → ${formatMB(result.vrmBytes)}。`));
       if (result.notes.length > 0) setWarning(result.notes.join(" "));
     } catch (err) {
       console.warn("Avaturn conversion failed:", err);
@@ -456,7 +459,7 @@ function UploadPanel({
       setError(
         err instanceof Error && err.name === "AvatarImportError"
           ? err.message
-          : "That file couldn't be converted. Make sure it's the .glb you exported from Avaturn."
+          : L("That file couldn't be converted. Make sure it's the .glb you exported from Avaturn.", "このファイルは変換できませんでした。Avaturnから書き出した .glb か確認してください。")
       );
     } finally {
       setBusy(false);
@@ -474,20 +477,22 @@ function UploadPanel({
       let optimized = "";
       // A converted Avaturn file is already optimized.
       if (optimize && !avaturn) {
-        setStatus("Optimizing…");
+        setStatus(L("Optimizing…", "最適化中…"));
         const result = await optimizeVrmAvatar(file);
         blob = result.blob;
-        optimized = result.applied ? ` Optimized from ${formatMB(result.originalBytes)} to ${formatMB(result.optimizedBytes)}.` : ` ${result.reason ?? ""}`;
+        optimized = result.applied
+          ? L(` Optimized from ${formatMB(result.originalBytes)} to ${formatMB(result.optimizedBytes)}.`, ` ${formatMB(result.originalBytes)} から ${formatMB(result.optimizedBytes)} に最適化しました。`)
+          : ` ${result.reason ?? ""}`;
         setStatus(optimized.trim() || null);
       }
       if (blob.size > HARD_MAX_AVATAR_BYTES) {
-        throw new Error(`Still too large after optimization (max ${formatMB(HARD_MAX_AVATAR_BYTES)}, a Cloudflare KV limit).`);
+        throw new Error(L(`Still too large after optimization (max ${formatMB(HARD_MAX_AVATAR_BYTES)}, a Cloudflare KV limit).`, `最適化後もまだ大きすぎます(最大 ${formatMB(HARD_MAX_AVATAR_BYTES)}、Cloudflare KVの上限)。`));
       }
 
       // Parse it before anyone else has to. A file that fails here would
       // otherwise upload cleanly and then break for every person in the
       // room — see validateVrm.ts.
-      setStatus("Checking the model…");
+      setStatus(L("Checking the model…", "モデルを確認中…"));
       const validation = await validateVrmFile(blob);
       if (!validation.ok) {
         setWarning(null);
@@ -495,7 +500,7 @@ function UploadPanel({
       }
       setWarning(validation.warnings.length > 0 ? validation.warnings.join(" ") : null);
 
-      setStatus("Uploading…");
+      setStatus(L("Uploading…", "アップロード中…"));
       const url = await uploadAvatarFile(blob);
       sessionUpload = { worldId, blob, fileName: file.name, remoteUrl: url };
       if (rememberLocally) await saveUploadedAvatarFile(worldId, blob, file.name, url);
@@ -504,10 +509,10 @@ function UploadPanel({
         url,
         localUrl: URL.createObjectURL(blob),
       });
-      setStatus(`Using ${file.name}.${optimized}`);
+      setStatus(L(`Using ${file.name}.${optimized}`, `${file.name} を使用中。${optimized}`));
       setFile(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed.");
+      setError(err instanceof Error ? err.message : L("Upload failed.", "アップロードに失敗しました。"));
       setStatus(null);
     } finally {
       setBusy(false);
@@ -554,7 +559,7 @@ function UploadPanel({
         }}
       >
         <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, opacity: 0.85 }}>
-          {avaturn ? "Drop your Avaturn .glb here or browse" : "Drop a .vrm here or browse"}
+          {avaturn ? L("Drop your Avaturn .glb here or browse", "Avaturnの .glb をここにドロップ、または選択") : L("Drop a .vrm here or browse", ".vrm をここにドロップ、または選択")}
           <input
             ref={inputRef}
             type="file"
@@ -573,19 +578,19 @@ function UploadPanel({
           {!avaturn && (
             <label style={{ display: "flex", gap: 6, alignItems: "flex-start", fontSize: 12, opacity: 0.85 }}>
               <input type="checkbox" checked={optimize} onChange={(e) => setOptimize(e.target.checked)} disabled={busy} />
-              <span>Optimize file size first (skipped automatically when it wouldn't help)</span>
+              <span>{L("Optimize file size first (skipped automatically when it wouldn't help)", "先にファイルサイズを最適化する(効果がないときは自動で省略)")}</span>
             </label>
           )}
           <label style={{ display: "flex", gap: 6, alignItems: "flex-start", fontSize: 12, opacity: 0.85 }}>
             <input type="checkbox" checked={rightsConfirmed} onChange={(e) => setRightsConfirmed(e.target.checked)} disabled={busy} />
             <span>
               {avaturn
-                ? "This avatar is of me, or of someone who agreed to it being shown here. Everyone in this room will see it."
-                : "I have the rights to use and share this avatar. Everyone in this room will see it, and this deployment does not license-check uploads."}
+                ? L("This avatar is of me, or of someone who agreed to it being shown here. Everyone in this room will see it.", "このアバターは自分自身、またはここでの表示に同意した人のものです。この部屋の全員に表示されます。")
+                : L("I have the rights to use and share this avatar. Everyone in this room will see it, and this deployment does not license-check uploads.", "このアバターを使用・共有する権利があります。この部屋の全員に表示され、このサイトはアップロードのライセンスを確認しません。")}
             </span>
           </label>
           <button type="button" style={{ ...primaryButtonStyle, padding: "9px 14px", fontSize: 13, opacity: rightsConfirmed && !busy ? 1 : 0.55 }} disabled={!rightsConfirmed || busy} onClick={() => void upload()}>
-            {busy ? "Working…" : "Upload and use"}
+            {busy ? L("Working…", "処理中…") : L("Upload and use", "アップロードして使う")}
           </button>
         </>
       )}
@@ -596,21 +601,21 @@ function UploadPanel({
       {avaturn ? (
         <AvaturnNotice />
       ) : (
-        <small style={{ opacity: 0.55 }}>VRM 0.x and 1.0 both work. Gestures retarget onto the VRM humanoid rig automatically.</small>
+        <small style={{ opacity: 0.55 }}>{L("VRM 0.x and 1.0 both work. Gestures retarget onto the VRM humanoid rig automatically.", "VRM 0.x と 1.0 の両方に対応しています。ジェスチャーはVRMのヒューマノイドに自動で合わせられます。")}</small>
       )}
 
       {!avaturn && (
       <div style={{ borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: 8, display: "flex", flexDirection: "column", gap: 5 }}>
         <small style={{ opacity: 0.75 }}>
-          Don't have one?{" "}
+          {L("Don't have one?", "お持ちでない場合:")}{" "}
           <a href="https://vroid.com/en/studio" target="_blank" rel="noopener noreferrer" style={{ color: ACCENT_COLOR }}>
             VRoid Studio
           </a>{" "}
-          is a free VRM maker, and{" "}
+          {L("is a free VRM maker, and", "は無料のVRM作成ツールで、")}{" "}
           <a href="https://hub.vroid.com/en" target="_blank" rel="noopener noreferrer" style={{ color: ACCENT_COLOR }}>
             VRoid Hub
           </a>{" "}
-          hosts models from other people.
+          {L("hosts models from other people.", "では他の人のモデルが公開されています。")}
         </small>
         {/* Deliberately a plain responsibility notice and not a "DMCA
             policy": a real safe harbour has statutory prerequisites (a
@@ -619,10 +624,10 @@ function UploadPanel({
             does not satisfy, and implying otherwise would mislead whoever
             deploys this. Say what is true, and point at real advice. */}
         <small style={{ opacity: 0.55 }}>
-          Check each model's licence before using it here — many VRoid Hub models restrict redistribution, modification, or
-          commercial use, and uploading one puts a copy on this deployment for everyone in the room to download. You are
-          responsible for what you upload; this deployment does not licence-check uploads, and its maintainers accept no
-          liability for infringing ones. Not legal advice — if this is going somewhere commercial, get some.
+          {L(
+            "Check each model's licence before using it here — many VRoid Hub models restrict redistribution, modification, or commercial use, and uploading one puts a copy on this deployment for everyone in the room to download. You are responsible for what you upload; this deployment does not licence-check uploads, and its maintainers accept no liability for infringing ones. Not legal advice — if this is going somewhere commercial, get some.",
+            "使う前に各モデルのライセンスを確認してください。VRoid Hubのモデルの多くは再配布・改変・商用利用を制限しており、アップロードすると部屋の全員がダウンロードできるコピーがこのサイトに置かれます。アップロードしたものの責任はあなたにあります。このサイトはライセンスを確認せず、管理者は権利侵害について責任を負いません。これは法的助言ではありません。商用で使う場合は専門家に相談してください。"
+          )}
         </small>
       </div>
       )}

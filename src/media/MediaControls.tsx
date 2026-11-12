@@ -5,6 +5,7 @@ import type { PresentSource } from "../multiplayer/types";
 import { VOICE_ENABLED } from "./useRealtimeMedia";
 import { BAR_LABEL_CLASS, barButtonActiveStyle, barButtonStyle, panelStyle, pillButtonActiveStyle, pillButtonStyle, popoverStyle } from "../ui/styles";
 import { CameraIcon, MicIcon, MicOffIcon, ScreenShareIcon } from "../ui/icons";
+import { L, useLang } from "../i18n/lang";
 
 interface MediaControlsProps {
   media: RealtimeMediaState;
@@ -25,6 +26,7 @@ interface MediaControlsProps {
  * only wants to look around never gives up a device or an upload.
  */
 export function MediaControls({ media, voiceEnabled, onShareScreen, onStopScreen }: MediaControlsProps) {
+  useLang();
   const [open, setOpen] = useState(false);
   useExclusiveMenu("media", open, () => setOpen(false));
   const [shareProblem, setShareProblem] = useState<string | null>(null);
@@ -42,11 +44,11 @@ export function MediaControls({ media, voiceEnabled, onShareScreen, onStopScreen
           style={barButtonStyle}
           onClick={() => void media.enableMic()}
           disabled={media.connecting}
-          aria-label={media.connecting ? "Connecting microphone" : "Enable voice chat"}
-          title={media.connecting ? "Connecting microphone…" : "Enable voice chat"}
+          aria-label={media.connecting ? L("Connecting microphone", "マイクに接続中") : L("Enable voice chat", "ボイスチャットを有効にする")}
+          title={media.connecting ? L("Connecting microphone…", "マイクに接続中…") : L("Enable voice chat", "ボイスチャットを有効にする")}
         >
           <MicIcon />
-          <span className={BAR_LABEL_CLASS}>{media.connecting ? "Connecting…" : "Voice"}</span>
+          <span className={BAR_LABEL_CLASS}>{media.connecting ? L("Connecting…", "接続中…") : L("Voice", "ボイス")}</span>
         </button>
       )}
       {voiceAvailable && media.micEnabled && (
@@ -56,24 +58,24 @@ export function MediaControls({ media, voiceEnabled, onShareScreen, onStopScreen
           style={media.muted ? barButtonStyle : barButtonActiveStyle}
           onClick={media.toggleMute}
           aria-pressed={!media.muted}
-          aria-label={media.muted ? "Unmute microphone" : "Mute microphone"}
-          title={media.muted ? "Unmute" : "Mute"}
+          aria-label={media.muted ? L("Unmute microphone", "マイクのミュートを解除") : L("Mute microphone", "マイクをミュート")}
+          title={media.muted ? L("Unmute", "ミュート解除") : L("Mute", "ミュート")}
         >
           {media.muted ? <MicOffIcon /> : <MicIcon />}
-          <span className={BAR_LABEL_CLASS}>{media.muted ? "Unmute" : "Mute"}</span>
+          <span className={BAR_LABEL_CLASS}>{media.muted ? L("Unmute", "ミュート解除") : L("Mute", "ミュート")}</span>
         </button>
       )}
       <button
         type="button"
-        aria-label="Camera, screen sharing and audio settings"
+        aria-label={L("Camera, screen sharing and audio settings", "カメラ、画面共有、音声の設定")}
         aria-expanded={open}
         className="seiza-bar-btn"
-        title="Camera and screen sharing"
+        title={L("Camera and screen sharing", "カメラと画面共有")}
         style={media.cameraOn || media.screenOn ? barButtonActiveStyle : barButtonStyle}
         onClick={() => setOpen((value) => !value)}
       >
         <CameraIcon />
-        <span className={BAR_LABEL_CLASS}>Video</span>
+        <span className={BAR_LABEL_CLASS}>{L("Video", "ビデオ")}</span>
         {media.micEnabled && (
           <span
             aria-hidden
@@ -93,15 +95,15 @@ export function MediaControls({ media, voiceEnabled, onShareScreen, onStopScreen
           className="seiza-popover"
           style={{ ...panelStyle, ...popoverStyle, display: "flex", flexDirection: "column", gap: 8, width: "min(280px, calc(100vw - 32px))" }}
         >
-          <strong style={{ fontSize: 13 }}>Share</strong>
+          <strong style={{ fontSize: 13 }}>{L("Share", "共有")}</strong>
           <button
             type="button"
             style={media.cameraOn ? pillButtonActiveStyle : pillButtonStyle}
             onClick={() => (media.cameraOn ? media.stopCamera() : void media.startCamera())}
           >
-            <CameraIcon /> {media.cameraOn ? "Turn camera off" : "Turn camera on"}
+            <CameraIcon /> {media.cameraOn ? L("Turn camera off", "カメラをオフ") : L("Turn camera on", "カメラをオン")}
           </button>
-          <small style={{ opacity: 0.6 }}>Your camera shows on a small panel beside your avatar.</small>
+          <small style={{ opacity: 0.6 }}>{L("Your camera shows on a small panel beside your avatar.", "カメラの映像はアバターの横の小さなパネルに表示されます。")}</small>
           <button
             type="button"
             style={media.screenOn ? pillButtonActiveStyle : pillButtonStyle}
@@ -111,9 +113,9 @@ export function MediaControls({ media, voiceEnabled, onShareScreen, onStopScreen
               else setShareProblem(onShareScreen());
             }}
           >
-            <ScreenShareIcon /> {media.screenOn ? "Stop sharing" : "Share your screen"}
+            <ScreenShareIcon /> {media.screenOn ? L("Stop sharing", "共有を停止") : L("Share your screen", "画面を共有")}
           </button>
-          <small style={{ opacity: 0.6 }}>Shares onto the nearest screen. You can also click a screen in the world.</small>
+          <small style={{ opacity: 0.6 }}>{L("Shares onto the nearest screen. You can also click a screen in the world.", "いちばん近いスクリーンに共有します。ワールドのスクリーンをクリックしても共有できます。")}</small>
           {/* A screen is just a surface, so it can carry a webcam as
               easily as a desktop — useful for putting a presenter's face
               up at the front of the room rather than on the small panel
@@ -126,22 +128,24 @@ export function MediaControls({ media, voiceEnabled, onShareScreen, onStopScreen
               setShareProblem(onShareScreen("camera"));
             }}
           >
-            <CameraIcon /> Put my camera on a screen
+            <CameraIcon /> {L("Put my camera on a screen", "カメラ映像をスクリーンに映す")}
           </button>
-          <small style={{ opacity: 0.6 }}>Turns your camera on if it isn't already.</small>
+          <small style={{ opacity: 0.6 }}>{L("Turns your camera on if it isn't already.", "カメラがオフならオンにします。")}</small>
           {shareProblem && <small style={{ color: "#ffb347" }}>{shareProblem}</small>}
           {media.error && <small style={{ color: "#ff8a80" }}>{media.error}</small>}
 
           {voiceAvailable && media.micEnabled && (
             <div style={{ display: "flex", flexDirection: "column", gap: 8, borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 8 }}>
               <small style={{ opacity: 0.8 }}>
-                {peerCount === 0 ? "No one else is connected yet." : `${peerCount} peer${peerCount === 1 ? "" : "s"} connected.`}
-                {anyoneSpeaking ? " Someone is talking." : ""}
+                {peerCount === 0
+                  ? L("No one else is connected yet.", "まだほかに誰も接続していません。")
+                  : L(`${peerCount} peer${peerCount === 1 ? "" : "s"} connected.`, `${peerCount}人と接続中。`)}
+                {anyoneSpeaking ? L(" Someone is talking.", "誰かが話しています。") : ""}
               </small>
-              <small style={{ opacity: 0.6 }}>Voices fade with distance, so walking closer makes someone easier to hear.</small>
+              <small style={{ opacity: 0.6 }}>{L("Voices fade with distance, so walking closer makes someone easier to hear.", "声は距離で小さくなります。近づくと聞きやすくなります。")}</small>
               {media.devices.length > 1 && (
                 <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
-                  Microphone
+                  {L("Microphone", "マイク")}
                   <select
                     value={media.selectedDeviceId ?? ""}
                     onChange={(event) => void media.selectDevice(event.target.value)}
@@ -155,14 +159,14 @@ export function MediaControls({ media, voiceEnabled, onShareScreen, onStopScreen
                   >
                     {media.devices.map((device) => (
                       <option key={device.deviceId} value={device.deviceId} style={{ color: "black" }}>
-                        {device.label || "Microphone"}
+                        {device.label || L("Microphone", "マイク")}
                       </option>
                     ))}
                   </select>
                 </label>
               )}
               <button type="button" style={pillButtonStyle} onClick={media.disableMic}>
-                Leave voice
+                {L("Leave voice", "ボイスから抜ける")}
               </button>
             </div>
           )}

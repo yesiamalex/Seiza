@@ -1,4 +1,5 @@
 import { barButtonActiveStyle, panelStyle, pillButtonStyle } from "../../ui/styles";
+import { L } from "../../i18n/lang";
 
 /**
  * The VR menu's layout and drawing: a plain 2D canvas, turned into a
@@ -140,12 +141,12 @@ function fit(ctx: CanvasRenderingContext2D, text: string, width: number): string
   return `${cut}…`;
 }
 
-const VOICE_LABEL: Record<XrHudModel["voice"], string> = {
-  unavailable: "",
-  off: "Voice",
-  connecting: "Connecting…",
-  muted: "Unmute",
-  live: "Mute",
+const VOICE_LABEL: Record<XrHudModel["voice"], [string, string]> = {
+  unavailable: ["", ""],
+  off: ["Voice", "ボイス"],
+  connecting: ["Connecting…", "接続中…"],
+  muted: ["Unmute", "ミュート解除"],
+  live: ["Mute", "ミュート"],
 };
 
 /** Lays the panel out for this model. Height follows the content. */
@@ -160,7 +161,7 @@ export function layoutHud(model: XrHudModel): HudLayout {
   const exitWidth = 150 * SCALE;
   texts.push({ text: model.title, x: PAD, y: y + ROW * 0.42, size: 17 * SCALE, color: TEXT, weight: 600, maxWidth: inner - exitWidth - GAP });
   texts.push({
-    text: `${model.people} ${model.people === 1 ? "person" : "people"} here`,
+    text: L(`${model.people} ${model.people === 1 ? "person" : "people"} here`, `${model.people}人がいます`),
     x: PAD,
     y: y + ROW * 0.86,
     size: 12 * SCALE,
@@ -169,7 +170,7 @@ export function layoutHud(model: XrHudModel): HudLayout {
   });
   buttons.push({
     id: "exit",
-    label: "Exit VR",
+    label: L("Exit VR", "VRを終了"),
     x: width - PAD - exitWidth,
     y,
     w: exitWidth,
@@ -188,8 +189,8 @@ export function layoutHud(model: XrHudModel): HudLayout {
     texts.push({ text: request.text, x: PAD, y: y + ROW * 0.55, size: 15 * SCALE, color: TEXT, weight: 600, maxWidth: inner });
     y += ROW * 0.9;
     const w = (inner - GAP) / 2;
-    buttons.push({ id: "together:yes", label: "Yes", x: PAD, y, w, h: ROW, hold: false, active: true, disabled: false, onPress: request.accept });
-    buttons.push({ id: "together:no", label: "No thanks", x: PAD + w + GAP, y, w, h: ROW, hold: false, active: false, disabled: false, onPress: request.decline });
+    buttons.push({ id: "together:yes", label: L("Yes", "はい"), x: PAD, y, w, h: ROW, hold: false, active: true, disabled: false, onPress: request.accept });
+    buttons.push({ id: "together:no", label: L("No thanks", "遠慮します"), x: PAD + w + GAP, y, w, h: ROW, hold: false, active: false, disabled: false, onPress: request.decline });
     y += ROW + GAP * 2;
   }
 
@@ -200,7 +201,7 @@ export function layoutHud(model: XrHudModel): HudLayout {
       texts.push({ text: together.waiting, x: PAD, y: y + LABEL * 0.7, size: 13 * SCALE, color: MUTED_TEXT, maxWidth: inner });
       y += LABEL + GAP;
     } else {
-      texts.push({ text: `Ask ${together.name} for`, x: PAD, y: y + LABEL * 0.7, size: 12 * SCALE, color: MUTED_TEXT, maxWidth: inner });
+      texts.push({ text: L(`Ask ${together.name} for`, `${together.name}さんに頼む`), x: PAD, y: y + LABEL * 0.7, size: 12 * SCALE, color: MUTED_TEXT, maxWidth: inner });
       y += LABEL;
       const w = (inner - GAP * (GESTURE_COLUMNS - 1)) / GESTURE_COLUMNS;
       together.gestures.forEach((gesture, i) => {
@@ -228,7 +229,7 @@ export function layoutHud(model: XrHudModel): HudLayout {
   if (model.voice !== "unavailable") {
     rowItems.push({
       id: "voice",
-      label: VOICE_LABEL[model.voice],
+      label: L(...VOICE_LABEL[model.voice]),
       hold: false,
       // Green while your microphone is live, as on the flat control bar.
       active: model.voice === "live",
@@ -238,7 +239,7 @@ export function layoutHud(model: XrHudModel): HudLayout {
     });
   }
   if (model.standUp) {
-    rowItems.push({ id: "stand", label: "Stand up", hold: false, active: false, disabled: false, onPress: model.standUp });
+    rowItems.push({ id: "stand", label: L("Stand up", "立つ"), hold: false, active: false, disabled: false, onPress: model.standUp });
   }
   if (rowItems.length) {
     const w = (inner - GAP * (rowItems.length - 1)) / rowItems.length;
@@ -251,7 +252,7 @@ export function layoutHud(model: XrHudModel): HudLayout {
     id: `gesture:${gesture.name}`,
     // "(hold)" is in the flat menu's labels already; here holding is how
     // the button works, so the hint is redundant and costs width.
-    label: gesture.label.replace(/\s*\(hold\)\s*$/i, ""),
+    label: gesture.label.replace(/\s*(\(hold\)|(長押し))\s*$/i, ""),
     hold: gesture.hold,
     active: model.activeGesture === gesture.name,
     disabled: false,
@@ -260,14 +261,14 @@ export function layoutHud(model: XrHudModel): HudLayout {
   }));
   if (model.seiza) {
     const seiza = model.seiza;
-    gestureItems.push({ id: "seiza", label: "Seiza", hold: false, active: seiza.active, disabled: false, onPress: seiza.toggle });
+    gestureItems.push({ id: "seiza", label: L("Seiza", "正座"), hold: false, active: seiza.active, disabled: false, onPress: seiza.toggle });
   }
   if (model.crouch) {
     const crouch = model.crouch;
-    gestureItems.push({ id: "crouch", label: "Crouch", hold: true, active: crouch.active, disabled: false, onPress: crouch.start, onRelease: crouch.end });
+    gestureItems.push({ id: "crouch", label: L("Crouch", "しゃがむ"), hold: true, active: crouch.active, disabled: false, onPress: crouch.start, onRelease: crouch.end });
   }
   if (gestureItems.length) {
-    texts.push({ text: "Gestures", x: PAD, y: y + LABEL * 0.7, size: 12 * SCALE, color: MUTED_TEXT, maxWidth: inner });
+    texts.push({ text: L("Gestures", "ジェスチャー"), x: PAD, y: y + LABEL * 0.7, size: 12 * SCALE, color: MUTED_TEXT, maxWidth: inner });
     y += LABEL;
     const w = (inner - GAP * (GESTURE_COLUMNS - 1)) / GESTURE_COLUMNS;
     gestureItems.forEach((item, i) => {
@@ -282,7 +283,7 @@ export function layoutHud(model: XrHudModel): HudLayout {
   // There is no comfortable way to type in a headset yet, so the panel
   // shows what people are saying and leaves replying to voice.
   if (model.chat.length) {
-    texts.push({ text: "Chat", x: PAD, y: y + LABEL * 0.7, size: 12 * SCALE, color: MUTED_TEXT, maxWidth: inner });
+    texts.push({ text: L("Chat", "チャット"), x: PAD, y: y + LABEL * 0.7, size: 12 * SCALE, color: MUTED_TEXT, maxWidth: inner });
     y += LABEL;
     for (const message of model.chat) {
       texts.push({ text: `${message.name}: ${message.text}`, x: PAD, y: y + 15 * SCALE, size: 13 * SCALE, color: TEXT, maxWidth: inner });
