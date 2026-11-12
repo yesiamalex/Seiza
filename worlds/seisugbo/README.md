@@ -33,6 +33,13 @@ Visitors wake at the tent on the meadow and look east down the lane.
   the lane, *Arts-based research* (how the work was made) in the hall, and
   *Let's talk*, three rounds of conversation prompts in English and
   Filipino, in the classroom. The dance is framed on the classroom's back wall.
+- **Portals to FrameVR.** Four portals stand in a row between the path
+  from the garden and the covered court, one per group in its colour, each
+  a ring around a slowly turning swirl. Click one and a card shows where it
+  goes and opens that group's FrameVR space in a new tab, so this room
+  stays open: Group A to `framevr.io/meijixup-a`, and B, C, and D the same
+  way (`client/Portals.tsx`). In a headset, the card says to exit VR first,
+  since a headset can't open another site from inside VR.
 - **A close-up view.** Click any piece or board. On a screen it opens large,
   with its group, its words, and a caption, and Previous and Next walk along
   its line or the lane. In a headset it opens as a panel in front of you
@@ -106,6 +113,7 @@ worlds/seisugbo/
     collection.ts           Every picture: group, words, caption
     info.ts                 The boards' text
     Lane.tsx                The lane, its houses, wires, store, and tour
+    Portals.tsx             The four portals to each group's FrameVR space
     Court.tsx               The covered court and the sampayan
     Boards.tsx              The text boards and the dance photos
     art.tsx                 A picture, its labels, and pins

@@ -17,13 +17,14 @@ import { boardObstacles, Boards } from "./Boards";
 import { Court, courtObstacles } from "./Court";
 import { SeisugboHud } from "./Hud";
 import { Lane, laneObstacles } from "./Lane";
+import { Portals, portalObstacles } from "./Portals";
 import { openPiece } from "./viewer";
 import { XrViewer } from "./Xr";
 
 export function Scene(_props: WorldSceneProps) {
   useEffect(() => {
     showWorldOverlay(<SeisugboHud />);
-    setWorldObstacles([...laneObstacles(), ...courtObstacles(), ...boardObstacles()]);
+    setWorldObstacles([...laneObstacles(), ...courtObstacles(), ...boardObstacles(), ...portalObstacles()]);
     return () => {
       openPiece(null);
       showWorldOverlay(null);
@@ -36,6 +37,7 @@ export function Scene(_props: WorldSceneProps) {
       <Lane />
       <Court />
       <Boards />
+      <Portals />
       <XrViewer />
     </>
   );

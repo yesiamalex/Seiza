@@ -12,7 +12,8 @@ import { useXR } from "@react-three/xr";
 import * as THREE from "three";
 import { readXrHead } from "../../../src/xr/body/xrPose";
 import { registerGazeTarget } from "../../../src/xr/hud/gaze";
-import { GROUP_COLORS, PIECE_BY_ID, viewUrl } from "./collection";
+import { GROUP_COLORS, PIECE_BY_ID, viewUrl, type Group } from "./collection";
+import { PORTAL_BY_GROUP } from "./Portals";
 import { BOARDS, type BoardKey } from "./info";
 import { KIND_LABEL } from "./Hud";
 import { FONT, loadPicture, wrapText } from "./kit";
@@ -47,6 +48,7 @@ function Panel() {
   const textMesh = useRef<THREE.Mesh>(null);
   const [picture, setPicture] = useState<THREE.Texture | null>(null);
   const board = open?.startsWith("board:") ? (open.slice(6) as BoardKey) : null;
+  const portal = open?.startsWith("portal:") ? PORTAL_BY_GROUP[open.slice(7) as Group] : null;
   const piece = open && !board ? PIECE_BY_ID[open] : null;
 
   useEffect(() => {
@@ -95,6 +97,9 @@ function Panel() {
         text(`Group ${piece.group} · ${KIND_LABEL[piece.kind]}`, 28, GROUP_COLORS[piece.group], 700);
         for (const line of piece.words ?? []) text(line.replace(/ \/ /g, " "), 30, "rgba(255,255,255,0.92)");
         if (piece.caption) text(piece.caption, 28, "rgba(255,255,255,0.75)");
+      } else if (portal) {
+        text(`Group ${portal.group} in FrameVR`, 44, GROUP_COLORS[portal.group], 700);
+        text(`This portal goes to ${portal.url.replace("https://", "")}. A headset can't open another site from inside VR: exit VR, and click the portal again to open it in a new tab.`, 28, "rgba(255,255,255,0.88)");
       } else if (board) {
         const b = BOARDS[board];
         text(b.title, 44, "#fff", 700);
@@ -143,7 +148,7 @@ function Panel() {
     layout.current = paint(false);
     texture.needsUpdate = true;
     setTextHeight((W * measured.height) / TEXT_PX);
-  }, [piece, board, sequence, canvas, texture]);
+  }, [piece, board, portal, sequence, canvas, texture]);
   useEffect(() => () => texture.dispose(), [texture]);
 
   // Where the panel goes: in front of you when it opens, and back in front
