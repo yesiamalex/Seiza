@@ -21,6 +21,10 @@
     // uploaded avatars and assets apart.
     { "binding": "AVATARS", "id": "REPLACE_WITH_KV_NAMESPACE_ID" }
   ],
+  // Keep variables set in the dashboard (Settings > Variables and Secrets),
+  // such as SEIZA_CANONICAL_ORIGIN, when a deploy from git runs: without
+  // this, a deploy keeps only the vars listed below.
+  "keep_vars": true,
   "vars": {
     "SEIZA_WORLD_ID": "seisugbo",
     "SEIZA_MAX_OCCUPANTS": "16"

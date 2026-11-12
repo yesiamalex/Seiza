@@ -386,22 +386,37 @@ and deploy again:
 
 Each world is its own Worker, so each can have its own address on one
 domain: `seiza.org` for the default world, `seizora.seiza.org`,
-`seiou.seiza.org`, and so on. Nothing in the code changes.
+`seiou.seiza.org`, and so on. Nothing in the code changes. In the
+Cloudflare dashboard:
 
-1. Add the domain to your Cloudflare account (its nameservers point to
-   Cloudflare).
-2. For each Worker, open **Settings > Domains & Routes**, choose **Add**,
-   then **Custom domain**, and enter its address. Cloudflare creates the
-   DNS record and the certificate.
-3. Optionally, set `SEIZA_CANONICAL_ORIGIN` on each Worker to its new
-   address (for example `https://seizora.seiza.org`). Pages opened at the
-   old `*.workers.dev` address are then sent to the new one, path and query
-   included, so old links keep working. Room connections and uploads aren't
-   redirected, so a page already open at the old address keeps working
-   until it's reloaded. Cloudflare's own redirect rules can't do this,
-   because `workers.dev` isn't a domain you own.
-4. Point the portals at the new addresses: in `world.json`,
-   `"urlPattern": "https://{id}.seiza.org"`.
+1. **Get the domain onto Cloudflare.** To buy it there, go to **Domain
+   Registration > Register Domains**, search for it, and pay; it's added
+   to your account at once. For a domain bought elsewhere, go to **Add >
+   Connect a domain** (on the account home), enter it, pick the Free plan,
+   and at your registrar replace its nameservers with the two Cloudflare
+   shows. It's ready when the domain says **Active** (minutes to a day).
+2. **Give each Worker its address.** Go to **Workers & Pages**, open the
+   Worker (for example `seizora`), then **Settings > Domains & Routes >
+   Add > Custom domain**. Enter `seizora.seiza.org` and choose **Add
+   domain**. Cloudflare makes the DNS record and the certificate; the
+   address works within a few minutes. The default world's Worker takes the
+   bare `seiza.org` (and `www.seiza.org`, if you like).
+3. **Send old links to the new address (optional).** In the same Worker,
+   **Settings > Variables and Secrets > Add**: type **Text**, name
+   `SEIZA_CANONICAL_ORIGIN`, value `https://seizora.seiza.org`, then
+   **Deploy**. Pages opened at the old `*.workers.dev` address now move to
+   the new one, path and query included. Room connections and uploads
+   aren't redirected, so a page already open at the old address keeps
+   working until it's reloaded. Cloudflare's own redirect rules can't do
+   this, because `workers.dev` isn't a domain you own. Every
+   `wrangler.jsonc` has `"keep_vars": true`, so a deploy from git keeps
+   what you set here.
+4. **Point the portals at the new addresses.** In the default world's
+   `world.json`, set `"urlPattern": "https://{id}.seiza.org"`, and give any
+   world whose Worker has another name its own `url`.
+5. **Optionally retire the old address.** Once links have moved, a
+   Worker's `workers.dev` route can be turned off under **Settings >
+   Domains & Routes**. Keep it on while you rely on the redirect.
 
 A room is kept per Worker, not per address, so people at the old and the
 new address meet in the same room.
@@ -1013,8 +1028,12 @@ translates what you've typed before you send it: English into Japanese, or
 Japanese into English.
 
 Translation uses the browser's own Translator API, which runs on the device.
-Nothing is sent to Seiza or to any other service. The first time, the
-browser downloads a small language pack. The controls appear only in
+Seiza calls no translation service and no AI model, and nothing you or
+others type is sent anywhere to be translated. The first time, Chrome
+downloads a small English–Japanese language pack from its own update
+servers, as it does for its other components; after that, translation
+works offline. The packs are dedicated translation models, not a chatbot
+or a generative model. The controls appear only in
 browsers that have the API (Chrome 138 and later on a computer); elsewhere,
 chat has no translation controls. Only the latest 30 messages are
 translated, and your own messages aren't.
