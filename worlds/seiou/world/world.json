@@ -1,6 +1,7 @@
 {
   "id": "seiou",
   "displayName": "SeiOU — UP Open University",
+  "displayNameJa": "SeiOU — フィリピン大学オープン大学",
   "environment": "model",
   "sceneUrl": "/worlds/seiou/models/campus.glb",
   "navMeshUrl": "/worlds/seiou/models/campus.navmesh",

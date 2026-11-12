@@ -1,6 +1,7 @@
 {
   "id": "seizora",
   "displayName": "Seizora — Solar Futures Lab",
+  "displayNameJa": "Seizora — ソーラー・フューチャーズ・ラボ",
   "sky": { "cycle": "realtime", "site": "cebu", "weather": "auto" },
   "spawnPoint": { "x": -13.03, "y": -0.6, "z": 58.35 },
   "spawnRotationY": -1.4,

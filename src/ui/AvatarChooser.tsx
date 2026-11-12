@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { WorldConfig } from "../config/worldConfig";
 import { optimizeVrmAvatar } from "../avatar/optimizeVrm";
 import { validateVrmFile } from "../avatar/validateVrm";
-import { AvatarDesignerDialog } from "../avatar/designer/AvatarDesigner";
+import { AvatarDesignerDialog, presetLabel } from "../avatar/designer/AvatarDesigner";
 import { AVATAR_DESIGN_PRESETS, DEFAULT_AVATAR_SPEC, encodeAvatarSpec } from "../avatar/designer/avatarSpec";
 import {
   ensureUploadedAvatarAvailable,
@@ -57,7 +57,7 @@ function labelForChoice(choice: StoredAvatarChoice, presets: WorldConfig["defaul
     case "preset":
       return presets?.find((p) => p.url === choice.url)?.label ?? L("A preset from this deployment", "このサイトのプリセット");
     case "designer":
-      return AVATAR_DESIGN_PRESETS.find((p) => JSON.stringify(p.spec) === JSON.stringify(choice.spec))?.label ?? L("Designed in the browser", "ブラウザでデザイン");
+      return (() => { const p = AVATAR_DESIGN_PRESETS.find((x) => JSON.stringify(x.spec) === JSON.stringify(choice.spec)); return p ? presetLabel(p.label) : null; })() ?? L("Designed in the browser", "ブラウザでデザイン");
     default:
       return L("Designed in the browser", "ブラウザでデザイン");
   }
@@ -285,7 +285,7 @@ export function AvatarChooser({ world, value, onChange, rememberLocally, onStage
                   style={{ ...(active ? pillButtonActiveStyle : pillButtonStyle), padding: "7px 12px", fontSize: 12 }}
                   onClick={() => choose({ kind: "designer", spec: preset.spec })}
                 >
-                  {preset.label}
+                  {presetLabel(preset.label)}
                 </button>
               );
             })}

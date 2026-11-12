@@ -1,6 +1,7 @@
 {
   "id": "seizorai",
   "displayName": "Seizorai — Solar Futures Lab, with Ilaw-san",
+  "displayNameJa": "Seizorai — ソーラー・フューチャーズ・ラボ(イラウさんと)",
   "sky": { "cycle": "realtime", "site": "cebu", "weather": "auto" },
   "spawnPoint": { "x": -13.03, "y": -0.6, "z": 58.35 },
   "spawnRotationY": -1.4,

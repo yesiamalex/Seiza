@@ -50,6 +50,8 @@ const EXPRESSION_LABELS: Record<string, [string, string]> = {
   relaxed: ["relaxed", "リラックス"],
 };
 const PRESET_LABELS: Record<string, string> = { Businessman: "ビジネスマン", Businesswoman: "ビジネスウーマン", Casual: "カジュアル", Student: "学生", Creative: "クリエイティブ" };
+/** A built-in design preset's name in the visitor's language. */
+export const presetLabel = (label: string) => L(label, PRESET_LABELS[label] ?? label);
 
 /**
  * Controls for the built-in avatar designer. Everything it produces is an
@@ -73,7 +75,7 @@ export function AvatarDesignerControls({ value, onChange }: { value: AvatarSpec;
         <div className="seiza-chip-row">
           {AVATAR_DESIGN_PRESETS.map((preset) => (
             <button key={preset.id} type="button" style={chipStyle(false)} onClick={() => onChange({ ...preset.spec })}>
-              {L(preset.label, PRESET_LABELS[preset.label] ?? preset.label)}
+              {presetLabel(preset.label)}
             </button>
           ))}
           <button type="button" style={chipStyle(false)} onClick={() => onChange(randomAvatarSpec())}>

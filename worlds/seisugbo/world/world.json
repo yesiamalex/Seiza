@@ -1,6 +1,7 @@
 {
   "id": "seisugbo",
   "displayName": "Seisugbo — Meiji × UP Arts-Based Research 2026",
+  "displayNameJa": "Seisugbo — 明治 × UP アートベース・リサーチ 2026",
   "sky": { "cycle": "realtime", "site": "cebu", "weather": "auto" },
   "spawnPoint": { "x": -13.03, "y": -0.6, "z": 58.35 },
   "spawnRotationY": -1.4,

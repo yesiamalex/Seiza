@@ -7,6 +7,7 @@ import type { VRM } from "@pixiv/three-vrm";
 import { VrmAvatar } from "../avatar/VrmAvatar";
 import { AvatarAnimator } from "../avatar/AvatarAnimator";
 import { pillButtonStyle } from "./styles";
+import { L, useLang } from "../i18n/lang";
 
 interface AvatarPreviewProps {
   url: string;
@@ -33,6 +34,7 @@ interface AvatarPreviewProps {
  * face -Z (see VrmAvatar.tsx) — this is looking at its front.
  */
 export function AvatarPreview({ url, height = "clamp(260px, 46vh, 460px)", expression = null }: AvatarPreviewProps) {
+  useLang();
   const [vrm, setVrm] = useState<VRM | null>(null);
   const [holdTPose, setHoldTPose] = useState(false);
   // A counter rather than a plain value, so pressing the same button again
@@ -72,10 +74,10 @@ export function AvatarPreview({ url, height = "clamp(260px, 46vh, 460px)", expre
       </Canvas>
       <div style={{ position: "absolute", right: 10, top: 10, display: "flex", gap: 5 }}>
         <button type="button" onClick={() => frame("face")} style={smallPill}>
-          Face
+          {L("Face", "顔")}
         </button>
         <button type="button" onClick={() => frame("body")} style={smallPill}>
-          Body
+          {L("Body", "全身")}
         </button>
       </div>
       <button
@@ -84,10 +86,12 @@ export function AvatarPreview({ url, height = "clamp(260px, 46vh, 460px)", expre
         style={{ ...smallPill, position: "absolute", right: 10, bottom: 10 }}
         aria-pressed={holdTPose}
       >
-        {holdTPose ? "Show idle" : "T-pose"}
+        {holdTPose ? L("Show idle", "通常ポーズ") : L("T-pose", "Tポーズ")}
       </button>
       <span style={{ position: "absolute", left: 12, right: 96, bottom: 14, fontSize: 11, opacity: 0.55, pointerEvents: "none" }}>
-        {hasFinePointer() ? "Drag to rotate · right-drag to move · scroll to zoom" : "Drag to rotate · two fingers to move and zoom"}
+        {hasFinePointer()
+          ? L("Drag to rotate · right-drag to move · scroll to zoom", "ドラッグで回転・右ドラッグで移動・スクロールでズーム")
+          : L("Drag to rotate · two fingers to move and zoom", "ドラッグで回転・2本指で移動とズーム")}
       </span>
     </div>
   );

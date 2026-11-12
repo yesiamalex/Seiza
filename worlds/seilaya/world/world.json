@@ -1,6 +1,7 @@
 {
   "id": "seilaya",
   "displayName": "Seilaya — Safe Spaces Lab",
+  "displayNameJa": "Seilaya — セーフスペース・ラボ",
   "sky": { "cycle": "realtime", "site": "manila", "weather": "auto" },
   "spawnPoint": { "x": -13.03, "y": -0.6, "z": 58.35 },
   "spawnRotationY": -1.4,

@@ -1,6 +1,7 @@
 {
   "id": "default",
   "displayName": "Seiza — Default World",
+  "displayNameJa": "Seiza — デフォルトワールド",
   "sky": { "cycle": "realtime", "site": "manila", "weather": "auto" },
   "spawnPoint": { "x": -13.03, "y": -0.6, "z": 58.35 },
   "spawnRotationY": -1.4,
