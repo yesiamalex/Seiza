@@ -34,6 +34,7 @@ import {
 } from "../../../src/interactions/together";
 import { LASTING_TOGETHER, TOGETHER as TOGETHER_RULES, TOGETHER_GESTURES, type PlayerState, type TogetherGesture } from "../../../src/multiplayer/types";
 import { onWorldMessage } from "../../../src/worlds/WorldExtension";
+import { L } from "../../../src/i18n/lang";
 
 // --- what a world's code gets from Seiza (set by the Scene each render) ---------
 
@@ -237,7 +238,7 @@ export function showToEveryone(card: CardKey) {
   setRoom(ROOM_KEYS.show, `${card}:${Date.now() % 100000}:${shown}`);
 }
 
-export const nameOf = (id: string) => api?.players[id]?.displayName ?? "Someone";
+export const nameOf = (id: string) => api?.players[id]?.displayName ?? L("Someone", "だれか");
 /** Everyone in the room but this visitor. */
 export const others = () => (api ? Object.keys(api.players).filter((id) => id !== api!.selfId) : []);
 
@@ -262,7 +263,7 @@ export function block(id: string) {
   dismissRequests((peer) => peer === id);
   if (getTogether().outgoing?.peer === id) cancelTogether();
   applyFilter();
-  notify(`${nameOf(id)} is blocked for this visit. You won't see or hear them, and they can't ask you for anything.`);
+  notify(L(`${nameOf(id)} is blocked for this visit. You won't see or hear them, and they can't ask you for anything.`, `${nameOf(id)}さんをこの訪問のあいだブロックしました。見えず聞こえず、あなたに何かを頼むこともできません。`));
 }
 
 export function unblock(id: string) {
@@ -309,11 +310,11 @@ function policy(from: string): "ask" | "unavailable" {
 
 /** Why this visitor can't ask `peer` right now, or null if they can. */
 export function cannotAsk(peer: string): string | null {
-  if (roomSettings().paused) return "The facilitator has paused requests for now.";
-  if (state.inRefuge) return "Return from Kanlungan first.";
-  if (state.blocked.has(peer)) return "You've blocked them.";
-  if (getTogether().outgoing) return "Waiting for an answer to your last request.";
-  if (!state.nearby.includes(peer)) return `Stand within ${REACH} m of them to ask.`;
+  if (roomSettings().paused) return L("The facilitator has paused requests for now.", "ファシリテーターが今はリクエストを止めています。");
+  if (state.inRefuge) return L("Return from Kanlungan first.", "先にカンルンガンから戻ってください。");
+  if (state.blocked.has(peer)) return L("You've blocked them.", "この人をブロックしています。");
+  if (getTogether().outgoing) return L("Waiting for an answer to your last request.", "前のリクエストの返事を待っています。");
+  if (!state.nearby.includes(peer)) return L(`Stand within ${REACH} m of them to ask.`, `頼むには${REACH} m以内に立ってください。`);
   return null;
 }
 

@@ -3,7 +3,7 @@
 // station cards are drawn here as panels in the world, pointed at with a
 // controller ray (or a hand) and pressed with the trigger or a pinch.
 //
-// - A small "Safety" chip floats low on the left of your view and follows
+// - A small L("Safety", "安全") chip floats low on the left of your view and follows
 //   you; press it to open the safety panel in front of you.
 // - A request appears in front of you, with Yes and No thanks.
 // - Station cards (and the code of conduct, if not yet agreed) open in
@@ -20,7 +20,7 @@ import * as THREE from "three";
 import { trackingStore } from "../../../src/xr/body/trackingStore";
 import { LazyYaw, registerGazeTarget } from "../../../src/xr/hud/gaze";
 import { answerTogether, getTogether, setAllowRequests, useTogether } from "../../../src/interactions/together";
-import { BYSTANDER, CARDS, HELP_CONTACTS, QUIZ } from "./info";
+import { bystander, card as cardText, helpContacts, quiz as quizItems } from "./info";
 import { REFERENCES } from "./references";
 import {
   ask,
@@ -46,8 +46,11 @@ import {
   useSafety,
   type CardKey,
 } from "./safety";
+import { getLang, L, useLang } from "../../../src/i18n/lang";
+import { togetherAskLine, togetherLabel } from "../../../src/interactions/together";
 
 export function XrSafety() {
+  useLang();
   const session = useXR((s) => s.session);
   // ?seilayaXrPreview draws the headset panels on a flat screen too, placed
   // from the ordinary camera, to check them without a headset.
@@ -364,6 +367,7 @@ function XrPanels() {
   const room = roomSettings();
   const people = others();
   const base = JSON.stringify([
+    getLang(),
     s.settings,
     [...s.blocked],
     s.nearby,
@@ -383,7 +387,7 @@ function XrPanels() {
   const card: CardKey | null = gate ? "conduct" : s.card;
   return (
     <>
-      <XrPanel widthM={0.12} canvasWidth={220} pad={14} placement="dock" signature={`dock:${t.incoming.length}:${s.panelOpen}:${s.inRefuge}`} paint={paintDock} />
+      <XrPanel widthM={0.12} canvasWidth={220} pad={14} placement="dock" signature={`dock:${getLang()}:${t.incoming.length}:${s.panelOpen}:${s.inRefuge}`} paint={paintDock} />
       {s.panelOpen && !card && <XrPanel widthM={0.62} placement="front" signature={base} paint={paintSafety} />}
       {t.incoming[0] && !s.inRefuge && !card && <XrPanel widthM={0.5} placement="low-front" signature={base} paint={paintPrompt} />}
       {s.inRefuge && !card && !s.panelOpen && <XrPanel widthM={0.55} placement="low-front" signature={base} paint={paintRefuge} />}
@@ -399,77 +403,76 @@ const togglePanel = () => {
 };
 
 const paintDock: Paint = (p) => {
-  p.row([{ label: getTogether().incoming.length ? "Safety  •" : "Safety", active: state.panelOpen, fill: true, onPress: togglePanel }], 96);
+  p.row([{ label: getTogether().incoming.length ? `${L("Safety", "安全")}  •` : L("Safety", "安全"), active: state.panelOpen, fill: true, onPress: togglePanel }], 96);
 };
 
 const paintSafety: Paint = (p) => {
   const room = roomSettings();
-  p.title("Your safety tools");
+  p.title(L("Your safety tools", "あなたの安全の機能"));
   if (room.notice) p.text(`Facilitator: ${room.notice}`, 28, GOLD, 600);
-  p.text("Only you see these choices. Nothing is recorded.", 26, "rgba(255,255,255,0.6)");
-  p.heading("Personal space");
+  p.text(L("Only you see these choices. Nothing is recorded.", "この選択はあなたにしか見えません。何も記録されません。"), 26, "rgba(255,255,255,0.6)");
+  p.heading(L("Personal space", "パーソナルスペース"));
   p.row(
     BUBBLE_CHOICES.map((r) => ({
-      label: r === 0 ? "Off" : `${r} m`,
+      label: r === 0 ? L("Off", "オフ") : `${r} m`,
       active: Math.max(state.settings.bubble, room.minSpace) === r,
       disabled: r < room.minSpace,
       onPress: () => updateSettings({ bubble: r }),
     }))
   );
-  p.heading("Handshakes, hugs, dances, and more");
+  p.heading(L("Handshakes, hugs, dances, and more", "握手、ハグ、ダンスなど"));
   p.row([
-    { label: "Others may ask me", active: getTogether().allow, onPress: () => setAllowRequests(true) },
-    { label: "No requests", active: !getTogether().allow, onPress: () => setAllowRequests(false) },
+    { label: L("Others may ask me", "頼まれてもいい"), active: getTogether().allow, onPress: () => setAllowRequests(true) },
+    { label: L("No requests", "リクエストを受けない"), active: !getTogether().allow, onPress: () => setAllowRequests(false) },
   ]);
-  if (room.paused) p.text("The facilitator has paused requests for now.", 26, "rgba(255,255,255,0.6)");
-  else if (state.nearby.length === 0) p.text(`Stand within ${REACH} m of someone to ask them.`, 26, "rgba(255,255,255,0.6)");
+  if (room.paused) p.text(L("The facilitator has paused requests for now.", "ファシリテーターが今はリクエストを止めています。"), 26, "rgba(255,255,255,0.6)");
+  else if (state.nearby.length === 0) p.text(L(`Stand within ${REACH} m of someone to ask them.`, `頼みたい人の${REACH} m以内に立ちましょう。`), 26, "rgba(255,255,255,0.6)");
   for (const id of state.nearby.slice(0, 2)) {
     p.text(`Ask ${nameOf(id)} for`, 28);
-    p.row(TOGETHER.map((t) => ({ label: t.label, disabled: !!cannotAsk(id), onPress: () => ask(id, t.name) })));
+    p.row(TOGETHER.map((t) => ({ label: togetherLabel(t.name), disabled: !!cannotAsk(id), onPress: () => ask(id, t.name) })));
   }
-  p.heading("People here");
+  p.heading(L("People here", "ここにいる人"));
   const people = others();
-  if (people.length === 0) p.text("Nobody else is here right now.", 26, "rgba(255,255,255,0.6)");
+  if (people.length === 0) p.text(L("Nobody else is here right now.", "今はほかに誰もいません。"), 26, "rgba(255,255,255,0.6)");
   for (const id of people.slice(0, 5)) {
     const pronouns = state.pronouns.get(id);
     p.text(`${nameOf(id)}${pronouns ? ` (${pronouns})` : ""}`, 28);
-    p.row([state.blocked.has(id) ? { label: "Unblock", active: true, onPress: () => unblock(id) } : { label: "Block", onPress: () => block(id) }], 60);
+    p.row([state.blocked.has(id) ? { label: L("Unblock", "ブロック解除"), active: true, onPress: () => unblock(id) } : { label: L("Block", "ブロック"), onPress: () => block(id) }], 60);
   }
-  p.heading("Your pronouns");
-  p.row(["", ...PRONOUNS].map((v) => ({ label: v || "None", active: state.settings.pronouns === v, onPress: () => updateSettings({ pronouns: v }) })));
+  p.heading(L("Your pronouns", "あなたの代名詞"));
+  p.row(["", ...PRONOUNS].map((v) => ({ label: v || L("None", "なし"), active: state.settings.pronouns === v, onPress: () => updateSettings({ pronouns: v }) })));
   p.divider();
   p.row([
-    state.inRefuge ? { label: "Return to where I was", primary: true, onPress: () => returnFromRefuge(true) } : { label: "Step out to Kanlungan", primary: true, onPress: stepOut },
-    { label: "If something happened", onPress: () => openCard("help") },
-    { label: "Code of conduct", onPress: () => openCard("conduct") },
+    state.inRefuge ? { label: L("Return to where I was", "元の場所に戻る"), primary: true, onPress: () => returnFromRefuge(true) } : { label: L("Step out to Kanlungan", "カンルンガンへ一時退避"), primary: true, onPress: stepOut },
+    { label: L("If something happened", "何かあったときは"), onPress: () => openCard("help") },
+    { label: L("Code of conduct", "行動規範"), onPress: () => openCard("conduct") },
   ]);
   if (isFacilitator()) {
-    p.heading("Facilitator");
-    p.row([{ label: room.paused ? "Resume requests" : "Pause requests for everyone", active: room.paused, onPress: () => setRoom(ROOM_KEYS.paused, !room.paused) }]);
-    p.text("Minimum personal space for everyone", 26);
-    p.row(BUBBLE_CHOICES.map((r) => ({ label: r === 0 ? "None" : `${r} m`, active: room.minSpace === r, onPress: () => setRoom(ROOM_KEYS.minSpace, r) })));
+    p.heading(L("Facilitator", "ファシリテーター"));
+    p.row([{ label: room.paused ? L("Resume requests", "リクエストを再開") : L("Pause requests for everyone", "全員のリクエストを止める"), active: room.paused, onPress: () => setRoom(ROOM_KEYS.paused, !room.paused) }]);
+    p.text(L("Minimum personal space for everyone", "全員の最小パーソナルスペース"), 26);
+    p.row(BUBBLE_CHOICES.map((r) => ({ label: r === 0 ? L("None", "なし") : `${r} m`, active: room.minSpace === r, onPress: () => setRoom(ROOM_KEYS.minSpace, r) })));
   }
-  p.row([{ label: "Close", onPress: togglePanel }]);
+  p.row([{ label: L("Close", "閉じる"), onPress: togglePanel }]);
 };
 
 const paintPrompt: Paint = (p) => {
   const request = getTogether().incoming[0];
   if (!request) return;
-  const label = TOGETHER.find((t) => t.name === request.gesture)?.ask ?? "that";
-  p.text(`${nameOf(request.peer)} would like ${label}.`, 36, "#fff", 600);
+  p.text(`${togetherAskLine(nameOf(request.peer), request.gesture)}${L(".", "。")}`, 36, "#fff", 600);
   p.row([
-    { label: "Yes", primary: true, onPress: () => answerTogether(request.id, true) },
-    { label: "No thanks", onPress: () => answerTogether(request.id, false) },
+    { label: L("Yes", "はい"), primary: true, onPress: () => answerTogether(request.id, true) },
+    { label: L("No thanks", "遠慮します"), onPress: () => answerTogether(request.id, false) },
   ], 84);
-  p.text("No answer means no.", 24, "rgba(255,255,255,0.55)");
+  p.text(L("No answer means no.", "返事がなければ「いいえ」です。"), 24, "rgba(255,255,255,0.55)");
 };
 
 const paintRefuge: Paint = (p) => {
   p.text("You've stepped out to Kanlungan.", 34, "#fff", 700);
-  p.text("You won't see or hear anyone, and nobody can ask you for anything, until you return.", 26);
+  p.text(L("You won't see or hear anyone, and nobody can ask you for anything, until you return.", "戻るまで、誰も見えず聞こえず、誰もあなたに何かを頼めません。"), 26);
   p.row([
-    { label: "Return to where I was", primary: true, onPress: () => returnFromRefuge(true) },
-    { label: "Stay here, but rejoin", onPress: () => returnFromRefuge(false) },
+    { label: L("Return to where I was", "元の場所に戻る"), primary: true, onPress: () => returnFromRefuge(true) },
+    { label: L("Stay here, but rejoin", "ここにいたまま、戻る"), onPress: () => returnFromRefuge(false) },
   ]);
 };
 
@@ -489,58 +492,60 @@ function XrCard({ card, gate, signature }: { card: CardKey; gate: boolean; signa
   const close = () => openCard(null);
 
   const paint: Paint = (p) => {
+    const QUIZ = quizItems();
+    const BYSTANDER = bystander();
     if (card === "quiz") {
-      p.title("Is this harassment?");
+      p.title(L("Is this harassment?", "これはハラスメント?"));
       if (quiz.index >= QUIZ.length) {
-        p.text(`You matched ${quiz.score} of ${QUIZ.length}. Was it wanted? Did everyone agree?`, 32, "#fff");
-        p.text("Following the Safe Spaces Act (RA 11313). Not legal advice.", 24, "rgba(255,255,255,0.55)");
-        p.row([{ label: "Try again", onPress: () => setQuiz({ index: 0, picked: null, score: 0 }) }, { label: "Close", onPress: close }]);
+        p.text(L(`You matched ${quiz.score} of ${QUIZ.length}. Was it wanted? Did everyone agree?`, `${QUIZ.length}問中${quiz.score}問が一致。望まれていた?全員が同意していた?`), 32, "#fff");
+        p.text(L("Following the Safe Spaces Act (RA 11313). Not legal advice.", "セーフスペース法(共和国法11313号)にもとづいています。法的な助言ではありません。"), 24, "rgba(255,255,255,0.55)");
+        p.row([{ label: L("Try again", "もう一度"), onPress: () => setQuiz({ index: 0, picked: null, score: 0 }) }, { label: L("Close", "閉じる"), onPress: close }]);
         return;
       }
       const item = QUIZ[quiz.index];
-      p.text(`${quiz.index + 1} of ${QUIZ.length}`, 24, "rgba(255,255,255,0.55)");
+      p.text(`${quiz.index + 1} / ${QUIZ.length}`, 24, "rgba(255,255,255,0.55)");
       p.text(item.situation, 32, "#fff");
       const pick = (v: boolean) => quiz.picked === null && setQuiz((q) => ({ ...q, picked: v, score: q.score + (v === item.harassment ? 1 : 0) }));
       p.row([
-        { label: "Harassment", active: quiz.picked === true, onPress: () => pick(true) },
-        { label: "Not harassment", active: quiz.picked === false, onPress: () => pick(false) },
+        { label: L("Harassment", "ハラスメント"), active: quiz.picked === true, onPress: () => pick(true) },
+        { label: L("Not harassment", "ハラスメントではない"), active: quiz.picked === false, onPress: () => pick(false) },
       ]);
       if (quiz.picked !== null) {
         p.text(`${item.harassment ? "Harassment." : "Not harassment."} ${item.why}`, 28, quiz.picked === item.harassment ? "#9dffb4" : "#ffc58f");
-        p.row([{ label: quiz.index + 1 < QUIZ.length ? "Next" : "See how you did", primary: true, onPress: () => setQuiz((q) => ({ ...q, index: q.index + 1, picked: null })) }]);
+        p.row([{ label: quiz.index + 1 < QUIZ.length ? L("Next", "次へ") : L("See how you did", "結果を見る"), primary: true, onPress: () => setQuiz((q) => ({ ...q, index: q.index + 1, picked: null })) }]);
       }
-      p.row([{ label: "Close", onPress: close }]);
+      p.row([{ label: L("Close", "閉じる"), onPress: close }]);
       return;
     }
     if (card === "bystander") {
-      p.title("What would you do?");
+      p.title(L("What would you do?", "あなたならどうする?"));
       p.text(BYSTANDER.scenario, 30, "#fff");
       BYSTANDER.choices.forEach((c, i) => {
         p.row([{ label: c.label.length > 52 ? `${c.label.slice(0, 50)}…` : c.label, active: choice === i, onPress: () => setChoice(i) }], 64);
         if (choice === i) p.text(c.feedback, 26, "#9dd2ff");
       });
-      p.text(`Source: ${REFERENCES.rightToBe.short}. Only step in directly when it's safe for you.`, 22, "rgba(255,255,255,0.55)");
-      p.row([{ label: "Close", onPress: close }]);
+      p.text(L(`Source: ${REFERENCES.rightToBe.short}. Only step in directly when it's safe for you.`, `出典:${REFERENCES.rightToBe.short}。直接介入するのは、安全なときだけにしてください。`), 22, "rgba(255,255,255,0.55)");
+      p.row([{ label: L("Close", "閉じる"), onPress: close }]);
       return;
     }
-    const c = CARDS[card];
-    p.title(gate ? "Before you start" : c.title);
+    const c = cardText(card);
+    p.title(gate ? L("Before you start", "はじめる前に") : c.title);
     for (const part of c.body) {
       if (Array.isArray(part)) {
         p.text(part[0], 30, "#fff", 700);
         p.text(part[1], 28);
       } else p.text(part, 30);
     }
-    if (card === "help") for (const h of HELP_CONTACTS) p.text(`${h.label}. ${h.detail}`, 26);
+    if (card === "help") for (const h of helpContacts()) p.text(`${h.label}. ${h.detail}`, 26);
     if (c.sources.length) p.text(`Sources: ${c.sources.map((k) => REFERENCES[k].short).join("; ")}.`, 22, "rgba(255,255,255,0.55)");
     const buttons: Omit<Button, "x" | "y" | "w" | "h">[] = [];
-    if (gate) buttons.push({ label: "I agree. Let me in", primary: true, onPress: () => updateSettings({ agreed: true }) });
+    if (gate) buttons.push({ label: L("I agree. Let me in", "同意します。入ります"), primary: true, onPress: () => updateSettings({ agreed: true }) });
     if (card === "refuge" && !gate)
       buttons.push(
         state.inRefuge
-          ? { label: "Return to where I was", primary: true, onPress: () => returnFromRefuge(true) }
+          ? { label: L("Return to where I was", "元の場所に戻る"), primary: true, onPress: () => returnFromRefuge(true) }
           : {
-              label: "Step out now",
+              label: L("Step out now", "今すぐ一時退避"),
               primary: true,
               onPress: () => {
                 openCard(null);
@@ -548,9 +553,9 @@ function XrCard({ card, gate, signature }: { card: CardKey; gate: boolean; signa
               },
             }
       );
-    if (!gate && isFacilitator()) buttons.push({ label: "Show to everyone", onPress: () => showToEveryone(card) });
-    if (!gate) buttons.push({ label: "Close", onPress: close });
+    if (!gate && isFacilitator()) buttons.push({ label: L("Show to everyone", "全員に見せる"), onPress: () => showToEveryone(card) });
+    if (!gate) buttons.push({ label: L("Close", "閉じる"), onPress: close });
     p.row(buttons);
   };
-  return <XrPanel widthM={0.7} placement="front" signature={`${card}:${gate}:${JSON.stringify(quiz)}:${choice}:${signature}`} paint={paint} />;
+  return <XrPanel widthM={0.7} placement="front" signature={`${getLang()}:${card}:${gate}:${JSON.stringify(quiz)}:${choice}:${signature}`} paint={paint} />;
 }

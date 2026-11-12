@@ -9,6 +9,7 @@ import type { LightZone } from "../../../src/multiplayer/types";
 import type { Obstacle } from "../../../src/scene/layout";
 import { Clickable, FONT, roundRect, standard, useCanvasTexture, useWashedFace, wrapText } from "./kit";
 import { openCard, REFUGE_SPOT, type CardKey } from "./safety";
+import { L, useLang } from "../../../src/i18n/lang";
 
 const materials = {
   wood: standard("#73502f", 0.8, 0),
@@ -31,6 +32,50 @@ interface BoardSpec {
   rotationY: number;
   zone: LightZone;
 }
+
+/** The boards' words in Japanese, by card. */
+const BOARD_JA: Partial<Record<BoardSpec["card"], { title: string; lines: string[] }>> = {
+  welcome: {
+    title: "Seilayaへようこそ",
+    lines: [
+      "ジェンダー、安全、尊重について学ぶための場所。ここにいる誰もが安心できるように作られています。",
+      "安全の機能は左上の「安全」ボタンに。何を選んでも記録されません。",
+      "握手、ハグ、グータッチ、ダンスの前には、まず聞きましょう。返事がなければ「いいえ」です。",
+    ],
+  },
+  safespaces: {
+    title: "セーフスペース法",
+    lines: [
+      "共和国法11313号(2019年)は、公共の場、オンライン、職場、学校でのジェンダーにもとづくハラスメントを対象にしています。",
+      "オンラインでは、望まれない性的な発言、侮辱語、ストーキング、同意のない画像の共有を含みます。",
+      "どの学校にも礼節・調査委員会が必要です。",
+    ],
+  },
+  gad: {
+    title: "ジェンダーと開発",
+    lines: [
+      "女性のためのマグナカルタ(共和国法9710号)で、国は女性と男性の平等を約束しています。",
+      "州立大学を含むすべての機関は、予算の少なくとも5%をGADにあてなければなりません。",
+      "安全で包摂的な学びの場は、その取り組みの一部です。",
+    ],
+  },
+  sogiesc: {
+    title: "SOGIESC",
+    lines: ["性的指向、性自認、性表現、性的特徴。", "誰もがこの4つすべてを持っています。言葉を知ることが、おたがいを尊重する助けになります。", "相手が伝えた名前と代名詞を使いましょう。"],
+  },
+  cpted: {
+    title: "デザインによる安全",
+    lines: [
+      "光、見通し、わかりやすい出口が、場所を安心できるものにします。CPTEDの考え方です。",
+      "だから夜は街灯が庭を照らし、道はいつも開けています。",
+      "仮想空間でも効果があるのでしょうか?Seilayaの研究が問いかけています。",
+    ],
+  },
+  refuge: {
+    title: "カンルンガン",
+    lines: ["避難所。ひと息つきたいときは、いつでもここへ。", "ここにいるあいだは誰も見えず聞こえず、誰もあなたに何かを頼めません。", "クリックして一時退避するか、「安全」ボタンを使ってください。"],
+  },
+};
 
 export const BOARDS: BoardSpec[] = [
   {
@@ -232,11 +277,12 @@ function drawBoard(ctx: CanvasRenderingContext2D, w: number, h: number, b: Board
   }
   ctx.fillStyle = "#6a7080";
   ctx.font = `500 24px ${FONT}`;
-  ctx.fillText("Click to read more, with sources", 36, h - 40);
+  ctx.fillText(L("Click to read more, with sources", "クリックで詳しい説明と出典"), 36, h - 40);
 }
 
 function Board(b: BoardSpec) {
-  const texture = useCanvasTexture(1200, 750, (ctx, w, h) => drawBoard(ctx, w, h, b));
+  const lang = useLang();
+  const texture = useCanvasTexture(1200, 750, (ctx, w, h) => drawBoard(ctx, w, h, lang === "ja" ? { ...b, ...BOARD_JA[b.card] } : b), [lang]);
   const face = useWashedFace(texture, b.zone);
   return (
     <group position={b.position} rotation={[0, b.rotationY, 0]}>
@@ -260,15 +306,16 @@ function Board(b: BoardSpec) {
 // --- plaques: women in Philippine science, on the hall's back wall --------------------------
 
 const PLAQUES = [
-  { x: -9.4, name: "Honoria Acosta-Sison", years: "1888–1970", line: "First Filipina physician" },
-  { x: -6.2, name: "María Y. Orosa", years: "1893–1945", line: "Food technologist and chemist" },
-  { x: 6.2, name: "Fe del Mundo", years: "1911–2011", line: "First woman National Scientist" },
-  { x: 9.4, name: "Lourdes J. Cruz", years: "National Scientist", line: "Biochemist, cone snail venoms" },
+  { x: -9.4, name: "Honoria Acosta-Sison", years: "1888–1970", line: ["First Filipina physician", "フィリピン初の女性医師"] as [string, string] },
+  { x: -6.2, name: "María Y. Orosa", years: "1893–1945", line: ["Food technologist and chemist", "食品技術者・化学者"] as [string, string] },
+  { x: 6.2, name: "Fe del Mundo", years: "1911–2011", line: ["First woman National Scientist", "初の女性ナショナル・サイエンティスト"] as [string, string] },
+  { x: 9.4, name: "Lourdes J. Cruz", years: "National Scientist" as string, line: ["Biochemist, cone snail venoms", "生化学者、イモガイの毒の研究"] as [string, string] },
 ];
 /** Just proud of the hall's back wall (z = -4, 0.3 m thick), above the wainscot. */
 const PLAQUE_Z = -4 + 0.15 + 0.02;
 
 function Plaque({ x, name, years, line }: (typeof PLAQUES)[number]) {
+  const lang = useLang();
   const texture = useCanvasTexture(640, 440, (ctx, w, h) => {
     ctx.fillStyle = "#f6efe3";
     ctx.fillRect(0, 0, w, h);
@@ -278,19 +325,19 @@ function Plaque({ x, name, years, line }: (typeof PLAQUES)[number]) {
     ctx.fillStyle = "#8a6a3a";
     ctx.font = `600 22px ${FONT}`;
     ctx.textAlign = "center";
-    ctx.fillText("WOMEN IN PHILIPPINE SCIENCE", w / 2, 70);
+    ctx.fillText(L("WOMEN IN PHILIPPINE SCIENCE", "フィリピンの科学の女性たち"), w / 2, 70);
     ctx.fillStyle = "#1f2430";
     ctx.font = `700 46px ${FONT}`;
     wrapText(ctx, name, w / 2, 160, w - 90, 52);
     ctx.font = `500 30px ${FONT}`;
     ctx.fillStyle = "#4a4f5c";
-    ctx.fillText(years, w / 2, 290);
+    ctx.fillText(years === "National Scientist" ? L(years, "ナショナル・サイエンティスト") : years, w / 2, 290);
     ctx.font = `400 28px ${FONT}`;
-    ctx.fillText(line, w / 2, 340);
+    ctx.fillText(L(...line), w / 2, 340);
     ctx.fillStyle = "#8a8f9c";
     ctx.font = `400 20px ${FONT}`;
-    ctx.fillText("Click to read more", w / 2, 400);
-  });
+    ctx.fillText(L("Click to read more", "クリックで詳しく"), w / 2, 400);
+  }, [lang]);
   const face = useWashedFace(texture, "hall");
   return (
     <group position={[x, 1.75, PLAQUE_Z]}>
@@ -315,16 +362,16 @@ function drawData(ctx: CanvasRenderingContext2D, w: number, h: number) {
   ctx.fillRect(0, 0, w, h);
   ctx.fillStyle = "#fff";
   ctx.font = `700 56px ${FONT}`;
-  ctx.fillText("Gender in numbers: the Philippines", 50, 90);
+  ctx.fillText(L("Gender in numbers: the Philippines", "数字で見るジェンダー:フィリピン"), 50, 90);
   ctx.font = `400 28px ${FONT}`;
   ctx.fillStyle = "#b9c3d8";
-  ctx.fillText("Global Gender Gap Report 2025: 20th of 148 countries, 78.1% of parity, first in Southeast Asia", 50, 140);
+  ctx.fillText(L("Global Gender Gap Report 2025: 20th of 148 countries, 78.1% of parity, first in Southeast Asia", "グローバル・ジェンダー・ギャップ報告書2025:148か国中20位、平等の78.1%、東南アジアで1位"), 50, 140);
   // Subindex bars, as a share of parity.
   const bars: [string, number][] = [
-    ["Educational attainment", 0.988],
-    ["Health and survival", 0.967],
-    ["Economic participation", 0.79],
-    ["Political empowerment", 0.377],
+    [L("Educational attainment", "教育"), 0.988],
+    [L("Health and survival", "健康と生存"), 0.967],
+    [L("Economic participation", "経済参画"), 0.79],
+    [L("Political empowerment", "政治参画"), 0.377],
   ];
   const left = 50, labelW = 380, barW = 900, top = 172, rowH = 62;
   bars.forEach(([label, v], i) => {
@@ -340,16 +387,16 @@ function drawData(ctx: CanvasRenderingContext2D, w: number, h: number) {
     ctx.fill();
     ctx.fillStyle = "#fff";
     ctx.font = `700 30px ${FONT}`;
-    ctx.fillText(`${(v * 100).toFixed(1)}%${label.startsWith("Economic") ? " (about)" : ""}`, left + labelW + barW + 20, y + 40);
+    ctx.fillText(`${(v * 100).toFixed(1)}%${v === 0.79 ? L(" (about)", "(約)") : ""}`, left + labelW + barW + 20, y + 40);
   });
   // Labor force participation, women and men.
   const y0 = top + bars.length * rowH + 44;
   ctx.fillStyle = "#e6ebf5";
   ctx.font = `600 32px ${FONT}`;
-  ctx.fillText("In the labor force (2021)", left, y0);
+  ctx.fillText(L("In the labor force (2021)", "労働力率(2021年)"), left, y0);
   const lf: [string, number, string][] = [
-    ["Women", 0.512, "#c8607a"],
-    ["Men", 0.754, "#5b8ad8"],
+    [L("Women", "女性"), 0.512, "#c8607a"],
+    [L("Men", "男性"), 0.754, "#5b8ad8"],
   ];
   lf.forEach(([label, v, color], i) => {
     const y = y0 + 18 + i * 56;
@@ -368,11 +415,12 @@ function drawData(ctx: CanvasRenderingContext2D, w: number, h: number) {
   });
   ctx.fillStyle = "#8f9bb5";
   ctx.font = `400 22px ${FONT}`;
-  ctx.fillText("Sources: World Economic Forum (2025), via the Philippine Commission on Women; Philippine Statistics Authority (2024). Click for details.", 50, h - 30);
+  ctx.fillText(L("Sources: World Economic Forum (2025), via the Philippine Commission on Women; Philippine Statistics Authority (2024). Click for details.", "出典:世界経済フォーラム(2025、フィリピン女性委員会経由)、フィリピン統計庁(2024)。クリックで詳しく。"), 50, h - 30);
 }
 
 function DataScreen() {
-  const texture = useCanvasTexture(1600, Math.round((1600 * DISPLAY.height) / DISPLAY.width), drawData);
+  const lang = useLang();
+  const texture = useCanvasTexture(1600, Math.round((1600 * DISPLAY.height) / DISPLAY.width), drawData, [lang]);
   return (
     <group position={[DISPLAY.x, DISPLAY.y, DISPLAY.z]}>
       <Clickable onClick={() => openCard("data")}>
@@ -431,6 +479,7 @@ function usePodiumBody() {
 }
 
 function Podium(p: PodiumSpec) {
+  const lang = useLang();
   const texture = useCanvasTexture(800, 500, (ctx, w, h) => {
     ctx.fillStyle = "#101828";
     ctx.fillRect(0, 0, w, h);
@@ -438,17 +487,17 @@ function Podium(p: PodiumSpec) {
     ctx.fillRect(0, 0, w, 16);
     ctx.fillStyle = "#fff";
     ctx.font = `700 54px ${FONT}`;
-    wrapText(ctx, p.title, 40, 110, w - 80, 60);
+    wrapText(ctx, p.card === "quiz" ? L(p.title, "これはハラスメント?") : L(p.title, "あなたならどうする?"), 40, 110, w - 80, 60);
     ctx.fillStyle = "#c6cfe0";
     ctx.font = `400 32px ${FONT}`;
-    wrapText(ctx, p.prompt, 40, 260, w - 80, 42);
+    wrapText(ctx, p.card === "quiz" ? L(p.prompt, "6つの場面。考えてから、理由を見てみよう。") : L(p.prompt, "ある場面と、傍観者の行動の5つのD。"), 40, 260, w - 80, 42);
     ctx.fillStyle = p.color;
     roundRect(ctx, 40, h - 110, 300, 70, 35);
     ctx.fill();
     ctx.fillStyle = "#fff";
     ctx.font = `600 32px ${FONT}`;
-    ctx.fillText("Click to start", 76, h - 63);
-  });
+    ctx.fillText(L("Click to start", "クリックしてはじめる"), 76, h - 63);
+  }, [lang]);
   const body = usePodiumBody();
   // The card fits the sloped top, with a small margin of wood round it.
   const cardW = PODIUM.w - 0.08;
