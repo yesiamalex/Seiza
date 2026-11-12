@@ -225,6 +225,17 @@ This is separate from licensing. Running Seiza under the AGPL is free and
 needs no permission; [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md) only
 matters if you want to use it in a closed-source product.
 
+## 👤 About the author
+
+Seiza is made by [Ziedell Alexander Figueroa](https://zafigueroa.vercel.app),
+a full-stack and XR developer in Cebu City: lecturer in the Department of
+Computer Science at the University of the Philippines Cebu, and consultant
+and researcher at UP Open University's ISCOLab. Its learning worlds grew out
+of work presented at the World Immersive Learning Labs Symposium (WILLS) in
+2025 and 2026, and out of earlier tools for immersive learning: Komprensible
+(an undergraduate thesis on Japanese language and culture in VR), Tourensible,
+and the ISCOLab dashboard.
+
 ## ⚖️ License
 
 Seiza is dual-licensed:
