@@ -28,6 +28,9 @@ interface EditToolbarProps {
   onSnapToFloor: () => void;
   onDeselect: () => void;
   onDeleteSelected: () => void;
+  /** The selected object, when it's a picture: its link can be set here. */
+  selectedImage?: WorldObject | null;
+  onSetLink?: (id: string, link: string) => void;
   /** Whether this deployment has a shared editor password configured at
    *  all (worker/room.ts's SEIZA_EDITOR_PASSWORD) — if not, editing is
    *  open and none of the auth props below matter. */
@@ -79,6 +82,8 @@ export function EditToolbar({
   onTransformModeChange,
   onSnapToFloor,
   onDeselect,
+  selectedImage,
+  onSetLink,
   onDeleteSelected,
   editorPasswordRequired,
   isEditor,
@@ -372,6 +377,7 @@ export function EditToolbar({
                   Snap to floor
                 </button>
               </div>
+              {selectedImage && onSetLink && <ImageLinkField key={selectedImage.id} image={selectedImage} connected={connected} onSetLink={onSetLink} />}
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 <button style={pillButtonStyle} onClick={onDeselect}>
                   Deselect
@@ -638,3 +644,40 @@ const headerIconButton: React.CSSProperties = {
   cursor: "pointer",
   flexShrink: 0,
 };
+
+/**
+ * A picture's link: anyone who opens the picture can follow it. https
+ * only; the room server refuses anything else (worker/room.ts,
+ * sanitizeLink), so a refused link simply doesn't appear.
+ */
+function ImageLinkField({ image, connected, onSetLink }: { image: WorldObject; connected: boolean; onSetLink: (id: string, link: string) => void }) {
+  const [value, setValue] = useState(image.link ?? "");
+  const valid = value.trim() === "" || /^https:\/\/[^\s]+$/.test(value.trim());
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (valid) onSetLink(image.id, value.trim());
+      }}
+      style={{ display: "flex", flexDirection: "column", gap: 4 }}
+    >
+      <label style={{ fontSize: 12, opacity: 0.85 }} htmlFor="seiza-image-link">
+        Link (optional): opens from the picture
+      </label>
+      <div style={{ display: "flex", gap: 6 }}>
+        <input
+          id="seiza-image-link"
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          placeholder="https://…"
+          maxLength={2000}
+          style={{ ...inputStyle, flex: 1, minWidth: 0 }}
+        />
+        <button type="submit" style={pillButtonStyle} disabled={!connected || !valid || value.trim() === (image.link ?? "")}>
+          {value.trim() ? "Save" : "Remove"}
+        </button>
+      </div>
+      {!valid && <small style={{ color: "#ff8a80" }}>Use a full https:// address.</small>}
+    </form>
+  );
+}

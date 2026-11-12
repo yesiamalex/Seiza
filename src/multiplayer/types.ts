@@ -84,6 +84,9 @@ export interface WorldObject {
   ownerId: string;
   /** Contents of a "text" object: first line is the heading. */
   text?: string;
+  /** An "image" object's link: a web page anyone who opens the picture
+   *  can visit. Set by editors only (objectSetLink); https only. */
+  link?: string;
   /** Who is presenting on a "screen" object, or null when it's free. */
   presenterId?: string | null;
   /** Which of the presenter's streams this screen is showing. Absent on
@@ -165,6 +168,8 @@ export type ClientMessage =
   | { type: "objectRemove"; id: string }
   // Writes on a text board or a note.
   | { type: "objectSetText"; id: string; text: string }
+  /** Sets (or, with "", removes) an image object's link. Editors only. */
+  | { type: "objectSetLink"; id: string; link: string }
   // Claims a screen to present on, or gives it back up. Only the presenter
   // can release their own screen; leaving the room releases it too.
   // `source` picks which of the presenter's own streams feeds the

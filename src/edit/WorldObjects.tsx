@@ -23,6 +23,8 @@ interface WorldObjectsProps {
   onEditText?: (object: WorldObject) => void;
   /** Click a screen to start presenting on it, or to stop. */
   onPresentToggle?: (object: WorldObject) => void;
+  /** Click a picture to see it large, with its link if it has one. */
+  onOpenImage?: (object: WorldObject) => void;
   /** The live picture for a screen, when somebody is presenting on it. */
   resolveScreenStream?: (object: WorldObject) => MediaStream | null;
   /** Sit on a placed chair. Omitted in edit mode, where a click selects the
@@ -43,6 +45,7 @@ export function WorldObjects({
   onMove,
   onEditText,
   onPresentToggle,
+  onOpenImage,
   resolveScreenStream,
   onSit,
   occupiedSeatId,
@@ -59,6 +62,7 @@ export function WorldObjects({
           onMove={onMove}
           transformMode={transformMode}
           onEditText={onEditText}
+          onOpenImage={onOpenImage}
           onPresentToggle={onPresentToggle}
           screenStream={obj.kind === "screen" ? (resolveScreenStream?.(obj) ?? null) : null}
           onSit={onSit}
@@ -78,6 +82,7 @@ interface PlacedObjectProps {
   onMove: (id: string, position: [number, number, number], rotationY: number) => void;
   onEditText?: (object: WorldObject) => void;
   onPresentToggle?: (object: WorldObject) => void;
+  onOpenImage?: (object: WorldObject) => void;
   screenStream: MediaStream | null;
   onSit?: (seat: Seat) => void;
   occupiedSeatId?: string | null;
@@ -92,6 +97,7 @@ function PlacedObject({
   transformMode,
   onEditText,
   onPresentToggle,
+  onOpenImage,
   screenStream,
   onSit,
   occupiedSeatId,
@@ -102,7 +108,9 @@ function PlacedObject({
   // Boards and screens are used, not just arranged, so they answer clicks
   // outside edit mode too. The server still decides whether a write is
   // allowed (worker/room.ts).
-  const interactive = !editMode && ((isTextObjectKind(object.kind) && !!onEditText) || (object.kind === "screen" && !!onPresentToggle));
+  const interactive =
+    !editMode &&
+    ((isTextObjectKind(object.kind) && !!onEditText) || (object.kind === "screen" && !!onPresentToggle) || (object.kind === "image" && !!onOpenImage));
 
   useEffect(
     () => () => {
@@ -123,6 +131,9 @@ function PlacedObject({
     } else if (object.kind === "screen" && onPresentToggle) {
       event.stopPropagation();
       onPresentToggle(object);
+    } else if (object.kind === "image" && onOpenImage) {
+      event.stopPropagation();
+      onOpenImage(object);
     }
   };
 

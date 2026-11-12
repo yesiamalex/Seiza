@@ -238,6 +238,13 @@ guarantee yet.
   before upload, so a phone photo takes a few hundred kilobytes instead of
   several megabytes. Video is link-only; see
   [Uploads and storage limits](#uploads-and-storage-limits).
+
+  Click a picture to see it large. An editor can give a picture a link
+  (select it in Edit Mode, then **Link**): it then shows where the link goes
+  and an **Open link** button, which opens it in a new tab. Links must be
+  https addresses on the public internet; the room server refuses anything
+  else (`sanitizeLink` in `worker/room.ts`), and only editors can set them
+  where the deployment has an editor password or admin key.
 - **Custom environments.** Upload a `.glb` or `.gltf` world in Edit Mode, and
   it becomes the room's environment for everyone right away. It's saved in
   the room and restored for people who join later. **Reset to default**

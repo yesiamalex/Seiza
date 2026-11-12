@@ -396,6 +396,27 @@ describe.skipIf(!built)("room server", () => {
     a.socket.close();
   });
 
+  it("lets a picture carry an https link, and refuses anything else", async () => {
+    const room = freshRoom();
+    const a = await client(room, "A", ["batch"]);
+    a.send({ type: "objectAdd", object: { kind: "image", src: "/api/assets/pic.webp", color: "#ffffff", position: [0, 0, 0], rotationY: 0, scale: 1 } as never });
+    const added = await until(() => a.received.find((m) => m.type === "objectAdded"));
+    const id = added.type === "objectAdded" ? added.object.id : "";
+    for (const bad of ["javascript:alert(1)", "http://example.com", "https://192.168.1.1/", "https://example.com/\u202Eexe.gpj"]) {
+      a.send({ type: "objectSetLink", id, link: bad });
+    }
+    a.send({ type: "objectSetLink", id, link: "https://framevr.io/example" });
+    const updated = await until(() => a.received.find((m) => m.type === "objectUpdated"));
+    await sleep(300);
+    expect(a.received.filter((m) => m.type === "objectUpdated")).toHaveLength(1);
+    expect(updated.type === "objectUpdated" && updated.object.link).toBe("https://framevr.io/example");
+    a.send({ type: "objectSetLink", id, link: "" });
+    await until(() => (a.received.filter((m) => m.type === "objectUpdated").length === 2 ? true : undefined));
+    const cleared = a.received.filter((m) => m.type === "objectUpdated")[1];
+    expect(cleared.type === "objectUpdated" && cleared.object.link).toBeUndefined();
+    a.socket.close();
+  });
+
   it("strips direction overrides and control characters from chat and names", async () => {
     const room = freshRoom();
     const a = await client(room, "A‮gnp.exe", ["batch"]);

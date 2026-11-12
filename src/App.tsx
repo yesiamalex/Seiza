@@ -62,6 +62,7 @@ import { formatSeizaTime, loadSeizaTimerView, saveSeizaTimerView, SeizaTimer, Se
 import { MediaControls } from "./media/MediaControls";
 import { CameraBadge } from "./media/CameraBadge";
 import { ScreenZoomOverlay } from "./media/ScreenZoomOverlay";
+import { ImageViewer } from "./edit/ImageViewer";
 import { PresentSourceChooser } from "./media/PresentSourceChooser";
 import { WorldObjects } from "./edit/WorldObjects";
 import { EditToolbar } from "./edit/EditToolbar";
@@ -192,6 +193,8 @@ export default function App() {
   const [avatarMessage, setAvatarMessage] = useState<string | null>(null);
   /** Id of the screen object currently blown up to fill the viewport. */
   const [zoomedScreenId, setZoomedScreenId] = useState<string | null>(null);
+  // A placed picture opened large (ImageViewer), by object id.
+  const [openImageId, setOpenImageId] = useState<string | null>(null);
   /** A free screen that was clicked and is waiting for the player to
    *  choose what to put on it. */
   const [pendingPresentId, setPendingPresentId] = useState<string | null>(null);
@@ -299,6 +302,7 @@ export default function App() {
     setPosture: sendPosture,
     setCalm,
     setObjectText,
+    setObjectLink,
     presentOnObject,
     setMedia,
     connected,
@@ -869,6 +873,9 @@ export default function App() {
     [canParticipate]
   );
 
+  const openImage = useCallback((object: WorldObject) => setOpenImageId(object.id), []);
+  const closeImage = useCallback(() => setOpenImageId(null), []);
+
   const presentOn = useCallback(
     async (object: WorldObject, explicitSource?: PresentSource) => {
       const source: PresentSource = explicitSource ?? "screen";
@@ -1369,6 +1376,7 @@ export default function App() {
             onMove={moveObject}
             onEditText={handleEditText}
             onPresentToggle={(object) => void presentOn(object)}
+            onOpenImage={openImage}
             resolveScreenStream={resolveScreenStream}
             onSit={editMode ? undefined : sitDown}
             occupiedSeatId={seat?.id ?? null}
@@ -1604,6 +1612,8 @@ export default function App() {
           onSnapToFloor={handleSnapToFloor}
           onDeselect={() => setSelectedObjectId(null)}
           onDeleteSelected={handleDeleteSelected}
+          selectedImage={selectedObjectId && objects[selectedObjectId]?.kind === "image" ? objects[selectedObjectId] : null}
+          onSetLink={setObjectLink}
           editorPasswordRequired={editGateProps.editorPasswordRequired}
           isEditor={editGateProps.isEditor}
           editorAuthPending={editGateProps.editorAuthPending}
@@ -1623,6 +1633,7 @@ export default function App() {
           not inside it: on a phone the HUD's controls fold into a drawer,
           which hid every world card until the drawer was opened. */}
       <WorldOverlay />
+      {openImageId && objects[openImageId]?.kind === "image" && <ImageViewer object={objects[openImageId]} onClose={closeImage} />}
       {/* Someone is talking but the browser still holds audio back (the
           Join click usually unlocks it; see src/media/audioContext.ts). */}
       {media.audioBlocked && (

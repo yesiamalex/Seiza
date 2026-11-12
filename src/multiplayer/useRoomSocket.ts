@@ -67,6 +67,8 @@ export interface MultiplayerState {
   setCalm: (calm: boolean) => void;
   /** Write on a board or a note. */
   setObjectText: (id: string, text: string) => void;
+  /** Sets an image's link ("" removes it). Editors only. */
+  setObjectLink: (id: string, link: string) => void;
   /** Claim a screen to present on, or hand it back. */
   presentOnObject: (id: string, active: boolean, source?: PresentSource) => void;
   /** Publish which of our live streams is which (see PlayerMedia). */
@@ -243,6 +245,7 @@ export function useRoomSocket(
   const setPosture = useCallback((posture: Posture) => send({ type: "setPosture", posture }), [send]);
   const setCalm = useCallback((calm: boolean) => send({ type: "setCalm", calm }), [send]);
   const setObjectText = useCallback((id: string, text: string) => send({ type: "objectSetText", id, text }), [send]);
+  const setObjectLink = useCallback((id: string, link: string) => send({ type: "objectSetLink", id, link }), [send]);
   const presentOnObject = useCallback(
     (id: string, active: boolean, source?: PresentSource) => send({ type: "objectPresent", id, active, source }),
     [send]
@@ -583,6 +586,7 @@ export function useRoomSocket(
     setPosture,
     setCalm,
     setObjectText,
+    setObjectLink,
     presentOnObject,
     setMedia,
     connected: connectionState === "connected",

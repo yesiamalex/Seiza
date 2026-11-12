@@ -613,6 +613,22 @@ export class SeizaRoom extends DurableObject<Env> {
         this.broadcast({ type: "objectRemoved", id: message.id });
         break;
       }
+      case "objectSetLink": {
+        // A link sends visitors somewhere else, so it's an edit: only
+        // editors (or admins) where the deployment has a password, like
+        // placing or removing things.
+        if (this.editingRequiresAuth() && !attachment.isEditor) return;
+        if (!this.allow(attachment.connId, "edit", EDIT_RATE)) return;
+        const object = this.objects.get(message.id);
+        if (!object || object.kind !== "image") return;
+        const link = sanitizeLink(message.link);
+        if (link === null) return;
+        if (link) object.link = link;
+        else delete object.link;
+        this.persistObjects();
+        this.broadcast({ type: "objectUpdated", object });
+        break;
+      }
       case "objectSetText": {
         // Deliberately NOT editor-gated, on the same principle as
         // objectPresent below: writing on a board that already exists is
@@ -1279,6 +1295,21 @@ export function sanitizeAssetUrl(input: unknown, { allowEmpty }: { allowEmpty: b
   if (url.includes("\\")) return null;
   if (url.startsWith("//")) return null; // protocol-relative → cross-origin
   if (url.startsWith("/")) return url; // same-origin path
+  return safeOutsideUrl(url) ? url : null;
+}
+
+/**
+ * An image's link: "" to remove it, an https address on the public
+ * internet, or null for anything else (refused). The same rule as any
+ * outside URL a room shares (safeOutsideUrl), and invisible characters
+ * that could disguise where it goes are refused, not stripped.
+ */
+export function sanitizeLink(input: unknown): string | null {
+  if (typeof input !== "string") return null;
+  const url = input.trim();
+  if (url.length === 0) return "";
+  if (url.length > MAX_URL_LENGTH || url.includes("\\")) return null;
+  if (stripUnsafeCharacters(url, { newlines: false }) !== url) return null;
   return safeOutsideUrl(url) ? url : null;
 }
 
