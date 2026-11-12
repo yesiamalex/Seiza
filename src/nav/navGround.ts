@@ -23,6 +23,7 @@ type Query = {
     end: { x: number; y: number; z: number }
   ) => { success: boolean; resultPosition: { x: number; y: number; z: number }; visited: number[] };
   getPolyHeight: (ref: number, position: { x: number; y: number; z: number }) => { success: boolean; height: number };
+  raycast: (startRef: number, start: { x: number; y: number; z: number }, end: { x: number; y: number; z: number }) => { success: boolean; t: number };
   computePath: (
     start: { x: number; y: number; z: number },
     end: { x: number; y: number; z: number },
@@ -93,6 +94,26 @@ export class NavGround implements Ground {
   isWalkable(x: number, z: number): boolean {
     const found = this.query.findClosestPoint({ x, y: this.at.y, z }, { halfExtents: { x: 0.2, y: 1, z: 0.2 } });
     return found.success && !!found.polyRef && Math.hypot(found.point.x - x, found.point.z - z) < 0.05;
+  }
+
+  /** How far a third-person camera keeps from a wall it would go through. */
+  private static readonly VIEW_MARGIN = 0.35;
+
+  limitView(from: THREE.Vector3, camera: THREE.Vector3): void {
+    if (!this.ref) return;
+    // Along the floor the walker is on: walls show as the navmesh's edges.
+    this.scratch.x = camera.x;
+    this.scratch.y = this.at.y;
+    this.scratch.z = camera.z;
+    const hit = this.query.raycast(this.ref, this.at, this.scratch);
+    if (!hit.success || !(hit.t < 1)) return;
+    const dx = camera.x - from.x;
+    const dz = camera.z - from.z;
+    const length = Math.hypot(dx, dz);
+    if (length < 1e-3) return;
+    const keep = Math.max(0, hit.t * length - NavGround.VIEW_MARGIN) / length;
+    camera.x = from.x + dx * keep;
+    camera.z = from.z + dz * keep;
   }
 
   /** A walking route, for click-to-walk and for guides. */

@@ -12,6 +12,7 @@ import {
   clampToRooms,
   constrainWalker,
   floorHeightAt,
+  getGround,
   SEATED_EYE_HEIGHT,
   standUpSpot,
   type Seat,
@@ -844,6 +845,8 @@ export function PlayerRig({
         // showed the room from outside, and rising over the top showed the
         // room from above with no roof on it.
         clampToRooms(camera.position, PLAYER_RADIUS_MARGIN - CAMERA_RADIUS);
+        // In a model world, walls are the navmesh's edges (navGround.ts).
+        getGround()?.limitView?.(pivot, camera.position);
         const floor = floorHeightAt(camera.position.x, camera.position.z);
         camera.position.y = THREE.MathUtils.clamp(
           camera.position.y,

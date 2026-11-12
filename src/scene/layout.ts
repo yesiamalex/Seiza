@@ -724,6 +724,9 @@ export interface Ground {
   /** Moves the walker to a spot at once (a spawn, a warp, a seat), on the
    *  level nearest `y`. Returns the floor height there. */
   place(x: number, y: number, z: number): number;
+  /** Keeps a third-person camera at `camera` on this side of any wall
+   *  between it and `from` (the walker), moving it in front of the wall. */
+  limitView?(from: THREE.Vector3, camera: THREE.Vector3): void;
 }
 
 let ground: Ground | null = null;

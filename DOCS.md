@@ -532,6 +532,8 @@ from `navMeshUrl`, a navigation mesh baked from the model ahead of time:
   ground walks you there along the paths, into buildings.
 - **Warps**, spawning, and an admin's gather land on the nearest walkable
   spot to where they aim, on the nearest floor.
+- **The third-person camera** stops in front of a wall rather than going
+  through it: walls are the navmesh's edges (`limitView` in `navGround.ts`).
 
 Bake the navmesh when you prepare the model, not in the browser: for a
 whole campus, building one takes the browser far too long.
