@@ -382,6 +382,37 @@ and deploy again:
 > might briefly return 404 for someone elsewhere. That's acceptable at
 > classroom scale, but consider it if you need stricter real-time behavior.
 
+#### Your own domain, for every world
+
+Each world is its own Worker, so each can have its own address on one
+domain: `seiza.org` for the default world, `seizora.seiza.org`,
+`seiou.seiza.org`, and so on. Nothing in the code changes.
+
+1. Add the domain to your Cloudflare account (its nameservers point to
+   Cloudflare).
+2. For each Worker, open **Settings > Domains & Routes**, choose **Add**,
+   then **Custom domain**, and enter its address. Cloudflare creates the
+   DNS record and the certificate.
+3. Optionally, set `SEIZA_CANONICAL_ORIGIN` on each Worker to its new
+   address (for example `https://seizora.seiza.org`). Pages opened at the
+   old `*.workers.dev` address are then sent to the new one, path and query
+   included, so old links keep working. Room connections and uploads aren't
+   redirected, so a page already open at the old address keeps working
+   until it's reloaded. Cloudflare's own redirect rules can't do this,
+   because `workers.dev` isn't a domain you own.
+4. Point the portals at the new addresses: in `world.json`,
+   `"urlPattern": "https://{id}.seiza.org"`.
+
+A room is kept per Worker, not per address, so people at the old and the
+new address meet in the same room.
+
+Paths on one address (`seiza.org/seizora`) aren't supported. Seiza expects
+to be at the root of its address: its pages, uploads (`/api/...`), rooms
+(`/rooms/...`), and world files (`/worlds/...`) are all addressed from
+`/`, and some of those addresses are saved in rooms and in visitors'
+browsers. Serving a world under a path would mean building each world with
+its own base path and rewriting those addresses, which is a larger change.
+
 ### Run Seiza somewhere other than Cloudflare
 
 If your institution can't use Cloudflare (for example, because of an

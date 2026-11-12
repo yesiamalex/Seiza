@@ -20,6 +20,7 @@
 
 import { AVATAR_LIMITS, checkGlb, checkGltfJson, imageSize, MAX_IMAGE_SIDE, MODEL_LIMITS } from "./uploadChecks";
 import { SeizaRoom, timingSafeEqual } from "./room";
+import { canonicalRedirect } from "./canonical";
 
 export interface Env {
   ASSETS: Fetcher;
@@ -38,6 +39,12 @@ export interface Env {
   SEIZA_ADMIN_KEY?: string;
   /** Maximum simultaneous joined players for the deployed world. */
   SEIZA_MAX_OCCUPANTS?: string;
+  /** Optional. This deployment's own address, like
+   *  https://seizora.seiza.org, once it has one. Visitors who open the old
+   *  *.workers.dev address are sent there (a 301), so old links keep
+   *  working. Rooms and uploads aren't redirected, so a page already open
+   *  at the old address keeps working until it's reloaded. */
+  SEIZA_CANONICAL_ORIGIN?: string;
   /** Outside origins (like https://models.example.org) that avatars may be
    *  loaded from, comma-separated. Avatars from this deployment's own files
    *  and uploads always work; an outside URL any visitor could set would
@@ -274,6 +281,9 @@ function isRateLimited(ip: string): boolean {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+
+    const moved = canonicalRedirect(request, url, env);
+    if (moved) return moved;
 
     if (url.pathname.startsWith("/rooms/")) {
       return routeToRoom(request, url, env);
