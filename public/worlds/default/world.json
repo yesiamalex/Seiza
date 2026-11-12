@@ -16,6 +16,65 @@
     { "label": "Sample (F)", "url": "/avatars/vroid/sample-female.vrm", "author": "pixiv Inc. (VRoid Studio sample)", "license": "CC0 1.0", "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/" },
     { "label": "Sample (M)", "url": "/avatars/vroid/sample-male.vrm", "author": "pixiv Inc. (VRoid Studio sample)", "license": "CC0 1.0", "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/" }
   ],
+  "portals": {
+    "urlPattern": "https://{id}.figueroaziedell.workers.dev",
+    "at": {
+      "x": 2,
+      "z": 60
+    },
+    "facing": -1.5708,
+    "worlds": [
+      {
+        "id": "seizora",
+        "label": "Seizora",
+        "labelJa": "Seizora",
+        "color": "#ffb35c",
+        "blurb": "A solar, wind, and battery microgrid for a town in Cebu, and a perovskite lab.",
+        "blurbJa": "セブの町のための太陽光・風力・蓄電池のマイクログリッドと、ペロブスカイトのラボ。"
+      },
+      {
+        "id": "seizorai",
+        "label": "Seizorai",
+        "labelJa": "Seizorai",
+        "color": "#ffd27a",
+        "blurb": "Seizora, with Ilaw-san, a guide who answers from what was written for the world.",
+        "blurbJa": "Seizoraに、ワールドのために書かれた答えで話すガイド、イラウさんが加わりました。"
+      },
+      {
+        "id": "seilaya",
+        "label": "Seilaya",
+        "labelJa": "Seilaya",
+        "color": "#c8607a",
+        "blurb": "A safe spaces lab for learning about gender, safety, and respect.",
+        "blurbJa": "ジェンダー、安全、尊重について学ぶセーフスペース・ラボ。"
+      },
+      {
+        "id": "seisugbo",
+        "label": "Seisugbo",
+        "labelJa": "Seisugbo",
+        "color": "#3fb6a8",
+        "blurb": "The Meiji × UP arts-based research exhibition of 2026, in a model Cebu lane.",
+        "blurbJa": "セブの路地のモデルで見る、明治 × UP アートベース・リサーチ2026の展覧会。"
+      },
+      {
+        "id": "seiou",
+        "label": "SeiOU",
+        "labelJa": "SeiOU",
+        "color": "#d8c98a",
+        "url": "https://seiou-up.figueroaziedell.workers.dev",
+        "blurb": "A walkable digital twin of UP Open University's campus, with two guides.",
+        "blurbJa": "歩いてめぐれるフィリピン大学オープン大学のデジタルツイン。ガイドが2人います。"
+      },
+      {
+        "id": "seinag",
+        "label": "Seinag",
+        "labelJa": "Seinag",
+        "color": "#7fa7ff",
+        "blurb": "UPOU's campus with hypothetical rooftop solar, running live on the sky.",
+        "blurbJa": "屋根に仮想の太陽光パネルをのせたUPOUのキャンパス。空に合わせてライブで動きます。"
+      }
+    ]
+  },
   "customGestures": [],
   "defaultObjects": [
     {

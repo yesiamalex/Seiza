@@ -475,7 +475,36 @@ Each deployment serves one world. To customize it:
 
 You don't need to change application code. For the full list of fields, see
 `public/worlds/default/README.md`. `displayNameJa` is the world's name for
-visitors who've chosen Japanese; without it, they see `displayName`. For example, you can turn off in-world
+visitors who've chosen Japanese; without it, they see `displayName`.
+
+#### Portals to other worlds
+
+`portals` puts a row of portals in the world, each a ring that opens
+another site in a new tab after a card says where it goes. The default
+world has one on the meadow, to each of the other worlds:
+
+```json
+"portals": {
+  "urlPattern": "https://{id}.your-subdomain.workers.dev",
+  "at": { "x": 2, "z": 60 },
+  "facing": -1.5708,
+  "worlds": [
+    { "id": "seizora", "label": "Seizora", "color": "#ffb35c", "blurb": "…" },
+    { "id": "seiou", "label": "SeiOU", "url": "https://seiou-up.your-subdomain.workers.dev" }
+  ]
+}
+```
+
+- `urlPattern` addresses every portal at once: `{id}` becomes each world's
+  `id`. On one domain, it's `"https://seiza.org/{id}/"`. A world's own
+  `url` wins. Only `https://` addresses and same-site paths open; an
+  address left with `REPLACE` or `example.` in it shows as not set yet.
+- `at` is the middle of the row on the ground; `facing` is which way the
+  portals face (`0` faces +Z, `-1.5708` faces -X); `spacing` is the
+  metres between them (default 2.6).
+- `labelJa` and `blurbJa` are shown to visitors who chose Japanese.
+- In a headset, which can't open another site, the card says to exit VR
+  first. For example, you can turn off in-world
 editing with `editingEnabled: false`, or avatar uploads with
 `allowAvatarUpload: false`.
 

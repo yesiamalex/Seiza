@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Canvas } from "@react-three/fiber";
 import { XR, createXRStore } from "@react-three/xr";
 import * as THREE from "three";
@@ -87,6 +87,7 @@ import { AvatarChooser } from "./ui/AvatarChooser";
 import { useMediaQuery, useWantsTouchControls } from "./ui/useMediaQuery";
 import { saveProfile } from "./profile/profileStore";
 import { deliverWorldMessage, unwrapWorldMessage, WorldExtension, WorldOverlay, wrapWorldMessage } from "./worlds/WorldExtension";
+import { PortalCard, Portals } from "./worlds/Portals";
 import { BAR_LABEL_CLASS, barButtonActiveStyle, barButtonStyle, inputStyle, panelStyle, pillButtonStyle, primaryButtonStyle } from "./ui/styles";
 import { CloseIcon, LockIcon, PersonIcon, VrHeadsetIcon } from "./ui/icons";
 import { isTextObjectKind, type PresentSource, type WorldObject, type WorldObjectKind } from "./multiplayer/types";
@@ -122,6 +123,13 @@ if (xrEmulateGaze) {
     (window as unknown as { __seizaXrDevice?: unknown }).__seizaXrDevice = device;
   });
 }
+/** Whether a headset session is running, for DOM outside the canvas. */
+function useXrSessionActive(): boolean {
+  return useSyncExternalStore(
+    (listener) => xrStore.subscribe(listener),
+    () => xrStore.getState().session != null
+  );
+}
 const OBJECT_COLORS = ["#c94f4f", "#4f8fc9", "#4fc97e", "#c9a94f", "#9a4fc9"];
 // Boards and screens get the app's accent rather than a random colour.
 const ACCENT_OBJECT_COLOR = "#e8c37a";
@@ -155,6 +163,7 @@ const isTypingTarget = (target: EventTarget | null) =>
 export default function App() {
   // Everything in the HUD redraws in the visitor's language (src/i18n/).
   useLang();
+  const xrSessionActive = useXrSessionActive();
   const [world, setWorld] = useState<WorldConfig | null>(null);
   const [worldError, setWorldError] = useState<Error | null>(null);
   const [joined, setJoined] = useState<JoinedIdentity | null>(null);
@@ -1311,6 +1320,7 @@ export default function App() {
               setPlayerFilter={setPlayerFilter}
               findPath={navMesh.findPath}
             />
+            {world.portals && <Portals config={world.portals} builtin={world.environment !== "model"} />}
           </group>
           <PlayerRig
             spawnPoint={[world.spawnPoint.x, world.spawnPoint.y, world.spawnPoint.z]}
@@ -1644,6 +1654,7 @@ export default function App() {
           not inside it: on a phone the HUD's controls fold into a drawer,
           which hid every world card until the drawer was opened. */}
       <WorldOverlay />
+      {world.portals && <PortalCard config={world.portals} inXr={xrSessionActive} />}
       {openImageId && objects[openImageId]?.kind === "image" && <ImageViewer object={objects[openImageId]} onClose={closeImage} />}
       {/* Someone is talking but the browser still holds audio back (the
           Join click usually unlocks it; see src/media/audioContext.ts). */}

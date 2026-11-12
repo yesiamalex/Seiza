@@ -104,6 +104,37 @@ export interface WorldConfig {
    * writable, deletable. Leave it out and the room simply starts bare.
    */
   defaultObjects?: DefaultWorldObject[];
+  /** Portals to other worlds: a row of rings that open another site in a
+   *  new tab (src/worlds/Portals.tsx). */
+  portals?: PortalConfig;
+}
+
+export interface PortalConfig {
+  /** Every portal's address, with `{id}` for the world's id:
+   *  "https://{id}.example.workers.dev", or "https://seiza.org/{id}/" on
+   *  one domain. A world's own `url` wins. */
+  urlPattern?: string;
+  /** The middle of the row, on the ground. `y` defaults to the floor there. */
+  at: { x: number; z: number; y?: number };
+  /** Which way the portals face, in radians about the vertical: they face
+   *  (sin facing, cos facing), so 0 faces +Z and -π/2 faces -X. */
+  facing: number;
+  /** Metres between portals. Default 2.6. */
+  spacing?: number;
+  worlds: PortalWorld[];
+}
+
+export interface PortalWorld {
+  id: string;
+  label: string;
+  labelJa?: string;
+  /** One line on its card. */
+  blurb?: string;
+  blurbJa?: string;
+  /** The ring's colour. */
+  color?: string;
+  /** Its address, instead of `urlPattern`'s. */
+  url?: string;
 }
 
 export interface DefaultWorldObject {
