@@ -617,8 +617,10 @@ A world can have guides: avatars who walk a round of the world and answer
 questions (`src/guides/`). Seizorai's Ilaw-san and SeiOU's Chancy Joan and
 Dean Rob are built this way. A guide:
 
-- walks a patrol (`route.ts`) worked out from the wall clock, so everyone
-  sees them in the same place with nothing sent over the network;
+- has a home spot (usually where visitors arrive, facing them) and takes an
+  occasional short stroll: a round of stops worked out from the wall clock
+  (`route.ts`), so everyone sees them in the same place with nothing sent
+  over the network;
 - answers from the world's written knowledge (`brain.ts`): guardrails
   first, then live readings, small talk, and the closest written topic by
   keyword matching, with Filipino, Cebuano, and romanized Japanese words
@@ -629,7 +631,8 @@ Dean Rob are built this way. A guide:
   pointing at a reading or the way;
 - comes over while you talk, and on request walks you to a place along the
   world's paths, waiting if you fall behind, or takes you there at once.
-  This happens on your screen only; everyone else still sees the patrol.
+  This happens on your screen only; everyone else still sees them at home.
+  After a chat or a walk they linger for 25 seconds, then walk back home.
 
 To add one, write the world's `Knowledge` (topics, each with an answer and
 several ways people might ask it) and a `Persona`, then in the world's
@@ -641,7 +644,7 @@ showWorldOverlay(<GuideHud />);
 setGuideWarp(warp);
 // …and in the scene:
 <Guide id="rob" name="Dean Rob" avatarUrl="/avatars/vroid/sample-male.vrm" stops={round}
-       pathsOnPatrol getSelfPosition={getSelfPosition} findPath={findPath} />
+       faceAt={spawn} pathsOnPatrol getSelfPosition={getSelfPosition} findPath={findPath} />
 ```
 
 In a headset, the chat appears as a panel beside the guide, with the next

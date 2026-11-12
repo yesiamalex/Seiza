@@ -11,15 +11,14 @@ Seizora's README for the plant and its sources.
 
 ## Ilaw-san
 
-- **She walks a loop of the exhibits:** the welcome board in the hall, the
-  solar array and the battery in the garden, the turbines on the meadow,
-  and the control room and the lab in the classroom, pausing at each. Her
-  route runs on the wall clock, so every visitor sees her in the same place
-  with nothing sent over the network.
+- **She waits by the campfire where everyone arrives,** facing them, and
+  now and then takes a short stroll across the meadow. Her day runs on the
+  wall clock, so every visitor sees her in the same place with nothing sent
+  over the network. Ask her and she'll walk you to any exhibit.
 - **Click her to talk** (point and pull the trigger in a headset; look at
   her in a phone viewer), or press **Ask Ilaw-san** at the top left. She
   comes and stands beside you while you talk (on your screen only), then
-  walks back onto her route.
+  lingers a little and walks back to the campfire.
 - **She answers from what was written for this world:** Seizorai's info
   cards, a set of questions and answers about the world, getting around,
   sustainability, climate, saving electricity, and rooftop solar, and the

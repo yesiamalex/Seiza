@@ -1,12 +1,14 @@
 /**
- * A guide in the world: a VRM avatar who walks a patrol (route.ts) on the
- * shared clock, so everyone sees them in the same place, and talks with
+ * A guide in the world: a VRM avatar with a home spot (near where visitors
+ * arrive) and an occasional short stroll, both on the shared clock
+ * (route.ts), so everyone sees them in the same place. They talk with
  * whoever clicks them (store.ts, GuideHud.tsx, GuideXr.tsx).
  *
  * While you talk, the guide walks over and stays beside you, following if
  * you wander. Ask them to walk you somewhere and they lead the way along
  * the world's paths, waiting if you fall behind. All of that happens on
- * your screen only: everyone else still sees the patrol. Each answer comes
+ * your screen only: everyone else still sees them at home. After a chat or
+ * a walk they linger a little, then walk back home. Each answer comes
  * with one of Seiza's gestures and a face, chosen by brain.ts: a wave
  * hello, gasshō for thanks, a bow to decline, a shrug when they don't
  * know, pointing at a reading or the way.
@@ -44,13 +46,16 @@ export interface GuideProps {
   getSelfPosition: () => [number, number, number];
   /** The world's walking routes (WorldSceneProps.findPath). */
   findPath?: (from: THREE.Vector3, to: THREE.Vector3) => THREE.Vector3[] | null;
-  /** Where the guide's chat opens in a headset, relative to them. */
-  label?: string;
+  /** Where to look while standing, when nobody is near: the spawn point,
+   *  say, so they greet arrivals. */
+  faceAt?: [number, number];
 }
 
 const GESTURES = buildGestureRegistry({});
 /** How far behind the visitor may fall before a guide leading them waits. */
 const WAIT_FOR = 5.5;
+/** Seconds a guide lingers after a chat or a walk before heading home. */
+const IDLE_BEFORE_RETURN = 25;
 /** Further than this, a guide you call on appears beside you. */
 const FAR_AWAY = 25;
 /** Leading and coming over are a little brisker than the patrol. */
@@ -85,7 +90,7 @@ interface Walk {
   kind: "come" | "lead" | "return";
 }
 
-export function Guide({ id, name, avatarUrl, stops, speed = 1, pathsOnPatrol = false, getSelfPosition, findPath }: GuideProps) {
+export function Guide({ id, name, avatarUrl, stops, speed = 1, pathsOnPatrol = false, getSelfPosition, findPath, faceAt }: GuideProps) {
   const root = useRef<THREE.Group>(null);
   const hit = useRef<THREE.Mesh>(null);
   const camera = useThree((s) => s.camera);
@@ -157,12 +162,12 @@ export function Guide({ id, name, avatarUrl, stops, speed = 1, pathsOnPatrol = f
     if (myLead) startWalk(myLead.at, "lead");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [myLead]);
+  // When the chat closes, wait a while where they are (you may come back
+  // with another question), then walk home.
+  const returnAt = useRef<number | null>(null);
   useEffect(() => {
-    if (!talking && walk.current?.kind !== "lead" && placed.current) {
-      route.at(Date.now() / 1000, onRoute);
-      startWalk([onRoute.x, onRoute.y, onRoute.z], "return");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (talking) returnAt.current = null;
+    else if (placed.current && walk.current?.kind !== "lead") returnAt.current = performance.now() + IDLE_BEFORE_RETURN * 1000;
   }, [talking]);
 
   const scratch = useMemo<RoutePosition>(() => ({ x: 0, y: 0, z: 0, heading: null }), []);
@@ -213,8 +218,14 @@ export function Guide({ id, name, avatarUrl, stops, speed = 1, pathsOnPatrol = f
           startWalk([onRoute.x, onRoute.y, onRoute.z], "return");
         }
       }
+    } else if (!talking && returnAt.current !== null) {
+      // Lingering after a chat or a walk, then heading home.
+      if (performance.now() > returnAt.current) {
+        returnAt.current = null;
+        startWalk([onRoute.x, onRoute.y, onRoute.z], "return");
+      }
     } else if (!talking) {
-      // On patrol.
+      // Home, or on one of their strolls (the round).
       pos.set(onRoute.x, onRoute.y, onRoute.z);
       heading = onRoute.heading;
     }
@@ -226,7 +237,9 @@ export function Guide({ id, name, avatarUrl, stops, speed = 1, pathsOnPatrol = f
 
     // Face the visitor when near or talking; otherwise the way they walk.
     const near = toVisitor < 4.5;
-    const facing = heading !== null && !(talking && !walk.current) ? heading + Math.PI : near || talking || waitingFor.current ? Math.atan2(-(sx - pos.x), -(sz - pos.z)) : yaw.current;
+    const idleFacing = faceAt ? Math.atan2(-(faceAt[0] - pos.x), -(faceAt[1] - pos.z)) : yaw.current;
+    const facing =
+      heading !== null && !(talking && !walk.current) ? heading + Math.PI : near || talking || waitingFor.current ? Math.atan2(-(sx - pos.x), -(sz - pos.z)) : idleFacing;
     let d = facing - yaw.current;
     d = Math.atan2(Math.sin(d), Math.cos(d));
     yaw.current += d * (1 - Math.exp(-dt * 5));

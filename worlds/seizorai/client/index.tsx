@@ -25,7 +25,7 @@ import { createBrain } from "../../../src/guides/brain";
 import { Guide } from "../../../src/guides/Guide";
 import { openGuide, registerGuides, setGuideWarp } from "../../../src/guides/store";
 import { SeizoraiHud } from "./ilaw/Hud";
-import { ILAW, ILAW_AVATAR, ILAW_ROUTE, seizoraiKnowledge } from "./ilaw/knowledge";
+import { ILAW, ILAW_AVATAR, ILAW_FACES, ILAW_ROUTE, seizoraiKnowledge } from "./ilaw/knowledge";
 import { liveReader } from "./ilaw/liveReader";
 import { openInfo } from "./InfoCard";
 import { CONSOLE, ControlRoom } from "./ControlRoom";
@@ -87,7 +87,7 @@ export function Scene({ canEdit, connected, objects, removeObject, roomSky, setR
       <Exhibits />
       <ControlRoom canEdit={canEdit} connected={connected} roomSky={roomSky} setRoomSky={setRoomSky} controls={controls} setWorldState={setWorldState} />
       <LabBench />
-      <Guide id="ilaw" name={ILAW.name} avatarUrl={ILAW_AVATAR} stops={ILAW_ROUTE} speed={0.9} getSelfPosition={getSelfPosition} findPath={findPath} />
+      <Guide id="ilaw" name={ILAW.name} avatarUrl={ILAW_AVATAR} stops={ILAW_ROUTE} faceAt={ILAW_FACES} speed={0.9} getSelfPosition={getSelfPosition} findPath={findPath} />
     </>
   );
 }

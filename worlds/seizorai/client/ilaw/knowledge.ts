@@ -178,7 +178,7 @@ export const STARTERS = ["What is this place?", "What's the battery doing now?",
 
 export const ILAW: Persona = {
   name: "Ilaw-san",
-  self: "I'm Ilaw-san, Seizorai's guide. Ilaw means light in Filipino, and san is how you'd politely say someone's name in Japanese. I walk around the exhibits all day. I'm not a chatbot that makes things up: everything I say was written for this world, so if I don't know, I'll say so.",
+  self: "I'm Ilaw-san, Seizorai's guide. Ilaw means light in Filipino, and san is how you'd politely say someone's name in Japanese. You'll usually find me by the campfire where everyone arrives, and I can walk you to any exhibit. I'm not a chatbot that makes things up: everything I say was written for this world, so if I don't know, I'll say so.",
   invite: "Ask me about the sun, the wind, the battery, or the town, or ask for a tour.",
 };
 
@@ -186,35 +186,19 @@ export const ILAW: Persona = {
  *  fetched at build time with the other preset avatars. */
 export const ILAW_AVATAR = "/avatars/vroid/sendagaya-shino.vrm";
 
-/** Her patrol: [x, z, seconds to wait]. Through the doorways, round the
- *  pond, down the steps, and back. */
+/** Where visitors wake (world.json): by the tent, facing the fire. */
+export const ILAW_FACES: [number, number] = [-13.03, 58.35];
+
+/** Her day: mostly by the campfire where everyone arrives, with a short
+ *  stroll across the meadow now and then. Home is the first stop. */
 export const ILAW_ROUTE: Stop[] = (
   [
-    [5.0, 12.0, 30], // the welcome board
-    [0, 15.0, 0],
-    [0, 18.6, 0],
-    [-4.4, 26.6, 30], // the solar array
-    [-1.0, 22.4, 0],
-    [3.2, 22.6, 0],
-    [5.4, 27.2, 30], // the battery
-    [2.2, 34.6, 0],
-    [0, 36.6, 0],
-    [0, 41.6, 0],
-    [4.2, 44.0, 25], // a turbine
-    [-4.2, 43.6, 20], // the other
-    [0, 41.6, 0],
-    [0, 36.6, 0],
-    [0, 22.0, 0],
-    [0, 18.6, 0],
-    [0, 15.0, 0],
-    [0, -2.8, 0],
-    [0, -10.8, 0],
-    [1.4, -18.6, 30], // the control room
-    [-4.4, -12.6, 25], // the lab
-    [0, -10.8, 0],
-    [0, -2.8, 0],
+    [-9.0, 55.6, 300], // home: by the fire, clear of the camp chairs
+    [-1.5, 44.5, 20], // the foot of the garden steps
+    [-9.0, 55.6, 300],
+    [3.5, 46.5, 20], // toward the turbines
   ] as [number, number, number][]
-).map(([x, z, wait]) => ({ at: [x, 0, z], wait }));
+).map(([x, z, wait]) => ({ at: [x, -0.6, z], wait }));
 
 // --- the live plant --------------------------------------------------------------------------------
 
