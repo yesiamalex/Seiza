@@ -518,7 +518,9 @@ answers questions from written knowledge, offline. `worlds/seiou/` is a
 whole campus: a digital twin of UP Open University's headquarters, made
 from a 3D model instead of Seiza's rooms (see
 [A world made of its own model](#a-world-made-of-its-own-model)), with two
-guides. See their READMEs, and [World code](#world-code) for how a world
+guides. `worlds/seinag/` is the same campus with hypothetical rooftop
+solar, run live on Seizora's plant model, with a dashboard and guides who
+know the solar too. See their READMEs, and [World code](#world-code) for how a world
 adds its own exhibits and controls.
 
 #### A world made of its own model
