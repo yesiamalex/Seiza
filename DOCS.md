@@ -638,6 +638,10 @@ Dean Rob are built this way. A guide:
   keyword matching, with Filipino, Cebuano, and romanized Japanese words
   folded onto English. Nothing is generated, so a guide can't make up a
   fact or be talked into anything, and nothing leaves the visitor's device;
+- answers in Japanese when asked in Japanese, or when the visitor chose
+  日本語. A topic's Japanese goes in its `ja` (title, answer, and ways of
+  asking), and both languages are indexed. Japanese is compared in
+  two-character pieces within each run of kanji, katakana, or hiragana;
 - shows each answer with one of Seiza's gestures and a face: a wave hello,
   gasshō for thanks, a bow to decline, a shrug when they don't know,
   pointing at a reading or the way;
@@ -932,9 +936,11 @@ top bar. The choice is kept on this device. A browser set to Japanese starts
 in Japanese.
 
 The language changes only what you see: menus, panels, prompts, the VR
-menu, gesture names, and the world's name (`displayNameJa` in `world.json`).
-Text people write, such as chat and notes on boards, stays as they wrote
-it.
+menu, gesture names, the world's name (`displayNameJa` in `world.json`),
+and each world's own boards, cards, and displays. Text people write, such
+as chat and notes on boards, stays as they wrote it, and so do artworks'
+titles. Guides answer in Japanese when you ask in Japanese or have chosen
+it (see [Guides](#guides)).
 
 #### Chat translation
 
@@ -959,6 +965,11 @@ calls `useLang()` once, so it redraws when the language changes. Text drawn
 on a canvas, such as the VR menu, includes the language in what triggers a
 redraw. Built-in gesture names are in `src/i18n/gestureLabels.ts`; a
 deployment's custom gestures keep the label `world.json` gives them.
+Text that's built once, such as a world's info cards, is read through
+getters that call `L()`, so it follows the language whenever it's drawn.
+`withLang("ja", fn)` reads such text in a given language, which is how a
+guide indexes a card in both. Japanese on a canvas wraps with
+`src/ui/wrapLines.ts`, since it has no spaces to break at.
 
 ### In a VR headset
 
