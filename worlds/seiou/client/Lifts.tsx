@@ -11,6 +11,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 import { registerGazeTarget } from "../../../src/xr/hud/gaze";
+import { L, useLang } from "../../../src/i18n/lang";
+import { wrapLines } from "../../../src/ui/wrapLines";
+
+/** Each building's name in Japanese, by its id in floors.json. */
+const BUILDING_JA: Record<string, string> = {
+  main: "本館",
+  tlh: "ティーチング・アンド・ラーニング・ハブ",
+  ccdl: "CCDL",
+  ar: "アカデミック・レジデンス",
+  wcmpb: "ワールドクラス多目的ビル",
+};
 
 export interface Floor {
   at: [number, number, number];
@@ -27,11 +38,12 @@ export function loadFloors(): Promise<FloorPlan | null> {
   return plan;
 }
 
-/** "Ground", "Level 2", …, and "Roof" for the top. */
+/** "Ground", "Level 2", …, and "Roof" for the top (in Japanese, 1階,
+ *  2階, …, 屋上: Japan counts the ground floor as the first). */
 export function floorName(index: number, count: number): string {
-  if (index === 0) return "Ground";
-  if (index === count - 1 && count > 2) return "Roof";
-  return `Level ${index + 1}`;
+  if (index === 0) return L("Ground", "1階");
+  if (index === count - 1 && count > 2) return L("Roof", "屋上");
+  return L(`Level ${index + 1}`, `${index + 1}階`);
 }
 
 const W = 0.5;
@@ -44,6 +56,7 @@ const FONT = "system-ui, -apple-system, 'Segoe UI', sans-serif";
 const SHOW_WITHIN = 45;
 
 function Kiosk({ building, floors, here, warp }: { building: string; floors: Floor[]; here: number; warp: (at: [number, number, number]) => void }) {
+  const lang = useLang();
   const face = useRef<THREE.Mesh>(null);
   const group = useRef<THREE.Group>(null);
   const height = BUTTON_TOP + floors.length * BUTTON_H + 20;
@@ -57,20 +70,14 @@ function Kiosk({ building, floors, here, warp }: { building: string; floors: Flo
     ctx.fillStyle = "#e8c37a";
     ctx.font = `700 24px ${FONT}`;
     ctx.textAlign = "center";
-    ctx.fillText("LIFT", PX / 2, 34);
+    ctx.fillText(L("LIFT", "エレベーター"), PX / 2, 34);
     ctx.fillStyle = "#fff";
     ctx.font = `600 17px ${FONT}`;
-    const words = building.split(" ");
-    let line = "";
     let y = 60;
-    for (const w of words) {
-      if (ctx.measureText(`${line} ${w}`).width > PX - 20 && line) {
-        ctx.fillText(line, PX / 2, y);
-        y += 20;
-        line = w;
-      } else line = line ? `${line} ${w}` : w;
+    for (const line of wrapLines(ctx, building, PX - 20).slice(0, 2)) {
+      ctx.fillText(line, PX / 2, y);
+      y += 20;
     }
-    ctx.fillText(line, PX / 2, y);
     floors.forEach((_, i) => {
       const top = BUTTON_TOP + (floors.length - 1 - i) * BUTTON_H;
       ctx.fillStyle = i === here ? "#2f8f6f" : "#2f5f9f";
@@ -79,12 +86,12 @@ function Kiosk({ building, floors, here, warp }: { building: string; floors: Flo
       ctx.fill();
       ctx.fillStyle = "#fff";
       ctx.font = `700 22px ${FONT}`;
-      ctx.fillText(i === here ? `${floorName(i, floors.length)} · here` : floorName(i, floors.length), PX / 2, top + BUTTON_H / 2 + 8);
+      ctx.fillText(i === here ? L(`${floorName(i, floors.length)} · here`, `${floorName(i, floors.length)}・現在地`) : floorName(i, floors.length), PX / 2, top + BUTTON_H / 2 + 8);
     });
     const t = new THREE.CanvasTexture(canvas);
     t.colorSpace = THREE.SRGBColorSpace;
     return t;
-  }, [building, floors, here, height]);
+  }, [building, floors, here, height, lang]);
   useEffect(() => () => texture.dispose(), [texture]);
 
   const floorAt = (uv: THREE.Vector2) => {
@@ -142,6 +149,7 @@ function Kiosk({ building, floors, here, warp }: { building: string; floors: Flo
 }
 
 export function Lifts({ warp }: { warp: (at: [number, number, number]) => void }) {
+  useLang();
   const [floors, setFloors] = useState<FloorPlan | null>(null);
   useEffect(() => {
     let live = true;
@@ -154,7 +162,7 @@ export function Lifts({ warp }: { warp: (at: [number, number, number]) => void }
   return (
     <>
       {Object.entries(floors).flatMap(([id, b]) =>
-        b.floors.length < 2 ? [] : b.floors.map((_, i) => <Kiosk key={`${id}-${i}`} building={b.name} floors={b.floors} here={i} warp={warp} />)
+        b.floors.length < 2 ? [] : b.floors.map((_, i) => <Kiosk key={`${id}-${i}`} building={L(b.name, BUILDING_JA[id] ?? b.name)} floors={b.floors} here={i} warp={warp} />)
       )}
     </>
   );

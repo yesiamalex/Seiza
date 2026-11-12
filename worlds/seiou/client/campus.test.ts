@@ -54,3 +54,31 @@ describe("SeiOU's guides", () => {
     }
   });
 });
+
+describe("SeiOU's guides in Japanese", () => {
+  it.each([
+    ["学部の事務室はどこ?", "tlh"],
+    ["UPOUっていつできたの?", "upou"],
+    ["オブレーション像って何?", "oblation"],
+    ["屋上デッキに連れて行って", "roof"],
+    ["どうやって出願するの?", "programs"],
+    ["キャンパスを案内して", "tour"],
+    ["講堂はどこ?", "ccdl"],
+    ["泊まれる場所はある?", "ar"],
+    ["食堂はどこ", "ar"],
+  ])("answers %j from %s, in Japanese", (question, topic) => {
+    const reply = chancy.answer(question);
+    expect(reply.topic).toBe(topic);
+    expect(reply.text).toMatch(/[ぁ-ん]/);
+  });
+
+  it("every topic has its Japanese", () => {
+    for (const t of seiouKnowledge().topics) expect(t.ja?.answer, t.id).toBeTruthy();
+    for (const p of Object.values(PLACES)) expect(p.labelJa, p.id).toBeTruthy();
+  });
+
+  it("introduces itself in Japanese", () => {
+    expect(chancy.answer("あなたは誰?").text).toContain("チャンシー・ジョアン");
+    expect(rob.greeting("ja").text).toContain("ディーン・ロブ");
+  });
+});

@@ -23,7 +23,7 @@ export function Scene({ warp, getSelfPosition, findPath }: WorldSceneProps) {
       { id: "chancy", name: CHANCY.name, brain: createBrain(knowledge, CHANCY) },
       { id: "rob", name: DEAN_ROB.name, brain: createBrain(knowledge, DEAN_ROB) },
     ]);
-    showWorldOverlay(<GuideHud tagline="answers only from this world, offline" />);
+    showWorldOverlay(<GuideHud />);
     return () => {
       openGuide(null);
       registerGuides(null);
