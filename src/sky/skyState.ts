@@ -33,6 +33,10 @@ export interface SkyConfig {
    *  minute. Each visitor's clock then runs from their own page load, so
    *  visitors no longer share a sky; leave it at 1 for a shared one. */
   timeScale?: number;
+  /** How vivid the sky's own colors are: 1 as designed, more for a
+   *  brighter blue, a richer sunset. The sky dome only; the light it casts
+   *  is unchanged. */
+  vibrance?: number;
 }
 
 /**

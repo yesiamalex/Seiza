@@ -481,6 +481,15 @@ The sky is set with `sky`:
 - `timeScale`: speeds the clock up for demonstrations (60 makes an hour pass
   in a minute). Each visitor's clock then starts from their own page load, so
   they no longer share a sky.
+- `vibrance`: how vivid the sky's own colors are; 1 (the default) as
+  designed, more for a brighter blue and a richer sunset. It changes only the
+  sky dome, not the light it casts.
+
+The sky dome follows the camera, so it's always all round you however big
+the world is. How far the camera sees is `viewDistance` in `world.json`,
+in metres (default 260, which suits Seiza's own rooms); the fog and the
+sky's size follow it. A big model world needs more, or its far buildings
+are cut off: SeiOU uses 700. Further costs more drawing.
 
 To preview a time or weather without changing the file, add `?skyHour=18.5`,
 `?skyWeather=rain`, or `?skyScale=600` to the URL. `?skyDate=2026-10-26`

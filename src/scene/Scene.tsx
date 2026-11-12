@@ -3,6 +3,7 @@ import type { LightZone } from "../multiplayer/types";
 import { useGLTF } from "@react-three/drei";
 import { useThree } from "@react-three/fiber";
 import type * as THREE from "three";
+import { PerspectiveCamera } from "three";
 import { BaseEnvironment } from "./BaseEnvironment";
 import { Outdoors } from "./Outdoors";
 import { ImageSkybox, SunsetSky, SUNSET_HORIZON_COLOR } from "./SunsetSky";
@@ -15,6 +16,9 @@ import type { RoomSky } from "../multiplayer/types";
 
 interface SceneProps {
   sceneUrl?: string;
+  /** How far the camera sees, in metres (world.json `viewDistance`): the
+   *  sky's size and the fog follow it. Default 260. */
+  viewDistance?: number;
   /** Seiza's own rooms and grounds. False for a world made of its own
    *  model (world.json `environment: "model"`): only `sceneUrl` is drawn,
    *  and a double-click on it walks there. */
@@ -60,6 +64,22 @@ const SHADOW_HEARTBEAT_MS = 2000;
  * Avatars don't cast shadows (see VrmAvatar.tsx), so nothing that moves
  * continuously depends on this being per-frame.
  */
+/** Sets the camera's far plane to the world's view distance. */
+function ViewDistance({ far }: { far: number }) {
+  const camera = useThree((state) => state.camera);
+  useEffect(() => {
+    if (!(camera instanceof PerspectiveCamera)) return;
+    const before = camera.far;
+    camera.far = far;
+    camera.updateProjectionMatrix();
+    return () => {
+      camera.far = before;
+      camera.updateProjectionMatrix();
+    };
+  }, [camera, far]);
+  return null;
+}
+
 function OnDemandShadows({ refreshKey }: { refreshKey?: unknown }) {
   const gl = useThree((state) => state.gl);
 
@@ -194,6 +214,7 @@ const FOG_FAR = 210;
  */
 export const Scene = memo(function Scene({
   sceneUrl,
+  viewDistance = 260,
   builtin = true,
   environmentIsCustom = false,
   environmentCollision = true,
@@ -208,6 +229,13 @@ export const Scene = memo(function Scene({
   roomSky = null,
 }: SceneProps) {
   const moving = sky?.cycle === "realtime" || roomSky !== null;
+  // Inside the camera's far plane, and the fog reaches full just before it,
+  // so nothing pops in at the edge (the defaults are the original 200, 55,
+  // and 210 for the 260 m the built-in world uses).
+  const skyRadius = viewDistance * (200 / 260);
+  const fogNear = Math.max(FOG_NEAR, viewDistance * 0.25);
+  const fogFar = viewDistance * (FOG_FAR / 260);
+  const vibrance = sky?.vibrance ?? 1;
   // A room sky over a still-sunset world still needs a site to put the sun.
   const skyConfig = useMemo<SkyConfig>(
     () => (sky?.cycle === "realtime" ? sky : { cycle: "realtime", site: sky?.site ?? "manila" }),
@@ -216,16 +244,17 @@ export const Scene = memo(function Scene({
   return (
     <>
       <OnDemandShadows refreshKey={shadowRefreshKey} />
+      <ViewDistance far={viewDistance} />
       {skyboxUrl ? (
-        <SceneLoadBoundary fallback={<SunsetSky sunPosition={SUN} dynamic={moving} />}>
-          <Suspense fallback={<SunsetSky sunPosition={SUN} dynamic={moving} />}>
-            <ImageSkybox url={skyboxUrl} />
+        <SceneLoadBoundary fallback={<SunsetSky sunPosition={SUN} dynamic={moving} radius={skyRadius} vibrance={vibrance} />}>
+          <Suspense fallback={<SunsetSky sunPosition={SUN} dynamic={moving} radius={skyRadius} vibrance={vibrance} />}>
+            <ImageSkybox url={skyboxUrl} radius={skyRadius} />
           </Suspense>
         </SceneLoadBoundary>
       ) : (
-        <SunsetSky sunPosition={SUN} dynamic={moving} />
+        <SunsetSky sunPosition={SUN} dynamic={moving} radius={skyRadius} vibrance={vibrance} />
       )}
-      <fog attach="fog" args={[SUNSET_HORIZON_COLOR, FOG_NEAR, FOG_FAR]} />
+      <fog attach="fog" args={[SUNSET_HORIZON_COLOR, fogNear, fogFar]} />
       {builtin && <Outdoors />}
       {/* Warm sky above, warmer bounce off the wooden floor below. A big
           share of the light comes from here rather than the sun, which is

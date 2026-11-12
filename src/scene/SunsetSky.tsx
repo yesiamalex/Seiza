@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { useFrame, useLoader } from "@react-three/fiber";
 import { TextureLoader } from "three";
 import * as THREE from "three";
@@ -78,6 +78,7 @@ const fragmentShader = /* glsl */ `
   uniform vec3 uStarCool;
   uniform vec3 uSunDirection;
   uniform float uTime;
+  uniform float uVibrance;
   // The moving sky (src/sky/skyState.ts). All four at their defaults
   // (0, 0, 1, 0) leave the shader exactly the original still sunset.
   uniform vec3 uDayZenith;
@@ -260,6 +261,9 @@ const fragmentShader = /* glsl */ `
     // keep it dark and warm so it reads as land in shadow, not as sky.
     sky = mix(uBelow, sky, smoothstep(-0.04, 0.02, h));
 
+    // Vibrance: away from grey, by the world's own amount (1: as designed).
+    float luma = dot(sky, vec3(0.2126, 0.7152, 0.0722));
+    sky = max(mix(vec3(luma), sky, uVibrance), 0.0);
     gl_FragColor = vec4(sky, 1.0);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
@@ -271,11 +275,21 @@ interface SunsetSkyProps {
   sunPosition: [number, number, number];
   /** Follow the moving sky (skyState) instead of holding still. */
   dynamic?: boolean;
-  /** Must stay inside the camera's far plane (App.tsx sets it to 260). */
+  /** Must stay inside the camera's far plane (App.tsx sets it to 260, or
+   *  the world's viewDistance). */
   radius?: number;
+  /** See SkyConfig.vibrance. */
+  vibrance?: number;
 }
 
-export function SunsetSky({ sunPosition, dynamic = false, radius = 200 }: SunsetSkyProps) {
+/**
+ * The sky dome follows the camera, so it's always all round you: it used
+ * to sit still at the world's origin, and a big world (SeiOU's campus) let
+ * people walk out of it, where the sky went black. Its colors depend only
+ * on the direction you look, so following you changes nothing you see.
+ */
+export function SunsetSky({ sunPosition, dynamic = false, radius = 200, vibrance = 1 }: SunsetSkyProps) {
+  const dome = useRef<THREE.Mesh>(null);
   const material = useMemo(
     () =>
       new THREE.ShaderMaterial({
@@ -294,6 +308,7 @@ export function SunsetSky({ sunPosition, dynamic = false, radius = 200 }: Sunset
           uStarCool: { value: new THREE.Color(STAR_COOL) },
           uSunDirection: { value: new THREE.Vector3(...sunPosition).normalize() },
           uTime: { value: 0 },
+          uVibrance: { value: 1 },
           uDayZenith: { value: new THREE.Color() },
           uDayHorizon: { value: new THREE.Color() },
           uDayness: { value: 0 },
@@ -317,9 +332,11 @@ export function SunsetSky({ sunPosition, dynamic = false, radius = 200 }: Sunset
 
   // Drives the twinkle. One uniform write per frame; wrapped so float
   // precision on mobile GPUs never degrades over a long session.
-  useFrame((_, delta) => {
+  useFrame(({ camera }, delta) => {
     const u = material.uniforms;
     u.uTime.value = (u.uTime.value + delta) % 3600;
+    u.uVibrance.value = vibrance;
+    dome.current?.position.copy(camera.position);
     if (dynamic && skyState.active) {
       u.uSunDirection.value.copy(skyState.sunDirection);
       u.uDayZenith.value.copy(skyState.dayZenith);
@@ -335,7 +352,7 @@ export function SunsetSky({ sunPosition, dynamic = false, radius = 200 }: Sunset
   });
 
   return (
-    <mesh material={material} renderOrder={-1000} frustumCulled={false} userData={{ navIgnore: true }}>
+    <mesh ref={dome} material={material} renderOrder={-1000} frustumCulled={false} userData={{ navIgnore: true }}>
       {/* Low tessellation is plenty: the gradient is per-pixel. */}
       <sphereGeometry args={[radius, 32, 16]} />
     </mesh>
@@ -352,8 +369,11 @@ export function ImageSkybox({ url, radius = 200 }: { url: string; radius?: numbe
   const texture = useLoader(TextureLoader, url);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.needsUpdate = true;
+  // Follows the camera, like SunsetSky, so you can't walk out of it.
+  const dome = useRef<THREE.Mesh>(null);
+  useFrame(({ camera }) => dome.current?.position.copy(camera.position));
   return (
-    <mesh scale={[-1, 1, 1]} renderOrder={-1000} frustumCulled={false} userData={{ navIgnore: true }}>
+    <mesh ref={dome} scale={[-1, 1, 1]} renderOrder={-1000} frustumCulled={false} userData={{ navIgnore: true }}>
       <sphereGeometry args={[radius, 48, 32]} />
       <meshBasicMaterial map={texture} side={THREE.BackSide} toneMapped={false} depthWrite={false} />
     </mesh>

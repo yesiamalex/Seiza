@@ -41,6 +41,14 @@ export interface WorldConfig {
    */
   navMeshUrl?: string;
   /**
+   * How far the camera sees, in metres. Default 260, which suits Seiza's
+   * own rooms and meadow. A big model world (a campus) needs more, or its
+   * far buildings are cut off: SeiOU uses 700. The fog and the sky dome
+   * follow it. Further costs more drawing, so keep it to what the world
+   * needs.
+   */
+  viewDistance?: number;
+  /**
    * The sky. Leave it out for the original still sunset. With
    * `{ "cycle": "realtime" }` the sun follows Philippine time and the
    * weather follows a shared schedule, so every visitor sees the same sky

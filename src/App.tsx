@@ -1258,6 +1258,7 @@ export default function App() {
             <Scene
               sceneUrl={environmentUrl ?? world.sceneUrl}
               builtin={world.environment !== "model"}
+              viewDistance={world.viewDistance}
               environmentIsCustom={!!environmentUrl}
               environmentCollision={currentWorld.environmentCollision !== false}
               skyboxUrl={skyboxUrl}
