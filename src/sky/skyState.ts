@@ -114,6 +114,10 @@ function urlOverrides(): { hour?: number; date?: number; weather?: WeatherType; 
  * new weather's settled values in one frame, a visible flash.
  */
 let carried: { weather: WeatherState; simMs: number } | null = null;
+/** How long, and how fast, a changed weather setting eases in: 8 simulated
+ *  minutes a second for 12 seconds, about 80% of the way there in 5. */
+const QUICK_CHANGE_MS = 12_000;
+const QUICK_MINUTES_PER_SECOND = 8;
 
 /**
  * Keeps skyState in step with a world's sky settings, or with the room's
@@ -124,6 +128,9 @@ export class SkyClock {
   private site: Site;
   private weather: WeatherState | null = null;
   private lastSimMs = 0;
+  private lastRealMs = 0;
+  /** Until when a changed weather setting is eased in quickly (real ms). */
+  private quickUntil = 0;
   private readonly startReal: number;
   private readonly startSim: number;
   private readonly scale: number;
@@ -161,9 +168,14 @@ export class SkyClock {
     const date = this.now();
     const simMs = date.getTime();
     const type = this.fixedWeather ?? scheduledWeather(date);
+    const realMs = performance.now();
     if (!this.weather && carried) {
-      // Ease from where the sky was toward the (possibly new) weather.
+      // Ease from where the sky was toward the (possibly new) weather. A
+      // changed setting (a weather button pressed) eases in over a few
+      // seconds rather than the schedule's 25 simulated minutes, which
+      // in real time are 25 real minutes: the button seemed to do nothing.
       this.weather = carried.weather;
+      if (this.weather.type !== type) this.quickUntil = realMs + QUICK_CHANGE_MS;
       this.weather.setType(type);
       this.weather.step(Math.min(Math.max(0, (simMs - carried.simMs) / 60000), 24 * 60), simMs / 60000);
     } else if (!this.weather) {
@@ -172,9 +184,12 @@ export class SkyClock {
       this.weather.step(0, simMs / 60000);
     } else {
       this.weather.setType(type);
-      this.weather.step(Math.max(0, (simMs - this.lastSimMs) / 60000), simMs / 60000);
+      let minutes = Math.max(0, (simMs - this.lastSimMs) / 60000);
+      if (realMs < this.quickUntil) minutes = Math.max(minutes, ((realMs - this.lastRealMs) / 1000) * QUICK_MINUTES_PER_SECOND);
+      this.weather.step(minutes, simMs / 60000);
     }
     this.lastSimMs = simMs;
+    this.lastRealMs = realMs;
     carried = { weather: this.weather, simMs };
 
     const { dayOfYear, hour } = philippineTime(date);

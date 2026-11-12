@@ -1056,9 +1056,9 @@ a world with `"cycle": "realtime"`, `src/sky/` moves it:
   25 simulated minutes, and sky colors that change continuously through
   twilight and the golden hour. Other code can use it too: Seizora's solar
   simulation reads the same numbers. The weather carries over when the sky's
-  clock restarts (a reconnect, or an editor setting the room's sky), so the
-  sky eases on instead of jumping to the new weather in one frame
-  (`skyState.ts`).
+  clock restarts (a reconnect), so the sky doesn't jump in one frame; when
+  the weather setting changes (an editor's weather buttons, or Seizora's
+  console), the new weather eases in over a few seconds (`skyState.ts`).
 - **The schedule** (`scheduledWeather`) picks the weather for each
   three-hour block from a hash of the date, with fair weather more likely
   from December to May and rain more likely from June to November. Every
