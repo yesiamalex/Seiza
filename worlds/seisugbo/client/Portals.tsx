@@ -15,6 +15,7 @@ import { GROUP_COLORS, type Group } from "./collection";
 import { canvasTexture, Clickable, FONT, noRaycast, useDrawDistance } from "./kit";
 import { Y } from "./plan";
 import { openPiece } from "./viewer";
+import { L, useLang } from "../../../src/i18n/lang";
 
 export const PORTALS: { group: Group; url: string; z: number }[] = [
   { group: "A", url: "https://framevr.io/meijixup-a", z: 51.0 },
@@ -65,15 +66,16 @@ function labelTexture(group: Group) {
     ctx.fillStyle = GROUP_COLORS[group];
     ctx.textAlign = "center";
     ctx.font = `800 46px ${FONT}`;
-    ctx.fillText(`GROUP ${group}`, w / 2, 58);
+    ctx.fillText(L(`GROUP ${group}`, `${group}グループ`), w / 2, 58);
     ctx.fillStyle = "#fff";
     ctx.font = `500 28px ${FONT}`;
-    ctx.fillText("Portal to FrameVR", w / 2, 100);
+    ctx.fillText(L("Portal to FrameVR", "FrameVRへのポータル"), w / 2, 100);
   });
 }
 
 function Portal({ group, z }: { group: Group; z: number }) {
   const disc = useRef<THREE.Mesh>(null);
+  const lang = useLang();
   const color = useMemo(() => new THREE.Color(GROUP_COLORS[group]), [group]);
   const m = useMemo(
     () => ({
@@ -82,7 +84,7 @@ function Portal({ group, z }: { group: Group; z: number }) {
       label: new THREE.MeshBasicMaterial({ map: labelTexture(group), transparent: true, toneMapped: false }),
       post: new THREE.MeshLambertMaterial({ color: "#3a3f48" }),
     }),
-    [color, group]
+    [color, group, lang] // eslint-disable-line react-hooks/exhaustive-deps
   );
   useEffect(
     () => () => {

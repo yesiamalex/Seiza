@@ -6,17 +6,21 @@ import { useEffect, useState } from "react";
 import { panelStyle, pillButtonStyle } from "../../../src/ui/styles";
 import { GROUP_COLORS, PIECE_BY_ID, texUrl, viewUrl, type Group, type Kind } from "./collection";
 import { PORTAL_BY_GROUP } from "./Portals";
-import { BOARDS, SUBTITLE, type BoardKey } from "./info";
+import { boardText, subtitle, type BoardKey } from "./info";
 import { openPiece, step, useViewer } from "./viewer";
+import { L, useLang } from "../../../src/i18n/lang";
 
-export const KIND_LABEL: Record<Kind, string> = {
-  art: "Art",
-  tour: "Walking tour",
-  poster: "Collage wall",
-  dance: "Dance",
+const KIND: Record<Kind, [string, string]> = {
+  art: ["Art", "作品"],
+  tour: ["Walking tour", "まち歩き"],
+  poster: ["Collage wall", "コラージュの壁"],
+  dance: ["Dance", "ダンス"],
 };
+/** What a piece is, in the visitor's language. */
+export const kindLabel = (kind: Kind) => L(...KIND[kind]);
 
 export function SeisugboHud() {
+  useLang();
   const { open, sequence } = useViewer();
   useEffect(() => {
     if (!open) return;
@@ -33,7 +37,7 @@ export function SeisugboHud() {
   return (
     <div
       role="dialog"
-      aria-label={board ? BOARDS[board].title : PIECE_BY_ID[open]?.title}
+      aria-label={board ? boardText(board).title : PIECE_BY_ID[open]?.title}
       onClick={close}
       style={{ position: "fixed", inset: 0, display: "grid", placeItems: "center", padding: 12, pointerEvents: "auto", zIndex: 40, background: "rgba(8,10,16,0.45)" }}
     >
@@ -46,20 +50,20 @@ export function SeisugboHud() {
           {sequence.length > 1 && !board ? (
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <button type="button" style={pillButtonStyle} onClick={() => step(-1)}>
-                ‹ Previous
+                {L("‹ Previous", "‹ 前へ")}
               </button>
               <span style={{ fontSize: 12, opacity: 0.7, fontVariantNumeric: "tabular-nums" }}>
                 {sequence.indexOf(open) + 1} / {sequence.length}
               </span>
               <button type="button" style={pillButtonStyle} onClick={() => step(1)}>
-                Next ›
+                {L("Next ›", "次へ ›")}
               </button>
             </div>
           ) : (
             <span />
           )}
-          <button type="button" style={pillButtonStyle} onClick={close} aria-label="Close">
-            Close
+          <button type="button" style={pillButtonStyle} onClick={close} aria-label={L("Close", "閉じる")}>
+            {L("Close", "閉じる")}
           </button>
         </div>
       </div>
@@ -79,8 +83,8 @@ function PieceCard({ id }: { id: string }) {
     <div>
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
         <strong style={{ fontSize: 18 }}>{piece.title}</strong>
-        <span style={{ fontSize: 12, fontWeight: 700, color: "#fff", background: color, borderRadius: 999, padding: "1px 9px" }}>Group {piece.group}</span>
-        <span style={{ fontSize: 12, opacity: 0.7 }}>{KIND_LABEL[piece.kind]}</span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: "#fff", background: color, borderRadius: 999, padding: "1px 9px" }}>{L(`Group ${piece.group}`, `${piece.group}グループ`)}</span>
+        <span style={{ fontSize: 12, opacity: 0.7 }}>{kindLabel(piece.kind)}</span>
       </div>
       <div
         style={{
@@ -100,7 +104,7 @@ function PieceCard({ id }: { id: string }) {
         <img
           key={id}
           src={viewUrl(id)}
-          alt={`${piece.title}, by Group ${piece.group}${piece.caption ? `: ${piece.caption}` : ""}`}
+          alt={L(`${piece.title}, by Group ${piece.group}${piece.caption ? `: ${piece.caption}` : ""}`, `${piece.title}(${piece.group}グループ)${piece.caption ? `:${piece.caption}` : ""}`)}
           onLoad={() => setLarge(true)}
           style={{ position: "relative", width: "100%", height: "100%", objectFit: "contain", opacity: large ? 1 : 0, transition: "opacity 160ms" }}
         />
@@ -115,14 +119,14 @@ function PieceCard({ id }: { id: string }) {
         </div>
       )}
       {piece.caption && <p style={{ margin: "10px 0 0" }}>{piece.caption}</p>}
-      {piece.by && <p style={{ margin: "6px 0 0", fontSize: 12, opacity: 0.75 }}>By {piece.by}</p>}
-      <p style={{ margin: "8px 0 0", fontSize: 12, opacity: 0.6 }}>{SUBTITLE}</p>
+      {piece.by && <p style={{ margin: "6px 0 0", fontSize: 12, opacity: 0.75 }}>{L(`By ${piece.by}`, `作:${piece.by}`)}</p>}
+      <p style={{ margin: "8px 0 0", fontSize: 12, opacity: 0.6 }}>{subtitle()}</p>
     </div>
   );
 }
 
 function BoardCard({ board }: { board: BoardKey }) {
-  const text = BOARDS[board];
+  const text = boardText(board);
   return (
     <div>
       <strong style={{ fontSize: 18 }}>{text.title}</strong>
@@ -151,18 +155,20 @@ function PortalCard({ group, onClose }: { group: Group; onClose: () => void }) {
   const portal = PORTAL_BY_GROUP[group];
   if (!portal) return null;
   return (
-    <div role="dialog" aria-label={`Group ${group}'s FrameVR space`} onClick={onClose} style={{ position: "fixed", inset: 0, display: "grid", placeItems: "center", padding: 12, pointerEvents: "auto", zIndex: 40, background: "rgba(8,10,16,0.45)" }}>
+    <div role="dialog" aria-label={L(`Group ${group}'s FrameVR space`, `${group}グループのFrameVRスペース`)} onClick={onClose} style={{ position: "fixed", inset: 0, display: "grid", placeItems: "center", padding: 12, pointerEvents: "auto", zIndex: 40, background: "rgba(8,10,16,0.45)" }}>
       <div onClick={(event) => event.stopPropagation()} style={{ ...panelStyle, width: "min(420px, 100%)", padding: 16, display: "grid", gap: 10, fontSize: 14, lineHeight: 1.5 }}>
-        <strong style={{ fontSize: 18, color: GROUP_COLORS[group] }}>Group {group} in FrameVR</strong>
+        <strong style={{ fontSize: 18, color: GROUP_COLORS[group] }}>{L(`Group ${group} in FrameVR`, `FrameVRの${group}グループ`)}</strong>
         <p style={{ margin: 0 }}>
-          This portal goes to Group {group}'s own space in FrameVR, at <span style={{ fontFamily: "monospace" }}>{portal.url.replace("https://", "")}</span>. It opens in a new tab, and this room stays open here.
+          {L(`This portal goes to Group ${group}'s own space in FrameVR, at `, `このポータルは、FrameVRにある${group}グループのスペース `)}
+          <span style={{ fontFamily: "monospace" }}>{portal.url.replace("https://", "")}</span>
+          {L(". It opens in a new tab, and this room stays open here.", " へつながります。新しいタブで開き、この部屋は開いたままです。")}
         </p>
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <button type="button" style={pillButtonStyle} onClick={onClose}>
-            Stay here
+            {L("Stay here", "ここに残る")}
           </button>
           <a href={portal.url} target="_blank" rel="noopener noreferrer" onClick={onClose} style={{ ...pillButtonStyle, textDecoration: "none", fontWeight: 700, background: GROUP_COLORS[group], color: "#fff" }}>
-            Open FrameVR
+            {L("Open FrameVR", "FrameVRを開く")}
           </a>
         </div>
       </div>

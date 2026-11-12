@@ -7,10 +7,11 @@ import * as THREE from "three";
 import type { Obstacle } from "../../../src/scene/layout";
 import { CLASSROOM } from "../../../src/scene/layout";
 import { addBacking, Labels, Picture, type LabelPlacement, type Placement } from "./art";
-import { BOARDS, TITLE, type BoardKey, type BoardText } from "./info";
+import { BOARDS, boardText, TITLE, type BoardKey, type BoardText } from "./info";
 import { Builder, Clickable, FONT, noRaycast, paint, useCanvasTexture, useDrawDistance, useNight, washed, wrapText, type Vec3 } from "./kit";
 import { Y } from "./plan";
 import { openPiece } from "./viewer";
+import { L, useLang } from "../../../src/i18n/lang";
 
 const ACCENT = "#2f6fd0";
 
@@ -98,11 +99,12 @@ function drawBoard(ctx: CanvasRenderingContext2D, w: number, h: number, text: Bo
   draw(s, false);
   ctx.fillStyle = "#6a7080";
   ctx.font = `500 22px ${FONT}`;
-  ctx.fillText("Click to read it close up", 36, h - 22);
+  ctx.fillText(L("Click to read it close up", "クリックで大きく読めます"), 36, h - 22);
 }
 
 function Board({ spec }: { spec: BoardSpec }) {
-  const texture = useCanvasTexture(Math.round(spec.w * PX_PER_M), Math.round(spec.h * PX_PER_M), (ctx, w, h) => drawBoard(ctx, w, h, BOARDS[spec.key]));
+  const lang = useLang();
+  const texture = useCanvasTexture(Math.round(spec.w * PX_PER_M), Math.round(spec.h * PX_PER_M), (ctx, w, h) => drawBoard(ctx, w, h, boardText(spec.key)), [lang]);
   const face = useMemo(() => washed(texture), [texture]);
   useEffect(() => () => face.dispose(), [face]);
   useNight([face]);

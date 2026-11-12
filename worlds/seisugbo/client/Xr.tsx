@@ -14,10 +14,11 @@ import { readXrHead } from "../../../src/xr/body/xrPose";
 import { registerGazeTarget } from "../../../src/xr/hud/gaze";
 import { GROUP_COLORS, PIECE_BY_ID, viewUrl, type Group } from "./collection";
 import { PORTAL_BY_GROUP } from "./Portals";
-import { BOARDS, type BoardKey } from "./info";
-import { KIND_LABEL } from "./Hud";
+import { boardText, type BoardKey } from "./info";
+import { kindLabel } from "./Hud";
 import { FONT, loadPicture, wrapText } from "./kit";
 import { openPiece, step, useViewer } from "./viewer";
+import { L, useLang } from "../../../src/i18n/lang";
 
 export function XrViewer() {
   const session = useXR((s) => s.session);
@@ -40,6 +41,7 @@ interface Button {
 }
 
 function Panel() {
+  const lang = useLang();
   const { open, sequence } = useViewer();
   const gl = useThree((s) => s.gl);
   const camera = useThree((s) => s.camera);
@@ -94,14 +96,21 @@ function Panel() {
       };
       if (piece) {
         text(piece.title, 46, "#fff", 700);
-        text(`Group ${piece.group} · ${KIND_LABEL[piece.kind]}`, 28, GROUP_COLORS[piece.group], 700);
+        text(L(`Group ${piece.group} · ${kindLabel(piece.kind)}`, `${piece.group}グループ · ${kindLabel(piece.kind)}`), 28, GROUP_COLORS[piece.group], 700);
         for (const line of piece.words ?? []) text(line.replace(/ \/ /g, " "), 30, "rgba(255,255,255,0.92)");
         if (piece.caption) text(piece.caption, 28, "rgba(255,255,255,0.75)");
       } else if (portal) {
-        text(`Group ${portal.group} in FrameVR`, 44, GROUP_COLORS[portal.group], 700);
-        text(`This portal goes to ${portal.url.replace("https://", "")}. A headset can't open another site from inside VR: exit VR, and click the portal again to open it in a new tab.`, 28, "rgba(255,255,255,0.88)");
+        text(L(`Group ${portal.group} in FrameVR`, `FrameVRの${portal.group}グループ`), 44, GROUP_COLORS[portal.group], 700);
+        text(
+          L(
+            `This portal goes to ${portal.url.replace("https://", "")}. A headset can't open another site from inside VR: exit VR, and click the portal again to open it in a new tab.`,
+            `このポータルは ${portal.url.replace("https://", "")} へつながります。VRの中からはほかのサイトを開けないので、VRを終えてからもう一度ポータルをクリックすると、新しいタブで開きます。`
+          ),
+          28,
+          "rgba(255,255,255,0.88)"
+        );
       } else if (board) {
-        const b = BOARDS[board];
+        const b = boardText(board);
         text(b.title, 44, "#fff", 700);
         if (b.subtitle) text(b.subtitle, 28, "#e8c37a", 600);
         for (const p of b.paragraphs) text(p, 28, "rgba(255,255,255,0.88)");
@@ -111,7 +120,8 @@ function Panel() {
         }
       }
       y += 16;
-      const labels = piece && sequence.length > 1 ? ["‹ Previous", "Close", "Next ›"] : ["Close"];
+      const PREV = L("‹ Previous", "‹ 前へ"), CLOSE = L("Close", "閉じる"), NEXT = L("Next ›", "次へ ›");
+      const labels = piece && sequence.length > 1 ? [PREV, CLOSE, NEXT] : [CLOSE];
       const bw = (TEXT_PX - pad * 2 - (labels.length - 1) * 16) / labels.length;
       labels.forEach((label, i) => {
         const b: Button = {
@@ -120,11 +130,11 @@ function Panel() {
           w: bw,
           h: 76,
           label,
-          onPress: label === "Close" ? () => openPiece(null) : () => step(label.startsWith("‹") ? -1 : 1),
+          onPress: label === CLOSE ? () => openPiece(null) : () => step(label.startsWith("‹") ? -1 : 1),
         };
         buttons.push(b);
         if (!dry) {
-          ctx.fillStyle = label === "Close" ? "#3a4256" : "#2f6fd0";
+          ctx.fillStyle = label === CLOSE ? "#3a4256" : "#2f6fd0";
           ctx.beginPath();
           ctx.roundRect(b.x, b.y, b.w, b.h, 18);
           ctx.fill();
@@ -148,7 +158,7 @@ function Panel() {
     layout.current = paint(false);
     texture.needsUpdate = true;
     setTextHeight((W * measured.height) / TEXT_PX);
-  }, [piece, board, portal, sequence, canvas, texture]);
+  }, [piece, board, portal, sequence, canvas, texture, lang]);
   useEffect(() => () => texture.dispose(), [texture]);
 
   // Where the panel goes: in front of you when it opens, and back in front

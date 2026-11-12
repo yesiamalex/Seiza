@@ -12,10 +12,12 @@ import { roomLights } from "../../../src/scene/roomLights";
 import type { Obstacle } from "../../../src/scene/layout";
 import { addBacking, dims, Labels, Picture, Pins, type LabelPlacement, type Placement } from "./art";
 import { GROUP_COLORS, PIECE_BY_ID, PIECES, type Group } from "./collection";
-import { GROUP_BLURB, TITLE } from "./info";
+import { groupBlurb, TITLE } from "./info";
 import { Builder, canvasTexture, Clickable, FONT, lampNeed, noRaycast, paint, useDrawDistance, useNight, washed, type Vec3 } from "./kit";
 import { COURT, COURT_CENTRE, Y } from "./plan";
 import { openPiece } from "./viewer";
+import { L, useLang } from "../../../src/i18n/lang";
+import { wrapLines } from "../../../src/ui/wrapLines";
 
 const EAVE = 5.4;
 const RIDGE = 7.0;
@@ -196,7 +198,7 @@ function fasciaTexture() {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.font = `800 50px ${FONT}`;
-    ctx.fillText(`BARANGAY ${TITLE.toUpperCase()} COVERED COURT`, w / 2, h / 2 + 2);
+    ctx.fillText(L(`BARANGAY ${TITLE.toUpperCase()} COVERED COURT`, `バランガイ・${TITLE} 屋根つきコート`), w / 2, h / 2 + 2);
   });
 }
 
@@ -212,20 +214,14 @@ function signsTexture() {
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.font = `800 40px ${FONT}`;
-      ctx.fillText(`GROUP ${line.group}`, x + 128, 54);
+      ctx.fillText(L(`GROUP ${line.group}`, `${line.group}グループ`), x + 128, 54);
       ctx.fillStyle = "#2a2f3a";
       ctx.font = `500 22px ${FONT}`;
-      const words = GROUP_BLURB[line.group].split(" ");
-      let row = "";
       let y = 136;
-      for (const word of words) {
-        if (ctx.measureText(`${row} ${word}`).width > 210 && row) {
-          ctx.fillText(row, x + 128, y);
-          y += 30;
-          row = word;
-        } else row = row ? `${row} ${word}` : word;
+      for (const row of wrapLines(ctx, groupBlurb(line.group), 210)) {
+        ctx.fillText(row, x + 128, y);
+        y += 30;
       }
-      ctx.fillText(row, x + 128, y);
     });
   });
 }
@@ -249,11 +245,11 @@ function postersHeaderTexture() {
     ctx.fillStyle = "#1d2230";
     ctx.textBaseline = "middle";
     ctx.font = `800 54px ${FONT}`;
-    ctx.fillText("The collage wall", 44, h / 2 - 4);
+    ctx.fillText(L("The collage wall", "コラージュの壁"), 44, h / 2 - 4);
     ctx.fillStyle = GROUP_COLORS.A;
     ctx.font = `700 30px ${FONT}`;
     ctx.textAlign = "right";
-    ctx.fillText("GROUP A", w - 30, h / 2);
+    ctx.fillText(L("GROUP A", "Aグループ"), w - 30, h / 2);
   });
 }
 
@@ -262,6 +258,7 @@ function postersHeaderTexture() {
 export function Court() {
   const area = useRef<THREE.Group>(null);
   useDrawDistance(area, COURT_CENTRE, 55);
+  const lang = useLang();
   const hung = useMemo(hangLines, []);
   const posters = useMemo(pinPosters, []);
   const geometry = useMemo(() => buildCourt(hung, posters), [hung, posters]);
@@ -290,7 +287,7 @@ export function Court() {
       signs: washed(signsTexture()),
       postersHeader: washed(postersHeaderTexture()),
     }),
-    []
+    [lang] // eslint-disable-line react-hooks/exhaustive-deps
   );
   useEffect(
     () => () => {

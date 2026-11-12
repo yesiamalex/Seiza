@@ -1,5 +1,6 @@
 // The words on Seisugbo's boards, and on the cards they open. Edit freely:
-// the boards redraw from this file.
+// the boards redraw from this file. The Japanese is at the end.
+import { getLang, L } from "../../../src/i18n/lang";
 
 export interface BoardText {
   title: string;
@@ -121,3 +122,125 @@ export const GROUP_BLURB: Record<string, string> = {
   C: "Collage, paper chains, and bulad cut out to hang.",
   D: "Torn paper, pastel, and a dance.",
 };
+
+// --- 日本語 ------------------------------------------------------------------------------------
+
+const BOARDS_JA: Record<BoardKey, BoardText> = {
+  welcome: {
+    title: "Maayong pag-abot! ようこそ! Welcome!",
+    subtitle: "明治 × UP アートベース・リサーチ 2026",
+    paragraphs: [
+      "明治大学とフィリピン大学の学生がセブで出会いました。市場や通り、家々が身を寄せ合う下町をいっしょに歩き、心に残ったものを作品にしました。どの作品にも、日本語、英語、そしてフィリピン語かセブアノ語で名前がついています。",
+      "Seisugboは、その作品をさらに先へ届けます。「スグボ」はセブの古い名前です。",
+    ],
+    list: [
+      {
+        items: [
+          "路地を歩こう:まち歩きの写真が並んでいます。",
+          "屋根つきコート:作品がサンパヤン(物干しロープ)に掛かっています。",
+          "ホールの奥の教室:いっしょに話すための問いがあります。",
+        ],
+      },
+    ],
+  },
+  lane: {
+    title: "路地",
+    subtitle: "Ang eskinita",
+    paragraphs: [
+      "この路地はモデルで、実在のどこか一か所ではありません。身を寄せ合う家々、頭上の電線、この前のフィエスタの旗飾り、干された洗濯物、角のサリサリストア(よろず屋)、日に干されるブラッド(干し魚)。",
+      "学生たちが撮った写真や描いた絵、とくにDグループの「活気(Energy、sigla)」をもとに作りました。屋台と家が並ぶ路地と、手を振ってくれた子どもたち。",
+      "路地の写真はまち歩きのときのものです。クリックすると大きく見られます。",
+    ],
+  },
+  court: {
+    title: "屋根つきコート",
+    subtitle: "どのバランガイにもひとつある",
+    paragraphs: [
+      "屋根つきコートは、バスケットボール、フィエスタ、集会、そして今日は展覧会の場所です。",
+      "作品は、路地の洗濯物のようにサンパヤン(物干しロープ)に掛かっています。それぞれの下には、作り手が3つの言葉で選んだ言葉があります。",
+      "作品をクリックすると大きく見られます。「前へ」「次へ」で列に沿って進めます。",
+    ],
+  },
+  process: {
+    title: "アートベース・リサーチ",
+    subtitle: "この作品ができるまで",
+    paragraphs: ["アートベース・リサーチは、作品を作ることを、知る方法として、そして報告書では言いにくいことを伝える方法として使う研究です。"],
+    list: [
+      {
+        numbered: true,
+        items: [
+          "歩く。セブ市をガイドといっしょにまち歩き。",
+          "気づく。心に残ったもの:におい、顔、色、言葉。",
+          "作る。クレヨン、粘土、ちぎり絵、折り紙、コラージュ、そしてダンス。",
+          "名づける。日本語、英語、フィリピン語かセブアノ語で、ひとつの言葉を。",
+          "分かち合う。展覧会、話し合い、そしてこのワールド。",
+        ],
+      },
+    ],
+  },
+  talk: {
+    title: "話そう",
+    subtitle: "Tayo'y mag-usap · Let's talk",
+    paragraphs: ["ほかの国の人とペアになって、交代で聞いてみましょう。"],
+    list: [
+      {
+        heading: "ラウンド1:おたがいを知ろう(5分)",
+        numbered: true,
+        items: [
+          "名前は?何と呼べばいい? · Ano ang pangalan mo, at ano ang gusto mong itawag namin sa iyo?",
+          "今日はどこから参加している? · Saan ka nakabase ngayon?",
+          "あなたについてのおもしろい話をひとつ。 · Ano ang isang nakakatuwang bagay tungkol sa iyo?",
+          "ふだん楽しみに何をしている? · Ano ang madalas mong gawin para maglibang?",
+          "自分を3つの言葉で表すと? · Kung ilalarawan mo ang sarili mo sa tatlong salita, ano ang mga ito?",
+        ],
+      },
+      {
+        heading: "ラウンド2:文化の交流(5〜7分)",
+        numbered: true,
+        items: [
+          "あなたの文化の食べもので、ぜひ食べてほしいものは? · Anong pagkain mula sa kultura mo ang dapat naming tikman?",
+          "あなたの言葉で、教えたい言葉をひとつ。 · Anong isang salita sa wika mo ang gusto mong ituro sa amin?",
+          "あなたのふるさとの特別なところは? · Ano ang espesyal sa inyong bayan o lugar?",
+          "好きな伝統行事やお祭りは? · Anong tradisyon o pagdiriwang ang gusto mo?",
+          "日本かフィリピンについて知りたいことをひとつ。 · Ano ang isang bagay na gusto mong malaman tungkol sa Hapon o Pilipinas?",
+        ],
+      },
+      {
+        heading: "ラウンド3:メタバースで遊ぼう(5分)",
+        numbered: true,
+        items: [
+          "メタバースを歩くのは初めて? · Unang beses mo bang mag-explore ng metaverse?",
+          "今どこへでもテレポートできるなら、どこへ行く? · Kung puwede kang mag-teleport kahit saan ngayon, saan ka pupunta?",
+          "この仮想世界に何でも作れるなら、何を作る? · Kung puwede kang gumawa ng kahit ano sa virtual world na ito, ano iyon?",
+          "あなたの文化からメタバースにひとつ持ちこむなら、何? · Kung may isang bagay mula sa kultura mo na dadalhin mo sa metaverse, ano iyon?",
+          "ほかの国の学生といっしょに何を作りたい? · Ano ang gusto mong likhain kasama ang isang estudyante mula sa ibang bansa?",
+        ],
+      },
+    ],
+  },
+  posters: {
+    title: "コラージュの壁",
+    subtitle: "Aグループ",
+    paragraphs: ["ふるさとの写真とセブの写真に絵を描き重ね、並べて貼りました。カフェ、夜風、それぞれが恋しい季節、そしておたがいの百科事典。"],
+  },
+};
+
+const GROUP_BLURB_JA: Record<string, string> = {
+  A: "クレヨン、粘土、折り紙、そしてセブアノ語の詩。",
+  B: "すべてを1枚のボードに、そして並べて描いた顔。",
+  C: "コラージュ、紙の鎖、そして吊るすために切り抜いたブラッド。",
+  D: "ちぎり絵、パステル、そしてダンス。",
+};
+
+/** A board's words in the visitor's language. */
+export function boardText(key: BoardKey): BoardText {
+  return getLang() === "ja" ? BOARDS_JA[key] : BOARDS[key];
+}
+
+export function groupBlurb(group: string): string {
+  return L(GROUP_BLURB[group] ?? "", GROUP_BLURB_JA[group] ?? GROUP_BLURB[group] ?? "");
+}
+
+export function subtitle(): string {
+  return L(SUBTITLE, "明治 × UP アートベース・リサーチ 2026");
+}
