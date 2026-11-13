@@ -56,7 +56,12 @@ const PRESENT_MIN_INTERVAL_MS = 400;
 const MEDIA_MIN_INTERVAL_MS = 300;
 // MediaStream ids are browser-generated (UUID-ish, occasionally braced).
 const STREAM_ID = /^[A-Za-z0-9._:{}-]{1,128}$/;
-const BOUNDS_LIMIT = 100; // generous outer bound — BaseEnvironment's own radius is smaller; this just rejects nonsense values, not enforcing gameplay bounds
+/** The farthest a position may be from the origin, in metres, on any axis:
+ *  a sanity bound that rejects nonsense values, not a gameplay limit. Big
+ *  enough for a model world: SeiOU's campus runs from about -130 to 409 m,
+ *  and at 100 m anyone who walked to its far buildings froze for everyone
+ *  else, and nothing could be placed there. */
+const BOUNDS_LIMIT = 1000;
 // A shared password, not per-user accounts — this project's "lean,
 // anyone-can-self-deploy" constraint rules out standing up real auth
 // infrastructure for a small self-hosted room. Deployers set this via
