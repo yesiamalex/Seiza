@@ -17,7 +17,7 @@
     { "label": "Sample (M)", "url": "/avatars/vroid/sample-male.vrm", "author": "pixiv Inc. (VRoid Studio sample)", "license": "CC0 1.0", "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/" }
   ],
   "portals": {
-    "urlPattern": "https://{id}.figueroaziedell.workers.dev",
+    "urlPattern": "https://{id}.seiza.cc",
     "at": {
       "x": 2,
       "z": 60
@@ -61,7 +61,6 @@
         "label": "SeiOU",
         "labelJa": "SeiOU",
         "color": "#d8c98a",
-        "url": "https://seiou-up.figueroaziedell.workers.dev",
         "blurb": "A walkable digital twin of UP Open University's campus, with two guides.",
         "blurbJa": "歩いてめぐれるフィリピン大学オープン大学のデジタルツイン。ガイドが2人います。"
       },
