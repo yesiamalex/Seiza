@@ -35,6 +35,7 @@ could do, so students and staff can see and talk about it.
   security run, so the roofs make more than the campus uses and the battery
   fills. It isn't metered data.
 - **The conference hall:** the CCDL's second floor, set up as in SeiOU.
+- **Lights:** SeiOU's ceiling lights and switches, on every indoor floor.
 - **The solar station:** an open shed on the grass north of the drive,
   ahead and to the left of where visitors arrive. Its sloped roof carries
   twelve modules of its own. Inside:

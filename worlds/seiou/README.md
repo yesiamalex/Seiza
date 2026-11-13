@@ -29,6 +29,16 @@ campus model is the whole world (`"environment": "model"` in
   navmesh, so they follow the model. They're labelled by height (Ground,
   Level 2, …, Roof), and a level may be a mezzanine or a roof rather than a
   full storey.
+- **Lights:** every indoor floor has ceiling lights, and its own switch
+  beside the floor's lift kiosk, shared with everyone in the room. They're
+  built the way Seiza's rooms are lit: glowing panels, drawn per floor as
+  one instanced mesh, with only the few lights nearest the view actually
+  shining (src/scene/LightPool.tsx), so 213 fixtures cost no more than
+  four. `scripts/place-lights.mjs` places them from the model: wherever a
+  floor is walkable with a ceiling 2.2 to 6 m overhead.
+- **The CCDL conference hall:** the CCDL's second floor starts set up for
+  meetings, with a screen anyone can present on, a presenter's table, and
+  rows of tables and chairs (world.json `defaultObjects`).
 - **The guides:** Chancy Joan and Dean Rob wait where visitors arrive,
   facing them, and now and then take a short stroll. Click one, or press
   **Ask Chancy Joan** or **Ask Dean Rob** at the top left. They answer
@@ -131,9 +141,12 @@ worlds/seiou/
   scripts/fix-navmesh.mjs       Pockets and floors, redone on the committed navmesh
   scripts/nav-tools.mjs         What both scripts share
   world/models/floors.json      Each building's floors, for the lifts (generated)
+  world/models/lights.json      Each indoor floor's ceiling lights (generated)
+  scripts/place-lights.mjs      The ceiling lights, from the model
   client/
     index.tsx                   Registers and places the two guides and the lifts
-    Lifts.tsx                   The lift kiosks
+    Lifts.tsx                   The lift kiosks, and each floor's light switch
+    RoomLights.tsx              The ceiling lights
     campus.ts                   What the guides know, the places, the guides
     campus.test.ts              What they answer
     navmesh.test.ts             Every place and lift lands on its own floor

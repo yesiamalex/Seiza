@@ -11,6 +11,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 import { registerGazeTarget } from "../../../src/xr/hud/gaze";
+import { LightSwitch } from "../../../src/scene/LightSwitch";
+import type { WorldStateValue } from "../../../src/multiplayer/types";
+import { isOn, useLightZones } from "./RoomLights";
 import { L, useLang } from "../../../src/i18n/lang";
 import { wrapLines } from "../../../src/ui/wrapLines";
 
@@ -55,7 +58,13 @@ const FONT = "system-ui, -apple-system, 'Segoe UI', sans-serif";
 /** Kiosks further than this aren't drawn. */
 const SHOW_WITHIN = 45;
 
-function Kiosk({ building, floors, here, warp }: { building: string; floors: Floor[]; here: number; warp: (at: [number, number, number]) => void }) {
+/** A floor's light switch, beside its kiosk (see RoomLights.tsx). */
+interface KioskLight {
+  on: boolean;
+  onToggle?: (on: boolean) => void;
+}
+
+function Kiosk({ building, floors, here, warp, light }: { building: string; floors: Floor[]; here: number; warp: (at: [number, number, number]) => void; light?: KioskLight }) {
   const lang = useLang();
   const face = useRef<THREE.Mesh>(null);
   const group = useRef<THREE.Group>(null);
@@ -144,11 +153,33 @@ function Kiosk({ building, floors, here, warp }: { building: string; floors: Flo
         <planeGeometry args={[W, panelH]} />
         <meshBasicMaterial map={texture} toneMapped={false} />
       </mesh>
+      {light && (
+        // A post beside the kiosk, with the floor's light switch on it.
+        <group position={[0.5, 0, 0]}>
+          <mesh position={[0, 0.62, -0.02]} userData={{ navIgnore: true }}>
+            <boxGeometry args={[0.07, 1.24, 0.05]} />
+            <meshLambertMaterial color="#3a4250" />
+          </mesh>
+          <group position={[0, 1.3, 0]}>
+            <LightSwitch on={light.on} onToggle={light.onToggle} />
+          </group>
+        </group>
+      )}
     </group>
   );
 }
 
-export function Lifts({ warp }: { warp: (at: [number, number, number]) => void }) {
+export function Lifts({
+  warp,
+  worldState = {},
+  setWorldState,
+}: {
+  warp: (at: [number, number, number]) => void;
+  /** The room's world state and its setter, for the floors' light switches. */
+  worldState?: Record<string, WorldStateValue>;
+  setWorldState?: (key: string, value: WorldStateValue) => void;
+}) {
+  const zones = useLightZones();
   useLang();
   const [floors, setFloors] = useState<FloorPlan | null>(null);
   useEffect(() => {
@@ -162,7 +193,20 @@ export function Lifts({ warp }: { warp: (at: [number, number, number]) => void }
   return (
     <>
       {Object.entries(floors).flatMap(([id, b]) =>
-        b.floors.length < 2 ? [] : b.floors.map((_, i) => <Kiosk key={`${id}-${i}`} building={L(b.name, BUILDING_JA[id] ?? b.name)} floors={b.floors} here={i} warp={warp} />)
+        b.floors.length < 2 ? [] : b.floors.map((_, i) => {
+          const zone = zones.find((z) => z.building === id && z.floor === i);
+          const on = zone ? isOn(worldState, zone.key) : true;
+          return (
+            <Kiosk
+              key={`${id}-${i}`}
+              building={L(b.name, BUILDING_JA[id] ?? b.name)}
+              floors={b.floors}
+              here={i}
+              warp={warp}
+              light={zone ? { on, onToggle: setWorldState && ((next) => setWorldState(zone.key, next)) } : undefined}
+            />
+          );
+        })
       )}
     </>
   );

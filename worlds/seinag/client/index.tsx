@@ -10,6 +10,7 @@ import { GuideHud } from "../../../src/guides/GuideHud";
 import { openGuide, registerGuides, setGuideWarp } from "../../../src/guides/store";
 import { showWorldOverlay, type WorldSceneProps } from "../../../src/worlds/WorldExtension";
 import { Lifts } from "../../seiou/client/Lifts";
+import { RoomLights } from "../../seiou/client/RoomLights";
 import { CHANCY, CHANCY_AVATAR, CHANCY_ROUTE, DEAN_ROB, DEAN_ROB_AVATAR, DEAN_ROB_ROUTE, SPAWN } from "../../seiou/client/campus";
 import { CardHost, openCard, type CardKey } from "./cards";
 import { Station, stationObstacles } from "./Station";
@@ -61,7 +62,8 @@ export function Scene({ warp, getSelfPosition, findPath, canEdit, connected, roo
     <>
       <Panels />
       <Station canEdit={canEdit} connected={connected} roomSky={roomSky} setRoomSky={setRoomSky} worldState={worldState} setWorldState={setWorldState} />
-      <Lifts warp={warp} />
+      <Lifts warp={warp} worldState={worldState} setWorldState={setWorldState} />
+      <RoomLights worldState={worldState} />
       <Guide id="chancy" name={CHANCY.name} avatarUrl={CHANCY_AVATAR} stops={CHANCY_ROUTE} faceAt={SPAWN} pathsOnPatrol getSelfPosition={getSelfPosition} findPath={findPath} />
       <Guide id="rob" name={DEAN_ROB.name} avatarUrl={DEAN_ROB_AVATAR} stops={DEAN_ROB_ROUTE} faceAt={SPAWN} pathsOnPatrol getSelfPosition={getSelfPosition} findPath={findPath} />
     </>
