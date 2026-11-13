@@ -489,6 +489,10 @@ export interface Obstacle {
   halfX: number;
   halfZ: number;
   rotationY: number;
+  /** The floor it stands on, for a building with storeys: it only blocks
+   *  a walker on that floor. Absent means every floor (Seiza's own rooms
+   *  have one). */
+  floorY?: number;
   /** True while this obstacle shouldn't block anyone — an open door's
    *  footprint, most often. A plain mutable field rather than something
    *  reactive on purpose: resolveObstacles runs once a frame from
@@ -642,6 +646,14 @@ export function setWorldObstacles(next: Obstacle[]): void {
   worldObstacles = next;
 }
 
+/** Furniture people placed in the room (src/edit/WorldObjects.tsx): only
+ *  tables, each on its own floor. See placedObstacles in App.tsx. */
+let placedObstacles: Obstacle[] = [];
+
+export function setPlacedObstacles(next: Obstacle[]): void {
+  placedObstacles = next;
+}
+
 /**
  * Derives collision boxes from arbitrary loaded geometry.
  *
@@ -700,6 +712,7 @@ export function resolveObstacles(position: THREE.Vector3, radius = PLAYER_RADIUS
   // The built-in room's furniture isn't there in a model world.
   if (!ground) pushOutOf(activeObstacles, position, radius);
   pushOutOf(worldObstacles, position, radius);
+  pushOutOf(placedObstacles, position, radius, ground ? undefined : floorHeightAt(position.x, position.z));
 }
 
 // --- a world's own ground ------------------------------------------------------
@@ -751,6 +764,7 @@ export function constrainWalker(position: THREE.Vector3): number {
   if (ground) {
     const floor = ground.constrain(position);
     pushOutOf(worldObstacles, position, PLAYER_RADIUS);
+    pushOutOf(placedObstacles, position, PLAYER_RADIUS, floor);
     return floor;
   }
   clampToRooms(position);
@@ -758,9 +772,11 @@ export function constrainWalker(position: THREE.Vector3): number {
   return floorHeightAt(position.x, position.z);
 }
 
-function pushOutOf(obstacles: readonly Obstacle[], position: THREE.Vector3, radius: number): void {
+function pushOutOf(obstacles: readonly Obstacle[], position: THREE.Vector3, radius: number, floorY?: number): void {
   for (const box of obstacles) {
     if (box.disabled) continue; // an open door — nothing to bump into here right now
+    // On another storey: a table upstairs doesn't block the hall below.
+    if (box.floorY !== undefined && floorY !== undefined && Math.abs(box.floorY - floorY) > 1.2) continue;
     const sin = Math.sin(box.rotationY);
     const cos = Math.cos(box.rotationY);
     const dx = position.x - box.x;

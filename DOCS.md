@@ -964,7 +964,7 @@ integrate with one. If you build a server-side integration later:
 | Walk to a spot | Double-click the floor | Double-tap the floor |
 | Sit down | Click a chair or bench | Tap a chair or bench |
 | Lie down | Click the tent's sleeping bag or a bed | Tap the sleeping bag or a bed |
-| Place a chair or a bed | **Edit Mode > Chair** or **Bed** | **Edit Mode > Chair** or **Bed** |
+| Place a chair, a bed, or a table | **Edit Mode > Chair**, **Bed**, or **Table** | **Edit Mode > Chair**, **Bed**, or **Table** |
 | Kneel (seiza) | `3`, then `3` again to stand | **Seiza** button |
 | Stand up | Move, jump, or **Stand up** | D-pad or **Stand up** |
 | Switch view | `V` or the camera button | Camera button |
@@ -985,6 +985,12 @@ Notes:
   It's a held gesture, so it syncs to everyone like any other pose.
 - Crouch uses `Z` rather than Ctrl, because crouch-walking forward would press
   Ctrl+W, which closes the tab in Chromium browsers. Pages can't block it.
+- Placed tables are solid: people walk round them, and only on the floor
+  the table stands on, so one upstairs doesn't block the hall below. Other
+  placed objects stay walk-through on purpose. A box or a model can be any
+  size, so making them solid would let anyone wall others in. The room
+  server caps a room at 300 objects and 10 edits a second per person, and
+  an editor password or admin key limits who can place anything.
 - In the edit panel, everything that acts on a selected object (**Move**,
   **Rotate**, **Snap to floor**, **Deselect**, and **Delete**) is grouped at
   the top.

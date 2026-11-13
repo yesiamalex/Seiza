@@ -84,6 +84,18 @@ export function ChairIcon(props: IconProps) {
   );
 }
 
+/** A table from the side: a top and two legs. */
+export function TableIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M3 9h18" />
+      <path d="M5 9v10" />
+      <path d="M19 9v10" />
+      <path d="M8 12h8" />
+    </Svg>
+  );
+}
+
 /** A bed seen from the side: headboard, mattress, a pillow, two legs. */
 export function BedIcon(props: IconProps) {
   return (

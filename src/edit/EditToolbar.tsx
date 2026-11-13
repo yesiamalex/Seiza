@@ -8,7 +8,7 @@ import { L, useLang } from "../i18n/lang";
 import type { RoomSky } from "../multiplayer/types";
 import type { SkyConfig } from "../sky/skyState";
 import { BAR_LABEL_CLASS, barButtonActiveStyle, barButtonStyle, inputStyle, panelStyle, pillButtonActiveStyle, pillButtonStyle, popoverStyle } from "../ui/styles";
-import { BedIcon, ChairIcon, CloseIcon, EditIcon, MinimizeIcon, ScreenShareIcon, SignIcon, TextBoardIcon } from "../ui/icons";
+import { BedIcon, ChairIcon, TableIcon, CloseIcon, EditIcon, MinimizeIcon, ScreenShareIcon, SignIcon, TextBoardIcon } from "../ui/icons";
 
 interface EditToolbarProps {
   enabled: boolean;
@@ -441,6 +441,9 @@ export function EditToolbar({
             </button>
             <button style={pillButtonStyle} disabled={!connected} onClick={() => onSpawn("bed")} title={L("A bed anyone can lie down on", "誰でも横になれるベッド")}>
               <BedIcon /> {L("Bed", "ベッド")}
+            </button>
+            <button style={pillButtonStyle} disabled={!connected} onClick={() => onSpawn("table")} title={L("A meeting table people walk around, not through", "通り抜けられない会議用テーブル")}>
+              <TableIcon /> {L("Table", "テーブル")}
             </button>
           </div>
           <small style={{ opacity: 0.7 }}>

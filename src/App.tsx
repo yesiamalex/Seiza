@@ -15,7 +15,8 @@ import {
   LIE_GESTURE_NAME,
   type GestureDefinition,
 } from "./avatar/gestures";
-import type { Seat } from "./scene/layout";
+import { setPlacedObstacles, type Seat } from "./scene/layout";
+import { TABLE } from "./scene/Table";
 import { roomLights } from "./scene/roomLights";
 import { setPlayerFilter, usePlayerFilter } from "./multiplayer/playerFilter";
 import {
@@ -379,6 +380,23 @@ export default function App() {
     ),
     away
   );
+  // Placed tables are solid: people walk round them, on their own floor.
+  // Only tables, which are the furniture meant to stand in the way; a
+  // placed box or model of any size could wall someone in.
+  useEffect(() => {
+    const tables = Object.values(objects).filter((o) => o.kind === "table");
+    setPlacedObstacles(
+      tables.map((o) => ({
+        x: o.position[0],
+        z: o.position[2],
+        halfX: (TABLE.width / 2) * (o.scale ?? 1),
+        halfZ: (TABLE.depth / 2) * (o.scale ?? 1),
+        rotationY: o.rotationY,
+        floorY: o.position[1],
+      }))
+    );
+  }, [objects]);
+  useEffect(() => () => setPlacedObstacles([]), []);
   // Fittings that read the switches every frame (text boards, world code).
   Object.assign(roomLights, lights);
   selfIdRef.current = selfId;
@@ -702,8 +720,8 @@ export default function App() {
       // Put each kind where it's actually used: a note on a desk, a board at
       // eye level, a screen or a picture a little above that, a chair on the
       // floor (its own geometry is measured up from its base).
-      const furniture = kind === "chair" || kind === "bed";
-      const distance = flat ? 1.1 : kind === "chair" ? 1.4 : kind === "bed" ? 2.2 : 2;
+      const furniture = kind === "chair" || kind === "bed" || kind === "table";
+      const distance = flat ? 1.1 : kind === "chair" ? 1.4 : kind === "bed" || kind === "table" ? 2.2 : 2;
       const height =
         furniture
           ? 0

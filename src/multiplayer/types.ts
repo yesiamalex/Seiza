@@ -41,7 +41,7 @@ export interface PlayerState {
 // "sign" is a text object like "text", but shaped and typeset to be read
 // from across the room rather than up close — see createTextTexture's
 // "sign" surface and SignObject in src/edit/WorldObjects.tsx.
-export const WORLD_OBJECT_KINDS = ["box", "sphere", "cylinder", "model", "text", "sign", "screen", "image", "video", "chair", "bed"] as const;
+export const WORLD_OBJECT_KINDS = ["box", "sphere", "cylinder", "model", "text", "sign", "screen", "image", "video", "chair", "bed", "table"] as const;
 export type WorldObjectKind = (typeof WORLD_OBJECT_KINDS)[number];
 
 /** Longest text a board or note will hold. Long enough for a notice, short
