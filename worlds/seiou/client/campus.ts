@@ -24,6 +24,7 @@ export const PLACES = {
   wcmpb: place("wcmpb", "the ground floor of the World-Class Multimedia Production Building", "ワールドクラス・マルチメディア制作棟の1階", [226, 1.6, 154]),
   wcmpb2F: place("wcmpb2F", "the second floor of the World-Class Multimedia Production Building", "ワールドクラス・マルチメディア制作棟の2階", [226, 8.2, 150], false),
   wcmpbRoof: place("wcmpbRoof", "the roof deck of the World-Class Multimedia Production Building", "ワールドクラス・マルチメディア制作棟の屋上デッキ", [226, 14.8, 150], false),
+  ccdlHall: place("ccdlHall", "the conference hall on the CCDL's second floor", "CCDL2階の会議ホール", [270.96, 4.7, -93.46]),
   ar: place("ar", "the Academic Residences", "アカデミック・レジデンス", [336, 1.1, -98]),
 };
 
@@ -178,6 +179,22 @@ const TOPICS: Topic[] = [
       answer:
         "センテニアル・センター・フォー・デジタル・ラーニング(CCDL)には、UPOUの講堂があります。ステージのある大きな冷房つきのホールで、120〜200人ほどの会議、セミナー、イベントに使われます。キャンパスの北東、アカデミック・レジデンスの隣です。",
       asks: ["CCDL", "講堂", "イベントはどこでやる", "ステージ", "イベントホール", "セミナー会場"],
+    },
+  },
+  {
+    id: "ccdlHall",
+    title: "The CCDL conference hall",
+    answer:
+      "The CCDL's second floor is set up as a conference hall: rows of tables facing a big screen, a presenter's table, and a notice board. Click the screen to share your own screen or camera with everyone there. I can walk you up, or take you there at once.",
+    asks: ["conference hall", "meeting room", "where can we hold a meeting", "share my screen", "presentation room", "seminar room", "ccdl second floor", "where can i present"],
+    place: PLACES.ccdlHall,
+    gesture: "raisehand",
+    mood: "happy",
+    ja: {
+      title: "CCDLの会議ホール",
+      answer:
+        "CCDLの2階は会議ホールになっています。大きなスクリーンに向かってテーブルが並び、発表者用のテーブルと掲示板があります。スクリーンをクリックすると、自分の画面やカメラをそこにいる全員に共有できます。歩いてご案内することも、今すぐお連れすることもできます。",
+      asks: ["会議ホール", "会議室", "打ち合わせできる場所", "画面を共有したい", "発表できる部屋", "セミナー室", "CCDLの2階"],
     },
   },
   {
