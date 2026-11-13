@@ -12,9 +12,11 @@ import { showWorldOverlay, type WorldSceneProps } from "../../../src/worlds/Worl
 import { Lifts } from "../../seiou/client/Lifts";
 import { CHANCY, CHANCY_AVATAR, CHANCY_ROUTE, DEAN_ROB, DEAN_ROB_AVATAR, DEAN_ROB_ROUTE, SPAWN } from "../../seiou/client/campus";
 import { CardHost, openCard, type CardKey } from "./cards";
-import { Dashboard } from "./Dashboard";
+import { Station, stationObstacles } from "./Station";
+import { controlsFrom, live } from "./live";
 import { seinagKnowledge } from "./knowledge";
 import { stepLive } from "./live";
+import { setWorldObstacles } from "../../../src/scene/layout";
 import { Panels } from "./Panels";
 import { L, useLang } from "../../../src/i18n/lang";
 
@@ -28,7 +30,13 @@ function Hud() {
   );
 }
 
-export function Scene({ warp, getSelfPosition, findPath }: WorldSceneProps) {
+export function Scene({ warp, getSelfPosition, findPath, canEdit, connected, roomSky, setRoomSky, worldState, setWorldState }: WorldSceneProps) {
+  // The console's switches, shared through the room, drive the plant.
+  live.controls = controlsFrom(worldState);
+  useEffect(() => {
+    setWorldObstacles(stationObstacles());
+    return () => setWorldObstacles([]);
+  }, []);
   useEffect(() => {
     const knowledge = seinagKnowledge();
     registerGuides([
@@ -52,7 +60,7 @@ export function Scene({ warp, getSelfPosition, findPath }: WorldSceneProps) {
   return (
     <>
       <Panels />
-      <Dashboard />
+      <Station canEdit={canEdit} connected={connected} roomSky={roomSky} setRoomSky={setRoomSky} worldState={worldState} setWorldState={setWorldState} />
       <Lifts warp={warp} />
       <Guide id="chancy" name={CHANCY.name} avatarUrl={CHANCY_AVATAR} stops={CHANCY_ROUTE} faceAt={SPAWN} pathsOnPatrol getSelfPosition={getSelfPosition} findPath={findPath} />
       <Guide id="rob" name={DEAN_ROB.name} avatarUrl={DEAN_ROB_AVATAR} stops={DEAN_ROB_ROUTE} faceAt={SPAWN} pathsOnPatrol getSelfPosition={getSelfPosition} findPath={findPath} />

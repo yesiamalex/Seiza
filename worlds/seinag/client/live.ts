@@ -5,7 +5,8 @@
 // sky, so they see the same numbers.
 import { skyState } from "../../../src/sky/skyState";
 import { philippineTime, scheduledWeather, WeatherState, type WeatherType } from "../../../src/sky/weather";
-import { DEFAULT_CONTROLS, GRID_EMISSION_FACTOR, type Controls, type Microgrid, type Snapshot } from "../../seizora/sim/energy";
+import { DEFAULT_CONTROLS, GRID_EMISSION_FACTOR, type BatteryMode, type Controls, type Microgrid, type Snapshot } from "../../seizora/sim/energy";
+import type { WorldStateValue } from "../../../src/multiplayer/types";
 import { newCampusPlant, SITE } from "./plant";
 
 /** One chart sample per this many minutes. */
@@ -14,14 +15,39 @@ const HISTORY_SAMPLES = (24 * 60) / SAMPLE_MINUTES;
 /** A jump in the sky's time bigger than this re-runs the warm-up. */
 const JUMP_MS = 3 * 3600_000;
 
-/** Always on the grid, solar and battery switched in: there's no console
- *  here, only the dashboard. */
-const CONTROLS: Controls = { ...DEFAULT_CONTROLS, perovskite: false, wind: false };
+/** World state keys for the solar station's console: shared by everyone in
+ *  the room, like Seizora's control room. */
+export const KEYS = {
+  solar: "seinag.solar",
+  battery: "seinag.battery",
+  grid: "seinag.grid",
+  batteryMode: "seinag.batteryMode",
+} as const;
+const BATTERY_MODES: BatteryMode[] = ["auto", "charge", "hold", "discharge"];
+
+/** The plant's switches from the room's world state: rooftop solar,
+ *  battery, and grid tie on, and the battery on auto, unless someone has
+ *  changed them at the console. No perovskite and no wind here. */
+export function controlsFrom(state: Record<string, WorldStateValue>): Controls {
+  const on = (key: string) => (typeof state[key] === "boolean" ? (state[key] as boolean) : true);
+  const mode = state[KEYS.batteryMode];
+  return {
+    ...DEFAULT_CONTROLS,
+    silicon: on(KEYS.solar),
+    perovskite: false,
+    wind: false,
+    battery: on(KEYS.battery),
+    gridConnected: on(KEYS.grid),
+    batteryMode: BATTERY_MODES.includes(mode as BatteryMode) ? (mode as BatteryMode) : "auto",
+    elNino: false,
+  };
+}
 
 export const live = {
   plant: newCampusPlant() as Microgrid,
   now: null as Snapshot | null,
   history: [] as Snapshot[],
+  controls: controlsFrom({}),
 };
 
 let lastSimMs = 0;
@@ -48,7 +74,7 @@ function warmUp(simMs: number, current: WeatherType) {
     weather.setType(fixed ?? scheduledWeather(date));
     weather.step(SAMPLE_MINUTES, t / 60_000);
     const { dayOfYear, hour } = philippineTime(date);
-    record(live.plant.step(SAMPLE_MINUTES, dayOfYear, hour, SITE, weather, CONTROLS), SAMPLE_MINUTES);
+    record(live.plant.step(SAMPLE_MINUTES, dayOfYear, hour, SITE, weather, live.controls), SAMPLE_MINUTES);
   }
 }
 
@@ -67,7 +93,7 @@ export function stepLive(realSeconds: number) {
   // A held sky stands still, but the plant keeps running at that hour.
   const minutes = simDelta <= 0 ? realSeconds / 60 : simDelta / 60_000;
   if (minutes <= 0) return;
-  record(live.plant.step(Math.min(minutes, 30), skyState.dayOfYear, skyState.hour, SITE, weather, CONTROLS), minutes);
+  record(live.plant.step(Math.min(minutes, 30), skyState.dayOfYear, skyState.hour, SITE, weather, live.controls), minutes);
 }
 
 /** The last 24 hours, added up. */

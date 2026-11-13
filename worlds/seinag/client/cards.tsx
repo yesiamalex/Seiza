@@ -8,7 +8,7 @@ import { panelStyle, pillButtonStyle } from "../../../src/ui/styles";
 import solar from "../world/solar.json";
 import { CAMPUS, ROOFTOP_MWP } from "./plant";
 
-export type CardKey = "solar" | "load";
+export type CardKey = "solar" | "load" | "battery";
 
 let open: CardKey | null = null;
 const listeners = new Set<() => void>();
@@ -32,6 +32,20 @@ const modules = Object.values(solar.arrays).reduce((n, a) => n + a.modules.lengt
 
 function body(key: CardKey): { title: string; paragraphs: string[] } {
   const kwp = Math.round(ROOFTOP_MWP * 1000);
+  if (key === "battery")
+    return {
+      title: L("The station's battery", "ステーションの蓄電池"),
+      paragraphs: [
+        L(
+          `A ${Math.round(CAMPUS.batteryMwh * 1000)} kWh lithium-ion battery that can charge or discharge at up to ${Math.round(CAMPUS.batteryMw * 1000)} kW. On Auto it stores what the roofs make beyond the campus's use, and gives it back when the sun goes, covering the part of the evening's demand above the day's usual level.`,
+          `容量${Math.round(CAMPUS.batteryMwh * 1000)} kWh、最大${Math.round(CAMPUS.batteryMw * 1000)} kWで充放電できるリチウムイオン電池です。「自動」では、キャンパスの使用量を超えて屋根が発電した分をため、日が沈むと、夕方の需要のうちふだんを上回る分をまかないます。`
+        ),
+        L(
+          "About 15% is lost on the round trip, and it's kept between 10% and 95% full to protect it, as Seizora's is. The strip on the cabinet shows its charge; the console in the station switches it, its mode, and the grid tie, for everyone here.",
+          "ためて取り出すまでに約15%が失われ、Seizoraと同じく電池を守るため充電率は10〜95%に保たれます。キャビネットの帯が充電率を示します。ステーションの操作盤で、蓄電池、そのモード、系統連系を、ここにいる全員に共有して切り替えられます。"
+        ),
+      ],
+    };
   if (key === "load")
     return {
       title: L("What the campus uses", "キャンパスの使用量"),

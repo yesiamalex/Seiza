@@ -28,12 +28,28 @@ could do, so students and staff can see and talk about it.
   heat up, wiring and inverter losses, a 200 kWh battery, and the grid for
   the rest. It runs on the same sky every visitor sees, with 24 hours of
   warm-up, so everyone sees the same numbers without sending any.
-- **The campus's demand:** an assumed weekday for offices, classrooms, and
+- **The campus's demand:** an assumed week for offices, classrooms, and
   labs, with aircon that rises with the heat. It peaks at about 0.25 MW on
-  a hot afternoon. It isn't metered data.
-- **The dashboard:** by the drive, facing where visitors arrive: the
-  roofs' output, the campus's use, the battery, the grid, and the last 24
-  hours. Click it for how the numbers are worked out.
+  a hot weekday afternoon, more than the roofs make, so on weekdays every
+  kilowatt is used at once. At the weekend only lights, servers, and
+  security run, so the roofs make more than the campus uses and the battery
+  fills. It isn't metered data.
+- **The conference hall:** the CCDL's second floor, set up as in SeiOU.
+- **The solar station:** an open shed on the grass north of the drive,
+  ahead and to the left of where visitors arrive. Its sloped roof carries
+  twelve modules of its own. Inside:
+  - the live **dashboard** on the back wall: the roofs' output, the
+    campus's use, the battery, the grid, and the last 24 hours;
+  - a **console** like Seizora's control room's: breakers for the rooftop
+    solar, the battery, and the grid tie, the battery's mode, and the time
+    and weather, shared with everyone in the room;
+  - the **battery cabinet**, its charge on a live strip;
+  - Seizora's **perovskite lab bench**, where you design a solar cell and
+    see its efficiency, cost, first-year yield, and how fast it fades, here
+    in Metro Manila's weather.
+  Three **study boards** outside its west side, toward the arrival point,
+  explain the rooftop solar, the campus's use, and the battery, each with a
+  live line. Click anything for its card.
 - **The guides:** Chancy Joan and Dean Rob know everything they know in
   SeiOU, plus the solar, with live answers ("How much are the roofs making
   now?", 「今日はどのくらい発電した?」). Ask them to take you to the
@@ -62,9 +78,11 @@ worlds/seinag/
     plant.ts                   The campus plant: its spec and its demand
     plant.test.ts              Day and night, sun and rain
     live.ts                    The plant, running on the shared sky
-    Panels.tsx                 The modules, as one instanced mesh
-    Dashboard.tsx              The live display by the drive
-    cards.tsx                  How it's worked out, and the campus's demand
+    module.ts                  What a module looks like: cells, frame, legs
+    Panels.tsx                 The rooftop modules
+    Station.tsx                The solar station: shed, console, battery, boards, lab bench
+    Dashboard.tsx              The live display on the station's back wall
+    cards.tsx                  How it's worked out, the battery, and the campus's demand
     knowledge.ts               SeiOU's knowledge, plus the solar
   build.mjs                    Builds the deployment into dist/
   wrangler.jsonc               Seinag's own Worker

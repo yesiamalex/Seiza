@@ -10,13 +10,10 @@ import solar from "../world/solar.json";
 
 const kw = (mw: number) => `${Math.round(mw * 1000)} kW`;
 
-/** Where the dashboard stands, by the arrival point. */
-export const DASHBOARD_AT: [number, number, number] = [77, 0.2, -6.5];
-/** Turned to face where visitors arrive (SPAWN). */
-export const DASHBOARD_TURN = Math.atan2(66 - 77, 0 + 6.5);
 
 export const SOLAR_PLACES = {
-  dashboard: { id: "dashboard", label: "the solar dashboard by the drive", labelJa: "車道わきのソーラー・ダッシュボード", at: [75.6, 0.2, -5.4] } as Place,
+  // In front of the solar station's console (Station.tsx), facing its dashboard.
+  dashboard: { id: "dashboard", label: "the solar station by the drive", labelJa: "車道わきのソーラーステーション", at: [79, 0.27, -10.2] } as Place,
   mainRoof: { id: "mainRoof", label: "the panels on the Main Building's roof", labelJa: "本館の屋上のパネル", // Where the Main Building's lift arrives on the roof
   // (worlds/seiou/world/models/floors.json), among the panels.
   at: [115.5, 10.24, 0.5], walk: false } as Place,
@@ -54,15 +51,15 @@ const TOPICS: Topic[] = [
   },
   {
     id: "dashboard",
-    title: "The solar dashboard",
-    answer: "The dashboard by the drive shows the panels' output right now, what the campus is using, the battery, and the last 24 hours. Click it for how the numbers are worked out.",
-    asks: ["dashboard", "where can i see the numbers", "solar display", "the screen by the drive"],
+    title: "The solar station",
+    answer: "The solar station by the drive houses it all: a live dashboard (the panels' output now, the campus's use, the battery, the last 24 hours), a console that switches the rooftop solar, the battery, and the grid tie and sets the time and weather for everyone, the battery cabinet, a perovskite lab bench where you design a solar cell, and study boards outside. Its own roof carries panels too. Click anything there for more.",
+    asks: ["dashboard", "solar station", "where can i see the numbers", "solar display", "control panel", "console", "perovskite lab", "the shed by the drive"],
     card: "solar",
     place: SOLAR_PLACES.dashboard,
     ja: {
-      title: "ソーラー・ダッシュボード",
-      answer: "車道わきのダッシュボードに、今のパネルの出力、キャンパスの使用量、蓄電池、過去24時間が表示されています。クリックすると、数字の出し方がわかります。",
-      asks: ["ダッシュボード", "数字はどこで見られる", "ソーラーの表示", "車道わきの画面"],
+      title: "ソーラーステーション",
+      answer: "車道わきのソーラーステーションにすべてがそろっています。ライブのダッシュボード(今のパネルの出力、キャンパスの使用量、蓄電池、過去24時間)、屋根のソーラー・蓄電池・系統連系を切り替え、時刻と天気を全員に共有して変えられる操作盤、蓄電池のキャビネット、太陽電池を設計できるペロブスカイト・ラボ、そして外の学習ボード。ステーション自体の屋根にもパネルがあります。クリックすると詳しく見られます。",
+      asks: ["ダッシュボード", "ソーラーステーション", "数字はどこで見られる", "操作盤", "ペロブスカイト・ラボ", "車道わきの小屋"],
     },
   },
   {
@@ -160,8 +157,8 @@ export function seinagKnowledge(): Knowledge {
     subject: "UPOU, this campus, its rooftop solar, and finding your way",
     subjectJa: "UPOUとこのキャンパス、屋根の太陽光、そして道案内",
     live: liveIntents(),
-    liveSuggestions: ["What did the roofs make today?", "Take me to the solar dashboard"],
-    liveSuggestionsJa: ["今日はどのくらい発電した?", "ソーラー・ダッシュボードに連れて行って"],
+    liveSuggestions: ["What did the roofs make today?", "Take me to the solar station"],
+    liveSuggestionsJa: ["今日はどのくらい発電した?", "ソーラーステーションに連れて行って"],
     cardTitle: (card, lang) => (card === "load" ? (lang === "ja" ? "キャンパスの使用量" : "What the campus uses") : lang === "ja" ? "キャンパスの太陽光" : "Campus solar"),
     synonyms: { ...base.synonyms, pv: "solar", photovoltaic: "solar", araw: "sun", sinag: "seinag" },
   };

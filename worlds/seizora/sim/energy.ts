@@ -314,13 +314,13 @@ export class Microgrid {
   private alert = false;
 
   /**
-   * `load` is what the plant serves, in MW, at an hour and an air
-   * temperature: the town (sim/town.ts) unless a world brings its own, as
-   * Seinag does for a campus.
+   * `load` is what the plant serves, in MW, at an hour, an air temperature,
+   * and a day of the year: the town (sim/town.ts) unless a world brings its
+   * own, as Seinag does for a campus.
    */
   constructor(
     public spec: PlantSpec = PLANT,
-    private load: (hour: number, ambient: number) => number = (hour, ambient) => townLoad(hour, ambient).totalMw
+    private load: (hour: number, ambient: number, dayOfYear: number) => number = (hour, ambient) => townLoad(hour, ambient).totalMw
   ) {}
 
   /** Advances by `minutes` at the given simulated time and weather. */
@@ -351,7 +351,7 @@ export class Microgrid {
     }
     const windMw = c.wind ? this.spec.turbines * turbinePower(this.spec.turbineMw, wind) : 0;
     const generation = siliconMw + perovskiteMw + windMw;
-    const loadMw = this.load(hour, ambient);
+    const loadMw = this.load(hour, ambient, dayOfYear);
     const gridAlert = c.gridConnected && gridAlertAt(hour, c.elNino, weather.type);
     const gridLimitMw = gridAlert ? EL_NINO.importShare * this.spec.peakLoadMw : Infinity;
     if (gridAlert !== this.alert) {

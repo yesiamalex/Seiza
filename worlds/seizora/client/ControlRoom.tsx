@@ -345,18 +345,18 @@ function Display({ roomSky }: { roomSky: RoomSky | null }) {
  *  the teacher's desk, with its operator facing the display. */
 export const CONSOLE = { x: 3.4, z: -21.95, width: 3.0, depth: 0.9, front: 0.8, back: 1.06 };
 /** The sloped top: its tilt toward the operator, and its length. */
-const TOP_TILT = Math.atan2(CONSOLE.back - CONSOLE.front, CONSOLE.depth);
-const TOP_LENGTH = Math.hypot(CONSOLE.depth, CONSOLE.back - CONSOLE.front);
+export const TOP_TILT = Math.atan2(CONSOLE.back - CONSOLE.front, CONSOLE.depth);
+export const TOP_LENGTH = Math.hypot(CONSOLE.depth, CONSOLE.back - CONSOLE.front);
 /** The console's outline: round its sloped top, and round its foot. */
 const CONSOLE_GLOW: BoxSpec[] = [
   { size: [CONSOLE.width, 0, TOP_LENGTH], at: [0, (CONSOLE.front + CONSOLE.back) / 2, 0], rotation: [TOP_TILT, 0, 0] },
   { size: [CONSOLE.width, 0, CONSOLE.depth], at: [0, 0.015, 0] },
 ];
-const TOP_W = 1536;
-const TOP_H = Math.round((TOP_W * TOP_LENGTH) / CONSOLE.width);
+export const TOP_W = 1536;
+export const TOP_H = Math.round((TOP_W * TOP_LENGTH) / CONSOLE.width);
 
-type Action = { label: string; active: boolean; run: () => void; tone?: "toggle" };
-interface Row {
+export type Action = { label: string; active: boolean; run: () => void; tone?: "toggle" };
+export interface Row {
   title: string;
   buttons: Action[];
 }
@@ -439,7 +439,7 @@ function useRows({ roomSky, setRoomSky, controls, setWorldState }: ConsoleProps)
   ];
 }
 
-interface ButtonRect {
+export interface ButtonRect {
   x: number;
   y: number;
   w: number;
@@ -448,7 +448,7 @@ interface ButtonRect {
   index: number;
 }
 
-function layout(rows: Row[]): ButtonRect[] {
+export function layout(rows: Row[]): ButtonRect[] {
   const rects: ButtonRect[] = [];
   const left = 250, right = TOP_W - 24, rowH = (TOP_H - 70) / rows.length;
   rows.forEach((row, r) => {
@@ -459,7 +459,7 @@ function layout(rows: Row[]): ButtonRect[] {
   return rects;
 }
 
-function drawConsole(ctx: CanvasRenderingContext2D, w: number, h: number, rows: Row[], rects: ButtonRect[], enabled: boolean, hovered: number, note: string) {
+export function drawConsole(ctx: CanvasRenderingContext2D, w: number, h: number, rows: Row[], rects: ButtonRect[], enabled: boolean, hovered: number, note: string) {
   ctx.fillStyle = "#1d2433";
   ctx.fillRect(0, 0, w, h);
   ctx.fillStyle = "#ffcf6e";

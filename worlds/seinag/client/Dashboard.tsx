@@ -1,22 +1,15 @@
-// The solar dashboard by the drive: the roofs' output now, the campus's
-// demand, the battery, and the last 24 hours, redrawn while someone is
-// near. Click it for the card that explains the numbers.
+// The solar dashboard on the station's back wall (Station.tsx): the roofs'
+// output now, the campus's demand, the battery, and the last 24 hours,
+// redrawn while someone is near. Click it for the card that explains them.
 import { useRef } from "react";
 import * as THREE from "three";
 import { L, useLang } from "../../../src/i18n/lang";
-import { Clickable, FONT, roundRect, useCanvasTexture, useMerged, standard, type BoxSpec } from "../../seizora/client/kit";
+import { Clickable, FONT, roundRect, useCanvasTexture, standard } from "../../seizora/client/kit";
 import { openCard } from "./cards";
 import { dayTotals, live } from "./live";
 import { CAMPUS, ROOFTOP_MWP } from "./plant";
-import { DASHBOARD_AT, DASHBOARD_TURN } from "./knowledge";
 
-const SCREEN = { w: 2.6, h: 1.5, bottom: 0.9 };
-const FRAME: BoxSpec[] = [
-  { size: [SCREEN.w + 0.14, SCREEN.h + 0.14, 0.08], at: [0, SCREEN.bottom + SCREEN.h / 2, -0.05] },
-  { size: [0.1, SCREEN.bottom + 0.2, 0.1], at: [-SCREEN.w / 2 + 0.25, (SCREEN.bottom + 0.2) / 2, -0.06] },
-  { size: [0.1, SCREEN.bottom + 0.2, 0.1], at: [SCREEN.w / 2 - 0.25, (SCREEN.bottom + 0.2) / 2, -0.06] },
-];
-const frameMaterial = standard("#2a3140", 0.5, 0.3);
+const bezel = standard("#1c222c", 0.45, 0.4);
 
 const kw = (mw: number) => `${Math.round(mw * 1000)}`;
 
@@ -125,20 +118,22 @@ function draw(ctx: CanvasRenderingContext2D, w: number, h: number) {
   ctx.fillText(L("Click for how this is worked out", "クリックで計算のしかたを見る"), 32, h - 22);
 }
 
-export function Dashboard() {
+/** The dashboard, mounted on the station's back wall: a screen `width`
+ *  metres across, in a dark bezel, facing +Z. Click it for how it works. */
+export function DashboardScreen({ width = 2.8 }: { width?: number }) {
   const lang = useLang();
   const anchor = useRef<THREE.Mesh>(null);
   const texture = useCanvasTexture(1400, 808, draw, { hz: 2, anchor, range: 30, deps: [lang] });
-  const frame = useMerged(FRAME);
+  const height = (width * 808) / 1400;
   return (
-    <group position={DASHBOARD_AT} rotation={[0, DASHBOARD_TURN, 0]}>
-      <Clickable onClick={() => openCard("solar")}>
-        <mesh geometry={frame} material={frameMaterial} castShadow />
-        <mesh ref={anchor} position={[0, SCREEN.bottom + SCREEN.h / 2, 0.001]}>
-          <planeGeometry args={[SCREEN.w, SCREEN.h]} />
-          <meshBasicMaterial map={texture} toneMapped={false} />
-        </mesh>
-      </Clickable>
-    </group>
+    <Clickable onClick={() => openCard("solar")}>
+      <mesh position={[0, 0, -0.04]} material={bezel} castShadow>
+        <boxGeometry args={[width + 0.12, height + 0.12, 0.06]} />
+      </mesh>
+      <mesh ref={anchor}>
+        <planeGeometry args={[width, height]} />
+        <meshBasicMaterial map={texture} toneMapped={false} />
+      </mesh>
+    </Clickable>
   );
 }

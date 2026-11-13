@@ -8,6 +8,7 @@ import { ABSORBERS, ENCAPSULATION, ETLS, evaluateDesign, HTLS, MOUNTS, type LabD
 import { openInfo } from "./InfoCard";
 import { FONT, fmt, GlowLines, roundRect, standard, useCanvasTexture, useMerged, useNightLift, wrapText, type BoxSpec } from "./kit";
 import { SITE } from "./live";
+import type { Site } from "../../../src/sky/weather";
 import { L, useLang } from "../../../src/i18n/lang";
 
 export const LAB = { x: -5.6, z: -12.6, width: 2.4, depth: 0.8, height: 0.8 };
@@ -80,7 +81,7 @@ const LAB_GLOW: BoxSpec[] = [
   { size: [SCREEN.w + 0.1, SCREEN.h + 0.1, 0.05], at: [0, SCREEN.bottom + SCREEN.h / 2, -LAB.depth / 2 + 0.1] },
 ];
 
-function drawResults(ctx: CanvasRenderingContext2D, w: number, h: number, d: LabDesign, r: LabResult) {
+function drawResults(ctx: CanvasRenderingContext2D, w: number, h: number, d: LabDesign, r: LabResult, site: Site) {
   ctx.fillStyle = "#101522";
   ctx.fillRect(0, 0, w, h);
   ctx.fillStyle = "#3a1e14";
@@ -91,7 +92,7 @@ function drawResults(ctx: CanvasRenderingContext2D, w: number, h: number, d: Lab
   ctx.fillText(L("PEROVSKITE LAB · design a cell", "ペロブスカイト・ラボ · セルを設計しよう"), 26, 36);
   ctx.textAlign = "right";
   ctx.font = `500 22px ${FONT}`;
-  ctx.fillText(L(`in ${SITE.label} weather`, `${SITE.labelJa}の天気で`), w - 26, 36);
+  ctx.fillText(L(`in ${site.label} weather`, `${site.labelJa}の天気で`), w - 26, 36);
   ctx.textAlign = "left";
 
   const tiles: [string, string][] = [
@@ -181,12 +182,14 @@ function drawSelectors(ctx: CanvasRenderingContext2D, w: number, h: number, d: L
   });
 }
 
-export function LabBench() {
+/** The bench, in this world's weather unless another `site` is given (Seinag
+ *  sets up the same bench at its station, in Metro Manila's). */
+export function LabBench({ site = SITE }: { site?: Site } = {}) {
   const lang = useLang();
   const [design, setDesign] = useState<LabDesign>({ absorber: "mapi", etl: "sno2", htl: "spiro", encapsulation: "glass", mount: "roof" });
   const [hovered, setHovered] = useState(-1);
-  const result = useMemo(() => evaluateDesign(design, SITE), [design]);
-  const screen = useCanvasTexture(1520, 800, (ctx, w, h) => drawResults(ctx, w, h, design, result), { deps: [design, result, lang] });
+  const result = useMemo(() => evaluateDesign(design, site), [design, site]);
+  const screen = useCanvasTexture(1520, 800, (ctx, w, h) => drawResults(ctx, w, h, design, result, site), { deps: [design, result, lang] });
   const top = useCanvasTexture(TOP_W, TOP_H, (ctx, w, h) => drawSelectors(ctx, w, h, design, hovered), { deps: [design, hovered, lang] });
   const legs = [-1, 1].flatMap((sx) => [-1, 1].map((sz) => ({ size: [0.06, LAB.height - 0.04, 0.06], at: [sx * (LAB.width / 2 - 0.08), (LAB.height - 0.04) / 2, sz * (LAB.depth / 2 - 0.08)] })));
   const frame = useMerged([
