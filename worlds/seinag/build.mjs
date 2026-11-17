@@ -47,10 +47,12 @@ step("Building Seiza for the seinag world", () => {
 
 // 2. The world config, model, and navmesh, where Seiza's client looks for them,
 //    and the icon.
-step("Adding the world config, and SeiOU's campus model, navmesh, and floors", () => {
+step("Adding the world config, and SeiOU's campus model, navmesh, floors, and guides", () => {
   mkdirSync(join(DIST, "worlds", WORLD_ID), { recursive: true });
   cpSync(join(HERE, "world"), join(DIST, "worlds", WORLD_ID), { recursive: true });
   cpSync(CAMPUS, join(DIST, "worlds", "seiou", "models"), { recursive: true });
+  // Chancy Joan's and Dean Rob's avatars: Seinag's guides are SeiOU's.
+  cpSync(join(ROOT, "worlds", "seiou", "world", "avatars"), join(DIST, "worlds", "seiou", "avatars"), { recursive: true });
   // Seinag's own tab icon, over Seiza's in this build's output only, at
   // its own URL: browsers cache icons hard, so one at Seiza's URL keeps
   // showing Seiza's in any browser that has seen it.

@@ -113,11 +113,12 @@ Edit `client/campus.ts`:
 - **Places:** feet positions on the model. `walk: false` for a floor whose
   stairs the model doesn't have.
 - **The guides:** their names, how they introduce themselves, their
-  avatars, and their rounds. Their avatars are CC0 VRoid Studio samples for
-  now; to use their own Avaturn avatars, convert them to `.vrm` in Seiza's
-  avatar menu (which turns an Avaturn `.glb` into an optimized VRM),
-  download or upload them to the deployment, and change `CHANCY_AVATAR`
-  and `DEAN_ROB_AVATAR`.
+  avatars, and their rounds. Their avatars are their own Avaturn exports,
+  converted to VRM: put the `.glb` files at `media-src/chancy.glb` and
+  `media-src/dean-rob.glb` (kept local), then run
+  `npx vite-node worlds/seiou/scripts/build-guides.mjs`, which writes
+  `world/avatars/chancy.vrm` and `dean-rob.vrm` (committed) with Seiza's
+  own importer. Seinag's guides are the same two.
 
 Then `npm test`: `client/campus.test.ts` checks the guides still answer the
 common questions and stay inside the campus.

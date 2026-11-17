@@ -404,11 +404,11 @@ export const DEAN_ROB: Persona = {
   inviteJa: "UPOUや建物のこと、キャンパスのどこへの道でも聞いてください。",
 };
 
-/** For now the CC0 VRoid Studio samples (pixiv Inc.) the world offers as
- *  avatars; their own Avaturn avatars can replace these later (upload
- *  them as .vrm and change the URLs). */
-export const CHANCY_AVATAR = "/avatars/vroid/sample-female.vrm";
-export const DEAN_ROB_AVATAR = "/avatars/vroid/sample-male.vrm";
+/** The guides' own avatars, converted from their Avaturn exports by
+ *  scripts/build-guides.mjs and served from world/avatars/. Seinag uses the
+ *  same two, and its build copies the files across. */
+export const CHANCY_AVATAR = "/worlds/seiou/avatars/chancy.vrm";
+export const DEAN_ROB_AVATAR = "/worlds/seiou/avatars/dean-rob.vrm";
 
 const stop = (at: [number, number, number], wait: number): Stop => ({ at, wait });
 
