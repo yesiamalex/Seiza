@@ -30,6 +30,10 @@ export interface WorldConfig {
    *  washi, paper lanterns) or "filipino" (banig, capiz windows, capiz
    *  lamps). Materials only; see src/scene/materials.ts. */
   theme?: "japanese" | "filipino";
+  /** The tree on the meadow, which changes with the seasons. Default on,
+   *  at x 14, z 47; `{ "x", "z" }` moves it, for a world that builds where
+   *  it usually stands, and false removes it. Built-in grounds only. */
+  meadowTree?: boolean | { x: number; z: number };
   /**
    * What the world is made of. "builtin" (the default): Seiza's own hall,
    * classroom, garden, and meadow, with `sceneUrl` layered over them.

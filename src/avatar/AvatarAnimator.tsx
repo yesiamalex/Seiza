@@ -284,7 +284,14 @@ const fitHand = new THREE.Vector3();
 const fitChest = new THREE.Quaternion();
 const fitParent = new THREE.Quaternion();
 const fitTurn = new THREE.Quaternion();
+const fitToChest = new THREE.Quaternion();
+const fitParentInverse = new THREE.Quaternion();
 const fitAxis = new THREE.Vector3();
+/** Each arm: which way is outward (+X is the avatar's left), and its bones. */
+const FIT_SIDES = [
+  [1, "leftUpperArm", "leftHand"],
+  [-1, "rightUpperArm", "rightHand"],
+] as const;
 
 /**
  * Moves each hand inward by `amount`, by turning the upper arm about the
@@ -298,11 +305,10 @@ export function fitArms(vrm: VRM, amount: number) {
   if (!chest) return;
   chest.updateWorldMatrix(true, false);
   chest.getWorldQuaternion(fitChest);
-  const toChest = fitChest.clone().invert();
-  for (const [side, upperName, handName] of [
-    [1, "leftUpperArm", "leftHand"],
-    [-1, "rightUpperArm", "rightHand"],
-  ] as const) {
+  // Scratch values throughout: this runs every frame for every avatar, and
+  // allocates nothing.
+  const toChest = fitToChest.copy(fitChest).invert();
+  for (const [side, upperName, handName] of FIT_SIDES) {
     const upper = vrm.humanoid.getNormalizedBoneNode(upperName);
     const hand = vrm.humanoid.getNormalizedBoneNode(handName);
     if (!upper || !hand || !upper.parent) continue;
@@ -330,7 +336,7 @@ export function fitArms(vrm: VRM, amount: number) {
     fitAxis.set(0, 0, 1).applyQuaternion(fitChest);
     fitTurn.setFromAxisAngle(fitAxis, angle);
     upper.parent.getWorldQuaternion(fitParent);
-    upper.quaternion.premultiply(fitParent.clone().invert().multiply(fitTurn).multiply(fitParent));
+    upper.quaternion.premultiply(fitParentInverse.copy(fitParent).invert().multiply(fitTurn).multiply(fitParent));
   }
 }
 

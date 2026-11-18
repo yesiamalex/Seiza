@@ -1,7 +1,7 @@
 /**
- * The season's own touches outdoors (src/sky/seasons.ts): a tree in the
- * meadow that blossoms, greens, reddens, and goes bare, with petals or
- * leaves drifting down from it; the same drifting round you wherever you
+ * The season's own touches outdoors (src/sky/seasons.ts): the tree in the
+ * meadow (MeadowTree, there in every season and none) blossoms, greens,
+ * reddens, and goes bare, with petals or leaves drifting down from it; the same drifting round you wherever you
  * are outdoors, and fireflies on summer nights; and cicadas on summer
  * days. The ground and the treeline change colour in Outdoors.tsx, and
  * snow falls in Rain.tsx.
@@ -22,9 +22,10 @@ import { floorHeightAt, makeObstacle, setSceneryObstacles, sheltered } from "./l
 import { softDotTexture } from "./softDot";
 import { viewerPosition } from "../xr/viewer";
 
-/** Out in the open east side of the meadow: clear of the campsite, the
- *  portals, and the steps, and seen from the top of the steps. */
-const TREE_AT: [number, number] = [14, 47];
+/** Where the meadow tree stands unless a world moves it (world.json
+ *  `meadowTree`): out in the open east side of the meadow, clear of the
+ *  campsite, the portals, and the steps, and seen from the top of them. */
+export const MEADOW_TREE_AT: [number, number] = [14, 47];
 const TRUNK_RADIUS = 0.3;
 /** Where the canopy is, for petals to fall from. */
 const CANOPY_Y = 4.2;
@@ -77,9 +78,14 @@ function buildTree() {
 
 const canopyColors = Object.fromEntries(Object.entries(CANOPY_COLORS).map(([season, color]) => [season, new THREE.Color(color)])) as Record<Season, THREE.Color>;
 
-/** The tree. Its canopy takes on each season's colour as a change blends
- *  in (seasonWeight), and thins away into winter and fills out of it. */
-function SeasonalTree() {
+/**
+ * The tree on the meadow, in every world on Seiza's grounds unless the
+ * world turns it off (world.json `meadowTree`). Green with no season; with
+ * one, its canopy takes on each season's colour as a change blends in
+ * (seasonWeight), and thins away into winter and fills out of it. Cheap
+ * either way: two meshes, and a colour mixed once a frame.
+ */
+export function MeadowTree({ at = MEADOW_TREE_AT }: { at?: [number, number] }) {
   const { wood, canopy } = useMemo(buildTree, []);
   const woodMaterial = useMemo(() => new THREE.MeshLambertMaterial({ color: "#5a4334", flatShading: true }), []);
   const canopyMaterial = useMemo(() => new THREE.MeshLambertMaterial({ color: CANOPY_COLORS.summer, flatShading: true }), []);
@@ -90,17 +96,24 @@ function SeasonalTree() {
     const bare = seasonWeight("winter");
     mesh.visible = bare < 0.98;
     if (!mesh.visible) return;
-    // The leafy seasons' colours, mixed by how much of each is showing.
+    // The leafy seasons' colours, mixed by how much of each is showing, and
+    // summer's green for whatever share is no season at all.
+    let none = 1 - bare;
     canopyMaterial.color.setRGB(0, 0, 0);
-    let leafy = 0;
     for (const season of ["spring", "summer", "autumn"] as const) {
       const weight = seasonWeight(season);
+      none -= weight;
       if (weight <= 0) continue;
       canopyMaterial.color.r += canopyColors[season].r * weight;
       canopyMaterial.color.g += canopyColors[season].g * weight;
       canopyMaterial.color.b += canopyColors[season].b * weight;
-      leafy += weight;
     }
+    if (none > 0) {
+      canopyMaterial.color.r += canopyColors.summer.r * none;
+      canopyMaterial.color.g += canopyColors.summer.g * none;
+      canopyMaterial.color.b += canopyColors.summer.b * none;
+    }
+    const leafy = 1 - bare;
     if (leafy > 0) canopyMaterial.color.multiplyScalar(1 / leafy);
     // Thinning: the canopy draws in toward the branches as it goes bare.
     const fullness = 1 - bare;
@@ -117,12 +130,12 @@ function SeasonalTree() {
   );
   // Its trunk is solid while it's there.
   useEffect(() => {
-    setSceneryObstacles([makeObstacle(TREE_AT[0], TREE_AT[1], TRUNK_RADIUS + 0.05, TRUNK_RADIUS + 0.05)]);
+    setSceneryObstacles([makeObstacle(at[0], at[1], TRUNK_RADIUS + 0.05, TRUNK_RADIUS + 0.05)]);
     return () => setSceneryObstacles([]);
-  }, []);
-  const y = floorHeightAt(TREE_AT[0], TREE_AT[1]);
+  }, [at]);
+  const y = floorHeightAt(at[0], at[1]);
   return (
-    <group position={[TREE_AT[0], y, TREE_AT[1]]}>
+    <group position={[at[0], y, at[1]]}>
       <mesh geometry={wood} material={woodMaterial} castShadow />
       <mesh ref={canopyMesh} geometry={canopy} material={canopyMaterial} castShadow />
     </group>
@@ -233,9 +246,9 @@ function placeFlutter(mesh: THREE.InstancedMesh, i: number, x: number, y: number
 }
 
 /** Petals or leaves drifting down from the tree's canopy and settling. */
-function Falling({ season }: { season: Season }) {
+function Falling({ season, at }: { season: Season; at: [number, number] }) {
   const mesh = useFlutter(season, MAX_FALLING);
-  const ground = useMemo(() => floorHeightAt(TREE_AT[0], TREE_AT[1]), []);
+  const ground = useMemo(() => floorHeightAt(at[0], at[1]), [at]);
   const state = useMemo(() => {
     const s = {
       x: new Float32Array(MAX_FALLING),
@@ -254,8 +267,8 @@ function Falling({ season }: { season: Season }) {
     // rather than appearing in mid-air all at once.
     const arriving = seasonWeight(season) < 0.99;
     for (let i = 0; i < MAX_FALLING; i++) {
-      s.x[i] = TREE_AT[0] + (Math.random() - 0.5) * CANOPY_RADIUS * 2;
-      s.z[i] = TREE_AT[1] + (Math.random() - 0.5) * CANOPY_RADIUS * 2;
+      s.x[i] = at[0] + (Math.random() - 0.5) * CANOPY_RADIUS * 2;
+      s.z[i] = at[1] + (Math.random() - 0.5) * CANOPY_RADIUS * 2;
       s.y[i] = ground + Math.random() * CANOPY_Y;
       s.phase[i] = Math.random() * Math.PI * 2;
       if (arriving) {
@@ -264,11 +277,11 @@ function Falling({ season }: { season: Season }) {
       }
     }
     return s;
-  }, [ground, season]);
+  }, [ground, season, at]);
 
   useFrame(({ camera }, delta) => {
     const eye = viewerPosition(camera, scratchEye);
-    mesh.visible = Math.hypot(eye.x - TREE_AT[0], eye.z - TREE_AT[1]) < FALLING_RANGE;
+    mesh.visible = Math.hypot(eye.x - at[0], eye.z - at[1]) < FALLING_RANGE;
     if (!mesh.visible) return;
     const dt = Math.min(delta, 0.1);
     state.time += dt;
@@ -289,8 +302,8 @@ function Falling({ season }: { season: Season }) {
         if (state.rest[i] <= 0) {
           if (Math.random() < weight) {
             state.hidden[i] = 0;
-            state.x[i] = TREE_AT[0] + (Math.random() - 0.5) * CANOPY_RADIUS * 2;
-            state.z[i] = TREE_AT[1] + (Math.random() - 0.5) * CANOPY_RADIUS * 2;
+            state.x[i] = at[0] + (Math.random() - 0.5) * CANOPY_RADIUS * 2;
+            state.z[i] = at[1] + (Math.random() - 0.5) * CANOPY_RADIUS * 2;
             state.y[i] = ground + CANOPY_Y - Math.random() * 1.2;
           } else {
             state.hidden[i] = 1;
@@ -458,23 +471,22 @@ function Cicadas() {
  * seasons are mounted: the old one's petals stop falling and its fireflies
  * and cicadas fade as the new one's begin.
  */
-export function Seasons({ builtin }: { builtin: boolean }) {
+export function Seasons({ builtin, tree }: { builtin: boolean; tree: [number, number] | null }) {
   const showing = useSeasons();
   if (showing.length === 0) return null;
   return (
     <>
-      {builtin && <SeasonalTree />}
       {showing.map((season) => (
-        <SeasonParts key={season} season={season} builtin={builtin} />
+        <SeasonParts key={season} season={season} builtin={builtin} tree={tree} />
       ))}
     </>
   );
 }
 
-function SeasonParts({ season, builtin }: { season: Season; builtin: boolean }) {
+function SeasonParts({ season, builtin, tree }: { season: Season; builtin: boolean; tree: [number, number] | null }) {
   return (
     <>
-      {builtin && (season === "spring" || season === "autumn") && <Falling season={season} />}
+      {builtin && tree && (season === "spring" || season === "autumn") && <Falling season={season} at={tree} />}
       {builtin && season !== "winter" && <Drift season={season} />}
       {season === "summer" && <Cicadas />}
     </>

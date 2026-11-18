@@ -11,7 +11,7 @@ import { deriveObstaclesFromObject, OBSTACLES, setActiveObstacles } from "./layo
 import type { Seat } from "./layout";
 import { LightPool } from "./LightPool";
 import { SkyDriver } from "../sky/SkyDriver";
-import { Seasons } from "./Seasons";
+import { MEADOW_TREE_AT, MeadowTree, Seasons } from "./Seasons";
 import { Rain } from "./Rain";
 import { Beach } from "./Beach";
 import type { SkyConfig } from "../sky/skyState";
@@ -51,6 +51,9 @@ interface SceneProps {
   /** The room's own sky from the edit panel. While set, the sky moves
    *  even if the world's own sky is the still sunset. */
   roomSky?: RoomSky | null;
+  /** The tree on the meadow (world.json `meadowTree`): where it stands, or
+   *  false for none. Default: on, where it usually stands. */
+  meadowTree?: boolean | { x: number; z: number };
 }
 
 /** How often the frozen shadow map refreshes anyway, to pick up geometry
@@ -230,8 +233,13 @@ export const Scene = memo(function Scene({
   shadowRefreshKey,
   sky,
   roomSky = null,
+  meadowTree = true,
 }: SceneProps) {
   const moving = sky?.cycle === "realtime" || roomSky !== null;
+  const treeX = typeof meadowTree === "object" ? meadowTree.x : MEADOW_TREE_AT[0];
+  const treeZ = typeof meadowTree === "object" ? meadowTree.z : MEADOW_TREE_AT[1];
+  // Stable while the numbers are, so the tree and its petals don't rebuild.
+  const treeAt = useMemo<[number, number] | null>(() => (meadowTree === false ? null : [treeX, treeZ]), [meadowTree === false, treeX, treeZ]); // eslint-disable-line react-hooks/exhaustive-deps
   // Inside the camera's far plane, and the fog reaches full just before it,
   // so nothing pops in at the edge (the defaults are the original 200, 55,
   // and 210 for the 260 m the built-in world uses).
@@ -262,6 +270,7 @@ export const Scene = memo(function Scene({
           sea past the meadow's east side, in every world built on them. */}
       {builtin && <Outdoors />}
       {builtin && <Beach />}
+      {builtin && treeAt && <MeadowTree at={treeAt} />}
       {/* Warm sky above, warmer bounce off the wooden floor below. A big
           share of the light comes from here rather than the sun, which is
           what keeps the shadows soft. */}
@@ -271,7 +280,7 @@ export const Scene = memo(function Scene({
         <>
           <SkyDriver config={skyConfig} room={roomSky} />
           <Rain />
-          <Seasons builtin={builtin} />
+          <Seasons builtin={builtin} tree={treeAt} />
         </>
       ) : (
         <>

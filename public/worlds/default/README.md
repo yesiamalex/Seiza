@@ -48,6 +48,7 @@ any:
 | `environmentCollision` | Optional. Set to `false` to stop `sceneUrl` environments from blocking movement. Defaults to `true`. |
 | `sky` | Optional. `{ "cycle": "realtime", "site", "weather", "timeScale"?, "seasons"? }` moves the sky with Philippine time and a shared weather schedule; `"cycle": "fixed"`, or leaving it out, keeps the still sunset. `"seasons": true` dresses the outdoors by Japan's calendar (scenery and sound only). Editors can override the time, weather, and season for one room from the edit panel. See DOCS.md, "Sky and weather". |
 | `theme` | Optional. `"filipino"` dresses Seiza's own rooms with banig, capiz, and a tropical treeline in place of tatami, washi, and cones. Defaults to `"japanese"`. Built-in grounds only. |
+| `meadowTree` | Optional. The tree on the meadow, which stands in every world on the built-in grounds and changes with the seasons, at x 14, z 47. `{ "x": -12, "z": 46 }` moves it (Seisugbo does, for its covered court); `false` removes it. |
 | `spawnPoint` | Where players appear, as `{ "x", "y", "z" }`. |
 | `spawnRotationY` | Optional. Which way they face on arrival, in radians (0 looks toward -Z). |
 | `defaultAvatarUrl` | A `.vrm` URL for first-time visitors, or `""` for the designer's default look. |
