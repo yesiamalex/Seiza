@@ -104,6 +104,23 @@
         "color": "#7fa7ff",
         "blurb": "UPOU's campus with hypothetical rooftop solar, running live on the sky.",
         "blurbJa": "屋根に仮想の太陽光パネルをのせたUPOUのキャンパス。空に合わせてライブで動きます。"
+      },
+      {
+        "id": "iscolab",
+        "label": "ISCOLab",
+        "labelJa": "ISCOLab",
+        "color": "#5fc4e8",
+        "blurb": "UP Open University's Immersive Science Communication Open Laboratory, as a lab you can walk through.",
+        "blurbJa": "フィリピン大学オープン大学の没入型サイエンスコミュニケーション・オープンラボを、歩いてめぐれる空間に。"
+      },
+      {
+        "id": "seiza",
+        "label": "Seiza",
+        "labelJa": "Seiza",
+        "color": "#f2d16b",
+        "blurb": "Where the family began: the hall, the classroom, the garden, and the beach, through Japan's seasons.",
+        "blurbJa": "すべての始まり。ホール、教室、庭、浜辺を日本の四季とともに。",
+        "url": "https://seiza.cc"
       }
     ]
   },
