@@ -20,7 +20,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import { skyState } from "../sky/skyState";
+import { seasonWeight, skyState } from "../sky/skyState";
 import { flashLevel, strikeAt } from "../sky/lightning";
 import { playThunder, setRainAmbience } from "../audio/sfx";
 import { floorHeightAt, sheltered } from "./layout";
@@ -133,7 +133,7 @@ function Splashes({ eye }: { eye: THREE.Vector3 }) {
     const mesh = points.current;
     if (!mesh) return;
     const rain = skyState.active ? skyState.rain : 0;
-    if (rain < 0.15 || skyState.season === "winter") {
+    if (rain < 0.15 || seasonWeight("winter") > 0.5) {
       mesh.visible = false;
       return;
     }
@@ -213,7 +213,7 @@ function Snow({ eye }: { eye: THREE.Vector3 }) {
     const mesh = points.current;
     if (!mesh) return;
     const rain = skyState.active ? skyState.rain : 0;
-    if (rain < 0.04 || skyState.season !== "winter") {
+    if (rain < 0.04 || seasonWeight("winter") <= 0.5) {
       mesh.visible = false;
       return;
     }
@@ -291,7 +291,7 @@ export function Rain() {
     const precipitation = skyState.active ? skyState.rain : 0;
     // In winter it snows instead (Snow, above): no rain, rain sound, or
     // lightning, though a typhoon's wind still blows.
-    const snowing = skyState.season === "winter";
+    const snowing = seasonWeight("winter") > 0.5;
     const rain = snowing ? 0 : precipitation;
     const wind = skyState.weatherState?.windSpeed() ?? 0;
     const eye = viewerPosition(camera, scratchEye);

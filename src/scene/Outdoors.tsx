@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import { skyState } from "../sky/skyState";
-import type { Season } from "../sky/seasons";
+import { seasonWeight, skyState } from "../sky/skyState";
+import { SEASONS, type Season } from "../sky/seasons";
 import { coastX, FIELD, POND_CENTER, POND_WATER_RADIUS } from "./layout";
 import { buildMeadowGeometry } from "./meadow";
 import { getWorldTheme } from "./materials";
@@ -170,6 +170,27 @@ function broadleafTree(): THREE.BufferGeometry {
 const treeMaterialColor = new THREE.Color(TREE_MATERIAL);
 const treeMaterialInverse = new THREE.Color(1 / treeMaterialColor.r, 1 / treeMaterialColor.g, 1 / treeMaterialColor.b);
 
+/** A season-by-season tint, mixed by how much of each season is showing
+ *  (seasonWeight), with no tint for whatever share is no season at all. */
+function blendSeasonTint(table: Record<Season, THREE.Color>, out: THREE.Color): THREE.Color {
+  out.setRGB(0, 0, 0);
+  let total = 0;
+  for (const season of SEASONS) {
+    const weight = seasonWeight(season);
+    if (weight <= 0) continue;
+    out.r += table[season].r * weight;
+    out.g += table[season].g * weight;
+    out.b += table[season].b * weight;
+    total += weight;
+  }
+  out.r += 1 - total;
+  out.g += 1 - total;
+  out.b += 1 - total;
+  return out;
+}
+const seasonTint = new THREE.Color();
+const WINTER_HILLS = new THREE.Color("#bcc4ce");
+
 /** The treeline's colours for a season, from its own colours. */
 function seasonalTreeColors(base: number[], season: Season | null): Float32Array {
   const out = new Float32Array(base);
@@ -213,7 +234,10 @@ export function Outdoors() {
   useEffect(() => () => tropicalTree?.dispose(), [tropicalTree]);
   const snow = useMemo(makeSnowTexture, []);
   const treeMesh = useRef<THREE.InstancedMesh | null>(null);
-  const shownSeason = useRef<Season | null>(null);
+  /** The season blend the treeline's colours were last set for. */
+  const shownBlend = useRef("");
+  /** The treeline's colours for each season, worked out once each. */
+  const treeColorsBySeason = useRef(new Map<Season | "none", Float32Array>());
   const groundMaterial = useRef<THREE.MeshBasicMaterial>(null);
   const meadowMaterial = useRef<THREE.MeshBasicMaterial>(null);
   const hillMaterial = useRef<THREE.MeshBasicMaterial>(null);
@@ -227,25 +251,45 @@ export function Outdoors() {
     if (!skyState.active) return;
     const k = THREE.MathUtils.lerp(1, NIGHT_BRIGHTNESS, skyState.night) * (1 - 0.25 * skyState.cloud * (1 - skyState.night));
     tint.setRGB(1, 1, 1).lerp(NIGHT_TINT, skyState.night).multiplyScalar(k);
-    const season = skyState.season;
-    const winter = season === "winter" && snow !== null;
+    // A change of season blends in over a few seconds (skyState's
+    // seasonWeight): the tints mix, and the grass and snow textures, which
+    // can't mix, swap at the middle of it, behind the grass going pale
+    // toward it and the snow coming up out of grey after it.
+    const snowShare = snow ? seasonWeight("winter") : 0;
+    const swap = snowShare <= 0 || snowShare >= 1 ? 1 : snowShare <= 0.5 ? 1 + 0.9 * (snowShare / 0.5) : 0.55 + 0.45 * ((snowShare - 0.5) / 0.5);
+    blendSeasonTint(SEASON_GROUND, seasonTint);
     for (const material of [groundMaterial.current, meadowMaterial.current]) {
       if (!material) continue;
-      material.color.set(ground ? "#ffffff" : "#8d9a5c").multiply(tint);
-      if (season) material.color.multiply(SEASON_GROUND[season]);
+      material.color.set(ground ? "#ffffff" : "#8d9a5c").multiply(tint).multiply(seasonTint).multiplyScalar(swap);
       // The same kind of texture either way, so swapping needs no new shader.
-      const map = winter ? snow : ground;
+      const map = snowShare > 0.5 ? snow : ground;
       if (map && material.map !== map) material.map = map;
     }
     if (hillMaterial.current) {
-      hillMaterial.current.color.set(winter ? "#bcc4ce" : "#6c6b58").multiply(tint);
-      if (season && !winter) hillMaterial.current.color.multiply(SEASON_HILLS[season]);
+      blendSeasonTint(SEASON_HILLS, seasonTint);
+      hillMaterial.current.color.set("#6c6b58").multiply(seasonTint).lerp(WINTER_HILLS, snowShare).multiply(tint);
     }
-    // The treeline's colours change only when the season does.
+    // The treeline's colours change only while the season does.
     const mesh = treeMesh.current;
-    if (mesh?.instanceColor && season !== shownSeason.current) {
-      shownSeason.current = season;
-      (mesh.instanceColor.array as Float32Array).set(seasonalTreeColors(treeColors, season));
+    const from = skyState.seasonFrom;
+    const to = skyState.season;
+    const mix = skyState.seasonMix;
+    const blend = `${from}|${to}|${mix.toFixed(3)}`;
+    if (mesh?.instanceColor && blend !== shownBlend.current) {
+      shownBlend.current = blend;
+      const colorsFor = (season: Season | null) => {
+        const key = season ?? "none";
+        let colors = treeColorsBySeason.current.get(key);
+        if (!colors) treeColorsBySeason.current.set(key, (colors = seasonalTreeColors(treeColors, season)));
+        return colors;
+      };
+      const target = mesh.instanceColor.array as Float32Array;
+      const end = colorsFor(to);
+      if (mix >= 1) target.set(end);
+      else {
+        const start = colorsFor(from);
+        for (let i = 0; i < target.length; i++) target[i] = start[i] + (end[i] - start[i]) * mix;
+      }
       mesh.instanceColor.needsUpdate = true;
     }
   });
@@ -430,7 +474,7 @@ export function Outdoors() {
       <instancedMesh
         ref={(mesh) => {
           treeMesh.current = mesh;
-          shownSeason.current = null;
+          shownBlend.current = "";
           applyInstances(mesh, trees, treeColors);
         }}
         args={[undefined, undefined, treeCount]}

@@ -83,12 +83,62 @@ export const skyState = {
    *  windows. Written by Rain each frame. */
   flash: 0,
   flashLight: 0,
-  /** The season the outdoors is dressed for, or null for none. */
+  /** The season the outdoors is dressed for, or null for none: the one
+   *  being changed to, while a change blends in (see seasonWeight). */
   season: null as Season | null,
+  /** The season being changed from, while a change blends in. */
+  seasonFrom: null as Season | null,
+  /** How far the change has come, 0 to 1, eased: 1 when nothing is
+   *  changing. */
+  seasonMix: 1,
   /** Simulated Philippine time, for anything that wants to show it. */
   dayOfYear: 1,
   hour: 18,
 };
+
+/** How long a change of season takes to blend in, in real seconds. */
+const SEASON_BLEND_SECONDS = 8;
+let seasonSettled = false;
+let seasonChangedAt = 0;
+
+/**
+ * Moves the season toward `next`. The first season a page shows is simply
+ * there; a later change (a room's pick, the calendar turning) blends in
+ * over a few seconds, and one that turns back halfway reverses from where
+ * it had got to rather than jumping.
+ */
+export function advanceSeason(next: Season | null, realMs: number) {
+  if (!seasonSettled) {
+    seasonSettled = true;
+    skyState.season = next;
+    skyState.seasonFrom = null;
+    skyState.seasonMix = 1;
+    return;
+  }
+  if (next !== skyState.season) {
+    const turningBack = next === skyState.seasonFrom && skyState.seasonMix < 1;
+    const progress = turningBack ? 1 - rawSeasonProgress(realMs) : 0;
+    skyState.seasonFrom = skyState.season;
+    skyState.season = next;
+    seasonChangedAt = realMs - progress * SEASON_BLEND_SECONDS * 1000;
+  }
+  const t = rawSeasonProgress(realMs);
+  skyState.seasonMix = t * t * (3 - 2 * t);
+  if (t >= 1) skyState.seasonFrom = null;
+}
+
+function rawSeasonProgress(realMs: number) {
+  return Math.min(1, Math.max(0, (realMs - seasonChangedAt) / (SEASON_BLEND_SECONDS * 1000)));
+}
+
+/** How much of a season is showing, 0 to 1: all of it when it's the
+ *  season, none when it isn't, and in between while a change blends. */
+export function seasonWeight(season: Season): number {
+  let weight = 0;
+  if (skyState.season === season) weight += skyState.seasonMix;
+  if (skyState.seasonFrom === season) weight += 1 - skyState.seasonMix;
+  return weight;
+}
 
 /** Sun elevation, in degrees, of the original fixed sunset: the sky looks
  *  exactly as it was designed at and below this point. */
@@ -237,6 +287,6 @@ export class SkyClock {
     skyState.weatherState = this.weather;
     skyState.dayOfYear = dayOfYear;
     skyState.hour = hour;
-    skyState.season = this.previewSeason ?? activeSeason(this.config.seasons === true, this.roomSettings, date);
+    advanceSeason(this.previewSeason ?? activeSeason(this.config.seasons === true, this.roomSettings, date), realMs);
   }
 }

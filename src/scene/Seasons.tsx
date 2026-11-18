@@ -15,8 +15,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import { skyState } from "../sky/skyState";
-import type { Season } from "../sky/seasons";
+import { seasonWeight, skyState } from "../sky/skyState";
+import { SEASONS, type Season } from "../sky/seasons";
 import { setCicadas } from "../audio/sfx";
 import { floorHeightAt, makeObstacle, setSceneryObstacles, sheltered } from "./layout";
 import { softDotTexture } from "./softDot";
@@ -75,13 +75,37 @@ function buildTree() {
   return { wood, canopy };
 }
 
-function SeasonalTree({ season }: { season: Season }) {
+const canopyColors = Object.fromEntries(Object.entries(CANOPY_COLORS).map(([season, color]) => [season, new THREE.Color(color)])) as Record<Season, THREE.Color>;
+
+/** The tree. Its canopy takes on each season's colour as a change blends
+ *  in (seasonWeight), and thins away into winter and fills out of it. */
+function SeasonalTree() {
   const { wood, canopy } = useMemo(buildTree, []);
   const woodMaterial = useMemo(() => new THREE.MeshLambertMaterial({ color: "#5a4334", flatShading: true }), []);
-  const canopyMaterial = useMemo(() => new THREE.MeshLambertMaterial({ color: CANOPY_COLORS[season], flatShading: true }), []); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    canopyMaterial.color.set(CANOPY_COLORS[season]);
-  }, [season, canopyMaterial]);
+  const canopyMaterial = useMemo(() => new THREE.MeshLambertMaterial({ color: CANOPY_COLORS.summer, flatShading: true }), []);
+  const canopyMesh = useRef<THREE.Mesh>(null);
+  useFrame(() => {
+    const mesh = canopyMesh.current;
+    if (!mesh) return;
+    const bare = seasonWeight("winter");
+    mesh.visible = bare < 0.98;
+    if (!mesh.visible) return;
+    // The leafy seasons' colours, mixed by how much of each is showing.
+    canopyMaterial.color.setRGB(0, 0, 0);
+    let leafy = 0;
+    for (const season of ["spring", "summer", "autumn"] as const) {
+      const weight = seasonWeight(season);
+      if (weight <= 0) continue;
+      canopyMaterial.color.r += canopyColors[season].r * weight;
+      canopyMaterial.color.g += canopyColors[season].g * weight;
+      canopyMaterial.color.b += canopyColors[season].b * weight;
+      leafy += weight;
+    }
+    if (leafy > 0) canopyMaterial.color.multiplyScalar(1 / leafy);
+    // Thinning: the canopy draws in toward the branches as it goes bare.
+    const fullness = 1 - bare;
+    mesh.scale.set(0.35 + 0.65 * fullness, 0.5 + 0.5 * fullness, 0.35 + 0.65 * fullness);
+  });
   useEffect(
     () => () => {
       wood.dispose();
@@ -100,7 +124,7 @@ function SeasonalTree({ season }: { season: Season }) {
   return (
     <group position={[TREE_AT[0], y, TREE_AT[1]]}>
       <mesh geometry={wood} material={woodMaterial} castShadow />
-      {season !== "winter" && <mesh geometry={canopy} material={canopyMaterial} castShadow />}
+      <mesh ref={canopyMesh} geometry={canopy} material={canopyMaterial} castShadow />
     </group>
   );
 }
@@ -218,18 +242,29 @@ function Falling({ season }: { season: Season }) {
       y: new Float32Array(MAX_FALLING),
       z: new Float32Array(MAX_FALLING),
       phase: new Float32Array(MAX_FALLING),
-      /** Seconds left lying on the grass, once landed. */
+      /** Seconds left lying on the grass, once landed (or, hidden, waiting
+       *  to fall). */
       rest: new Float32Array(MAX_FALLING),
+      /** Not showing: waiting its turn, while this season is blending in
+       *  or out. */
+      hidden: new Uint8Array(MAX_FALLING),
       time: 0,
     };
+    // Arriving with a change of season, they start falling a few at a time
+    // rather than appearing in mid-air all at once.
+    const arriving = seasonWeight(season) < 0.99;
     for (let i = 0; i < MAX_FALLING; i++) {
       s.x[i] = TREE_AT[0] + (Math.random() - 0.5) * CANOPY_RADIUS * 2;
       s.z[i] = TREE_AT[1] + (Math.random() - 0.5) * CANOPY_RADIUS * 2;
       s.y[i] = ground + Math.random() * CANOPY_Y;
       s.phase[i] = Math.random() * Math.PI * 2;
+      if (arriving) {
+        s.hidden[i] = 1;
+        s.rest[i] = Math.random() * 6;
+      }
     }
     return s;
-  }, [ground]);
+  }, [ground, season]);
 
   useFrame(({ camera }, delta) => {
     const eye = viewerPosition(camera, scratchEye);
@@ -238,20 +273,29 @@ function Falling({ season }: { season: Season }) {
     const dt = Math.min(delta, 0.1);
     state.time += dt;
     const drift = (skyState.weatherState?.windSpeed() ?? 0) * 0.05;
+    // How much of this season is showing: as it fades, fewer leave the
+    // canopy, until none do.
+    const weight = seasonWeight(season);
     for (let i = 0; i < MAX_FALLING; i++) {
       if (state.rest[i] > 0) {
         // Landed: lying flat on the grass a while, then gone, and another
-        // leaves the canopy.
+        // leaves the canopy. Or hidden, waiting its turn.
         state.rest[i] -= dt;
         flutterDummy.position.set(state.x[i], ground + 0.015, state.z[i]);
         flutterDummy.rotation.set(-Math.PI / 2, 0, state.phase[i] * 3);
-        flutterDummy.scale.setScalar(state.rest[i] > 0 ? 1 : 0);
+        flutterDummy.scale.setScalar(state.rest[i] > 0 && !state.hidden[i] ? 1 : 0);
         flutterDummy.updateMatrix();
         mesh.setMatrixAt(i, flutterDummy.matrix);
         if (state.rest[i] <= 0) {
-          state.x[i] = TREE_AT[0] + (Math.random() - 0.5) * CANOPY_RADIUS * 2;
-          state.z[i] = TREE_AT[1] + (Math.random() - 0.5) * CANOPY_RADIUS * 2;
-          state.y[i] = ground + CANOPY_Y - Math.random() * 1.2;
+          if (Math.random() < weight) {
+            state.hidden[i] = 0;
+            state.x[i] = TREE_AT[0] + (Math.random() - 0.5) * CANOPY_RADIUS * 2;
+            state.z[i] = TREE_AT[1] + (Math.random() - 0.5) * CANOPY_RADIUS * 2;
+            state.y[i] = ground + CANOPY_Y - Math.random() * 1.2;
+          } else {
+            state.hidden[i] = 1;
+            state.rest[i] = 1 + Math.random() * 3;
+          }
         }
         continue;
       }
@@ -330,6 +374,7 @@ function Drift({ season }: { season: Season }) {
     const drift = (skyState.weatherState?.windSpeed() ?? 0) * 0.06;
     const p = (geometry.getAttribute("position") as THREE.BufferAttribute).array as Float32Array;
     const c = (geometry.getAttribute("color") as THREE.BufferAttribute).array as Float32Array;
+    const weight = seasonWeight(season);
     const respawn = (i: number, high: boolean) => {
       const a = Math.random() * Math.PI * 2;
       const r = Math.sqrt(Math.random()) * DRIFT_RADIUS;
@@ -337,12 +382,15 @@ function Drift({ season }: { season: Season }) {
       state.z[i] = eye.z + Math.sin(a) * r;
       const floor = floorHeightAt(state.x[i], state.z[i]);
       state.y[i] = fireflies ? floor + 0.3 + Math.random() * 1.6 : high ? eye.y + 4 + Math.random() * 3 : floor + Math.random() * 7;
-      state.live[i] = sheltered(state.x[i], eye.y, state.z[i]) ? 0 : 1;
+      // Fewer as this season fades, more as it blends in.
+      state.live[i] = sheltered(state.x[i], eye.y, state.z[i]) || Math.random() >= weight ? 0 : 1;
       colors[i % colors.length].toArray(c, i * 3);
     };
     for (let i = 0; i < DRIFT_COUNT; i++) {
       const far = Math.hypot(state.x[i] - eye.x, state.z[i] - eye.z) > DRIFT_RADIUS + 3;
-      if (state.time === dt || far) respawn(i, false);
+      // Arriving with a change of season, they come down from above rather
+      // than appearing all round you.
+      if (state.time === dt || far) respawn(i, state.time === dt && weight < 0.99);
       const swing = state.time * (0.8 + 0.4 * Math.sin(state.phase[i])) + state.phase[i];
       if (fireflies) {
         // Wandering low, and blinking: a few seconds' slow pulse each.
@@ -350,7 +398,7 @@ function Drift({ season }: { season: Season }) {
         state.z[i] += Math.cos(swing * 0.6) * 0.3 * dt;
         state.y[i] += Math.sin(swing * 1.3) * 0.15 * dt;
         const blink = Math.max(0, Math.sin(state.time * 1.4 + state.phase[i] * 3));
-        const k = state.live[i] ? blink * blink : 0;
+        const k = state.live[i] ? blink * blink * weight : 0;
         c[i * 3] = 0.85 * k;
         c[i * 3 + 1] = 1.0 * k;
         c[i * 3 + 2] = 0.45 * k;
@@ -399,35 +447,64 @@ function Cicadas() {
     const day = Math.min(1, skyState.dayness * 1.5) * (1 - skyState.night);
     const dry = 1 - Math.min(1, skyState.rain * 3);
     const outside = sheltered(eye.x, eye.y, eye.z) ? 0.25 : 1;
-    setCicadas(day * dry * outside);
+    setCicadas(day * dry * outside * seasonWeight("summer"));
   });
   return null;
 }
 
-/** Everything seasonal that isn't a recolour: mount once, in a moving sky. */
+/**
+ * Everything seasonal that isn't a recolour: mount once, in a moving sky.
+ * While a change of season blends in (skyState's seasonWeight), both
+ * seasons are mounted: the old one's petals stop falling and its fireflies
+ * and cicadas fade as the new one's begin.
+ */
 export function Seasons({ builtin }: { builtin: boolean }) {
-  const season = useSeason();
-  if (!season) return null;
+  const showing = useSeasons();
+  if (showing.length === 0) return null;
   return (
     <>
-      {builtin && <SeasonalTree season={season} />}
-      {builtin && (season === "spring" || season === "autumn") && <Falling key={`falling-${season}`} season={season} />}
-      {builtin && season !== "winter" && <Drift key={`drift-${season}`} season={season} />}
+      {builtin && <SeasonalTree />}
+      {showing.map((season) => (
+        <SeasonParts key={season} season={season} builtin={builtin} />
+      ))}
+    </>
+  );
+}
+
+function SeasonParts({ season, builtin }: { season: Season; builtin: boolean }) {
+  return (
+    <>
+      {builtin && (season === "spring" || season === "autumn") && <Falling season={season} />}
+      {builtin && season !== "winter" && <Drift season={season} />}
       {season === "summer" && <Cicadas />}
     </>
   );
 }
 
-/** skyState.season, as React state: it changes rarely (a room's pick, or
- *  the calendar turning), so checking twice a second is plenty. */
-function useSeason(): Season | null {
-  const [season, setSeason] = useState<Season | null>(skyState.season);
+/** How long a season that has blended out stays mounted, in seconds, so
+ *  its last petals can land instead of vanishing in mid-air. */
+const SEASON_LINGER_SECONDS = 15;
+
+/** The seasons showing (one, or two while a change blends, and one that
+ *  has just gone, for a little while), as React state: they change rarely
+ *  (a room's pick, or the calendar turning), so checking a few times a
+ *  second is plenty. */
+function useSeasons(): Season[] {
+  const lastSeen = useRef(new Map<Season, number>());
+  const read = (now: number) => {
+    for (const season of [skyState.seasonFrom, skyState.season]) if (season) lastSeen.current.set(season, now);
+    return SEASONS.filter((season) => now - (lastSeen.current.get(season) ?? -Infinity) <= SEASON_LINGER_SECONDS);
+  };
+  const [showing, setShowing] = useState<Season[]>(() => read(0));
+  const clock = useRef(0);
   const since = useRef(0);
   useFrame((_, delta) => {
+    clock.current += delta;
     since.current += delta;
-    if (since.current < 0.5) return;
+    if (since.current < 0.25) return;
     since.current = 0;
-    setSeason(skyState.season);
+    const next = read(clock.current);
+    setShowing((current) => (current.length === next.length && current.every((s, i) => s === next[i]) ? current : next));
   });
-  return season;
+  return showing;
 }

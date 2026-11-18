@@ -49,8 +49,9 @@ const scratchEye = new THREE.Vector3();
  * the second useFrame pass at the bottom of this file.
  */
 
-/** Bones that get offsets added after the mixer (gaze, doze, tremble). */
-const ADDITIVE_BONES = ["spine", "chest", "neck", "head"] as const;
+/** Bones that get offsets added after the mixer (gaze, doze, tremble, and
+ *  the arm fit). */
+const ADDITIVE_BONES = ["spine", "chest", "neck", "head", "leftUpperArm", "rightUpperArm"] as const;
 /** A bone's pose before our offsets, and as we left it after them. */
 interface AdditiveBase {
   base: THREE.Quaternion;
@@ -120,6 +121,12 @@ const BODY_CONTACT_BONES: [VRMHumanBoneName, number][] = [
 ];
 /** Hips height of the skeleton the built-in clips were authored against. */
 const REFERENCE_HIPS_HEIGHT = 0.95;
+/** How far the shoulder joint sits from the middle of the body, as a share
+ *  of the arm's length, on the bodies the built-in clips were tuned on
+ *  (VRoid's: 0.109 m against a 0.435 m arm). */
+const REFERENCE_SHOULDER_SHARE = 0.25;
+/** The most the arm fit moves a hand inward, at reference scale. */
+const MAX_ARM_FIT = 0.08;
 /** Distance from a shin or ankle joint to the skin, at reference scale. */
 const LIMB_RADIUS = 0.05;
 /** Distance from the hip joint down to the part that meets the cushion. */
@@ -211,6 +218,9 @@ interface AnimatorState {
   headPitch: number;
   /** Rest hips height, so contact clearances scale with the body. */
   scale: number;
+  /** How much wider than the reference this body's shoulders are, in
+   *  metres: how far the arm fit moves each hand inward (see measureArmFit). */
+  armFit: number;
 }
 
 /**
@@ -241,6 +251,87 @@ function measureRestScale(vrm: VRM): number {
   // A metre-tall child avatar and a two-metre one are both plausible; a
   // zero is not, and would divide the clearances away to nothing.
   return height > 0.2 ? height / REFERENCE_HIPS_HEIGHT : 1;
+}
+
+/**
+ * How far in each hand should be moved so arm poses land where they were
+ * meant to on a broad-shouldered body.
+ *
+ * Clips store joint rotations, not hand positions. On a body whose
+ * shoulders sit further out (a realistic adult, as Avaturn's are, rather
+ * than VRoid's slimmer build), the same rotations carry each hand that much
+ * further out: arms that should hang at the sides splay, and hands that
+ * should meet in a clap stop short. The excess is the shoulder's distance
+ * from the spine beyond the reference share of this arm's length; zero for
+ * a body as narrow as the reference or narrower, which is left alone.
+ */
+export function measureArmFit(vrm: VRM, scale: number): number {
+  const position = (name: VRMHumanBoneName) => {
+    const node = vrm.humanoid.getRawBoneNode(name);
+    if (!node) return null;
+    node.updateWorldMatrix(true, false);
+    return vrm.scene.worldToLocal(new THREE.Vector3().setFromMatrixPosition(node.matrixWorld));
+  };
+  const hips = position("hips"), shoulder = position("leftUpperArm"), elbow = position("leftLowerArm"), hand = position("leftHand");
+  if (!hips || !shoulder || !elbow || !hand) return 0;
+  const arm = shoulder.distanceTo(elbow) + elbow.distanceTo(hand);
+  const excess = Math.abs(shoulder.x - hips.x) - REFERENCE_SHOULDER_SHARE * arm;
+  return THREE.MathUtils.clamp(excess, 0, MAX_ARM_FIT * scale);
+}
+
+const fitShoulder = new THREE.Vector3();
+const fitHand = new THREE.Vector3();
+const fitChest = new THREE.Quaternion();
+const fitParent = new THREE.Quaternion();
+const fitTurn = new THREE.Quaternion();
+const fitAxis = new THREE.Vector3();
+
+/**
+ * Moves each hand inward by `amount`, by turning the upper arm about the
+ * chest's forward axis at the shoulder: the elbow and wrist keep their
+ * bend, and the hand travels on the arm's own arc. Applied in full when
+ * the arm moves across the body (hanging, raised, clapping) and faded out
+ * as it points forward, where a sideways turn would only swing it.
+ */
+export function fitArms(vrm: VRM, amount: number) {
+  const chest = vrm.humanoid.getNormalizedBoneNode("upperChest") ?? vrm.humanoid.getNormalizedBoneNode("chest") ?? vrm.humanoid.getNormalizedBoneNode("spine");
+  if (!chest) return;
+  chest.updateWorldMatrix(true, false);
+  chest.getWorldQuaternion(fitChest);
+  const toChest = fitChest.clone().invert();
+  for (const [side, upperName, handName] of [
+    [1, "leftUpperArm", "leftHand"],
+    [-1, "rightUpperArm", "rightHand"],
+  ] as const) {
+    const upper = vrm.humanoid.getNormalizedBoneNode(upperName);
+    const hand = vrm.humanoid.getNormalizedBoneNode(handName);
+    if (!upper || !hand || !upper.parent) continue;
+    hand.updateWorldMatrix(true, false);
+    upper.getWorldPosition(fitShoulder);
+    hand.getWorldPosition(fitHand);
+    // The arm in the chest's own frame: +X is the avatar's left, +Y up,
+    // +Z forward (a normalized VRM's rest axes).
+    const arm = fitHand.sub(fitShoulder).applyQuaternion(toChest);
+    const length = arm.length();
+    const across = Math.hypot(arm.x, arm.y);
+    if (length < 1e-4) continue;
+    // In full for an arm across the body, fading out as it points straight
+    // ahead (under about a quarter of its length across).
+    const weight = THREE.MathUtils.smoothstep(across / length, 0.25, 0.5);
+    if (weight <= 0) continue;
+    const x = arm.x - side * amount * weight;
+    if (Math.abs(x) >= across) continue;
+    const y = Math.sign(arm.y || -1) * Math.sqrt(across * across - x * x);
+    let angle = Math.atan2(y, x) - Math.atan2(arm.y, arm.x);
+    if (angle > Math.PI) angle -= 2 * Math.PI;
+    if (angle < -Math.PI) angle += 2 * Math.PI;
+    // The turn, about the chest's forward axis in world space, re-expressed
+    // in the upper arm's parent frame.
+    fitAxis.set(0, 0, 1).applyQuaternion(fitChest);
+    fitTurn.setFromAxisAngle(fitAxis, angle);
+    upper.parent.getWorldQuaternion(fitParent);
+    upper.quaternion.premultiply(fitParent.clone().invert().multiply(fitTurn).multiply(fitParent));
+  }
 }
 
 /** World Y of the group the avatar is parented to — i.e. where its feet are
@@ -412,7 +503,9 @@ export function AvatarAnimator({
       groundOffset: 0,
       headPitch: 0,
       scale: measureRestScale(vrm),
+      armFit: 0,
     };
+    state.armFit = measureArmFit(vrm, state.scale);
     stateRef.current = state;
 
     // Hidden until idle is ready, so a freshly loaded avatar never flashes
@@ -937,6 +1030,11 @@ export function AvatarAnimator({
       if (base.valid && bone.quaternion.equals(base.left)) bone.quaternion.copy(base.base);
       base.base.copy(bone.quaternion);
     }
+
+    // --- arm fit ---------------------------------------------------------
+    // Broad shoulders carry every arm pose further out than it was made
+    // for (see measureArmFit); bring the hands back in.
+    if (!holdTPose && state.armFit > 0.002) fitArms(vrm, state.armFit);
 
     // --- head gaze -----------------------------------------------------
     // Applied last, on top of whatever the clips just wrote, so looking

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
-import { SkyClock, skyState, type SkyConfig } from "./skyState";
+import { SkyClock, seasonWeight, skyState, type SkyConfig } from "./skyState";
 import type { RoomSky } from "../multiplayer/types";
 import { NIGHT_HORIZON_COLOR, SUNSET_HORIZON_COLOR } from "../scene/SunsetSky";
 
@@ -138,7 +138,7 @@ export function SkyDriver({ config, room = null }: { config: SkyConfig; room?: R
       } else {
         s.position.copy(skyState.sunDirection).multiplyScalar(SUN_DISTANCE);
         s.color.copy(SUNSET.sunColor).lerp(DAY.sunColor, dayness);
-        s.intensity = THREE.MathUtils.lerp(SUNSET.sun, DAY.sun, dayness) * sunVisible * (1 - 2 * night) * (skyState.season === "summer" ? SUMMER_SUN : 1);
+        s.intensity = THREE.MathUtils.lerp(SUNSET.sun, DAY.sun, dayness) * sunVisible * (1 - 2 * night) * THREE.MathUtils.lerp(1, SUMMER_SUN, seasonWeight("summer"));
       }
     }
 
