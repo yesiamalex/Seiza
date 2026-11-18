@@ -656,7 +656,9 @@ The `Scene` component renders inside the 3D scene and gets:
   shared with everyone in the room. Keys are short lowercase names such as
   `breaker.wind`, values are booleans, numbers, or short strings, and a room
   holds at most 64 keys. Setting a value needs the editor password when the
-  deployment has one.
+  deployment has one, except for a world's light switches: a key starting
+  `light.` that holds `true` or `false` is anyone's to flip, at the same pace
+  as the switches in Seiza's own rooms (SeiOU's floors use these).
 - `lights`: the room's light switches (`hall`, `classroom`, and `pond`, the
   garden), read-only, so the world's own fittings can switch with the
   room's lamps. The same switches are in `roomLights`

@@ -509,6 +509,25 @@ describe.skipIf(!built)("room server with passwords", () => {
     friend.socket.close();
   });
 
+  it("lets anyone flip a world's light switch, but keeps other world settings to editors", async () => {
+    const room = `lights-${Date.now()}`;
+    const visitor = await open(room);
+    visitor.send({ type: "join", displayName: "Visitor", avatarUrl: "" });
+    await until(() => visitor.received.find((m) => m.type === "welcome"));
+    visitor.send({ type: "setWorldState", key: "breaker.wind", value: false });
+    visitor.send({ type: "setWorldState", key: "light.main.0", value: false });
+    const changed = await until(() => visitor.received.find((m) => m.type === "worldStateChanged"));
+    expect(changed).toEqual({ type: "worldStateChanged", key: "light.main.0", value: false });
+    await sleep(200);
+    expect(visitor.received.filter((m) => m.type === "worldStateChanged")).toHaveLength(1);
+    // A light key still has to be a plain on or off.
+    await sleep(350);
+    visitor.send({ type: "setWorldState", key: "light.main.1", value: "dim" });
+    await sleep(200);
+    expect(visitor.received.filter((m) => m.type === "worldStateChanged")).toHaveLength(1);
+    visitor.socket.close();
+  });
+
   it("doesn't let a second join reset the admin key guess limit", async () => {
     const room = `adm-${Date.now()}`;
     const a = await open(room);

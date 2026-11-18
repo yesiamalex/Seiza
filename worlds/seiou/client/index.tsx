@@ -5,19 +5,26 @@
 // with its navmesh for walking: see scripts/build-campus.mjs). What's here
 // is the two guides, Chancy Joan and Dean Rob, on Seiza's shared guides
 // (src/guides/), who wait where visitors arrive, answer questions from
-// campus.ts, and walk visitors to any building; and the lift kiosks on
-// every floor (Lifts.tsx).
+// campus.ts, and walk visitors to any building; the lift kiosks on every
+// floor (Lifts.tsx); and conference seating in the CCDL and WCMPB halls
+// (Conference.tsx).
 import { useEffect } from "react";
 import { createBrain } from "../../../src/guides/brain";
 import { Guide } from "../../../src/guides/Guide";
 import { GuideHud } from "../../../src/guides/GuideHud";
 import { openGuide, registerGuides, setGuideWarp } from "../../../src/guides/store";
 import { showWorldOverlay, type WorldSceneProps } from "../../../src/worlds/WorldExtension";
+import { setWorldObstacles } from "../../../src/scene/layout";
+import { ConferenceHalls, conferenceObstacles } from "./Conference";
 import { Lifts } from "./Lifts";
 import { RoomLights } from "./RoomLights";
 import { CHANCY, CHANCY_AVATAR, CHANCY_ROUTE, DEAN_ROB, DEAN_ROB_AVATAR, DEAN_ROB_ROUTE, seiouKnowledge, SPAWN } from "./campus";
 
-export function Scene({ warp, getSelfPosition, findPath, worldState, setWorldState }: WorldSceneProps) {
+export function Scene({ warp, getSelfPosition, findPath, worldState, setWorldState, sit, occupiedSeatId }: WorldSceneProps) {
+  useEffect(() => {
+    setWorldObstacles(conferenceObstacles());
+    return () => setWorldObstacles([]);
+  }, []);
   useEffect(() => {
     const knowledge = seiouKnowledge();
     registerGuides([
@@ -40,6 +47,7 @@ export function Scene({ warp, getSelfPosition, findPath, worldState, setWorldSta
     <>
       <Lifts warp={warp} worldState={worldState} setWorldState={setWorldState} />
       <RoomLights worldState={worldState} />
+      <ConferenceHalls sit={sit} occupiedSeatId={occupiedSeatId} />
       <Guide id="chancy" name={CHANCY.name} avatarUrl={CHANCY_AVATAR} stops={CHANCY_ROUTE} faceAt={SPAWN} pathsOnPatrol getSelfPosition={getSelfPosition} findPath={findPath} />
       <Guide id="rob" name={DEAN_ROB.name} avatarUrl={DEAN_ROB_AVATAR} stops={DEAN_ROB_ROUTE} faceAt={SPAWN} pathsOnPatrol getSelfPosition={getSelfPosition} findPath={findPath} />
     </>

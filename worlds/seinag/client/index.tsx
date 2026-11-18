@@ -12,6 +12,7 @@ import { showWorldOverlay, type WorldSceneProps } from "../../../src/worlds/Worl
 import { Lifts } from "../../seiou/client/Lifts";
 import { RoomLights } from "../../seiou/client/RoomLights";
 import { CHANCY, CHANCY_AVATAR, CHANCY_ROUTE, DEAN_ROB, DEAN_ROB_AVATAR, DEAN_ROB_ROUTE, SPAWN } from "../../seiou/client/campus";
+import { ConferenceHalls, conferenceObstacles } from "../../seiou/client/Conference";
 import { CardHost, openCard, type CardKey } from "./cards";
 import { Station, stationObstacles } from "./Station";
 import { controlsFrom, live } from "./live";
@@ -31,11 +32,12 @@ function Hud() {
   );
 }
 
-export function Scene({ warp, getSelfPosition, findPath, canEdit, connected, roomSky, setRoomSky, worldState, setWorldState }: WorldSceneProps) {
+export function Scene({ warp, getSelfPosition, findPath, canEdit, connected, roomSky, setRoomSky, worldState, setWorldState, sit, occupiedSeatId }: WorldSceneProps) {
   // The console's switches, shared through the room, drive the plant.
   live.controls = controlsFrom(worldState);
   useEffect(() => {
-    setWorldObstacles(stationObstacles());
+    // The station's, and the conference halls' tables (SeiOU's campus).
+    setWorldObstacles([...stationObstacles(), ...conferenceObstacles()]);
     return () => setWorldObstacles([]);
   }, []);
   useEffect(() => {
@@ -64,6 +66,7 @@ export function Scene({ warp, getSelfPosition, findPath, canEdit, connected, roo
       <Station canEdit={canEdit} connected={connected} roomSky={roomSky} setRoomSky={setRoomSky} worldState={worldState} setWorldState={setWorldState} />
       <Lifts warp={warp} worldState={worldState} setWorldState={setWorldState} />
       <RoomLights worldState={worldState} />
+      <ConferenceHalls sit={sit} occupiedSeatId={occupiedSeatId} />
       <Guide id="chancy" name={CHANCY.name} avatarUrl={CHANCY_AVATAR} stops={CHANCY_ROUTE} faceAt={SPAWN} pathsOnPatrol getSelfPosition={getSelfPosition} findPath={findPath} />
       <Guide id="rob" name={DEAN_ROB.name} avatarUrl={DEAN_ROB_AVATAR} stops={DEAN_ROB_ROUTE} faceAt={SPAWN} pathsOnPatrol getSelfPosition={getSelfPosition} findPath={findPath} />
     </>

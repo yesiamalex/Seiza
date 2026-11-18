@@ -42,6 +42,36 @@ export function useLightZones(): LightZone[] {
 export const isOn = (state: Record<string, unknown>, key: string) => state[key] !== false;
 
 const PANEL = new THREE.BoxGeometry(0.62, 0.03, 0.62);
+/** Fixtures within a cell this wide share one real light. */
+const CLUSTER = 12;
+
+/**
+ * The real lights for a floor: one per cluster of nearby fixtures rather
+ * than one per fixture. A floor has 10 to 24 fixtures and the world shares
+ * a pool of only four lights (LightPool.tsx), so with one each, the lights
+ * were handed from fixture to fixture as you walked, and patches of floor
+ * brightened and dimmed around you. A few broader lights per floor stay
+ * put. Each panel still glows on its own.
+ */
+export function clusterLights(fixtures: [number, number, number][]) {
+  const cells = new Map<string, [number, number, number][]>();
+  for (const f of fixtures) {
+    const key = `${Math.floor(f[0] / CLUSTER)},${Math.floor(f[2] / CLUSTER)}`;
+    const cell = cells.get(key);
+    if (cell) cell.push(f);
+    else cells.set(key, [f]);
+  }
+  return [...cells.values()].map((cell) => {
+    const n = cell.length;
+    const x = cell.reduce((t, f) => t + f[0], 0) / n;
+    const y = Math.min(...cell.map((f) => f[1]));
+    const z = cell.reduce((t, f) => t + f[2], 0) / n;
+    // As bright at the floor as Seiza's lanterns are: they hang at 2.75 m,
+    // these at about 4, so (4 / 2.75)² as strong; more for a cell that
+    // stands for several fixtures, reaching further.
+    return { position: [x, y - 0.2, z] as [number, number, number], intensity: 16 * Math.min(2.5, 1 + 0.3 * (n - 1)), distance: 12 + Math.min(10, 2 * (n - 1)) };
+  });
+}
 const ON = new THREE.Color("#fff6e2");
 const OFF = new THREE.Color("#8d8f94");
 
@@ -61,14 +91,13 @@ function Zone({ zone, on }: { zone: LightZone; on: boolean }) {
     },
     [material, mesh]
   );
+  const lights = useMemo(() => clusterLights(zone.fixtures), [zone]);
   material.color.copy(on ? ON : OFF);
   return (
     <>
       <primitive object={mesh} />
-      {zone.fixtures.map(([x, y, z], i) => (
-        // As bright at the floor as Seiza's lanterns are: they hang at
-        // 2.75 m, these at about 4, so (4 / 2.75)² as strong.
-        <PooledLight key={i} position={[x, y - 0.2, z]} intensity={on ? 16 : 0} distance={12} color="#ffe9c4" />
+      {lights.map((light, i) => (
+        <PooledLight key={i} position={light.position} intensity={on ? light.intensity : 0} distance={light.distance} color="#ffe9c4" />
       ))}
     </>
   );

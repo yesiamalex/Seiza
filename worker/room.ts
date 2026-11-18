@@ -738,8 +738,18 @@ export class SeizaRoom extends DurableObject<Env> {
         break;
       }
       case "setWorldState": {
-        if (this.editingRequiresAuth() && !attachment.isEditor) return;
         const { key, value } = message;
+        // A world's own light switch (a key starting "light.", on or off) is
+        // anyone's to flip, like the switches in Seiza's own rooms
+        // ("setLight" below), at the same pace; every other setting is
+        // Edit Mode's to change.
+        if (typeof key === "string" && key.startsWith("light.") && typeof value === "boolean") {
+          if (!attachment.player) return;
+          const now = Date.now();
+          if (attachment.lastLightAt && now - attachment.lastLightAt < LIGHT_MIN_INTERVAL_MS) return;
+          attachment.lastLightAt = now;
+          this.save(ws, attachment);
+        } else if (this.editingRequiresAuth() && !attachment.isEditor) return;
         if (typeof key !== "string" || !WORLD_STATE_LIMITS.keyPattern.test(key)) return;
         const ok =
           typeof value === "boolean" ||
