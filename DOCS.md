@@ -1140,8 +1140,13 @@ for you and for everyone else:
 - Your arms reach where your hands are.
 - Your fingers close with the trigger and grip buttons, or follow your real
   fingers with hand tracking.
-- Your head turns and tilts on its own. Your body only turns once you've
-  turned well past your shoulders.
+- Your head turns and tilts on its own, and your chest turns part of the
+  way with it. Your body only turns once you've turned well past your
+  shoulders.
+- Leaning bends your avatar at the waist with its feet planted, the way
+  people lean in. Lean too far and it takes a step. You see this on
+  everyone else; your own copy stays under the camera.
+- Reaching overhead lifts your shoulders too.
 - Physically crouching lowers the avatar's hips and bends its knees with the
   feet planted.
 
@@ -2067,9 +2072,9 @@ it isn't production-hardened. These limitations are known:
 - **VR hasn't been tested on a real headset.** Movement, collision, seating,
   body tracking, and the wrist menu are built and checked as far as a
   desktop computer can check them (see [In a VR headset](#in-a-vr-headset)).
-  Body tracking covers the head, hands, fingers, and a physical crouch. There
-  is no leg or hip tracking, and leaning moves your whole avatar instead of
-  bending it. On a phone, a browser that still offers immersive VR with a
+  Headsets track only the head and hands, so the rest is worked out from
+  them: arms by IK, the chest's turn, a lean with planted feet, and a
+  physical crouch. There is no leg or hip tracking. On a phone, a browser that still offers immersive VR with a
   Cardboard-style viewer gets the gaze-mode menu (look and tap); otherwise
   phones use the touch version.
 - **Sound effects are synthesized.** Footsteps (which differ by surface and

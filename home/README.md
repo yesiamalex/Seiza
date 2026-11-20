@@ -28,5 +28,17 @@ the same Cloudflare account. Otherwise, remove `routes` from
 `wrangler.jsonc` and add the domain in the dashboard under **Settings >
 Domains & Routes**.
 
+### Deploy from git (Workers Builds)
+
+Create a Worker from the repository in the Cloudflare dashboard
+(**Workers & Pages > Create > Import a repository**), then under
+**Settings > Build**:
+
+- **Build command:** leave it empty. The page is plain files, with nothing
+  to build.
+- **Deploy command:** `npx wrangler deploy --config home/wrangler.jsonc`
+- **Non-production branch deploy command** (if shown):
+  `npx wrangler versions upload --config home/wrangler.jsonc`
+
 Preview it locally with any static server, for example
 `npx serve home/public`.

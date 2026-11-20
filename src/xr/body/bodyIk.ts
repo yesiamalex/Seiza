@@ -33,6 +33,8 @@ interface ArmBones {
   fingers: { chain: THREE.Object3D[]; curl: 0 | 1 }[];
   /** Local axis a finger joint turns about to close toward the palm. */
   curlAxis: THREE.Vector3;
+  /** The collarbone, which lifts when the hand goes overhead. */
+  shoulder: THREE.Object3D | null;
 }
 
 interface LegBones {
@@ -164,7 +166,7 @@ export function createBodyRig(vrm: VRM): BodyRig | null {
       // Turning a finger about forward × palm by a positive angle moves it
       // from forward toward the palm, i.e. closes it.
       const curlAxis = new THREE.Vector3().crossVectors(handForward, PALM_LOCAL).normalize();
-      arms[side] = { upper, lower, hand, handForward, fingers, curlAxis };
+      arms[side] = { upper, lower, hand, handForward, fingers, curlAxis, shoulder: bone(`${side}Shoulder`) };
     }
     const legUpper = bone(`${side}UpperLeg`);
     const legLower = bone(`${side}LowerLeg`);
@@ -408,6 +410,78 @@ const recordedFeet = { left: new THREE.Vector3(), right: new THREE.Vector3() };
 const recordedFeetQ = { left: new THREE.Quaternion(), right: new THREE.Quaternion() };
 const hipsTarget = new THREE.Vector3();
 const curlQ = new THREE.Quaternion();
+const headQ = new THREE.Quaternion();
+const yawEuler = new THREE.Euler(0, 0, 0, "YXZ");
+const twistQ = new THREE.Quaternion();
+const bendQ = new THREE.Quaternion();
+const spineQ = new THREE.Quaternion();
+const shift = new THREE.Vector3();
+const hipsWorld = new THREE.Vector3();
+const headBone = new THREE.Vector3();
+const headGoal = new THREE.Vector3();
+const spineFrom = new THREE.Vector3();
+const spineTo = new THREE.Vector3();
+const neckTarget = new THREE.Vector3();
+const shoulderAt = new THREE.Vector3();
+const upperAt = new THREE.Vector3();
+
+/** How much of a head turn the chest follows, and the most it turns. */
+const TWIST_SHARE = 0.4;
+const MAX_TWIST = 0.6;
+/** The most the spine bends to put the head where the real one is. */
+const MAX_LEAN = 0.6;
+/** Lean smaller than this (metres) is standing straight. */
+const LEAN_DEAD_ZONE = 0.03;
+/** The furthest the feet stay planted from under the head. */
+const MAX_PLANTED_OFFSET = 0.35;
+
+/**
+ * Where a tracked player's feet are, which is not straight under their
+ * head. A headset reports only the head, and the avatar is drawn with its
+ * feet under it, so leaning in to look at something used to slide the
+ * whole avatar forward, upright, like a chess piece. People don't move like
+ * that: their feet stay where they are and they bend, and only when they
+ * lean too far do they take a step.
+ *
+ * Kept per avatar, by whoever draws it (TrackedBody), from where it's drawn,
+ * so it needs nothing new on the network and works for every sender.
+ */
+export class Balance {
+  readonly planted = new THREE.Vector3();
+  private valid = false;
+  private stepping = false;
+  private last = new THREE.Vector3();
+
+  reset() {
+    this.valid = false;
+    this.stepping = false;
+  }
+
+  /** Moves the feet toward `target` (under the neck), the way feet do. */
+  update(target: THREE.Vector3, delta: number) {
+    if (!this.valid) {
+      this.planted.copy(target);
+      this.last.copy(target);
+      this.valid = true;
+      return this.planted;
+    }
+    const speed = this.last.distanceTo(target) / Math.max(delta, 1e-3);
+    this.last.copy(target);
+    const apart = Math.hypot(target.x - this.planted.x, target.z - this.planted.z);
+    if (apart > 1.5) this.planted.copy(target);
+    if (apart > 0.28) this.stepping = true;
+    else if (apart < 0.1) this.stepping = false;
+    // Walking (the thumbstick, or across the room): the feet keep up.
+    // Leaning too far: a quick step. Otherwise, a slow settle, so a lean
+    // held for a while eases back to standing over the feet.
+    const rate = speed > 0.6 ? 10 : this.stepping ? 6 : apart > LEAN_DEAD_ZONE ? 0.5 : 0;
+    const t = 1 - Math.exp(-rate * delta);
+    this.planted.x += (target.x - this.planted.x) * t;
+    this.planted.z += (target.z - this.planted.z) * t;
+    this.planted.y = target.y;
+    return this.planted;
+  }
+}
 
 function toWorldPoint(point: TrackedPoint, eye: number, out: THREE.Vector3) {
   return out.set(point[0], point[1], point[2]).applyQuaternion(bodyQ).multiplyScalar(eye).add(feetPos);
@@ -417,7 +491,13 @@ function toWorldQuaternion(point: TrackedPoint, out: THREE.Quaternion) {
   return out.set(point[3], point[4], point[5], point[6]).premultiply(bodyQ);
 }
 
-export function applyTrackedPose(rig: BodyRig, overlay: PoseOverlay, pose: TrackedPose, weights: TrackedWeights) {
+/**
+ * `balance` (optional) lets the body lean: its feet stay planted while the
+ * head moves, and the spine bends to carry the head there. Leave it out
+ * for an avatar something else positions under the camera (your own, in
+ * a headset: see SelfView).
+ */
+export function applyTrackedPose(rig: BodyRig, overlay: PoseOverlay, pose: TrackedPose, weights: TrackedWeights, balance?: Balance, delta = 0) {
   // The body frame the pose was sent in (see trackingWire.ts), rebuilt on
   // this avatar: right, up and *back* (the frame's +z), from the model's
   // own facing and wherever the avatar now stands.
@@ -432,8 +512,40 @@ export function applyTrackedPose(rig: BodyRig, overlay: PoseOverlay, pose: Track
   bodyQ.setFromRotationMatrix(basis);
   const eye = rig.eyeHeight * worldScale.y;
 
+  // The head's world rotation, as a rotation of the head bone from rest.
+  toWorldQuaternion(pose.head, pointQ);
+  dirF.set(0, 0, -1).applyQuaternion(pointQ);
+  dirU.set(0, 1, 0).applyQuaternion(pointQ);
+  frameQuaternion(rig.modelForward, rig.modelUp, localFrame);
+  frameQuaternion(dirF, dirU, headWorld);
+  headWorld.multiply(localFrame.invert());
+
+  // ---- feet: planted, not under the head ------------------------------------
+  // The avatar is drawn with its feet under the real eyes. Move the body
+  // back to where the feet were planted; the spine then bends (below) to
+  // bring the head forward again to the eyes.
+  const leaning = balance && weights.legs > 0.001 && rig.spine.length > 0;
+  if (leaning) {
+    // Under the neck, which the head turns about: the eyes, less the
+    // eyes' offset from the head bone turned the way the head faces, but
+    // level, so looking down doesn't read as leaning.
+    yawEuler.setFromQuaternion(headWorld, "YXZ");
+    headQ.setFromAxisAngle(up, yawEuler.y);
+    toWorldPoint(pose.head, eye, neckTarget).sub(shift.copy(rig.eyeOffset).multiplyScalar(worldScale.y).applyQuaternion(headQ).setY(0));
+    neckTarget.y = feetPos.y;
+    const planted = balance.update(neckTarget, delta);
+    shift.subVectors(planted, feetPos).setY(0);
+    if (shift.length() > MAX_PLANTED_OFFSET) shift.setLength(MAX_PLANTED_OFFSET);
+    shift.multiplyScalar(weights.legs);
+    if (shift.lengthSq() > 1e-8 && rig.hips.parent) {
+      rig.hips.getWorldPosition(hipsWorld).add(shift);
+      rig.hips.parent.updateWorldMatrix(true, false);
+      overlay.setPosition(rig.hips, rig.hips.parent.worldToLocal(hipsWorld));
+    }
+  } else shift.set(0, 0, 0);
+
   // ---- hips: a physical crouch ------------------------------------------
-  // Done first, because everything above the hips moves with them.
+  // Done before the spine, because everything above the hips moves with them.
   const drop = Math.min(MAX_HIP_DROP, Math.max(0, 1 - pose.height - CROUCH_DEAD_ZONE)) * eye * weights.legs;
   if (drop > 0.005 && rig.legs.left && rig.legs.right) {
     for (const side of SIDES) {
@@ -455,19 +567,64 @@ export function applyTrackedPose(rig: BodyRig, overlay: PoseOverlay, pose: Track
     }
   }
 
+  // ---- spine: turn with the head, and lean to where it is -------------------
+  // A head turned on a rigid torso is what made tracked avatars look
+  // stiff: people turn their chest part of the way too. And with the feet
+  // planted, the spine bends so the head arrives where the real one is.
+  if (rig.spine.length > 0 && (weights.head > 0 || leaning)) {
+    twistQ.set(pose.head[3], pose.head[4], pose.head[5], pose.head[6]);
+    yawEuler.setFromQuaternion(twistQ, "YXZ");
+    const twist = THREE.MathUtils.clamp(yawEuler.y * TWIST_SHARE, -MAX_TWIST, MAX_TWIST) * weights.head;
+    twistQ.setFromAxisAngle(up, twist / rig.spine.length);
+
+    // Twist first, then the lean in two passes: the spine bends from bones
+    // above the hips, so one pass, aimed from the hips, fell well short.
+    for (let pass = 0; pass < (leaning ? 3 : 1); pass++) {
+      bendQ.identity();
+      if (pass > 0) {
+        rig.head.updateWorldMatrix(true, false);
+        headBone.setFromMatrixPosition(rig.head.matrixWorld);
+        rig.spine[0].getWorldPosition(hipsWorld);
+        // Where the head bone belongs: behind the real eyes by the avatar's
+        // own eye offset, turned the way the head is.
+        toWorldPoint(pose.head, eye, headGoal).sub(spineTo.copy(rig.eyeOffset).multiplyScalar(worldScale.y).applyQuaternion(headWorld));
+        spineFrom.subVectors(headBone, hipsWorld);
+        // Only how far it is to the side or ahead; height is the crouch's.
+        const along = Math.hypot(headGoal.x - headBone.x, headGoal.z - headBone.z);
+        const dead = pass === 1 ? LEAN_DEAD_ZONE : 0;
+        if (along <= dead) break;
+        spineTo.set(headGoal.x - headBone.x, 0, headGoal.z - headBone.z).multiplyScalar((along - dead) / along).add(spineFrom);
+        const angle = spineFrom.angleTo(spineTo);
+        if (angle < 1e-4) break;
+        bendQ.setFromUnitVectors(spineFrom.normalize(), spineTo.normalize());
+        if (angle > MAX_LEAN / 2) bendQ.slerp(spineQ.identity(), 1 - MAX_LEAN / 2 / angle);
+        bendQ.slerp(spineQ.identity(), 1 - weights.legs);
+        spineQ.identity().slerp(bendQ, 1 / rig.spine.length);
+        bendQ.copy(spineQ);
+      }
+      // Each bone takes its share on top of its parent's, so the top of
+      // the spine has the whole of it.
+      for (const bone of rig.spine) {
+        bone.getWorldQuaternion(spineQ);
+        spineQ.premultiply(bendQ);
+        if (pass === 0) spineQ.premultiply(twistQ);
+        setWorldQuaternion(overlay, bone, spineQ, 1);
+      }
+    }
+  }
+
   // ---- head -------------------------------------------------------------
   if (weights.head > 0) {
-    toWorldQuaternion(pose.head, pointQ);
-    dirF.set(0, 0, -1).applyQuaternion(pointQ);
-    dirU.set(0, 1, 0).applyQuaternion(pointQ);
-    // The head's target as a world rotation, then a share of the way to
-    // it for the neck, measured from the body's own neutral (rootQ: rest
-    // rotations are identity, so a bone at rest is oriented like the root).
-    frameQuaternion(rig.modelForward, rig.modelUp, localFrame);
-    frameQuaternion(dirF, dirU, headWorld);
-    headWorld.multiply(localFrame.invert());
+    // A share of the way to the head's rotation for the neck, measured
+    // from the body's own neutral (rootQ: rest rotations are identity, so
+    // a bone at rest is oriented like the root).
     if (rig.neck) {
-      neckWorld.copy(rootQ).slerp(headWorld, NECK_SHARE);
+      // From the top of the spine, which may already have turned and
+      // leaned with the head (above).
+      const top = rig.spine[rig.spine.length - 1];
+      if (top) top.getWorldQuaternion(neckWorld);
+      else neckWorld.copy(rootQ);
+      neckWorld.slerp(headWorld, NECK_SHARE);
       setWorldQuaternion(overlay, rig.neck, neckWorld, weights.head);
     }
     setWorldQuaternion(overlay, rig.head, headWorld, weights.head);
@@ -481,6 +638,14 @@ export function applyTrackedPose(rig: BodyRig, overlay: PoseOverlay, pose: Track
     if (!arm || !hand || weight <= 0) continue;
 
     toWorldPoint(hand.pose, eye, target);
+    // Reaching overhead lifts the collarbone too, rather than the arm
+    // pivoting alone at a fixed shoulder, which pinched the armpit.
+    if (arm.shoulder) {
+      arm.shoulder.getWorldPosition(shoulderAt);
+      arm.upper.getWorldPosition(upperAt);
+      const lift = THREE.MathUtils.smoothstep(target.y - upperAt.y, 0, 0.35 * eye);
+      if (lift > 0.01) swingBone(overlay, arm.shoulder, spineFrom.subVectors(upperAt, shoulderAt), spineTo.subVectors(target, shoulderAt), 0.2 * lift * weight);
+    }
     // Elbows hang down, a little back and a little out, the way they do
     // when a hand is raised in front of you.
     const outward = side === "left" ? -1 : 1;

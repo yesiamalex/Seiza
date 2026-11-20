@@ -3,7 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { VRM } from "@pixiv/three-vrm";
 import type { AnimatorLayerWeights } from "../../avatar/AvatarAnimator";
-import { applyTrackedPose, createBodyRig, PoseOverlay, type BodyRig, type TrackedWeights } from "./bodyIk";
+import { applyTrackedPose, Balance, createBodyRig, PoseOverlay, type BodyRig, type TrackedWeights } from "./bodyIk";
 import { LOCAL_TRACKING_SOURCE, trackingStore } from "./trackingStore";
 import { TRACKING_STALE_MS, type TrackedPoint, type TrackedPose } from "./trackingWire";
 
@@ -108,6 +108,7 @@ const UPRIGHT = new THREE.Quaternion();
 export function TrackedBody({ vrm, source, layerWeightsRef }: TrackedBodyProps) {
   const rigRef = useRef<BodyRig | null>(null);
   const overlay = useRef(new PoseOverlay()).current;
+  const balance = useRef(new Balance()).current;
   const smoothedRef = useRef<SmoothedPose | null>(null);
   const weightRef = useRef(0);
   const weights = useRef<TrackedWeights>({ head: 0, arms: 0, hand: { left: 0, right: 0 }, legs: 0 }).current;
@@ -115,6 +116,7 @@ export function TrackedBody({ vrm, source, layerWeightsRef }: TrackedBodyProps) 
   useEffect(() => {
     rigRef.current = vrm ? createBodyRig(vrm) : null;
     overlay.clear();
+    balance.reset();
     smoothedRef.current = null;
     weightRef.current = 0;
   }, [vrm, overlay]);
@@ -140,7 +142,10 @@ export function TrackedBody({ vrm, source, layerWeightsRef }: TrackedBodyProps) 
     const smoothed = smoothedRef.current;
     const weight = weightRef.current;
     if (!smoothed || weight < 0.001) {
-      if (weight < 0.001) smoothedRef.current = null;
+      if (weight < 0.001) {
+        smoothedRef.current = null;
+        balance.reset();
+      }
       return;
     }
 
@@ -153,7 +158,9 @@ export function TrackedBody({ vrm, source, layerWeightsRef }: TrackedBodyProps) 
     weights.hand.left = smoothed.hand.left;
     weights.hand.right = smoothed.hand.right;
     weights.legs = free * (1 - Math.min(1, layers.posture));
-    applyTrackedPose(rig, overlay, smoothed.pose, weights);
+    // Others' avatars lean with planted feet. Your own stays under the
+    // camera, where SelfView puts it.
+    applyTrackedPose(rig, overlay, smoothed.pose, weights, source === LOCAL_TRACKING_SOURCE ? undefined : balance, delta);
 
     // Your own copy, in a headset. The headset is the camera and stays
     // where your real head is, so a gesture that bends at the waist (a
