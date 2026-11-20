@@ -20,3 +20,7 @@ public/avatars/vroid/
 # A world's original media (photos, the campus model), kept local: each
 # world's scripts/ turn them into the small files it serves (committed).
 worlds/*/media-src/
+
+# home.seiza.cc: written by home/build.mjs at deploy.
+home/public/index.html
+home/public/sitemap.xml

@@ -201,6 +201,13 @@ export default function App() {
   // send a stand-up message on every frame a movement key is held.
   const seatRef = useRef<Seat | null>(null);
   const postureRef = useRef<GestureDefinition | null>(null);
+  // A together gesture's two-shot: while one plays, the camera steps out
+  // to the side to frame both people, then back (see PlayerRig's
+  // showcaseRef). `since` is when it began, so the gesture that's about
+  // to start isn't mistaken for one that already ended.
+  const [showcase, setShowcase] = useState<{ a: [number, number]; b: [number, number]; since: number } | null>(null);
+  const showcaseRef = useRef<{ a: [number, number]; b: [number, number] } | null>(null);
+  showcaseRef.current = showcase;
   const [editMode, setEditMode] = useState(false);
   const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
   // Touch devices start in third person: seeing your own avatar makes the
@@ -1175,6 +1182,7 @@ export default function App() {
         const half = (togetherSpacing(gesture) * (reachScale(selfIdRef.current) + reachScale(partner))) / 4;
         warpTo([mx + dx * half, sy, mz + dz * half]);
         faceToward(mx - dx * half, mz - dz * half);
+        setShowcase({ a: [mx + dx * half, mz + dz * half], b: [mx - dx * half, mz - dz * half], since: performance.now() });
       }
       // After the step lands: a warp stands the player up first. A lasting
       // one (the slow dance) is this player's part, held until either stops.
@@ -1190,6 +1198,19 @@ export default function App() {
       offEnd();
     };
   }, [faceToward, warpTo]);
+  // The two-shot lasts as long as the gesture, or the held one (the slow
+  // dance), and a moment after, so the end of it is seen too.
+  useEffect(() => {
+    if (!showcase || localGesture || posture || performance.now() - showcase.since < 1000) return;
+    const timer = window.setTimeout(() => setShowcase(null), 600);
+    return () => window.clearTimeout(timer);
+  }, [showcase, localGesture, posture]);
+  useEffect(() => {
+    if (!showcase) return;
+    // Never longer than this, whatever happens to the gesture.
+    const timer = window.setTimeout(() => setShowcase(null), 60_000);
+    return () => window.clearTimeout(timer);
+  }, [showcase]);
   const together = useTogether();
   // Offered when this world has the clips: a lasting one (the slow dance)
   // is its two parts, lead and follow, rather than a clip of its own.
@@ -1427,7 +1448,10 @@ export default function App() {
             // Numb legs after a long seiza walk like a crouch: slow and low.
             crouching={crouching || numbLegs}
             editMode={editMode}
-            viewMode={viewMode}
+            // A together gesture's two-shot is seen from outside, even in
+            // first person; the view comes back when it ends.
+            viewMode={showcase ? "third" : viewMode}
+            showcaseRef={showcaseRef}
             moveTargetRef={moveTargetRef}
             movePathRef={movePathRef}
             touchInputRef={touchInputRef}
@@ -1466,7 +1490,7 @@ export default function App() {
             <TrackedBody vrm={localVrm} source={LOCAL_TRACKING_SOURCE} layerWeightsRef={localLayerWeightsRef} />
             {/* First person, VR or screen: your body seen from your eyes,
                 with your head hidden from your own camera. */}
-            <SelfView vrm={localVrm} firstPerson={viewMode === "first"} lying={posture?.ground === "body"} />
+            <SelfView vrm={localVrm} firstPerson={viewMode === "first" && !showcase} lying={posture?.ground === "body"} />
           </PlayerRig>
           <XrBodyTracker positionRef={positionRef} rotationRef={rotationRef} onSend={(pose) => send({ type: "tracking", pose })} />
           <XrHud model={xrHudModel} />

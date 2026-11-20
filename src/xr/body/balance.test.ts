@@ -34,4 +34,26 @@ describe("planted feet", () => {
     b.update(at(10, 10), 1 / 72);
     expect(b.planted.distanceTo(at(10, 10))).toBeLessThan(1e-6);
   });
+
+  it("lift one foot, then the other, while stepping, and neither while standing or walking", () => {
+    const b = new Balance();
+    run(b, at(0, 0), 0.5);
+    expect(b.step).toBeNull();
+    // Lean far enough to step, slowly.
+    for (let i = 1; i <= 72; i++) b.update(at(0, -0.4 * (i / 72)), 1 / 72);
+    const seen = new Set<string>();
+    let lifted = 0;
+    for (let i = 0; i < 40 && b.step; i++) {
+      b.update(at(0, -0.4), 1 / 72);
+      const step = b.step;
+      if (step) {
+        seen.add(step.side);
+        lifted = Math.max(lifted, step.lift);
+      }
+    }
+    expect(lifted).toBeGreaterThan(0.5);
+    expect(seen.size).toBeGreaterThan(0);
+    run(b, at(0, -0.4), 1);
+    expect(b.step).toBeNull();
+  });
 });

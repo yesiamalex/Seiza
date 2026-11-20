@@ -1146,7 +1146,13 @@ for you and for everyone else:
 - Leaning bends your avatar at the waist with its feet planted, the way
   people lean in. Lean too far and it takes a step. You see this on
   everyone else; your own copy stays under the camera.
-- Reaching overhead lifts your shoulders too.
+- Reaching overhead lifts your shoulders too. Raised hands flare the
+  elbows out, and a hand reaching across your body swings its elbow out
+  instead of folding it into your chest.
+- Turning your wrist turns your forearm part of the way with it, so the
+  wrist doesn't twist like a sweet wrapper.
+- When a lean turns into a step, the feet lift one at a time instead of
+  sliding.
 - Physically crouching lowers the avatar's hips and bends its knees with the
   feet planted.
 
@@ -1693,6 +1699,11 @@ rules in `TOGETHER` (`src/multiplayer/types.ts`):
    a flat screen; never in a headset), and plays the gesture through the
    ordinary gesture message. So hands meet wherever the two stood when one
    asked.
+
+   While it plays, a flat-screen camera steps out to the side of the two,
+   so both are in the picture rather than one person's back. That happens
+   in first person too, and the view comes back when the gesture ends
+   (`showcaseRef` in `PlayerRig.tsx`). A headset's view is never moved.
 
    The spacings were measured, not guessed: each clip's moment of contact
    was posed on real rigs (VRoid samples, a VRM 1.0 sample, a VRoid Hub

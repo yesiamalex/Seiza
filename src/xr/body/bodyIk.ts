@@ -423,6 +423,17 @@ const spineFrom = new THREE.Vector3();
 const spineTo = new THREE.Vector3();
 const neckTarget = new THREE.Vector3();
 const shoulderAt = new THREE.Vector3();
+const twistAxis = new THREE.Vector3();
+const twistAxisQ = new THREE.Quaternion();
+const forearmQ = new THREE.Quaternion();
+const stepFoot = new THREE.Vector3();
+const stepFootQ = new THREE.Quaternion();
+/** How much of the hand's twist the forearm takes. */
+const FOREARM_TWIST_SHARE = 0.5;
+/** A step: how long each foot is off the ground, and how high it lifts
+ *  (in eye heights). */
+const STEP_SECONDS = 0.32;
+const STEP_LIFT = 0.045;
 const upperAt = new THREE.Vector3();
 
 /** How much of a head turn the chest follows, and the most it turns. */
@@ -451,10 +462,20 @@ export class Balance {
   private valid = false;
   private stepping = false;
   private last = new THREE.Vector3();
+  private stepClock = 0;
 
   reset() {
     this.valid = false;
     this.stepping = false;
+    this.stepClock = 0;
+  }
+
+  /** While stepping (not while walking, which the walk animation shows):
+   *  which foot is up, and how far, 0 to 1. */
+  get step(): { side: "left" | "right"; lift: number } | null {
+    if (!this.stepping) return null;
+    const n = this.stepClock / STEP_SECONDS;
+    return { side: Math.floor(n) % 2 === 0 ? "right" : "left", lift: Math.sin((n % 1) * Math.PI) };
   }
 
   /** Moves the feet toward `target` (under the neck), the way feet do. */
@@ -475,6 +496,7 @@ export class Balance {
     // Leaning too far: a quick step. Otherwise, a slow settle, so a lean
     // held for a while eases back to standing over the feet.
     const rate = speed > 0.6 ? 10 : this.stepping ? 6 : apart > LEAN_DEAD_ZONE ? 0.5 : 0;
+    this.stepClock = this.stepping && speed <= 0.6 ? this.stepClock + delta : 0;
     const t = 1 - Math.exp(-rate * delta);
     this.planted.x += (target.x - this.planted.x) * t;
     this.planted.z += (target.z - this.planted.z) * t;
@@ -567,6 +589,20 @@ export function applyTrackedPose(rig: BodyRig, overlay: PoseOverlay, pose: Track
     }
   }
 
+  // ---- a step: the feet catch up one at a time, lifted ------------------------
+  // Without this, a step to recover from a lean slid the planted feet
+  // across the floor.
+  const step = leaning ? balance!.step : null;
+  if (step && step.lift > 0.01 && rig.legs.left && rig.legs.right) {
+    const leg = rig.legs[step.side]!;
+    leg.foot.updateWorldMatrix(true, false);
+    stepFoot.setFromMatrixPosition(leg.foot.matrixWorld).addScaledVector(up, STEP_LIFT * eye * step.lift * weights.legs);
+    leg.foot.getWorldQuaternion(stepFootQ);
+    leg.upper.getWorldPosition(pole).lerp(stepFoot, 0.5).addScaledVector(forward, eye * 0.5);
+    solveTwoBone(overlay, leg.upper, leg.lower, leg.foot, stepFoot, pole, 1);
+    setWorldQuaternion(overlay, leg.foot, stepFootQ, 1);
+  }
+
   // ---- spine: turn with the head, and lean to where it is -------------------
   // A head turned on a rigid torso is what made tracked avatars look
   // stiff: people turn their chest part of the way too. And with the feet
@@ -648,17 +684,39 @@ export function applyTrackedPose(rig: BodyRig, overlay: PoseOverlay, pose: Track
     }
     // Elbows hang down, a little back and a little out, the way they do
     // when a hand is raised in front of you.
+    // Hands raised, the elbows flare out to the side rather than hanging
+    // down (try lifting your hands to your head); a hand reaching across
+    // the body swings its elbow out too, instead of folding it into the chest.
     const outward = side === "left" ? -1 : 1;
+    arm.upper.getWorldPosition(upperAt);
+    const raised = THREE.MathUtils.smoothstep(target.y - upperAt.y, -0.15 * eye, 0.3 * eye);
+    const across = THREE.MathUtils.clamp((-outward * shoulderAt.subVectors(target, feetPos).dot(right)) / (0.2 * eye), 0, 1);
     arm.upper.getWorldPosition(pole)
-      .addScaledVector(up, -0.35 * eye)
-      .addScaledVector(back, 0.15 * eye)
-      .addScaledVector(right, outward * 0.25 * eye);
+      .addScaledVector(up, -0.35 * eye * (1 - 0.75 * raised))
+      .addScaledVector(back, 0.15 * eye * (1 + raised))
+      .addScaledVector(right, outward * eye * (0.25 + 0.3 * raised + 0.2 * across));
     solveTwoBone(overlay, arm.upper, arm.lower, arm.hand, target, pole, weight);
 
     toWorldQuaternion(hand.pose, pointQ);
     dirF.set(0, 0, -1).applyQuaternion(pointQ);
     dirU.set(0, -1, 0).applyQuaternion(pointQ);
     alignBone(overlay, arm.hand, arm.handForward, PALM_LOCAL, dirF, dirU, weight);
+    // A turned wrist turns the forearm too: half of the hand's twist about
+    // the forearm goes to the forearm, so the wrist doesn't wring like a
+    // sweet wrapper. Then the hand is put back exactly where it was asked.
+    // (Scratch of its own: setWorldQuaternion uses q2 and q3 inside.)
+    arm.lower.getWorldQuaternion(forearmQ);
+    arm.hand.getWorldQuaternion(twistAxisQ).premultiply(q3.copy(forearmQ).invert());
+    twistAxis.copy(arm.hand.position).normalize();
+    const along = twistAxisQ.x * twistAxis.x + twistAxisQ.y * twistAxis.y + twistAxisQ.z * twistAxis.z;
+    const wring = 2 * Math.atan2(along, twistAxisQ.w);
+    const share = THREE.MathUtils.euclideanModulo(wring + Math.PI, Math.PI * 2) - Math.PI;
+    if (Math.abs(share) > 0.05) {
+      twistAxis.applyQuaternion(forearmQ);
+      forearmQ.premultiply(twistAxisQ.setFromAxisAngle(twistAxis, share * FOREARM_TWIST_SHARE));
+      setWorldQuaternion(overlay, arm.lower, forearmQ, weight);
+      alignBone(overlay, arm.hand, arm.handForward, PALM_LOCAL, dirF, dirU, weight);
+    }
 
     for (const finger of arm.fingers) {
       const amount = hand.curl[finger.curl];

@@ -5,13 +5,18 @@ import { L, useLang } from "../i18n/lang";
  *  developer page. Every world built on Seiza shows the same line. */
 export const REPO_URL = "https://github.com/yesiamalex/Seiza";
 export const DEVELOPER_URL = "https://github.com/yesiamalex";
+/** Seiza's homepage: what it is, every world, and what's new. */
+export const HOME_URL = "https://home.seiza.cc";
 
 export function Credit() {
   useLang();
   const link = { color: "inherit", textDecoration: "underline", textUnderlineOffset: 2 } as const;
   return (
     <small style={{ opacity: 0.5, textAlign: "center", fontSize: 11 }}>
-      {L("Open source on", "オープンソース:")}{" "}
+      <a href={HOME_URL} target="_blank" rel="noopener" style={link}>
+        {L("About Seiza and its worlds", "Seizaとワールドについて")}
+      </a>{" "}
+      · {L("Open source on", "オープンソース:")}{" "}
       <a href={REPO_URL} target="_blank" rel="noopener noreferrer" style={link}>
         GitHub
       </a>{" "}

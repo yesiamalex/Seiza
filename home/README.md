@@ -4,22 +4,28 @@ Seiza's homepage: what Seiza is, the worlds, what's new, and how to host
 your own. It's a static page in `public/`, served by an assets-only Worker
 with no code of its own.
 
-## Update "What's new"
+## How it stays current
 
-The changelog is `public/changelog.json`. It's written by hand, in plain
-words for visitors, because commit messages are written for contributors.
-To see what happened since the newest month in it:
+`build.mjs` writes two files the page reads (both git-ignored):
 
-```bash
-node home/changelog-draft.mjs
-```
+- `public/worlds.json`: Seiza and every world its portals go to, from
+  `public/worlds/default/world.json`. Add a portal, and the world shows up
+  here on the next deploy.
+- `public/changelog.json`: "What's new". The months before it was automatic
+  are in `changelog.json`, written by hand. Every commit since its
+  `through` date is added on its own, reworded for visitors: only features
+  and fixes, the world named instead of the code's scope, the first point
+  of the message only, and a few technical words swapped for everyday ones
+  (see `item()` in `build.mjs`). Plain commit messages make a plain
+  changelog.
 
-Then add the month's items, newest month first. Tag each item `new`,
-`world`, or `better`.
+To rewrite a month by hand, add it to `changelog.json` and move `through`
+past it.
 
 ## Deploy
 
 ```bash
+node home/build.mjs
 npx wrangler deploy --config home/wrangler.jsonc
 ```
 
@@ -34,11 +40,15 @@ Create a Worker from the repository in the Cloudflare dashboard
 (**Workers & Pages > Create > Import a repository**), then under
 **Settings > Build**:
 
-- **Build command:** leave it empty. The page is plain files, with nothing
-  to build.
-- **Deploy command:** `npx wrangler deploy --config home/wrangler.jsonc`
+- **Root directory:** `home`
+- **Build command:** `node build.mjs`
+- **Deploy command:** `npx wrangler deploy`
 - **Non-production branch deploy command** (if shown):
-  `npx wrangler versions upload --config home/wrangler.jsonc`
+  `npx wrangler versions upload`
 
-Preview it locally with any static server, for example
-`npx serve home/public`.
+"What's new" needs the commit history. If a deploy from git shows only the
+hand-written months, the build cloned only the latest commit: deploy from
+your machine instead.
+
+Preview it locally: `node home/build.mjs`, then any static server, for
+example `npx serve home/public`.

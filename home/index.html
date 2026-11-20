@@ -1,14 +1,32 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="no-js">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Seiza: rooms you own, for learning together</title>
-<meta name="description" content="Seiza is open-source, multiplayer WebXR for learning: shared worlds you visit from a phone, a laptop, or a headset, hosted on your own account.">
-<meta property="og:title" content="Seiza">
-<meta property="og:description" content="Rooms you own, for learning together. Open-source multiplayer WebXR, from a phone, a laptop, or a headset.">
+<title>Seiza: open-source VR classrooms and worlds you host yourself</title>
+<meta name="description" content="Seiza is free, open-source multiplayer WebXR for learning: shared 3D worlds where a class meets as avatars, from a phone, a laptop, or a VR headset. Nothing to install, hosted on your own Cloudflare account.">
+<link rel="canonical" href="https://home.seiza.cc/">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="author" content="Ziedell Alexander Figueroa">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Seiza">
+<meta property="og:url" content="https://home.seiza.cc/">
+<meta property="og:title" content="Seiza: rooms you own, for learning together">
+<meta property="og:description" content="Open-source multiplayer WebXR for classes, workshops, and exhibitions, from a phone, a laptop, or a headset. <!--WORLD_COUNT--> worlds open now.">
+<meta property="og:image" content="https://home.seiza.cc/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Seiza: rooms you own, for learning together">
+<meta property="og:locale" content="en_US">
+<meta property="og:locale:alternate" content="ja_JP">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Seiza: rooms you own, for learning together">
+<meta name="twitter:description" content="Open-source multiplayer WebXR for learning, from a phone, a laptop, or a headset.">
+<meta name="twitter:image" content="https://home.seiza.cc/og.png">
 <meta name="theme-color" content="#070c26">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="sitemap" type="application/xml" href="sitemap.xml">
+<!--JSONLD-->
 <style>
   :root {
     --night: #070c26;
@@ -137,6 +155,40 @@
   .step p { margin: 0; color: var(--muted); font-size: 15px; }
   code { font: 13px var(--mono); background: rgba(255, 255, 255, 0.08); padding: 2px 6px; border-radius: 6px; }
 
+  /* --- effects --- */
+  .reveal, .world, .month { opacity: 0; transform: translateY(18px); transition: opacity 600ms ease, transform 600ms cubic-bezier(.2, .7, .2, 1); transition-delay: var(--delay, 0ms); }
+  .reveal.shown, .world.shown, .month.shown { opacity: 1; transform: none; }
+  /* Without JavaScript nothing waits to be revealed. */
+  .no-js .reveal, .no-js .world, .no-js .month { opacity: 1; transform: none; }
+  .world {
+    background:
+      radial-gradient(260px circle at var(--mx, -300px) var(--my, -300px), color-mix(in srgb, var(--c) 26%, transparent), transparent 70%),
+      radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--c) 22%, transparent), transparent 60%),
+      var(--glass);
+  }
+  .world.shown:hover { transform: translateY(-4px); }
+  .world .ring { border-top-color: transparent; transition: transform 300ms; }
+  .world:hover .ring { animation: spin 1.6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  h1 span { padding-bottom: 0.12em; line-height: 1.15; background: linear-gradient(90deg, var(--gold), #fff3d6, var(--gold)); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: shimmer 6s ease-in-out infinite; }
+  @keyframes shimmer { 50% { background-position: 100% 0; } }
+  nav { transition: background 200ms, box-shadow 200ms; }
+  nav.scrolled { background: rgba(7, 12, 38, 0.92); box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35); }
+  nav ul a.here { color: var(--gold); }
+  .month.folded { display: none; }
+  .more-button { display: flex; margin: 18px auto 0; cursor: pointer; color: var(--ink); font: inherit; }
+  .button.primary { animation: pulse 3s ease-out infinite; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(232, 195, 122, 0.45); } 70%, 100% { box-shadow: 0 0 0 14px rgba(232, 195, 122, 0); } }
+  :focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; border-radius: 6px; }
+  .scroll-cue { position: absolute; left: 50%; bottom: 72px; width: 22px; height: 34px; margin-left: -11px; border: 2px solid rgba(255, 255, 255, 0.5); border-radius: 12px; }
+  .scroll-cue::after { content: ""; position: absolute; left: 50%; top: 7px; width: 4px; height: 7px; margin-left: -2px; border-radius: 2px; background: #fff; animation: cue 1.8s ease-in-out infinite; }
+  @keyframes cue { 0% { opacity: 0; transform: translateY(0); } 40% { opacity: 1; } 100% { opacity: 0; transform: translateY(10px); } }
+  @media (max-width: 720px) { .scroll-cue { display: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+    .reveal, .world, .month { opacity: 1; transform: none; }
+  }
+
   footer { margin-top: 96px; border-top: 1px solid var(--line); padding: 36px 0 56px; color: var(--muted); font-size: 14px; }
   footer .wrap { display: flex; gap: 24px; flex-wrap: wrap; justify-content: space-between; align-items: center; }
   footer a { color: var(--ink); }
@@ -169,34 +221,35 @@
       </div>
     </div>
   </div>
+  <a class="scroll-cue" href="#why" aria-label="Scroll to learn more"></a>
 </header>
 
 <div class="wrap">
-  <div class="stats" role="list">
-    <div class="stat" role="listitem"><b>9</b><span>worlds, and counting</span></div>
-    <div class="stat" role="listitem"><b>3</b><span>ways in: phone, laptop, headset</span></div>
-    <div class="stat" role="listitem"><b>2</b><span>languages: English and 日本語</span></div>
+  <div class="stats reveal" role="list">
+    <div class="stat" role="listitem"><b data-count="<!--WORLD_COUNT-->"><!--WORLD_COUNT--></b><span>worlds, and counting</span></div>
+    <div class="stat" role="listitem"><b data-count="3">3</b><span>ways in: phone, laptop, headset</span></div>
+    <div class="stat" role="listitem"><b data-count="2">2</b><span>languages: English and 日本語</span></div>
     <div class="stat" role="listitem"><b>0</b><span>accounts to make before joining</span></div>
   </div>
 
   <section id="why" aria-labelledby="why-title">
-    <div class="section-head">
+    <div class="section-head reveal">
       <span class="number">01 /</span>
       <h2 id="why-title">A room is a place to be with people.</h2>
       <p>Seiza is for classes, workshops, and exhibitions that want to meet somewhere, not just on a call.</p>
     </div>
     <div class="pillars">
-      <article class="pillar">
+      <article class="pillar reveal">
         <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V21H3z"/><path d="M9 21v-6h6v6"/></svg></div>
         <h3>Yours to keep</h3>
         <p>A school deploys Seiza on its own Cloudflare account, where a class-sized room usually stays within the free tier. No platform can close it, raise its price, or keep your data.</p>
       </article>
-      <article class="pillar">
+      <article class="pillar reveal">
         <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M14.5 20c.3-2.6 1.6-4.5 4-4.5 1.6 0 2.5.6 2.5.6"/></svg></div>
         <h3>Together, with consent</h3>
         <p>Voice that fades with distance, screens to present on, boards to write on, gestures, and handshakes or hugs that happen only when both people say yes.</p>
       </article>
-      <article class="pillar">
+      <article class="pillar reveal">
         <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/></svg></div>
         <h3>Open all the way down</h3>
         <p>Every line is open source (AGPL), and every world here is built from the same code. Fork it, give a world your own exhibits, or start one from your own 3D model.</p>
@@ -205,33 +258,37 @@
   </section>
 
   <section id="worlds" aria-labelledby="worlds-title">
-    <div class="section-head">
+    <div class="section-head reveal">
       <span class="number">02 /</span>
       <h2 id="worlds-title">The worlds</h2>
       <p>Each one is its own room, open now. Step through the portals in any of them to reach the rest.</p>
     </div>
-    <div class="worlds" id="world-list"></div>
+    <div class="worlds" id="world-list">
+<!--WORLDS-->
+    </div>
   </section>
 
   <section id="new" aria-labelledby="new-title">
-    <div class="section-head">
+    <div class="section-head reveal">
       <span class="number">03 /</span>
       <h2 id="new-title">What's new</h2>
       <p>The changes worth knowing about, in plain words. Every detail is in the <a href="https://github.com/yesiamalex/Seiza/commits/main">commit history</a>.</p>
     </div>
-    <div class="changes" id="changes"><noscript><p>See the <a href="https://github.com/yesiamalex/Seiza/commits/main">commit history</a>.</p></noscript></div>
+    <div class="changes" id="changes">
+<!--CHANGES-->
+    </div>
   </section>
 
   <section id="host" aria-labelledby="host-title">
-    <div class="section-head">
+    <div class="section-head reveal">
       <span class="number">04 /</span>
       <h2 id="host-title">Host your own</h2>
       <p>On a free Cloudflare account, with no server to look after.</p>
     </div>
     <div class="steps">
-      <div class="step"><h3>Deploy</h3><p>Press the button, or run <code>npm run deploy</code> from a clone. It builds the site and the room server together.</p></div>
-      <div class="step"><h3>Make it yours</h3><p>Name the world, pick the avatars and gestures, and set an admin key, all in one <code>world.json</code> and the dashboard.</p></div>
-      <div class="step"><h3>Share the link</h3><p>Send it to your class. They pick a name and an avatar and they're in: no app, no sign-up.</p></div>
+      <div class="step reveal"><h3>Deploy</h3><p>Press the button, or run <code>npm run deploy</code> from a clone. It builds the site and the room server together.</p></div>
+      <div class="step reveal"><h3>Make it yours</h3><p>Name the world, pick the avatars and gestures, and set an admin key, all in one <code>world.json</code> and the dashboard.</p></div>
+      <div class="step reveal"><h3>Share the link</h3><p>Send it to your class. They pick a name and an avatar and they're in: no app, no sign-up.</p></div>
     </div>
     <div class="actions" style="margin-top: 22px">
       <a class="button primary" href="https://deploy.workers.cloudflare.com/?url=https://github.com/yesiamalex/Seiza">Deploy to Cloudflare</a>
@@ -248,68 +305,95 @@
 </footer>
 
 <script>
-  // The worlds, as their portals describe them (public/worlds/default/world.json).
-  const WORLDS = [
-    ["Seiza", "https://seiza.cc", "#e8c37a", "The home world: a hall, a classroom, a pond, a meadow with a campsite, and the beach."],
-    ["Seizora", "https://seizora.seiza.cc", "#ffb35c", "A solar, wind, and battery microgrid for a town in Cebu, and a perovskite lab."],
-    ["Seizorai", "https://seizorai.seiza.cc", "#ffd27a", "Seizora, with Ilaw-san, a guide who answers from what was written for the world."],
-    ["Seilaya", "https://seilaya.seiza.cc", "#c8607a", "A safe spaces lab for learning about gender, safety, and respect."],
-    ["Seisugbo", "https://seisugbo.seiza.cc", "#3fb6a8", "The Meiji × UP arts-based research exhibition of 2026, in a model Cebu lane."],
-    ["SeiOU", "https://seiou.seiza.cc", "#d8c98a", "A walkable digital twin of UP Open University's campus, with two guides."],
-    ["Seinag", "https://seinag.seiza.cc", "#7fa7ff", "UPOU's campus with hypothetical rooftop solar, running live on the sky."],
-    ["Tulay", "https://tulay.seiza.cc", "#e07a3f", "Seiza's Filipino home: a bahay kubo hall, banig and capiz, and a beach with coconut palms."],
-    ["ISCOLab", "https://iscolab.seiza.cc", "#5fc4e8", "UP Open University's Immersive Science Communication Open Laboratory, as a lab you can walk through."],
-  ];
-  const list = document.getElementById("world-list");
-  for (const [name, url, color, blurb] of WORLDS) {
-    const a = document.createElement("a");
-    a.className = "world";
-    a.href = url;
-    a.style.setProperty("--c", color);
-    a.innerHTML = '<span class="ring" aria-hidden="true"></span><h3></h3><p></p><span class="go"></span>';
-    a.querySelector("h3").textContent = name;
-    a.querySelector("p").textContent = blurb;
-    a.querySelector(".go").textContent = url.replace("https://", "") + " →";
-    list.append(a);
+  document.documentElement.classList.remove("no-js");
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // Sections rise into view as they're reached.
+  const reveal = new IntersectionObserver(
+    (entries) => {
+      for (const e of entries) {
+        if (!e.isIntersecting) continue;
+        e.target.classList.add("shown");
+        reveal.unobserve(e.target);
+      }
+    },
+    { rootMargin: "0px 0px -8% 0px" }
+  );
+  document.querySelectorAll(".reveal, .world, .month").forEach((el, i) => {
+    el.style.setProperty("--delay", `${(i % 6) * 60}ms`);
+    if (still) el.classList.add("shown");
+    else reveal.observe(el);
+  });
+
+  // The numbers count up the first time they're seen.
+  const counter = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (!e.isIntersecting) continue;
+      counter.unobserve(e.target);
+      const goal = Number(e.target.dataset.count);
+      if (still || !goal) continue;
+      const start = performance.now();
+      const tick = (t) => {
+        const k = Math.min(1, (t - start) / 900);
+        e.target.textContent = String(Math.round(goal * (1 - Math.pow(1 - k, 3))));
+        if (k < 1) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    }
+  });
+  document.querySelectorAll("[data-count]").forEach((el) => counter.observe(el));
+
+  // A soft light under the pointer on each world's card.
+  for (const card of document.querySelectorAll(".world")) {
+    card.addEventListener("pointermove", (e) => {
+      const r = card.getBoundingClientRect();
+      card.style.setProperty("--mx", `${e.clientX - r.left}px`);
+      card.style.setProperty("--my", `${e.clientY - r.top}px`);
+    });
   }
 
-  // What's new, from changelog.json.
-  const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-  const TAGS = { new: "New", world: "World", better: "Better" };
-  fetch("changelog.json")
-    .then((r) => r.json())
-    .then((log) => {
-      const root = document.getElementById("changes");
-      root.textContent = "";
-      for (const { month, items } of log.months) {
-        const [y, m] = month.split("-").map(Number);
-        const block = document.createElement("div");
-        block.className = "month";
-        const h = document.createElement("h3");
-        h.textContent = `${MONTHS[m - 1]} ${y}`;
-        const ul = document.createElement("ul");
-        for (const item of items) {
-          const li = document.createElement("li");
-          const tag = document.createElement("span");
-          tag.className = `tag ${item.tag}`;
-          tag.textContent = TAGS[item.tag] ?? item.tag;
-          const text = document.createElement("span");
-          text.textContent = item.text;
-          li.append(tag, text);
-          ul.append(li);
-        }
-        block.append(h, ul);
-        root.append(block);
-      }
-    })
-    .catch(() => {});
+  // The bar firms up once the page scrolls, and marks the section in view.
+  const nav = document.querySelector("nav");
+  const onScroll = () => nav.classList.toggle("scrolled", scrollY > 24);
+  addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+  const links = new Map([...document.querySelectorAll('nav a[href^="#"]')].map((a) => [a.getAttribute("href").slice(1), a]));
+  const spy = new IntersectionObserver(
+    (entries) => {
+      for (const e of entries) if (e.isIntersecting) for (const [id, a] of links) a.classList.toggle("here", id === e.target.id);
+    },
+    { rootMargin: "-45% 0px -50% 0px" }
+  );
+  document.querySelectorAll("section[id]").forEach((s) => spy.observe(s));
 
-  // The hero's sky: a constellation (星座, seiza) that slowly turns, with
-  // stars joined to their nearest neighbours. Still for reduced motion.
+  // Older months fold away behind a button (they stay in the HTML, for
+  // search engines and anyone without JavaScript).
+  const months = document.querySelectorAll(".month");
+  if (months.length > 2) {
+    months.forEach((m, i) => i >= 2 && m.classList.add("folded"));
+    const more = document.createElement("button");
+    more.type = "button";
+    more.className = "button small more-button";
+    more.textContent = "Show earlier months";
+    more.addEventListener("click", () => {
+      months.forEach((m) => {
+        m.classList.remove("folded");
+        m.classList.add("shown");
+      });
+      more.remove();
+    });
+    document.getElementById("changes").after(more);
+  }
+
+  // The hero's sky: a constellation (星座, seiza) that drifts, leans toward
+  // the pointer, and now and then lets a star fall. Still for reduced
+  // motion, and paused while it's scrolled out of sight.
   const canvas = document.getElementById("sky");
   const ctx = canvas.getContext("2d");
-  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
   let stars = [];
+  const lean = { x: 0, y: 0, tx: 0, ty: 0 };
+  let meteor = null;
+  let visible = true;
   function size() {
     const ratio = Math.min(2, devicePixelRatio || 1);
     canvas.width = canvas.clientWidth * ratio;
@@ -320,43 +404,68 @@
       x: Math.random() * canvas.clientWidth,
       y: Math.random() * canvas.clientHeight * 0.8,
       r: Math.random() * 1.3 + 0.3,
+      depth: Math.random() * 0.8 + 0.2,
       twinkle: Math.random() * Math.PI * 2,
       drift: (Math.random() - 0.5) * 0.06,
     }));
   }
+  addEventListener("pointermove", (e) => {
+    lean.tx = (e.clientX / innerWidth - 0.5) * 18;
+    lean.ty = (e.clientY / innerHeight - 0.5) * 12;
+  });
+  new IntersectionObserver(([e]) => (visible = e.isIntersecting)).observe(canvas);
   function draw(t) {
+    if (!still) requestAnimationFrame(draw);
+    if (!visible) return;
     const w = canvas.clientWidth, h = canvas.clientHeight;
+    lean.x += (lean.tx - lean.x) * 0.05;
+    lean.y += (lean.ty - lean.y) * 0.05;
     ctx.clearRect(0, 0, w, h);
-    for (const s of stars) {
-      if (!still) s.x = (s.x + s.drift + w) % w;
-    }
-    // Lines between near neighbours, fading with distance and height.
+    const px = (s) => s.x + lean.x * s.depth;
+    const py = (s) => s.y + lean.y * s.depth;
+    if (!still) for (const s of stars) s.x = (s.x + s.drift + w) % w;
     ctx.lineWidth = 0.6;
     for (let i = 0; i < stars.length; i++) {
       for (let j = i + 1; j < stars.length; j++) {
         const a = stars[i], b = stars[j];
         const d = Math.hypot(a.x - b.x, a.y - b.y);
         if (d > 110) continue;
-        const fade = (1 - d / 110) * (1 - a.y / h) * 0.35;
-        ctx.strokeStyle = `rgba(232,195,122,${fade})`;
+        ctx.strokeStyle = `rgba(232,195,122,${(1 - d / 110) * (1 - a.y / h) * 0.35})`;
         ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
-        ctx.lineTo(b.x, b.y);
+        ctx.moveTo(px(a), py(a));
+        ctx.lineTo(px(b), py(b));
         ctx.stroke();
       }
     }
     for (const s of stars) {
-      const glow = 0.55 + 0.45 * Math.sin(s.twinkle + t / 900);
-      ctx.fillStyle = `rgba(255,255,255,${(still ? 0.8 : glow) * (1 - s.y / h) + 0.15})`;
+      const glow = still ? 0.8 : 0.55 + 0.45 * Math.sin(s.twinkle + t / 900);
+      ctx.fillStyle = `rgba(255,255,255,${glow * (1 - s.y / h) + 0.15})`;
       ctx.beginPath();
-      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.arc(px(s), py(s), s.r, 0, Math.PI * 2);
       ctx.fill();
     }
-    if (!still) requestAnimationFrame(draw);
+    if (still) return;
+    if (!meteor && Math.random() < 0.004) meteor = { x: Math.random() * w * 0.8 + w * 0.2, y: Math.random() * h * 0.3, life: 0 };
+    if (meteor) {
+      meteor.life += 1;
+      const k = meteor.life / 50;
+      const x = meteor.x - k * 260, y = meteor.y + k * 120;
+      const tail = ctx.createLinearGradient(x, y, x + 90, y - 42);
+      tail.addColorStop(0, `rgba(255,255,255,${0.9 * (1 - k)})`);
+      tail.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.strokeStyle = tail;
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + 90, y - 42);
+      ctx.stroke();
+      if (k >= 1) meteor = null;
+    }
   }
   addEventListener("resize", size);
   size();
   requestAnimationFrame(draw);
 </script>
+
 </body>
 </html>

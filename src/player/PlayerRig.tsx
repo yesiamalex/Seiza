@@ -202,6 +202,11 @@ interface PlayerRigProps {
    *  in a headset: turning someone's view for them there makes people
    *  sick, so they turn themselves. */
   faceYawRef?: MutableRefObject<number | null>;
+  /** Two people doing a together gesture (where each stands, x and z):
+   *  while set, the third-person camera moves out to the side of them to
+   *  frame both, instead of looking over this player's shoulder at the
+   *  other's face. Ignored in a headset. */
+  showcaseRef?: MutableRefObject<{ a: [number, number]; b: [number, number] } | null>;
   /** Your own avatar. Always drawn: in first person its head is hidden from
    *  the camera instead (SelfView), so you can look down at your body. */
   children?: ReactNode;
@@ -211,6 +216,9 @@ interface PlayerRigProps {
    *  the camera. */
   outsideOnly?: ReactNode;
 }
+
+const showcaseLook = new THREE.Vector3();
+const showcaseShot = new THREE.Vector3();
 
 function lerpAngle(from: number, to: number, t: number) {
   return from + Math.atan2(Math.sin(to - from), Math.cos(to - from)) * t;
@@ -256,6 +264,7 @@ export function PlayerRig({
   warpTargetRef,
   onWarped,
   faceYawRef,
+  showcaseRef,
   children,
   outsideOnly,
 }: PlayerRigProps) {
@@ -267,6 +276,11 @@ export function PlayerRig({
   const virtualCameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   if (!virtualCameraRef.current) virtualCameraRef.current = new THREE.PerspectiveCamera();
   const thirdPersonDistanceRef = useRef(THIRD_PERSON_DEFAULT_DISTANCE);
+  /** How far into the together two-shot the camera is, 0 to 1, and which
+   *  side of the pair it picked (kept, so it never swings across them). */
+  const showcaseBlendRef = useRef(0);
+  const showcaseSideRef = useRef(0);
+  const lastShowcaseRef = useRef<{ a: [number, number]; b: [number, number] } | null>(null);
   // Eased, so sitting down or standing up glides the framing rather than
   // jumping it.
   const orbitPivotHeightRef = useRef(ORBIT_PIVOT_HEIGHT);
@@ -881,6 +895,33 @@ export function PlayerRig({
         const pivot = new THREE.Vector3(vcam.position.x, feetY + orbitPivotHeightRef.current, vcam.position.z);
         const back = new THREE.Vector3(0, 0, 1).applyQuaternion(vcam.quaternion).multiplyScalar(thirdPersonDistanceRef.current);
         camera.position.copy(pivot).add(back);
+
+        // A together gesture: out to the side of the two, so both are in
+        // the picture, eased in and out.
+        const show = showcaseRef?.current ?? null;
+        showcaseBlendRef.current = THREE.MathUtils.damp(showcaseBlendRef.current, show ? 1 : 0, 3, delta);
+        if (!show && showcaseBlendRef.current < 0.002) showcaseSideRef.current = 0;
+        const pair = show ?? lastShowcaseRef.current;
+        if (show) lastShowcaseRef.current = show;
+        if (pair && showcaseBlendRef.current > 0.002) {
+          const [ax, az] = pair.a;
+          const [bx, bz] = pair.b;
+          const apart = Math.max(0.3, Math.hypot(bx - ax, bz - az));
+          // Square to the line between them, on whichever side the camera
+          // already was.
+          const sideX = -(bz - az) / apart;
+          const sideZ = (bx - ax) / apart;
+          const midX = (ax + bx) / 2;
+          const midZ = (az + bz) / 2;
+          if (showcaseSideRef.current === 0) {
+            showcaseSideRef.current = (camera.position.x - midX) * sideX + (camera.position.z - midZ) * sideZ >= 0 ? 1 : -1;
+          }
+          const away = Math.max(2.4, apart * 1.3 + 1.6) * showcaseSideRef.current;
+          const k = THREE.MathUtils.smoothstep(showcaseBlendRef.current, 0, 1);
+          showcaseLook.set(midX, feetY + 1.05, midZ);
+          camera.position.lerp(showcaseShot.set(midX + sideX * away, feetY + 1.45, midZ + sideZ * away), k);
+          pivot.lerp(showcaseLook, k);
+        }
         // Keep the camera inside the building: zooming out through a wall
         // showed the room from outside, and rising over the top showed the
         // room from above with no roof on it.
