@@ -90,6 +90,7 @@ import { AvatarChooser } from "./ui/AvatarChooser";
 import { useMediaQuery, useWantsTouchControls } from "./ui/useMediaQuery";
 import { saveProfile } from "./profile/profileStore";
 import { deliverWorldMessage, unwrapWorldMessage, WorldExtension, WorldOverlay, wrapWorldMessage } from "./worlds/WorldExtension";
+import { AddonBarButtons, AddonOverlay, AddonScene, connectAddonBus, fantasyArmed, LOCAL_AVATAR, RoomModes, setAddonAvatar } from "./addons";
 import { PortalCard, Portals } from "./worlds/Portals";
 import { BAR_LABEL_CLASS, barButtonActiveStyle, barButtonStyle, inputStyle, panelStyle, pillButtonStyle, primaryButtonStyle } from "./ui/styles";
 import { CloseIcon, LockIcon, PersonIcon, VrHeadsetIcon } from "./ui/icons";
@@ -437,6 +438,15 @@ export default function App() {
   }, [joined, environmentUrl, navMesh]);
 
   const sendSignal = useCallback((to: string, data: unknown) => send({ type: "voiceSignal", to, data }), [send]);
+  // Room modes (src/addons/): their events go out on the room socket.
+  useEffect(() => {
+    connectAddonBus(connected ? (mode, data) => send({ type: "addon", mode, data }) : null);
+    return () => connectAddonBus(null);
+  }, [connected, send]);
+  useEffect(() => {
+    setAddonAvatar(LOCAL_AVATAR, localVrm);
+    return () => setAddonAvatar(LOCAL_AVATAR, null);
+  }, [localVrm]);
   const media = useRealtimeMedia({ selfId, players, sendSignal });
   // The relay also carries a world's own private messages (WorldExtension).
   voiceSignalHandlerRef.current = (from, data) => {
@@ -1107,7 +1117,8 @@ export default function App() {
   // Disabled while editing, where a floor click shouldn't yank you away.
   const handleFloorClick = useCallback(
     (point: THREE.Vector3) => {
-      if (editMode) return;
+      // With a weapon drawn (Fantasy mode), a click is an attack.
+      if (editMode || fantasyArmed()) return;
       // Walking somewhere is also a way of getting up.
       standUp();
       const destination = point.clone();
@@ -1401,6 +1412,8 @@ export default function App() {
               setPlayerFilter={setPlayerFilter}
               findPath={navMesh.findPath}
             />
+            {/* Room modes an editor switched on (src/addons/). */}
+            <AddonScene worldState={worldState} selfId={selfId} players={players} getSelfPosition={getSelfPosition} editMode={editMode} />
             {world.portals && <Portals config={world.portals} builtin={world.environment !== "model"} />}
           </group>
           <PlayerRig
@@ -1538,7 +1551,9 @@ export default function App() {
                   onSubmit={authAdmin}
                   roomPasswordSet={roomPasswordSet}
                   onSetRoomPassword={adminSetRoomPassword}
-                />
+                >
+                  <RoomModes worldState={worldState} setWorldState={setWorldState} disabled={!connected} />
+                </AdminButton>
               )}
               <button
                 type="button"
@@ -1677,6 +1692,7 @@ export default function App() {
               : null
           }
         />
+        <AddonBarButtons worldState={worldState} />
         <div className="seiza-bar-divider" aria-hidden />
         <ChatPanel
           open={chatOpen}
@@ -1730,12 +1746,15 @@ export default function App() {
           worldSky={world.sky}
           roomSky={roomSky}
           onSetRoomSky={setRoomSky}
-        />
+        >
+          <RoomModes worldState={worldState} setWorldState={setWorldState} disabled={!connected} />
+        </EditToolbar>
       </HUD>
       {/* A world's own cards and controls (WorldExtension). Beside the HUD,
           not inside it: on a phone the HUD's controls fold into a drawer,
           which hid every world card until the drawer was opened. */}
       <WorldOverlay />
+      <AddonOverlay worldState={worldState} touch={showTouchControls} />
       {world.portals && <PortalCard config={world.portals} inXr={xrSessionActive} />}
       {openImageId && objects[openImageId]?.kind === "image" && <ImageViewer object={objects[openImageId]} onClose={closeImage} />}
       {/* Someone is talking but the browser still holds audio back (the

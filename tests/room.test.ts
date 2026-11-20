@@ -176,6 +176,33 @@ describe.skipIf(!built)("room server", () => {
     late.socket.close();
   });
 
+  it("relays a room mode's events only while that mode is on", async () => {
+    const room = freshRoom();
+    const a = await client(room, "A", ["batch"]);
+    const b = await client(room, "B", ["batch"]);
+    const events = () => b.received.filter((m) => m.type === "addonEvent");
+    // Off: nothing passes.
+    a.send({ type: "addon", mode: "fantasy", data: { k: "act", a: "swing", n: 0 } });
+    await sleep(150);
+    expect(events()).toHaveLength(0);
+    a.send({ type: "setWorldState", key: "mode.fantasy", value: true });
+    await until(() => b.received.find((m) => m.type === "worldStateChanged"));
+    a.send({ type: "addon", mode: "fantasy", data: { k: "act", a: "swing", n: 0 } });
+    const relayed = await until(() => events()[0]);
+    expect(relayed).toEqual({ type: "addonEvent", from: a.selfId, mode: "fantasy", data: { k: "act", a: "swing", n: 0 } });
+    // Another mode that's still off, an unknown mode, an oversized event,
+    // and a non-object are all dropped; none comes back to the sender.
+    a.send({ type: "addon", mode: "band", data: { k: "n", n: 1 } });
+    a.send({ type: "addon", mode: "chaos" as "band", data: { k: "x" } });
+    a.send({ type: "addon", mode: "fantasy", data: { k: "x".repeat(600) } });
+    a.send({ type: "addon", mode: "fantasy", data: [1, 2] as unknown as Record<string, unknown> });
+    await sleep(200);
+    expect(events()).toHaveLength(1);
+    expect(a.received.some((m) => m.type === "addonEvent")).toBe(false);
+    a.socket.close();
+    b.socket.close();
+  });
+
   it("passes a voice 'busy' signal through untouched", async () => {
     const room = freshRoom();
     const a = await client(room, "A", ["batch"]);

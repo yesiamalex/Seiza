@@ -1,5 +1,8 @@
 import { DurableObject } from "cloudflare:workers";
 import {
+  ADDON_MODES,
+  addonModeKey,
+  MAX_ADDON_EVENT_CHARS,
   LIGHT_ZONES,
   MAX_OBJECT_TEXT_LENGTH,
   WORLD_OBJECT_KINDS,
@@ -119,6 +122,8 @@ const MAX_SIGNAL_CHARS = 32 * 1024;
  *  and rate than signalling. */
 const MAX_WORLD_MESSAGE_CHARS = 1024;
 const WORLD_MESSAGE_RATE = { perSecond: 4, burst: 20 };
+/** Room-mode events (src/addons/): a drum roll is the fastest real use. */
+const ADDON_RATE = { perSecond: 12, burst: 24 };
 /** Room password guesses per connection before it's closed. */
 const MAX_ROOM_AUTH_ATTEMPTS = 5;
 /**
@@ -901,6 +906,19 @@ export class SeizaRoom extends DurableObject<Env> {
         this.togetherPending.delete(message.id);
         const target = this.findConnection(request.to);
         if (target) this.sendTo(target, { type: "togetherClosed", id: message.id, reason: "cancelled" });
+        break;
+      }
+      case "addon": {
+        // A room mode's event (src/addons/): relayed to everyone else,
+        // never read or kept. Only while an editor has that mode on, so a
+        // room that never uses the modes passes none of it.
+        if (!attachment.player) return;
+        const { mode, data } = message;
+        if (!(ADDON_MODES as readonly unknown[]).includes(mode) || this.worldState[addonModeKey(mode)] !== true) return;
+        if (typeof data !== "object" || data === null || Array.isArray(data)) return;
+        if (!this.allow(attachment.connId, "addon", ADDON_RATE)) return;
+        if (JSON.stringify(data).length > MAX_ADDON_EVENT_CHARS) return;
+        this.broadcast({ type: "addonEvent", from: attachment.connId, mode, data }, attachment.connId);
         break;
       }
       case "adminKick": {

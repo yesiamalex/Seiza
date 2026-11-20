@@ -80,6 +80,12 @@ export function unlockAudio() {
   }
 }
 
+/** The world-sound output, for add-ons that make their own sounds
+ *  (src/addons/): null while muted or before audio can start. */
+export function sfxOutput(): { ctx: AudioContext; out: GainNode } | null {
+  return audio();
+}
+
 /** Turns all world sound on or off. Voice chat is unaffected. */
 export function setSfxMuted(next: boolean) {
   muted = next;

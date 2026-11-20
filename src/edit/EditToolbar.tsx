@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { WorldObject } from "../multiplayer/types";
 import { optimizeVrmAvatar } from "../avatar/optimizeVrm";
 import { compressImage } from "./compressImage";
@@ -57,6 +57,8 @@ interface EditToolbarProps {
   worldSky?: SkyConfig;
   roomSky: RoomSky | null;
   onSetRoomSky: (sky: RoomSky | null) => void;
+  /** More settings for the room, after the sky's (the room modes). */
+  children?: ReactNode;
   /** False while the panel is minimised: still in edit mode, with the
    *  world uncovered. */
   panelOpen: boolean;
@@ -99,6 +101,7 @@ export function EditToolbar({
   worldSky,
   roomSky,
   onSetRoomSky,
+  children,
   panelOpen,
   onMinimize,
   onExit,
@@ -638,6 +641,7 @@ export function EditToolbar({
             connected={connected}
             skyboxInUse={skyboxUrl !== null}
           />
+          {children}
         </div>
       )}
     </div>

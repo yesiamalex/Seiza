@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { useExclusiveMenu } from "../ui/exclusiveMenu";
 import { useDismissOnOutside } from "../ui/useDismissOnOutside";
 import { panelStyle, pillButtonActiveStyle, pillButtonStyle, primaryButtonStyle, inputStyle } from "../ui/styles";
@@ -12,6 +12,8 @@ interface AdminButtonProps {
   onSubmit: (key: string) => void;
   roomPasswordSet: boolean;
   onSetRoomPassword: (password: string | null) => void;
+  /** More admin controls, after the room password (the room modes). */
+  children?: ReactNode;
 }
 
 /**
@@ -26,7 +28,7 @@ interface AdminButtonProps {
  * ADMIN.md for why that's a third, separate, runtime-settable secret
  * rather than reusing the admin key or the editor password.
  */
-export function AdminButton({ isAdmin, authPending, authFailed, onSubmit, roomPasswordSet, onSetRoomPassword }: AdminButtonProps) {
+export function AdminButton({ isAdmin, authPending, authFailed, onSubmit, roomPasswordSet, onSetRoomPassword, children }: AdminButtonProps) {
   useLang();
   const [open, setOpen] = useState(false);
   useExclusiveMenu("admin", open, () => setOpen(false));
@@ -180,6 +182,7 @@ export function AdminButton({ isAdmin, authPending, authFailed, onSubmit, roomPa
                     </div>
                   </form>
                 </div>
+                {children}
               </>
             )}
           </div>

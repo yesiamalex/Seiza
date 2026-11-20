@@ -1023,6 +1023,46 @@ menus and notifications.
 - Opening any menu (chat, gestures, media, edit, avatar, roster, or admin)
   closes the others.
 
+### Room modes
+
+An editor (or an admin, from the admin panel) can switch on a room mode for
+everyone in the room under **Room modes** in the edit panel. Each mode
+adds its own coloured button to the bar while it is on.
+
+- **Fantasy** (red): pick a sword, katana, naginata, light saber, or bow,
+  and an element for your special (lightning, fire, or ice). Health bars
+  show over everyone holding a weapon. Only people holding a weapon can be
+  hit, so choosing None steps out.
+  - A blow lands only where the blade really meets a body. Where two blades
+    meet, both bounce off.
+  - On a PC, click to swing and hold F to raise your blade into a guard.
+    On a phone, use the sword and shield buttons.
+  - A guard catches more blows, but not all of them, and a guard that
+    stops one is knocked aside for a moment.
+  - When the meter under your health is full, hold the click or the sword
+    button for your special.
+  - In VR, swing for real, and the blade cuts and parries wherever you
+    hold it. Draw your hand back over your shoulder with the meter full,
+    and the next hard swing is the special. The trigger shoots the bow.
+  - The weapons trade off against each other rather than one being best.
+    The weapon picker says what each is good at.
+- **Band** (violet): pick a drum pad, keys, a guitar, or a light stick.
+  - **Start playing** opens the instrument, which you can tap or click. Its
+    keyboard keys are shown on it, and they play the instrument instead of
+    moving you until you press Esc.
+  - In VR, play with your hands. Tap the pads and keys, or strum the
+    guitar while your other hand picks the chord along its neck.
+  - Notes are sent as events and played by each visitor's own browser, so
+    no audio is streamed. Everyone hears the whole room.
+  - Light sticks come in seven colours and sway on the same beat for
+    everyone.
+
+The modes are add-ons in `src/addons/`, outside the rest of the code: see
+its README. Their events go through the room server only while their mode
+is on. Each player decides their own health, checking every hit claimed
+against them (distance, rate, and the most that weapon can do). That is
+enough for a classroom game, but it is not built to resist cheating.
+
 ### Language
 
 Seiza's own words come in English and Japanese. The language button
@@ -1959,6 +1999,8 @@ src/            Frontend (React Three Fiber, WebXR, VRM)
                 sky's lights (SkyDriver)
   ui/           Join screen, avatar chooser and preview, HUD, shared styles
   worlds/       Loads a world's own in-world code (WorldExtension.tsx)
+  addons/       Room modes an editor switches on: Fantasy (fantasy/) and
+                Band (band/); see its README
   interactions/ Gesture menu and practice mode
   xr/           Headset only: body tracking (body/) and wrist menu (hud/)
 worker/         Cloudflare Worker: static hosting, upload API (KV), and the

@@ -29,6 +29,7 @@ const PAGE_SESSION_ID =
     : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 import { trackingStore } from "../xr/body/trackingStore";
 import { receiveTogether } from "../interactions/together";
+import { deliverAddonEvent } from "../addons/bus";
 
 // The production Worker serves both the app and the Durable Object route, so
 // same-origin is the reliable default. Set VITE_SEIZA_ROOM_HOST only when the
@@ -530,6 +531,9 @@ export function useRoomSocket(
             break;
           case "voiceSignal":
             onVoiceSignalRef.current?.(msg.from, msg.data);
+            break;
+          case "addonEvent":
+            deliverAddonEvent(msg.from, msg.mode, msg.data);
             break;
         }
       });

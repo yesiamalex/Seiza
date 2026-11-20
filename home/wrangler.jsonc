@@ -1,0 +1,14 @@
+{
+  // home.seiza.cc: Seiza's homepage, a static site. Assets only, no Worker
+  // code, so it costs nothing to serve. Deploy with
+  // `npx wrangler deploy --config home/wrangler.jsonc`.
+  "name": "seiza-home",
+  "compatibility_date": "2026-01-01",
+  "assets": {
+    "directory": "./public",
+    "not_found_handling": "single-page-application"
+  },
+  // The custom domain is attached on deploy, provided seiza.cc is a zone on
+  // the same Cloudflare account.
+  "routes": [{ "pattern": "home.seiza.cc", "custom_domain": true }]
+}

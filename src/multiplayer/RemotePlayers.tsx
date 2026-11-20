@@ -17,6 +17,7 @@ import { isPlayerHidden } from "./playerFilter";
 import type { PlayerState } from "./types";
 import { RemoteMotion } from "./remoteMotion";
 import { viewerPosition } from "../xr/viewer";
+import { setAddonAvatar } from "../addons/avatars";
 
 /** The viewer's eyes in the world (see viewerPosition). */
 const scratchEye = new THREE.Vector3();
@@ -243,7 +244,12 @@ function RemotePlayerAvatar({
   // Their arm length, for how far apart to stand for a together gesture.
   useEffect(() => {
     setAvatarReach(playerId, vrm);
-    return () => setAvatarReach(playerId, null);
+    // And for room modes that put things in their hands (src/addons/).
+    setAddonAvatar(playerId, vrm);
+    return () => {
+      setAvatarReach(playerId, null);
+      setAddonAvatar(playerId, null);
+    };
   }, [playerId, vrm]);
 
   return (

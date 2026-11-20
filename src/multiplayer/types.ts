@@ -252,7 +252,11 @@ export type ClientMessage =
   // saying so: blocked, not taking requests); or withdraw your own.
   | { type: "togetherAsk"; to: string; gesture: TogetherGesture }
   | { type: "togetherAnswer"; id: string; accept: boolean; unavailable?: boolean }
-  | { type: "togetherCancel"; id: string };
+  | { type: "togetherCancel"; id: string }
+  // A room mode's own event (src/addons/): a swing, a hit, a note. Relayed
+  // to everyone else in the room, never read or stored, and only while an
+  // editor has that mode switched on (see ADDON_MODES).
+  | { type: "addon"; mode: AddonMode; data: Record<string, unknown> };
 
 export type ServerMessage =
   | {
@@ -356,7 +360,20 @@ export type ServerMessage =
   | { type: "togetherStart"; id: string; gesture: TogetherGesture; partner: string; role: "lead" | "follow" }
   // A lasting together gesture (the slow dance) ended: the partner stopped,
   // walked away, or left. Your side stops too.
-  | { type: "togetherEnded"; partner: string };
+  | { type: "togetherEnded"; partner: string }
+  | { type: "addonEvent"; from: string; mode: AddonMode; data: Record<string, unknown> };
+
+/**
+ * Room modes: add-ons an editor (or admin) switches on for everyone, which
+ * then show their own button in the bar. Each is on while the world state
+ * holds `true` at its key, so the switch is the same shared setting worlds
+ * already use, and its events only pass the room server while it is on.
+ */
+export const ADDON_MODES = ["fantasy", "band"] as const;
+export type AddonMode = (typeof ADDON_MODES)[number];
+export const addonModeKey = (mode: AddonMode) => `mode.${mode}`;
+/** Largest add-on event, as JSON. A swing or a note is a few dozen bytes. */
+export const MAX_ADDON_EVENT_CHARS = 512;
 
 /** Places with a light switch in the built-in world. */
 /** `camp` is the campfire on the meadow: a light switch too, so it's lit
