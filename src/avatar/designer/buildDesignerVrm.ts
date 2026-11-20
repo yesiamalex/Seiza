@@ -5,7 +5,7 @@ import { buildDesignerExpressions, type DesignerFaceParts } from "./designerExpr
 import { chainWeights, sampleProfile, sweepGeometry, type ProfileKey } from "./designerBody";
 import { decalMaterial, faceDecalGeometry, paintBlush, paintBrow, paintEye, paintMouth, raycastFaceSurface, sculptedHeadGeometry } from "./designerFace";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import { hairLock, scalpLock } from "./designerHair";
+import { HEAD_OFFSET, hairLock, SCALP, scalpLock } from "./designerHair";
 import { mergeParts, OUTLINE_WIDTH, outlineMaterial, rigidPart, torsoPanel } from "./designerMesh";
 
 /**
@@ -206,18 +206,18 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
     // bulged down between the legs as a separate seat shape.
     { s: 0.82, a: W(0.02), b: 0.02, c: -0.01 },
     { s: 0.845, a: W(0.075), b: 0.07, c: -0.012 },
-    { s: 0.875, a: W(0.146), b: 0.094, c: -0.014 },
-    { s: 0.93, a: W(0.146), b: 0.094, c: -0.01 },
+    { s: 0.875, a: W(0.152), b: 0.098, c: -0.014 },
+    { s: 0.93, a: W(0.152), b: 0.098, c: -0.01 },
     { s: 1.0, a: W(0.134 * (0.55 + 0.5 * waist)), b: 0.084, c: -0.004 },
     { s: 1.06, a: W(0.128 * (0.5 + 0.55 * waist)), b: 0.082, c: 0.0 },
-    { s: 1.13, a: W(0.136), b: 0.09, c: 0.006 },
-    { s: 1.21, a: W(0.146 * (0.6 + 0.4 * shoulderSpread)), b: 0.096, c: 0.008 },
-    { s: 1.29, a: W(0.156 * shoulderSpread), b: 0.09, c: 0.002 },
-    { s: 1.345, a: W(0.158 * shoulderSpread), b: 0.076, c: -0.006 },
-    { s: 1.378, a: W(0.122 * shoulderSpread), b: 0.062, c: -0.01 },
-    { s: 1.405, a: 0.054, b: 0.052, c: -0.006 },
-    { s: 1.49, a: 0.049, b: 0.05, c: 0.0 },
-    { s: 1.57, a: 0.04, b: 0.042, c: 0.004 },
+    { s: 1.13, a: W(0.14), b: 0.096, c: 0.006 },
+    { s: 1.21, a: W(0.152 * (0.6 + 0.4 * shoulderSpread)), b: 0.104, c: 0.008 },
+    { s: 1.29, a: W(0.164 * shoulderSpread), b: 0.096, c: 0.002 },
+    { s: 1.345, a: W(0.166 * shoulderSpread), b: 0.08, c: -0.006 },
+    { s: 1.378, a: W(0.126 * shoulderSpread), b: 0.064, c: -0.01 },
+    { s: 1.405, a: 0.046, b: 0.046, c: -0.006 },
+    { s: 1.49, a: 0.037, b: 0.04, c: -0.002 },
+    { s: 1.57, a: 0.034, b: 0.037, c: 0.002 },
   ];
   const torsoWeights = chainWeights(
     [boneIndex.hips, boneIndex.spine, boneIndex.chest, boneIndex.upperChest, boneIndex.neck, boneIndex.head],
@@ -357,7 +357,9 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
   // added straight to the head bone, because the expression system moves
   // those groups (see designerExpressions.ts). A part added directly to
   // the bone could not be animated without disturbing its siblings.
-  const headY = 0.128;
+  // A little lower than the head bone's own height, so the chin overlaps
+  // the top of the neck (see sculptedHeadGeometry) and the neck is short.
+  const headY = HEAD_OFFSET;
   const headGroup = new THREE.Group();
   headGroup.position.set(0, headY * h, 0);
   bones.get("head")!.add(headGroup);
@@ -406,7 +408,7 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
   const headSurface = raycastFaceSurface(headGeometry);
   // Nose: just a tip that catches a highlight and a short shadow. At this
   // level of stylisation anything more reads as a caricature.
-  face(sphere(0.0055), faceSkin, [0, -0.04, headSurface(0, -0.04) - 0.0015], [0, 0, 0], [1, 0.75, 1], headGroup, false);
+  face(sphere(0.005), faceSkin, [0, -0.052, headSurface(0, -0.052) - 0.0015], [0, 0, 0], [1, 0.75, 1], headGroup, false);
 
   // Painted features (designerFace.ts), each in the group the expression
   // system animates. Eye and brow are painted once and mirrored.
@@ -420,9 +422,11 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
     [-1, "rightEye"],
   ] as const) {
     // Ear.
-    face(sphere(0.024), faceSkin, [0.116 * side, -0.01, -0.004], [0, 0, 0], [0.5, 1, 0.75]);
+    face(sphere(0.022), faceSkin, [0.106 * side, -0.012, -0.006], [0, 0, 0], [0.5, 1, 0.75]);
 
-    const eyeDecal = faceDecalGeometry(headSurface, 0.042 * side, -0.016, 0.064, 0.072, 0.0015, side < 0);
+    // Large, set low (the middle of the eye just under the head's
+    // equator), and close together, as on a VRoid face.
+    const eyeDecal = faceDecalGeometry(headSurface, 0.04 * side, -0.024, 0.07, 0.086, 0.0015, side < 0);
     const eye = facePart(eyeDecal.origin);
     eye.name = key;
     eyeGroups[key] = eye;
@@ -431,19 +435,19 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
     // Kept below the bangs on every hair style, so the brows (which carry
     // most of an expression) are never buried.
     const browKey = side > 0 ? "leftBrow" : "rightBrow";
-    const browDecal = faceDecalGeometry(headSurface, 0.045 * side, 0.031, 0.054, 0.0135, 0.002, side < 0);
+    const browDecal = faceDecalGeometry(headSurface, 0.043 * side, 0.032, 0.05, 0.012, 0.002, side < 0);
     const brow = facePart(browDecal.origin);
     brow.name = browKey;
     browGroups[browKey] = brow;
     face(browDecal.geometry, browMat, [0, 0, 0], [0, 0, 0], [1, 1, 1], brow);
 
-    const blush = faceDecalGeometry(headSurface, 0.06 * side, -0.046, 0.05, 0.024, 0.001);
+    const blush = faceDecalGeometry(headSurface, 0.052 * side, -0.06, 0.046, 0.022, 0.001);
     face(blush.geometry, blushMat, blush.origin);
   }
 
   // Mouth: painted open, then squashed to a soft closed line at rest.
   // Visemes and expressions scale this group, which parts the lips.
-  const mouthDecal = faceDecalGeometry(headSurface, 0, -0.07, 0.034, 0.02, 0.0015);
+  const mouthDecal = faceDecalGeometry(headSurface, 0, -0.082, 0.03, 0.018, 0.0015);
   const mouth = facePart(mouthDecal.origin);
   mouth.name = "mouth";
   mouth.scale.y = 0.42;
@@ -477,7 +481,12 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
   };
   /** One lock in front of each ear, hanging `drop` below ear level. */
   const frame = (drop: number) => {
-    for (const side of [1, -1]) lock(scalpLock(1.28 * side, 0.26 * PI, 0.5 * PI, drop, 0.004, 0.012), 0.025, 0.008);
+    // Two each side, broad, swept forward over the cheeks: VRoid hair
+    // frames the face, which is much of why its faces read as narrow.
+    for (const side of [1, -1]) {
+      lock(scalpLock(1.12 * side, 0.24 * PI, 0.5 * PI, drop, 0.002, 0.016), 0.038, 0.009);
+      lock(scalpLock(1.38 * side, 0.26 * PI, 0.52 * PI, drop * 0.85, 0.004, 0.012), 0.034, 0.009);
+    }
   };
   /** Locks round the back, from ear to ear, hanging `drop` below the
    *  nape, splaying `out` and curling in by `curl`. */
@@ -497,7 +506,7 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
       hairTop(0.136, PI * 0.38);
       hairBack(0.136, PI * 0.5);
       fringe();
-      frame(0.035);
+      frame(0.06);
       back(7, 0.02, 0.006, 0.01, 0.045);
       break;
     case "bob":
@@ -521,9 +530,9 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
       frame(0.08);
       add("head", sphere(0.026), accessory, [0, headY + 0.04, -0.132]);
       // The tail: out from the tie, then falling, thick at the top.
-      const tie = new THREE.Vector3(0, 1.656, -0.14);
+      const tie = new THREE.Vector3(0, SCALP.center.y + 0.04, -0.14);
       for (const x of [-0.012, 0.012]) {
-        lock([tie.clone().setX(x * 0.5), new THREE.Vector3(x, 1.63, -0.2), new THREE.Vector3(x * 1.3, 1.5, -0.215), new THREE.Vector3(x, 1.37, -0.18)], 0.034, 0.024, 0.3);
+        lock([tie.clone().setX(x * 0.5), new THREE.Vector3(x, tie.y - 0.026, -0.2), new THREE.Vector3(x * 1.3, tie.y - 0.156, -0.215), new THREE.Vector3(x, tie.y - 0.286, -0.18)], 0.034, 0.024, 0.3);
       }
       break;
     }
@@ -543,8 +552,8 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
   // ---- accessories ------------------------------------------------------------
   if (spec.accessories.includes("glasses")) {
     // Centred on the painted eyes (see the eye decals above).
-    for (const side of [1, -1]) add("head", new THREE.TorusGeometry(0.033, 0.0042, 8, 28), dark, [0.042 * side, headY - 0.016, 0.127]);
-    add("head", new THREE.BoxGeometry(0.018, 0.005, 0.005), dark, [0, headY - 0.008, 0.13]);
+    for (const side of [1, -1]) add("head", new THREE.TorusGeometry(0.038, 0.0042, 8, 28), dark, [0.04 * side, headY - 0.024, 0.124]);
+    add("head", new THREE.BoxGeometry(0.008, 0.005, 0.005), dark, [0, headY - 0.016, 0.127]);
   }
   if (spec.accessories.includes("cap")) {
     add("head", cap(0.143, Math.PI * 0.46), accessory, [0, headY + 0.018, -0.005], [0, 0, 0], [1, 1, 1.03]);
@@ -563,15 +572,17 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
   const sleeveLength = longSleeves ? 0.478 : spec.top === "tshirt" ? 0.13 : 0;
   const shoulderX = 0.165 * b;
   const armKeys: ProfileKey[] = [
-    { s: shoulderX - 0.07, a: W(0.034), b: W(0.04) },
-    { s: shoulderX, a: W(0.04), b: W(0.046) },
-    { s: shoulderX + 0.05, a: W(0.041), b: W(0.042) },
-    { s: shoulderX + 0.14, a: W(0.035), b: W(0.035) },
-    { s: shoulderX + 0.235, a: W(0.028), b: W(0.03) },
-    { s: shoulderX + 0.275, a: W(0.03), b: W(0.033) },
-    { s: shoulderX + 0.34, a: W(0.027), b: W(0.029) },
-    { s: shoulderX + 0.44, a: W(0.018), b: W(0.025) },
-    { s: shoulderX + 0.49, a: W(0.017), b: W(0.024) },
+    // Fuller than a mannequin's, as VRoid's are: a rounded deltoid, an
+    // upper arm about as thick as the forearm's widest, a slim wrist.
+    { s: shoulderX - 0.07, a: W(0.04), b: W(0.046) },
+    { s: shoulderX, a: W(0.048), b: W(0.054) },
+    { s: shoulderX + 0.05, a: W(0.048), b: W(0.05) },
+    { s: shoulderX + 0.14, a: W(0.041), b: W(0.042) },
+    { s: shoulderX + 0.235, a: W(0.034), b: W(0.036) },
+    { s: shoulderX + 0.275, a: W(0.036), b: W(0.039) },
+    { s: shoulderX + 0.34, a: W(0.032), b: W(0.034) },
+    { s: shoulderX + 0.44, a: W(0.021), b: W(0.028) },
+    { s: shoulderX + 0.49, a: W(0.02), b: W(0.027) },
   ];
   for (const [side, prefix] of [[1, "left"], [-1, "right"]] as const) {
     const shoulder = `${prefix}Shoulder` as VRMHumanBoneName;
@@ -631,7 +642,8 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
     ];
     body(
       sweepGeometry({
-        keys: handKeys.map((k) => ({ ...k, s: shoulderX + k.s, a: k.a * b, b: k.b * b })),
+        // A touch narrower than life, as stylized hands are.
+        keys: handKeys.map((k) => ({ ...k, s: shoulderX + k.s, a: k.a * b, b: k.b * b * 0.88 })),
         from: shoulderX + 0.46,
         to: shoulderX + 0.645,
         step: 0.01,
@@ -670,18 +682,18 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
   // tubes plugged into a ball.
   const bareLegs = spec.bottom === "skirt" || dress;
   const legKeys: ProfileKey[] = [
-    { s: 0.06, a: W(0.029), b: W(0.03) },
-    { s: 0.1, a: W(0.031), b: W(0.033) },
-    { s: 0.17, a: W(0.035), b: W(0.038), c: -0.002 },
-    { s: 0.29, a: W(0.044), b: W(0.05), c: -0.007 },
-    { s: 0.37, a: W(0.048), b: W(0.053), c: -0.008 },
-    { s: 0.44, a: W(0.046), b: W(0.048), c: -0.003 },
-    { s: 0.49, a: W(0.045), b: W(0.047), c: 0.004 },
-    { s: 0.55, a: W(0.05), b: W(0.052), c: 0.004 },
-    { s: 0.66, a: W(0.06), b: W(0.062), c: 0.006 },
-    { s: 0.78, a: W(0.069), b: W(0.07), c: 0.004 },
-    { s: 0.87, a: W(0.073), b: W(0.072), c: 0 },
-    { s: 0.95, a: W(0.07), b: W(0.07), c: -0.004 },
+    { s: 0.06, a: W(0.031), b: W(0.032) },
+    { s: 0.1, a: W(0.034), b: W(0.036) },
+    { s: 0.17, a: W(0.04), b: W(0.043), c: -0.002 },
+    { s: 0.29, a: W(0.05), b: W(0.057), c: -0.008 },
+    { s: 0.37, a: W(0.054), b: W(0.06), c: -0.009 },
+    { s: 0.44, a: W(0.052), b: W(0.054), c: -0.003 },
+    { s: 0.49, a: W(0.051), b: W(0.053), c: 0.004 },
+    { s: 0.55, a: W(0.057), b: W(0.059), c: 0.004 },
+    { s: 0.66, a: W(0.068), b: W(0.07), c: 0.006 },
+    { s: 0.78, a: W(0.078), b: W(0.079), c: 0.004 },
+    { s: 0.87, a: W(0.083), b: W(0.081), c: 0 },
+    { s: 0.95, a: W(0.078), b: W(0.078), c: -0.004 },
   ];
   for (const [side, prefix] of [[1, "left"], [-1, "right"]] as const) {
     const upper = `${prefix}UpperLeg` as VRMHumanBoneName;

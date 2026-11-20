@@ -39,7 +39,7 @@ import { BLADE_CONTACT, bodyCapsule, segmentDistance, sweep, type Capsule, type 
 import { FantasyEffects, Trail } from "./effects";
 import { heldPose, timingOf, type Action, type ActionKind, type HeldPose } from "./poses";
 import { playCharged, playClash, playHit, playKnockedOut, playSpecial, playSwing } from "./sounds";
-import { buildWeapon, ELEMENT_COLORS, MAX_HP, WEAPON_SPECS, type Element, type Weapon } from "./weapons";
+import { buildWeapon, ELEMENT_COLORS, MAX_HP, SABER_HALO, weaponGlow, WEAPON_SPECS, type Element, type Weapon } from "./weapons";
 
 interface FantasyLayerProps {
   selfId: string | null;
@@ -331,7 +331,7 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
             break;
           case "lo": {
             const wasKo = fighter.ko;
-            Object.assign(fighter, { weapon: event.weapon, element: event.element, hp: event.hp, ko: event.ko, guard: event.guard });
+            Object.assign(fighter, { weapon: event.weapon, element: event.element, hp: event.hp, ko: event.ko, guard: event.guard, ready: event.ready });
             if (!event.weapon) fighter.action = null;
             if (event.ko && !wasKo) playKnockedOut(distance);
             break;
@@ -343,6 +343,7 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
             if (!fighter.weapon) return;
             const action: Action = { kind: event.kind, n: event.n, start: seconds() };
             fighter.action = action;
+            if (action.kind === "special") fighter.ready = false;
             const timing = timingOf(fighter.weapon, action.kind);
             const weapon = fighter.weapon;
             if (weapon !== "bow" && action.kind !== "recoil") setTimeout(() => playSwing(weapon, distance), timing.duration * timing.impact * 450);
@@ -508,7 +509,7 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
     const inVr = sample !== null && performance.now() - sample.receivedAt < TRACKING_STALE_MS;
 
     const seen = new Set<string>();
-    const tend = (key: string, weapon: Weapon | null, element: Element, ko: boolean, action: Action | null, hp: number | null, guard: boolean) => {
+    const tend = (key: string, weapon: Weapon | null, element: Element, ko: boolean, action: Action | null, hp: number | null, guard: boolean, charge: number) => {
       const vrm = getAddonAvatar(key);
       if (!vrm) return;
       seen.add(key);
@@ -546,7 +547,8 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
       holder.overlay.restore();
 
       const held = ko ? null : weapon;
-      const propKey = held ? `${held}:${held === "lightsaber" ? element : ""}` : "";
+      // Every weapon is built in its element's colour now: its aura is.
+      const propKey = held ? `${held}:${element}` : "";
       if (propKey !== holder.propKey) {
         holder.detach();
         if (holder.prop) disposeTree(holder.prop);
@@ -594,6 +596,15 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
       } else holder.speed = 0;
       holder.trail.update(now);
 
+      // The aura: faint as the meter fills, pulsing once the special is
+      // ready, and flaring while it goes off.
+      const glow = holder.prop && weaponGlow(holder.prop);
+      if (glow) {
+        const special = action?.kind === "special" && now - action.start < timingOf(held ?? "sword", "special").duration;
+        const level = special ? 1 : charge >= 1 ? 0.55 + 0.25 * Math.sin(now * 7) : 0.05 + 0.25 * charge * charge;
+        glow.opacity = holder.prop!.userData.saber ? SABER_HALO + (1 - SABER_HALO) * Math.max(0, level - 0.3) : level;
+      }
+
       // Other fighters' health, over their heads.
       if (hp !== null && weapon) {
         if (!holder.bar) holder.bar = new HealthBar();
@@ -607,9 +618,10 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
       }
     };
 
-    tend(LOCAL_AVATAR, me.weapon, me.element, me.ko, local.action, null, me.guard);
+    tend(LOCAL_AVATAR, me.weapon, me.element, me.ko, local.action, null, me.guard, me.meter / 100);
     for (const [id, fighter] of remoteFighters) {
-      if (fighter.weapon || holders.has(id)) tend(id, fighter.weapon, fighter.element, fighter.ko, fighter.action, fighter.hp, fighter.guard);
+      // Others' meters aren't sent, only whether it's full.
+      if (fighter.weapon || holders.has(id)) tend(id, fighter.weapon, fighter.element, fighter.ko, fighter.action, fighter.hp, fighter.guard, fighter.ready ? 1 : 0);
     }
     for (const [key, holder] of holders) {
       if (seen.has(key)) continue;

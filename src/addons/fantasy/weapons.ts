@@ -113,45 +113,94 @@ function group(parts: [THREE.BufferGeometry[], THREE.Material][]) {
   return out;
 }
 
-/** A curved blade from straight segments, bending toward the back (-x). */
-function curvedBlade(from: number, length: number, width: number, bend: number, segments = 4) {
+/** A curved blade from straight segments, bending toward the back (-x).
+ *  `fat` widens and thickens it, for the glow round it. */
+function curvedBlade(from: number, length: number, width: number, bend: number, segments = 4, fat = 0) {
   const parts: THREE.BufferGeometry[] = [];
   const step = length / segments;
+  const thick = 0.007 + fat * 2.5;
   for (let i = 0; i < segments; i++) {
     const s = (i + 0.5) / segments;
-    parts.push(box(width * (1 - 0.25 * s), step * 1.04, 0.007, from + step * (i + 0.5), -bend * s * s, bend * 1.6 * s / segments));
+    parts.push(box(width * (1 - 0.25 * s) + fat * 2, step * 1.04, thick, from + step * (i + 0.5), -bend * s * s, bend * 1.6 * s / segments));
   }
-  parts.push(tip(width * 0.75, 0.07, 0.007, from + length, -bend));
+  parts.push(tip(width * 0.75 + fat * 2, 0.07 + fat * 2, thick, from + length, -bend));
   return parts;
 }
+
+/**
+ * The aura round a weapon: its blade's shape, fattened, in its special's
+ * colour, unlit and additive. Invisible until FantasyLayer turns it up as
+ * the meter fills (see weaponGlow); a light saber's own halo serves.
+ */
+function glowMaterial(element: Element) {
+  return new THREE.MeshBasicMaterial({
+    color: ELEMENT_COLORS[element],
+    transparent: true,
+    opacity: 0,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    toneMapped: false,
+  });
+}
+
+function withGlow(out: THREE.Group, parts: THREE.BufferGeometry[], element: Element) {
+  const material = glowMaterial(element);
+  const merged = mergeGeometries(parts.map((g) => (g.index ? g.toNonIndexed() : g)));
+  for (const g of parts) g.dispose();
+  if (merged) {
+    const mesh = new THREE.Mesh(merged, material);
+    mesh.userData.navIgnore = true;
+    mesh.renderOrder = 2;
+    out.add(mesh);
+  }
+  out.userData.glow = material;
+  return out;
+}
+
+/** A weapon's aura material, if it has one (see buildWeapon). */
+export const weaponGlow = (weapon: THREE.Object3D): THREE.MeshBasicMaterial | null => (weapon.userData.glow as THREE.MeshBasicMaterial | undefined) ?? null;
+/** How bright a light saber's halo is at rest. */
+export const SABER_HALO = 0.45;
 
 export function buildWeapon(weapon: Weapon, element: Element): THREE.Group {
   switch (weapon) {
     case "sword":
-      return group([
-        [[box(0.05, 0.74, 0.008, 0.45), tip(0.05, 0.1, 0.008, 0.82)], steel()],
-        [[rod(0.017, -0.09, 0.07)], dark()],
-        [[box(0.22, 0.026, 0.036, 0.075), new THREE.SphereGeometry(0.027, 10, 8).translate(0, -0.1, 0)], gold()],
-      ]);
+      return withGlow(
+        group([
+          [[box(0.05, 0.74, 0.008, 0.45), tip(0.05, 0.1, 0.008, 0.82)], steel()],
+          [[rod(0.017, -0.09, 0.07)], dark()],
+          [[box(0.22, 0.026, 0.036, 0.075), new THREE.SphereGeometry(0.027, 10, 8).translate(0, -0.1, 0)], gold()],
+        ]),
+        [box(0.085, 0.78, 0.03, 0.46), tip(0.085, 0.13, 0.03, 0.85)],
+        element
+      );
     case "katana":
-      return group([
-        [curvedBlade(0.09, 0.7, 0.032, 0.05), steel()],
-        [[rod(0.016, -0.17, 0.07)], dark()],
-        [[rod(0.045, 0.072, 0.084, 14), rod(0.018, 0.084, 0.1)], gold()],
-      ]);
+      return withGlow(
+        group([
+          [curvedBlade(0.09, 0.7, 0.032, 0.05), steel()],
+          [[rod(0.016, -0.17, 0.07)], dark()],
+          [[rod(0.045, 0.072, 0.084, 14), rod(0.018, 0.084, 0.1)], gold()],
+        ]),
+        curvedBlade(0.09, 0.7, 0.032, 0.05, 4, 0.016),
+        element
+      );
     case "naginata":
-      return group([
-        [curvedBlade(0.6, 0.42, 0.04, 0.06, 3), steel()],
-        [[rod(0.016, -0.95, 0.57)], wood()],
-        [[rod(0.021, 0.54, 0.6), rod(0.019, -0.98, -0.93)], gold()],
-      ]);
+      return withGlow(
+        group([
+          [curvedBlade(0.6, 0.42, 0.04, 0.06, 3), steel()],
+          [[rod(0.016, -0.95, 0.57)], wood()],
+          [[rod(0.021, 0.54, 0.6), rod(0.019, -0.98, -0.93)], gold()],
+        ]),
+        curvedBlade(0.6, 0.42, 0.04, 0.06, 3, 0.018),
+        element
+      );
     case "lightsaber": {
       const color = new THREE.Color(ELEMENT_COLORS[element]);
       const core = new THREE.MeshBasicMaterial({ color: new THREE.Color("#ffffff").lerp(color, 0.25), toneMapped: false });
       const glow = new THREE.MeshBasicMaterial({
         color,
         transparent: true,
-        opacity: 0.45,
+        opacity: SABER_HALO,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
         toneMapped: false,
@@ -164,6 +213,8 @@ export function buildWeapon(weapon: Weapon, element: Element): THREE.Group {
       const halo = new THREE.Mesh(rod(0.03, 0.12, 1.08, 8), glow);
       halo.userData.navIgnore = true;
       out.add(halo);
+      out.userData.glow = glow;
+      out.userData.saber = true;
       return out;
     }
     case "bow": {
@@ -172,11 +223,15 @@ export function buildWeapon(weapon: Weapon, element: Element): THREE.Group {
       const curve = new THREE.QuadraticBezierCurve3(new THREE.Vector3(-0.16, -0.66, 0), new THREE.Vector3(0.12, 0, 0), new THREE.Vector3(-0.16, 0.66, 0));
       const limbs = new THREE.TubeGeometry(curve, 16, 0.014, 6, false);
       const string = new THREE.CylinderGeometry(0.0025, 0.0025, 1.3, 3).translate(-0.16, 0, 0);
-      return group([
-        [[limbs], wood()],
-        [[rod(0.022, -0.07, 0.07)], dark()],
-        [[string], new THREE.MeshBasicMaterial({ color: "#efe7d6" })],
-      ]);
+      return withGlow(
+        group([
+          [[limbs], wood()],
+          [[rod(0.022, -0.07, 0.07)], dark()],
+          [[string], new THREE.MeshBasicMaterial({ color: "#efe7d6" })],
+        ]),
+        [new THREE.TubeGeometry(curve, 16, 0.03, 6, false)],
+        element
+      );
     }
   }
 }

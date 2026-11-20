@@ -41,18 +41,23 @@ export function sculptedHeadGeometry(): THREE.BufferGeometry {
     const z = position.getZ(i);
     // 0 at the equator, 1 at the bottom of the head.
     const down = Math.max(0, -y);
-    // A soft jaw rather than a point: the earlier, stronger taper gave
-    // the head a light-bulb outline. Full cheeks just below the equator,
-    // a short lower face, and a front that is a little flatter than the
-    // sides, which is the plane anime features are drawn on.
-    const taper = 1 - 0.2 * Math.pow(down, 1.6);
-    const cheeks = 1 + 0.05 * Math.sin(Math.min(1, down * 1.6) * Math.PI);
     const front = Math.max(0, z);
+    // VRoid's face: a round cranium over a jaw that narrows in near-straight
+    // lines from the cheeks (just under the eyes) to a small chin. The taper
+    // starts below the eyes, not at the equator, which is what kept the
+    // earlier, stronger taper from reading as a light bulb; and it bites
+    // harder at the front, so the chin is narrow while the back of the jaw
+    // stays wide under the ears.
+    const jaw = Math.min(1, Math.max(0, (down - 0.15) / 0.85));
+    const taper = 1 - jaw * (0.4 + 0.32 * front);
+    // The chin comes down and a little forward in front of the neck, so
+    // the head sits on the neck the way a drawn one does, not on top of it.
+    const chin = front * front * jaw;
     position.setXYZ(
       i,
-      x * 0.122 * taper * cheeks,
-      y * (y < 0 ? 0.128 : 0.132),
-      z * (0.125 - 0.007 * front) * (1 - 0.1 * down * (1 - front)) + 0.012 * Math.pow(down, 2.2) * front
+      x * 0.112 * taper,
+      y * (y < 0 ? 0.128 + 0.034 * chin : 0.13),
+      z * (0.122 - 0.008 * front) * (1 - 0.12 * down * (1 - front)) + 0.016 * chin
     );
   }
   geometry.computeVertexNormals();
@@ -132,14 +137,24 @@ function texture(element: HTMLCanvasElement): THREE.CanvasTexture {
 export function paintEye(irisHex: string): THREE.CanvasTexture {
   const [element, g] = canvas(256, 256);
 
+  // Taller than wide, the inner corner lower than the outer, the way
+  // VRoid draws them: the shape is most of the style.
   const eyeShape = () => {
     g.beginPath();
-    g.moveTo(24, 122);
-    g.bezierCurveTo(52, 58, 168, 34, 238, 90); // upper lid
-    g.bezierCurveTo(240, 168, 204, 232, 132, 234); // outer, lower
-    g.bezierCurveTo(68, 234, 28, 186, 24, 122); // inner corner
+    g.moveTo(22, 132);
+    g.bezierCurveTo(40, 50, 170, 22, 240, 78); // upper lid
+    g.bezierCurveTo(244, 170, 210, 240, 128, 242); // outer, lower
+    g.bezierCurveTo(62, 242, 24, 200, 22, 132); // inner corner
     g.closePath();
   };
+  // The bottom of the iris glows in a brighter, more saturated version of
+  // its colour, so even a dark brown reads as an eye, not a grey disc.
+  const vivid = (() => {
+    const c = new THREE.Color(irisHex);
+    const hsl = { h: 0, s: 0, l: 0 };
+    c.getHSL(hsl);
+    return "#" + c.setHSL(hsl.h, Math.max(hsl.s, 0.55), Math.max(0.52, hsl.l + 0.3)).getHexString();
+  })();
 
   g.save();
   eyeShape();
@@ -149,27 +164,33 @@ export function paintEye(irisHex: string): THREE.CanvasTexture {
 
   // Iris: dark under the lid, brightening toward the bottom, with a
   // darker rim. This gradient is most of what makes it read as an eye.
-  const iris = g.createLinearGradient(0, 56, 0, 230);
-  iris.addColorStop(0, mix(irisHex, "#000000", 0.62));
-  iris.addColorStop(0.55, irisHex);
-  iris.addColorStop(1, mix(irisHex, "#ffffff", 0.45));
+  const iris = g.createLinearGradient(0, 40, 0, 236);
+  iris.addColorStop(0, mix(irisHex, "#000000", 0.72));
+  iris.addColorStop(0.45, irisHex);
+  iris.addColorStop(0.8, vivid);
+  iris.addColorStop(1, mix(vivid, "#ffffff", 0.35));
   g.beginPath();
-  g.ellipse(140, 142, 68, 88, 0, 0, Math.PI * 2);
+  g.ellipse(136, 146, 84, 100, 0, 0, Math.PI * 2);
   g.fillStyle = iris;
   g.fill();
-  g.lineWidth = 7;
-  g.strokeStyle = mix(irisHex, "#000000", 0.7);
+  g.lineWidth = 8;
+  g.strokeStyle = mix(irisHex, "#000000", 0.75);
   g.stroke();
 
-  // Pupil.
+  // Pupil, and a soft ring of light round the bottom of the iris.
   g.beginPath();
-  g.ellipse(140, 150, 26, 40, 0, 0, Math.PI * 2);
-  g.fillStyle = mix(irisHex, "#05040a", 0.85);
+  g.ellipse(136, 150, 30, 46, 0, 0, Math.PI * 2);
+  g.fillStyle = mix(irisHex, "#05040a", 0.88);
   g.fill();
+  g.strokeStyle = "rgba(255,255,255,0.35)";
+  g.lineWidth = 6;
+  g.beginPath();
+  g.ellipse(136, 152, 64, 76, 0, Math.PI * 0.2, Math.PI * 0.8);
+  g.stroke();
 
   // The upper lid's shadow across the top of the eye.
-  const lidShadow = g.createLinearGradient(0, 40, 0, 120);
-  lidShadow.addColorStop(0, "rgba(40,22,30,0.55)");
+  const lidShadow = g.createLinearGradient(0, 30, 0, 118);
+  lidShadow.addColorStop(0, "rgba(40,22,30,0.6)");
   lidShadow.addColorStop(1, "rgba(40,22,30,0)");
   g.fillStyle = lidShadow;
   g.fillRect(0, 0, 256, 130);
@@ -177,10 +198,10 @@ export function paintEye(irisHex: string): THREE.CanvasTexture {
   // Catch-lights: one large, one small, on opposite sides.
   g.fillStyle = "rgba(255,255,255,0.95)";
   g.beginPath();
-  g.ellipse(112, 110, 21, 25, -0.3, 0, Math.PI * 2);
+  g.ellipse(104, 104, 24, 28, -0.3, 0, Math.PI * 2);
   g.fill();
   g.beginPath();
-  g.ellipse(172, 190, 10, 8, 0, 0, Math.PI * 2);
+  g.ellipse(174, 196, 11, 9, 0, 0, Math.PI * 2);
   g.fill();
   g.restore();
 
@@ -188,23 +209,23 @@ export function paintEye(irisHex: string): THREE.CanvasTexture {
   g.lineCap = "round";
   g.lineJoin = "round";
   g.strokeStyle = "#1d1416";
-  g.lineWidth = 16;
+  g.lineWidth = 24;
   g.beginPath();
-  g.moveTo(26, 120);
-  g.bezierCurveTo(54, 58, 168, 34, 238, 90);
+  g.moveTo(26, 128);
+  g.bezierCurveTo(42, 50, 170, 22, 240, 78);
   g.stroke();
-  g.lineWidth = 12;
+  g.lineWidth = 15;
   g.beginPath();
-  g.moveTo(222, 80);
-  g.lineTo(250, 66);
+  g.moveTo(224, 70);
+  g.lineTo(252, 58);
   g.stroke();
 
   // A light lower lash, outer half only.
   g.strokeStyle = "rgba(29,20,22,0.55)";
   g.lineWidth = 5;
   g.beginPath();
-  g.moveTo(232, 160);
-  g.bezierCurveTo(222, 210, 190, 232, 140, 234);
+  g.moveTo(236, 168);
+  g.bezierCurveTo(226, 218, 192, 240, 140, 242);
   g.stroke();
 
   return texture(element);

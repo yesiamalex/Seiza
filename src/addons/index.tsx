@@ -5,6 +5,7 @@ import { BandButton, BandStage } from "./band/BandHud";
 import { FantasyLayer } from "./fantasy/FantasyLayer";
 import { FantasyButton, FantasyStatus } from "./fantasy/FantasyHud";
 import { fantasy } from "./fantasy/combat";
+import { tapped } from "./band/band";
 import { MODE_ACCENTS, ModeSwitch } from "./ui";
 
 /**
@@ -33,7 +34,7 @@ export function AddonScene({
   return (
     <>
       {on(worldState, "fantasy") && <FantasyLayer {...props} />}
-      {on(worldState, "band") && <BandLayer selfId={props.selfId} players={props.players} />}
+      {on(worldState, "band") && <BandLayer selfId={props.selfId} players={props.players} editMode={props.editMode} />}
     </>
   );
 }
@@ -88,5 +89,6 @@ export function RoomModes({ worldState, setWorldState, disabled }: { worldState:
   );
 }
 
-/** Whether a click on the floor is an attack rather than a walk. */
-export const fantasyArmed = () => fantasy.get().weapon !== null;
+/** Whether a click belongs to a room mode (an attack, or a note on an
+ *  instrument) rather than being a walk across the floor. */
+export const addonHoldsClicks = () => fantasy.get().weapon !== null || performance.now() - tapped.at < 600;

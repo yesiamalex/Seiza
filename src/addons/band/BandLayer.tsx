@@ -11,8 +11,8 @@ import type { PlayerState } from "../../multiplayer/types";
 import { getAddonAvatar, LOCAL_AVATAR } from "../avatars";
 import { onAddonEvent, sendAddonEvent } from "../bus";
 import { disposeTree, feetAndEye, holdInHand, newTrackedHand, poseHands, rigFor, toTrackedHand, wearOnChest, type HandTarget } from "../rig";
-import { announceBand, band, localNote, musicianOf, parseBandEvent, play, remoteMusicians, resetBand, validNote } from "./band";
-import { KEY_LAYOUT, LIGHT_COLORS, playNote, prepareGuitar, type Instrument } from "./instruments";
+import { announceBand, band, localNote, musicianOf, parseBandEvent, play, remoteMusicians, resetBand, tapped, validNote } from "./band";
+import { CHORDS, KEY_LAYOUT, LIGHT_COLORS, playNote, prepareGuitar, type Instrument } from "./instruments";
 
 /**
  * Band mode in the scene: each musician's instrument in front of them (a
@@ -90,10 +90,64 @@ function buildGuitar() {
   const neck = new THREE.BoxGeometry(0.05, NECK_LENGTH, 0.025).rotateZ(angle).translate(neckMid.x, neckMid.y, neckMid.z - 0.02);
   const head = new THREE.BoxGeometry(0.07, 0.15, 0.022).rotateZ(angle).translate(headAt.x, headAt.y, headAt.z - 0.02);
   group.add(merged([neck, head], material("#3b2618")));
+  // Frets marking the chord zones a tap picks (see chordOnNeck).
+  const frets = Array.from({ length: CHORDS.length + 1 }, (_, k) => {
+    const at = GUITAR_BODY.clone().addScaledVector(NECK, NECK_FROM + (k / CHORDS.length) * NECK_LENGTH);
+    return new THREE.BoxGeometry(0.052, 0.004, 0.004).rotateZ(angle).translate(at.x, at.y, at.z - 0.034);
+  });
+  group.add(merged(frets, material("#d8d2c4", { metalness: 0.4, roughness: 0.4 })));
   const pickguard = new THREE.CylinderGeometry(0.045, 0.045, 0.004, 16).rotateX(Math.PI / 2).translate(GUITAR_BODY.x - 0.05, GUITAR_BODY.y + 0.02, GUITAR_BODY.z - 0.042);
   group.add(merged([pickguard], material("#111111")));
   return group;
 }
+
+/** Which chord a point on a worn guitar picks: by how far up the neck it
+ *  is, one zone per chord between the frets; on the body, null (strum
+ *  the last chord again). `local` is in the guitar's own metres. */
+function chordOnNeck(local: THREE.Vector3): number | null {
+  const along = local.clone().sub(GUITAR_BODY).dot(NECK);
+  if (along < NECK_FROM - 0.02) return null;
+  return Math.max(0, Math.min(CHORDS.length - 1, Math.floor(((along - NECK_FROM) / NECK_LENGTH) * CHORDS.length)));
+}
+
+/** Where a note is on its instrument, in the instrument's own frame, and
+ *  how big a patch to light there. */
+function noteSpot(instrument: Instrument, note: number): { at: THREE.Vector3; size: [number, number, number] } | null {
+  if (instrument === "drums") {
+    const [x, z] = padAt(note);
+    return { at: new THREE.Vector3(x, PAD_TOP + 0.004, z), size: [0.078, 0.004, 0.075] };
+  }
+  if (instrument === "keys") {
+    const semitone = (((note - 60) % 12) + 12) % 12;
+    const black = KEY_LAYOUT[semitone]?.black;
+    return black
+      ? { at: new THREE.Vector3(keyX(semitone), PAD_TOP + 0.014, DESK_Z - 0.03), size: [WHITE_KEY * 0.55, 0.004, 0.06] }
+      : { at: new THREE.Vector3(keyX(semitone), PAD_TOP + 0.004, DESK_Z + 0.005), size: [WHITE_KEY * 0.92, 0.004, 0.11] };
+  }
+  if (instrument === "guitar") {
+    const at = GUITAR_BODY.clone().addScaledVector(NECK, NECK_FROM + ((note + 0.5) / CHORDS.length) * NECK_LENGTH);
+    at.z -= 0.036;
+    return { at, size: [0.054, NECK_LENGTH / CHORDS.length, 0.004] };
+  }
+  return null;
+}
+
+const FLASH_SECONDS = 0.18;
+
+/** A patch of light over the pad, key, or fret just played, seen by
+ *  everyone; unlit and additive, so it costs nothing to light. */
+function buildFlash() {
+  const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(1, 1, 1),
+    new THREE.MeshBasicMaterial({ color: "#d9c4ff", transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false })
+  );
+  mesh.userData.navIgnore = true;
+  mesh.visible = false;
+  return mesh;
+}
+
+/** The last chord played here, for a strum on the guitar's body. */
+let lastChord = 0;
 
 let halo: THREE.Texture | null = null;
 function haloTexture() {
@@ -247,6 +301,9 @@ interface Holder {
   propKey: string;
   prop: THREE.Object3D | null;
   detach: () => void;
+  flash: THREE.Mesh | null;
+  /** When the note the flash shows was played. */
+  flashed: number;
 }
 
 const approach = (current: number, goal: number, rate: number, dt: number) => current + (goal - current) * (1 - Math.exp(-rate * dt));
@@ -254,10 +311,12 @@ const approach = (current: number, goal: number, rate: number, dt: number) => cu
 interface BandLayerProps {
   selfId: string | null;
   players: Record<string, PlayerState>;
+  /** No playing by tap while editing: a click there picks things up. */
+  editMode: boolean;
 }
 
-export function BandLayer({ selfId, players }: BandLayerProps) {
-  const { camera } = useThree();
+export function BandLayer({ selfId, players, editMode }: BandLayerProps) {
+  const { camera, gl } = useThree();
   const holders = useRef(new Map<string, Holder>()).current;
   const playersRef = useRef(players);
   playersRef.current = players;
@@ -293,6 +352,49 @@ export function BandLayer({ selfId, players }: BandLayerProps) {
       playNote(m.instrument, event.note, at ? camera.getWorldPosition(new THREE.Vector3()).distanceTo(at) : undefined);
     });
   }, [camera]);
+
+  // Tap or click your own instrument to play it: the pad, key, or fret
+  // under the pointer. Drums and keys stand in front of you, so they're
+  // under your hands in first person and in view in third.
+  useEffect(() => {
+    if (editMode) return;
+    const el = gl.domElement;
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    const down = (e: PointerEvent) => {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      const { instrument, octave } = band.get();
+      const holder = holders.get(LOCAL_AVATAR);
+      if (!instrument || instrument === "lightstick" || !holder?.prop) return;
+      const rect = el.getBoundingClientRect();
+      pointer.set(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+      raycaster.setFromCamera(pointer, camera);
+      const hit = raycaster.intersectObject(holder.prop, true).find((h) => h.object !== holder.flash);
+      if (!hit) return;
+      const local = holder.prop.worldToLocal(hit.point.clone());
+      let note: number | null = null;
+      if (instrument === "guitar") {
+        const chord = chordOnNeck(local);
+        note = chord ?? lastChord;
+      } else if (local.y >= PAD_TOP - 0.025) {
+        if (instrument === "drums") {
+          for (let pad = 0; pad < 8 && note === null; pad++) {
+            const [px, pz] = padAt(pad);
+            if (Math.abs(local.x - px) < 0.045 && Math.abs(local.z - pz) < 0.045) note = pad;
+          }
+        } else if (Math.abs(local.z - DESK_Z) < 0.07) {
+          const semitone = (local.z < DESK_Z - 0.01 && local.y > PAD_TOP + 0.006 ? nearestKey(local.x, true) : null) ?? nearestKey(local.x, false);
+          if (semitone !== null) note = 60 + octave * 12 + semitone;
+        }
+      }
+      if (note === null) return;
+      if (instrument === "guitar") lastChord = note;
+      tapped.at = performance.now();
+      play(note);
+    };
+    el.addEventListener("pointerdown", down);
+    return () => el.removeEventListener("pointerdown", down);
+  }, [gl, camera, editMode, holders]);
 
   const roster = Object.keys(players).sort().join(",");
   useEffect(() => {
@@ -336,6 +438,8 @@ export function BandLayer({ selfId, players }: BandLayerProps) {
           propKey: "",
           prop: null,
           detach: () => {},
+          flash: null,
+          flashed: 0,
         };
         holders.set(key, holder);
       }
@@ -346,6 +450,7 @@ export function BandLayer({ selfId, players }: BandLayerProps) {
         holder.detach();
         if (holder.prop) disposeTree(holder.prop);
         holder.prop = null;
+        holder.flash = null;
         holder.detach = () => {};
         holder.propKey = propKey;
         if (instrument && rig) {
@@ -366,7 +471,28 @@ export function BandLayer({ selfId, players }: BandLayerProps) {
               holder.detach = () => anchor.remove(stand);
             }
           }
+          if (holder.prop && instrument !== "lightstick") {
+            holder.flash = buildFlash();
+            holder.prop.add(holder.flash);
+          }
         }
+      }
+
+      // Light up what was just played.
+      if (holder.flash && instrument && note) {
+        if (note.at !== holder.flashed) {
+          holder.flashed = note.at;
+          const spot = noteSpot(instrument, note.n);
+          if (spot) {
+            holder.flash.position.copy(spot.at);
+            holder.flash.scale.set(...spot.size);
+            holder.flash.rotation.z = instrument === "guitar" ? Math.atan2(NECK.y, NECK.x) - Math.PI / 2 : 0;
+          }
+        }
+        const age = now - note.at;
+        const material = holder.flash.material as THREE.MeshBasicMaterial;
+        holder.flash.visible = age < FLASH_SECONDS;
+        material.opacity = Math.max(0, 0.9 * (1 - age / FLASH_SECONDS));
       }
 
       const source = key === LOCAL_AVATAR ? LOCAL_TRACKING_SOURCE : key;
@@ -420,6 +546,7 @@ export function BandLayer({ selfId, players }: BandLayerProps) {
           const u = ((fretting.pose[0] - start[0]) * (end[0] - start[0]) + (fretting.pose[1] - start[1]) * (end[1] - start[1]) + (fretting.pose[2] - start[2]) * (end[2] - start[2])) / (length * length);
           chord = Math.max(0, Math.min(3, Math.floor(u * 4)));
         }
+        lastChord = chord;
         play(chord);
       }
       return;

@@ -90,7 +90,7 @@ import { AvatarChooser } from "./ui/AvatarChooser";
 import { useMediaQuery, useWantsTouchControls } from "./ui/useMediaQuery";
 import { saveProfile } from "./profile/profileStore";
 import { deliverWorldMessage, unwrapWorldMessage, WorldExtension, WorldOverlay, wrapWorldMessage } from "./worlds/WorldExtension";
-import { AddonBarButtons, AddonOverlay, AddonScene, connectAddonBus, fantasyArmed, LOCAL_AVATAR, RoomModes, setAddonAvatar } from "./addons";
+import { AddonBarButtons, AddonOverlay, AddonScene, addonHoldsClicks, connectAddonBus, LOCAL_AVATAR, RoomModes, setAddonAvatar } from "./addons";
 import { PortalCard, Portals } from "./worlds/Portals";
 import { BAR_LABEL_CLASS, barButtonActiveStyle, barButtonStyle, inputStyle, panelStyle, pillButtonStyle, primaryButtonStyle } from "./ui/styles";
 import { CloseIcon, LockIcon, PersonIcon, VrHeadsetIcon } from "./ui/icons";
@@ -1117,8 +1117,9 @@ export default function App() {
   // Disabled while editing, where a floor click shouldn't yank you away.
   const handleFloorClick = useCallback(
     (point: THREE.Vector3) => {
-      // With a weapon drawn (Fantasy mode), a click is an attack.
-      if (editMode || fantasyArmed()) return;
+      // With a weapon drawn or an instrument out (src/addons/), a click is
+      // an attack or a note.
+      if (editMode || addonHoldsClicks()) return;
       // Walking somewhere is also a way of getting up.
       standUp();
       const destination = point.clone();

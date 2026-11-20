@@ -1046,8 +1046,15 @@ adds its own coloured button to the bar while it is on.
     and the next hard swing is the special. The trigger shoots the bow.
   - The weapons trade off against each other rather than one being best.
     The weapon picker says what each is good at.
+  - Every weapon glows in its special's colour as the meter fills. It
+    pulses when the special is ready, so others can see it coming.
 - **Band** (violet): pick a drum pad, keys, a guitar, or a light stick.
-  - **Start playing** opens the instrument, which you can tap or click. Its
+  - The instruments are 3D models you carry: a guitar slung on you, a light
+    stick in your hand, and a drum pad or keys on a stand in front of you.
+    Tap or click the model itself to play it: a pad, a key, or a fret on
+    the guitar's neck (tap its body to strum the last chord again). Others
+    see what you play light up.
+  - **Start playing** also opens the instrument flat on the screen. Its
     keyboard keys are shown on it, and they play the instrument instead of
     moving you until you press Esc.
   - In VR, play with your hands. Tap the pads and keys, or strum the

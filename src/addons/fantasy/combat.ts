@@ -53,6 +53,8 @@ export interface RemoteFighter {
   ko: boolean;
   action: Action | null;
   guard: boolean;
+  /** Their special is ready (the meter full): their weapon glows. */
+  ready: boolean;
 }
 export const remoteFighters = new Map<string, RemoteFighter>();
 /** This visitor's own action in progress, for the pose and the trail. */
@@ -110,8 +112,8 @@ export function acceptHit(input: {
 // --- this visitor ----------------------------------------------------------------
 
 export function announce() {
-  const { weapon, element, hp, ko, guard } = fantasy.get();
-  sendAddonEvent("fantasy", { k: "lo", w: weapon ?? "", e: element, hp, ko, ...(guard ? { g: 1 } : {}) });
+  const { weapon, element, hp, ko, guard, meter } = fantasy.get();
+  sendAddonEvent("fantasy", { k: "lo", w: weapon ?? "", e: element, hp, ko, ...(guard ? { g: 1 } : {}), ...(meter >= 100 ? { rd: 1 } : {}) });
 }
 
 export function setWeapon(weapon: Weapon | null) {
@@ -196,7 +198,10 @@ export function gainMeter(amount: number) {
   const before = fantasy.get().meter;
   const meter = Math.min(100, before + amount);
   if (meter !== before) fantasy.set((s) => ({ ...s, meter }));
-  return before < 100 && meter >= 100;
+  const full = before < 100 && meter >= 100;
+  // Everyone sees a weapon light up when its special is ready.
+  if (full) announce();
+  return full;
 }
 
 export const meterPerSecond = METER_PER_SECOND;
@@ -231,7 +236,7 @@ export type FantasyEvent =
   | { k: "hi" }
   | { k: "gd"; on: boolean }
   | { k: "blk"; target: string; at: [number, number, number] }
-  | { k: "lo"; weapon: Weapon | null; element: Element; hp: number; ko: boolean; guard: boolean }
+  | { k: "lo"; weapon: Weapon | null; element: Element; hp: number; ko: boolean; guard: boolean; ready: boolean }
   | { k: "act"; kind: ActionKind; n: number }
   | { k: "hit"; targets: string[]; damage: number; special: boolean }
   | { k: "fx"; element: Element; at: [number, number, number] }
@@ -254,7 +259,7 @@ export function parseFantasyEvent(data: AddonEvent): FantasyEvent | null {
       const element = oneOf(data.e, ELEMENTS);
       const hp = readNumber(data.hp, 0, MAX_HP);
       if ((weapon === null && data.w !== "") || !element || hp === null) return null;
-      return { k: "lo", weapon, element, hp, ko: data.ko === true, guard: data.g === 1 };
+      return { k: "lo", weapon, element, hp, ko: data.ko === true, guard: data.g === 1, ready: data.rd === 1 };
     }
     case "act": {
       const kind = oneOf(data.a, ["swing", "special", "shoot", "recoil"] as const);
@@ -284,7 +289,7 @@ export function parseFantasyEvent(data: AddonEvent): FantasyEvent | null {
 
 export function fighterOf(id: string): RemoteFighter {
   let fighter = remoteFighters.get(id);
-  if (!fighter) remoteFighters.set(id, (fighter = { weapon: null, element: "lightning", hp: MAX_HP, ko: false, action: null, guard: false }));
+  if (!fighter) remoteFighters.set(id, (fighter = { weapon: null, element: "lightning", hp: MAX_HP, ko: false, action: null, guard: false, ready: false }));
   return fighter;
 }
 

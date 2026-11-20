@@ -34,6 +34,9 @@ export interface RemoteMusician {
 export const remoteMusicians = new Map<string, RemoteMusician>();
 /** This visitor's own last note, for their hands. */
 export const localNote = { note: null as { n: number; at: number } | null };
+/** When a tap last landed on this visitor's instrument (performance.now()),
+ *  so the same double-tap doesn't also walk them across the floor. */
+export const tapped = { at: -Infinity };
 
 export function announceBand() {
   const { instrument, color, waving } = band.get();

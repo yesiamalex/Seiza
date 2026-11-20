@@ -102,8 +102,8 @@ describe("fantasy rules", () => {
   });
 
   it("reads only well-formed events", () => {
-    expect(parseFantasyEvent({ k: "lo", w: "katana", e: "fire", hp: 80, ko: false })).toEqual({ k: "lo", weapon: "katana", element: "fire", hp: 80, ko: false, guard: false });
-    expect(parseFantasyEvent({ k: "lo", w: "", e: "ice", hp: 100 })).toEqual({ k: "lo", weapon: null, element: "ice", hp: 100, ko: false, guard: false });
+    expect(parseFantasyEvent({ k: "lo", w: "katana", e: "fire", hp: 80, ko: false })).toEqual({ k: "lo", weapon: "katana", element: "fire", hp: 80, ko: false, guard: false, ready: false });
+    expect(parseFantasyEvent({ k: "lo", w: "", e: "ice", hp: 100 })).toEqual({ k: "lo", weapon: null, element: "ice", hp: 100, ko: false, guard: false, ready: false });
     expect(parseFantasyEvent({ k: "lo", w: "bazooka", e: "ice", hp: 100 })).toBeNull();
     expect(parseFantasyEvent({ k: "hit", t: "everyone", d: 10 })).toBeNull();
     expect(parseFantasyEvent({ k: "hit", t: ["a", 4], d: 500 })).toEqual({ k: "hit", targets: ["a"], damage: 100, special: false });

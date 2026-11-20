@@ -14,8 +14,13 @@ import { sweepGeometry, type ProfileKey } from "./designerBody";
  */
 
 /** The scalp the locks lie on: the hair cap's ellipsoid. */
+/** Where the head's middle sits above the head bone (1.48, pre-height).
+ *  Low enough that the chin overlaps the top of the neck, as on a VRoid
+ *  avatar, so the neck is short. Everything on the head follows it. */
+export const HEAD_OFFSET = 0.1;
+
 export const SCALP = {
-  center: new THREE.Vector3(0, 1.616, -0.004),
+  center: new THREE.Vector3(0, 1.48 + HEAD_OFFSET + 0.008, -0.004),
   rx: 0.138,
   ry: 0.148,
   rz: 0.141,
