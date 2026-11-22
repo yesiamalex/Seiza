@@ -35,6 +35,9 @@ export interface Action {
 // out of the space between two fighters: only raising it (PARRY, below)
 // puts it in the path of their swings.
 const GUARD: Key = { at: 0, pos: [0.18, 0.54, -0.14], blade: [0.3, -0.85, -0.43], fingers: [0.05, -0.45, 0.9] };
+// A naginata rests upright at the right side, blade high, in one hand: held
+// like a sword's guard, its long shaft ran up past the face.
+const POLE_REST: Key = { at: 0, pos: [0.2, 0.6, -0.12], blade: [0.04, 0.98, -0.18], fingers: [-0.2, 0, -1] };
 
 /** The cuts a blade can make. Each weapon strings some of them into its
  *  own combo (SWING_SETS), so no two weapons fight alike. */
@@ -92,7 +95,7 @@ const CUTS: Record<Cut, Key[]> = {
 export const SWING_SETS: Record<Exclude<Weapon, "bow">, Cut[]> = {
   sword: ["diagonal", "backhand", "thrust"],
   katana: ["overhead", "diagonal", "rising"],
-  naginata: ["backhand", "thrust", "rising"],
+  naginata: ["backhand", "diagonal", "overhead"],
   lightsaber: ["diagonal", "backhand", "rising", "thrust"],
 };
 
@@ -112,6 +115,10 @@ export function cutOf(weapon: Exclude<Weapon, "bow">, n: number): Cut {
 // Guarding: the blade raised across the body at chest height, where an
 // incoming blade is likely, not certain, to meet it.
 const PARRY: Key = { at: 0, pos: [0.14, 0.82, -0.3], blade: [-0.96, 0.25, -0.1], fingers: [0.1, 0, -1] };
+// A naginata's: the shaft across the chest, blade out to the right.
+const POLE_PARRY: Key = { at: 0, pos: [0.16, 0.84, -0.3], blade: [0.96, 0.25, -0.12], fingers: [0, 0, -1] };
+const restOf = (weapon: Weapon) => (weapon === "naginata" ? POLE_REST : GUARD);
+const parryOf = (weapon: Weapon) => (weapon === "naginata" ? POLE_PARRY : PARRY);
 
 // Knocked back by a block: the blade thrown up and away, then on guard.
 const RECOIL: Key[] = [{ at: 0, pos: [0.16, 0.9, -0.14], blade: [0.35, 0.85, 0.4], fingers: [0, 0.4, -0.9] }, { ...GUARD, at: 1 }];
@@ -125,18 +132,32 @@ const SLAM: Key[] = [
   { ...GUARD, at: 1 },
 ];
 
+/** Every blade's moves, and a naginata's, which start from and end at its
+ *  own rest instead of the sword's. */
+const fromRest = (keys: Key[], rest: Key) => keys.map((k) => (k.pos === GUARD.pos ? { ...rest, at: k.at } : k));
+const BLADE_KEYS = { cuts: CUTS, slam: SLAM, recoil: RECOIL };
+// Raised for a naginata's overhead blow, the blade goes back over the right
+// shoulder: straight up, its long shaft came down in front of the face.
+const raised = (keys: Key[]) => keys.map((k, i) => (i === 1 ? { ...k, pos: [0.16, 0.96, -0.08] as Vec3, blade: [0.25, 0.55, 0.8] as Vec3, fingers: [0, 0.82, -0.57] as Vec3 } : k));
+const POLE_KEYS = {
+  cuts: Object.fromEntries(Object.entries(CUTS).map(([cut, keys]) => [cut, fromRest(cut === "overhead" ? raised(keys) : keys, POLE_REST)])) as Record<Cut, Key[]>,
+  slam: fromRest(raised(SLAM), POLE_REST),
+  recoil: fromRest(RECOIL, POLE_REST),
+};
+
 // --- the bow -----------------------------------------------------------------
-// The bow is in the left hand; the right draws the string to the cheek.
+// The bow is in the left hand, the arm straight out; the right draws the
+// string right back to the ear.
 
 const BOW_LOW: Key = { at: 0, pos: [-0.14, 0.56, -0.16], blade: [0.2, 0.6, -0.77], fingers: [0, -0.8, -0.6] };
-const BOW_UP: Key = { at: 0, pos: [-0.06, 0.84, -0.34], blade: [0, 1, 0], fingers: [0.1, 0, -1] };
-const DRAWN: Key = { at: 0, pos: [0.02, 0.88, -0.05], blade: [0, 1, 0], fingers: [-0.3, 0, -1] };
-const LOOSED: Key = { at: 0, pos: [0.09, 0.9, 0.02], blade: [0, 1, 0], fingers: [-0.1, 0.3, -1] };
+const BOW_UP: Key = { at: 0, pos: [-0.07, 0.85, -0.38], blade: [0, 1, 0], fingers: [0.1, 0, -1] };
+const DRAWN: Key = { at: 0, pos: [0.07, 0.9, 0.07], blade: [0, 1, 0], fingers: [-0.3, 0, -1] };
+const LOOSED: Key = { at: 0, pos: [0.13, 0.92, 0.11], blade: [0, 1, 0], fingers: [-0.1, 0.3, -1] };
 const RIGHT_REST: Key = { at: 0, pos: [0.03, 0.8, -0.3], blade: [0, 1, 0], fingers: [-0.3, 0, -1] };
 
 // A canted shot: the bow tipped over to the right, the draw following it.
-const BOW_CANT: Key = { at: 0, pos: [-0.05, 0.82, -0.35], blade: [0.5, 0.86, 0], fingers: [0.1, 0, -1] };
-const DRAWN_CANT: Key = { at: 0, pos: [0.04, 0.85, -0.06], blade: [0.5, 0.86, 0], fingers: [-0.3, 0, -1] };
+const BOW_CANT: Key = { at: 0, pos: [-0.06, 0.83, -0.38], blade: [0.5, 0.86, 0], fingers: [0.1, 0, -1] };
+const DRAWN_CANT: Key = { at: 0, pos: [0.09, 0.87, 0.06], blade: [0.5, 0.86, 0], fingers: [-0.3, 0, -1] };
 
 const at = (key: Key, time: number): Key => ({ ...key, at: time });
 const BOW_HAND = (release: number, up = BOW_UP): Key[] => [at(BOW_LOW, 0), at(up, release * 0.55), at(up, release + 0.15), at(BOW_LOW, 1)];
@@ -241,14 +262,18 @@ export function heldPose(weapon: Weapon, action: Action | null, now: number, out
     return out;
   }
 
-  const keys = !active ? null : action!.kind === "special" ? SLAM : action!.kind === "recoil" || action!.kind === "stagger" ? RECOIL : CUTS[cutOf(weapon, action!.n)];
+  const set = weapon === "naginata" ? POLE_KEYS : BLADE_KEYS;
+  const keys = !active ? null : action!.kind === "special" ? set.slam : action!.kind === "recoil" || action!.kind === "stagger" ? set.recoil : set.cuts[cutOf(weapon, action!.n)];
   if (keys) sample(keys, time, right);
-  else copy(guard ? PARRY : GUARD, right);
+  else copy(guard ? parryOf(weapon) : restOf(weapon), right);
   out.right = right;
   out.trail = active && timing !== null && time >= timing.trail[0] && time <= timing.trail[1];
 
+  // Two-handed weapons rest in one hand, the other at the side: reaching
+  // it across to the grip at the hip put the arm through the belly. Both
+  // hands come on to guard and to cut.
   const other = WEAPON_SPECS[weapon].otherHand;
-  if (other === null) out.left = null;
+  if (other === null || (!active && !guard)) out.left = null;
   else {
     // The other hand further down the same grip, holding the same way. The
     // blade is normalized first, so the spacing stays true mid-blend.

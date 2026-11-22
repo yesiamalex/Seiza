@@ -38,10 +38,10 @@ export function FantasyButton() {
           </>
         )}
       />
-      <Hint>
+      <Hint accent={ACCENT}>
         {L(
-          "Click to swing (on a phone, the sword button). A blow lands only where the blade really meets a body; where two blades meet, both bounce off. Hold F (the shield button) to raise your blade across your chest: it catches more blows, not all of them. When the bar under your health is full, hold the click for your special. In VR, just swing: your blade cuts and parries wherever you put it. Draw your hand back over your shoulder with the bar full, and your next hard swing is the special; the trigger shoots a bow. Only people holding a weapon can be hit, so choose None to step out.",
-          "クリックで振る(スマホは剣ボタン)。刃が実際に体に当たったときだけダメージが入り、刃同士が当たると両方はじかれます。Fキー長押し(盾ボタン)で刃を胸の前に構えると、受けられる攻撃が増えます(全部ではありません)。体力の下のゲージが満タンなら、クリック長押しで必殺技。VRではそのまま振るだけで、刃の当たった所で攻撃・受け流しになります。ゲージ満タンで手を肩の後ろへ引くと、次の強い一振りが必殺技。弓はトリガーで射ます。武器を持っている人だけが攻撃を受けるので、抜けたいときは「なし」を選んでください。"
+          "**Click** to swing (on a phone, the sword button). A blow lands only where the blade really meets a body; where two blades meet, both bounce off. **Hold F** (the shield button) to raise your blade across your chest: it catches more blows, not all of them. When the bar under your health is full, **hold the click** for your special. An arrow flies, so step out of its way. In VR, **just swing**: your blade cuts and parries wherever you put it. Draw your hand back over your shoulder with the bar full, and your next hard swing is the special; **the trigger** shoots a bow. Only people holding a weapon can be hit, so choose None to step out.",
+          "**クリック**で振る(スマホは剣ボタン)。刃が実際に体に当たったときだけダメージが入り、刃同士が当たると両方はじかれます。**Fキー長押し**(盾ボタン)で刃を胸の前に構えると、受けられる攻撃が増えます(全部ではありません)。体力の下のゲージが満タンなら、**クリック長押し**で必殺技。矢は飛んでくるので、よければ当たりません。VRでは**そのまま振るだけ**で、刃の当たった所で攻撃・受け流しになります。ゲージ満タンで手を肩の後ろへ引くと、次の強い一振りが必殺技。弓は**トリガー**で射ます。武器を持っている人だけが攻撃を受けるので、抜けたいときは「なし」を選んでください。"
         )}
       </Hint>
     </ModeButton>
@@ -87,7 +87,16 @@ export function FantasyStatus({ touch }: { touch: boolean }) {
       >
         <Bar share={state.hp / MAX_HP} color={state.hp > 35 ? "#5dff8a" : "#ff4d4d"} height={9} />
         <Bar share={state.meter / 100} color={full ? ELEMENT_COLORS[state.element] : "rgba(255,255,255,0.55)"} height={5} glow={full} />
-        <small style={{ textAlign: "center", fontSize: 11, opacity: 0.9 }}>
+        <small
+          style={{
+            textAlign: "center",
+            fontSize: full && !state.ko ? 13 : 11,
+            fontWeight: full && !state.ko ? 800 : 400,
+            letterSpacing: full && !state.ko ? 0.3 : 0,
+            color: full && !state.ko ? ELEMENT_COLORS[state.element] : undefined,
+            opacity: 0.95,
+          }}
+        >
           {state.ko
             ? L(`Knocked out. Back in ${left}…`, `ダウン。あと${left}秒で復帰…`)
             : state.primed
@@ -95,7 +104,9 @@ export function FantasyStatus({ touch }: { touch: boolean }) {
               : full
                 ? state.charge > 0
                   ? L("Charging…", "チャージ中…")
-                  : L("Hold to unleash your special", "長押しで必殺技")
+                  : touch
+                    ? L("Hold the attack button: special!", "攻撃ボタン長押しで必殺技!")
+                    : L("Hold the click: special!", "クリック長押しで必殺技!")
                 : null}
         </small>
         {state.charge > 0 && <Bar share={state.charge} color="#ffffff" height={3} />}

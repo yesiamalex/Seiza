@@ -3,7 +3,7 @@ import { L, useLang } from "../../i18n/lang";
 import { panelStyle, pillButtonStyle } from "../../ui/styles";
 import { useStore } from "../store";
 import { Choices, Hint, MODE_ACCENTS, ModeButton, MusicIcon } from "../ui";
-import { band, play, setInstrument, setLightColor, setPlaying, setWaving } from "./band";
+import { band, play, setInstrument, setLightColor, setPair, setPlaying, setWaving } from "./band";
 import { INSTRUMENT_LABELS, INSTRUMENTS, KEY_LAYOUT, KEYS_BASE, LIGHT_COLORS, PAD_COLUMNS, PADS, type Instrument } from "./instruments";
 
 const ACCENT = MODE_ACCENTS.band;
@@ -34,6 +34,14 @@ export function BandButton() {
       {state.instrument === "lightstick" ? (
         <>
           <Swatches value={state.color} onChange={setLightColor} />
+          <Choices<"one" | "two">
+            title={L("Hold", "持ち方")}
+            options={["one", "two"]}
+            value={state.pair ? "two" : "one"}
+            onChange={(n) => setPair(n === "two")}
+            accent={ACCENT}
+            render={(n) => (n === "two" ? L("One in each hand", "両手に1本ずつ") : L("One stick", "1本"))}
+          />
           <button type="button" onClick={() => setWaving(!state.waving)} style={toggleStyle(state.waving)}>
             {state.waving ? L("Stop waving", "振るのをやめる") : L("Wave it overhead", "頭上で振る")}
           </button>
@@ -44,10 +52,10 @@ export function BandButton() {
           <button type="button" onClick={() => setPlaying(!state.playing)} style={toggleStyle(state.playing)}>
             {state.playing ? L("Stop playing", "演奏をやめる") : L("Start playing", "演奏を始める")}
           </button>
-          <Hint>
+          <Hint accent={ACCENT}>
             {L(
-              "While you play, the keys shown on the instrument play it instead of moving you (Esc stops). On a phone, tap the instrument. In VR, play it with your hands: tap the pads and keys, or strum the guitar while your other hand picks the chord along the neck.",
-              "演奏中は、楽器に表示されたキーで演奏します(移動はしません。Escで終了)。スマホは楽器をタップ。VRでは手で演奏します:パッドや鍵盤をたたき、ギターはもう一方の手でネックの位置でコードを選んでかき鳴らします。"
+              "While you play, **the keys shown on the instrument** play it instead of moving you (**Esc** stops). On a phone, **tap the instrument**. In VR, play it with your hands: tap the pads and keys, or strum the guitar while your other hand picks the chord along the neck.",
+              "演奏中は、**楽器に表示されたキー**で演奏します(移動はしません。**Esc**で終了)。スマホは**楽器をタップ**。VRでは手で演奏します:パッドや鍵盤をたたき、ギターはもう一方の手でネックの位置でコードを選んでかき鳴らします。"
             )}
           </Hint>
         </>
@@ -199,7 +207,7 @@ export function BandStage() {
           {KEY_LAYOUT.filter((k) => k.black).map((k) => {
             const note = KEYS_BASE + octave * 12 + k.semitone;
             const whitesBefore = KEY_LAYOUT.filter((w) => !w.black && w.semitone < k.semitone).length;
-            return <Key key={k.semitone} hint={k.key} lit={lit === note} onHit={() => hit(note)} black left={`calc(${(whitesBefore / 8) * 100}% - 3.4%)`} />;
+            return <Key key={k.semitone} hint={k.key} lit={lit === note} onHit={() => hit(note)} black left={`calc(${(whitesBefore / WHITES) * 100}% - ${BLACK_WIDTH / 2}%)`} />;
           })}
         </div>
       )}
@@ -240,6 +248,10 @@ function Pad({ label, hint, lit, onHit, height }: { label: string; hint: string;
   );
 }
 
+const WHITES = KEY_LAYOUT.filter((k) => !k.black).length;
+/** A black key's width, in percent of the keyboard. */
+const BLACK_WIDTH = (100 / WHITES) * 0.58;
+
 function Key({ hint, lit, onHit, black, left }: { hint: string; lit: boolean; onHit: () => void; black?: boolean; left?: string }) {
   return (
     <button
@@ -253,7 +265,7 @@ function Key({ hint, lit, onHit, black, left }: { hint: string; lit: boolean; on
         position: black ? "absolute" : "relative",
         left,
         top: 0,
-        width: black ? "6.8%" : undefined,
+        width: black ? `${BLACK_WIDTH}%` : undefined,
         height: black ? "60%" : "100%",
         zIndex: black ? 1 : 0,
         borderRadius: "0 0 6px 6px",

@@ -3,7 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { VRM } from "@pixiv/three-vrm";
 import type { AnimatorLayerWeights } from "../../avatar/AvatarAnimator";
-import { applyTrackedPose, Balance, createBodyRig, PoseOverlay, type BodyRig, type TrackedWeights } from "./bodyIk";
+import { applyTrackedPose, Balance, createBodyRig, sharedOverlay, type BodyRig, type TrackedWeights } from "./bodyIk";
 import { LOCAL_TRACKING_SOURCE, trackingStore } from "./trackingStore";
 import { TRACKING_STALE_MS, type TrackedPoint, type TrackedPose } from "./trackingWire";
 
@@ -107,7 +107,6 @@ const UPRIGHT = new THREE.Quaternion();
  */
 export function TrackedBody({ vrm, source, layerWeightsRef }: TrackedBodyProps) {
   const rigRef = useRef<BodyRig | null>(null);
-  const overlay = useRef(new PoseOverlay()).current;
   const balance = useRef(new Balance()).current;
   const smoothedRef = useRef<SmoothedPose | null>(null);
   const weightRef = useRef(0);
@@ -115,18 +114,18 @@ export function TrackedBody({ vrm, source, layerWeightsRef }: TrackedBodyProps) 
 
   useEffect(() => {
     rigRef.current = vrm ? createBodyRig(vrm) : null;
-    overlay.clear();
     balance.reset();
     smoothedRef.current = null;
     weightRef.current = 0;
-  }, [vrm, overlay]);
+  }, [vrm]);
 
-  useFrame((_, rawDelta) => {
+  useFrame((state, rawDelta) => {
     const rig = rigRef.current;
-    if (!rig) return;
+    if (!rig || !vrm) return;
     // Always first, even with nothing to apply: it is what takes last
-    // frame's pose back off bones that animation doesn't rewrite.
-    overlay.restore();
+    // frame's pose back off bones that animation doesn't rewrite. Shared
+    // with the room modes (bodyIk.ts), so neither traps the other's pose.
+    const overlay = sharedOverlay(vrm, state.clock.elapsedTime);
 
     const delta = Math.min(rawDelta, 0.05);
     const sample = trackingStore.get(source);

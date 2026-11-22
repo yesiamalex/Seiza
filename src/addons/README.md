@@ -21,12 +21,18 @@ store.ts     A tiny store shared by the HUD and the 3D scene.
 sound.ts     Synthesized sound through the world sounds' output (and mute).
 ui.tsx       The coloured mode button, choice chips, the switch.
 fantasy/     Weapons, health, swings and specials; blade contact
-             (contact.ts) for hits and parries; each weapon's set of cuts
-             and the bow's shots, hands and body (poses.ts); special
-             bursts, their wind-up and pooled lights (effects.ts).
-band/        Instruments (synthesized: pad, kit, keys, acoustic, lead and
-             bass), light sticks, touch play in VR; how each instrument's
-             player grooves (moves.ts).
+             (contact.ts) for hits and parries; each weapon's set of cuts,
+             a naginata's own rest and guard, and the bow's shots, hands
+             and body (poses.ts); special bursts, their wind-up, pooled
+             lights, and arrows that land on what they reach (effects.ts).
+band/        Instruments (synthesized: pad, kit, keys, acoustic, lead
+             through an amp and cabinet, and bass), one or two light
+             sticks, touch play in VR; how each instrument's player
+             grooves (moves.ts).
+
+Both modes pose an avatar through the overlay VR tracking uses, shared
+(`sharedOverlay` in ../xr/body/bodyIk.ts), so nothing one leaves on the
+bones outlives it.
 ```
 
 ## How it hooks in

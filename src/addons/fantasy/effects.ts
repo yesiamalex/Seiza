@@ -385,7 +385,13 @@ interface Flight {
   seconds: number;
   live: boolean;
   onLanded: (at: THREE.Vector3) => void;
+  /** What it meets on the stretch it just flew, if anything: it stops
+   *  there. A real projectile, so a target can step out of its way. */
+  meets: ArrowTest | null;
+  last: THREE.Vector3;
 }
+
+export type ArrowTest = (from: THREE.Vector3, to: THREE.Vector3) => THREE.Vector3 | null;
 
 class Arrows {
   readonly group = new THREE.Group();
@@ -397,20 +403,22 @@ class Arrows {
     const flight = (mesh: THREE.Group): Flight => {
       mesh.visible = false;
       this.group.add(mesh);
-      return { mesh, from: new THREE.Vector3(), to: new THREE.Vector3(), start: 0, seconds: 1, live: false, onLanded: () => {} };
+      return { mesh, from: new THREE.Vector3(), to: new THREE.Vector3(), start: 0, seconds: 1, live: false, onLanded: () => {}, meets: null, last: new THREE.Vector3() };
     };
     for (let i = 0; i < 8; i++) this.plain.push(flight(buildArrow()));
     for (const element of ["lightning", "fire", "ice"] as const) this.special[element] = flight(buildArrow(ELEMENT_COLORS[element]));
     this.all = [...this.plain, ...Object.values(this.special)];
   }
 
-  fire(from: THREE.Vector3, to: THREE.Vector3, element: Element | null, time: number, onLanded: (at: THREE.Vector3) => void) {
+  fire(from: THREE.Vector3, to: THREE.Vector3, element: Element | null, time: number, onLanded: (at: THREE.Vector3) => void, meets: ArrowTest | null) {
     const f = element ? this.special[element] : (this.plain.find((a) => !a.live) ?? this.plain[0]);
     f.from.copy(from);
     f.to.copy(to);
     f.start = time;
     f.seconds = Math.max(0.05, arrowSeconds(from.distanceTo(to)));
     f.onLanded = onLanded;
+    f.meets = meets;
+    f.last.copy(from);
     f.live = true;
     f.mesh.visible = true;
     f.mesh.position.copy(from);
@@ -432,6 +440,14 @@ class Arrows {
       const arc = (from: THREE.Vector3, to: THREE.Vector3, t: number, out: THREE.Vector3) =>
         out.lerpVectors(from, to, t).setY(out.y + Math.sin(Math.PI * t) * Math.min(1.6, from.distanceTo(to) * 0.04));
       arc(f.from, f.to, s, f.mesh.position);
+      const met = f.meets?.(f.last, f.mesh.position);
+      if (met) {
+        f.live = false;
+        f.mesh.visible = false;
+        f.onLanded(met);
+        continue;
+      }
+      f.last.copy(f.mesh.position);
       f.mesh.lookAt(arc(f.from, f.to, Math.min(1, s + 0.02), ahead));
     }
   }
@@ -485,8 +501,8 @@ export class FantasyEffects {
     else this.sparks.burst(lift, color, 30, 4, { gravity: 4, life: 0.5 });
   }
 
-  arrow(from: THREE.Vector3, to: THREE.Vector3, element: Element | null, time: number, onLanded: (at: THREE.Vector3) => void = () => {}) {
-    this.arrows.fire(from, to, element, time, onLanded);
+  arrow(from: THREE.Vector3, to: THREE.Vector3, element: Element | null, time: number, onLanded: (at: THREE.Vector3) => void = () => {}, meets: ArrowTest | null = null) {
+    this.arrows.fire(from, to, element, time, onLanded, meets);
   }
 
   update(time: number, dt: number, camera: THREE.Camera) {

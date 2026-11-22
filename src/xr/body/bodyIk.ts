@@ -251,6 +251,27 @@ export class PoseOverlay {
   }
 }
 
+const shared = new WeakMap<object, { overlay: PoseOverlay; frame: number }>();
+
+/**
+ * The one overlay everything that poses an avatar shares (VR tracking, the
+ * room modes), taken back off once a frame, before the first of them
+ * writes. Each with its own overlay, the second to write a bone recorded
+ * the first one's pose as "before" and put it back every frame, so a hand
+ * curled by one mode stayed curled after both had stopped. `frame` is
+ * anything the same for every caller in a frame and different the next
+ * (the frame clock's elapsed time).
+ */
+export function sharedOverlay(avatar: object, frame: number): PoseOverlay {
+  let entry = shared.get(avatar);
+  if (!entry) shared.set(avatar, (entry = { overlay: new PoseOverlay(), frame: NaN }));
+  if (entry.frame !== frame) {
+    entry.frame = frame;
+    entry.overlay.restore();
+  }
+  return entry.overlay;
+}
+
 // ---- math -------------------------------------------------------------------
 
 const v1 = new THREE.Vector3();

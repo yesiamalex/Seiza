@@ -50,13 +50,18 @@ export const KIT_PIECES: Pad[] = [
   { label: "Hi-hat", key: "D" },
   { label: "Open hat", key: "F" },
   { label: "Rim", key: "G" },
+  { label: "Splash", key: "Z" },
+  { label: "China", key: "X" },
+  { label: "Cowbell", key: "C" },
 ];
-export const KIT = { crash: 0, hiTom: 1, midTom: 2, floorTom: 3, ride: 4, kick: 5, snare: 6, hat: 7, openHat: 8, rim: 9 } as const;
+export const KIT = { crash: 0, hiTom: 1, midTom: 2, floorTom: 3, ride: 4, kick: 5, snare: 6, hat: 7, openHat: 8, rim: 9, splash: 10, china: 11, cowbell: 12 } as const;
 
-/** A piano octave and one more C, on the keys a DAW uses. */
+/** An octave and a half, C up to the F above the next C, on the keys
+ *  music software's typing keyboard uses (A to K, then O L P ; '). */
 export const KEY_LAYOUT: { semitone: number; key: string; black: boolean }[] = [
   ["A", false], ["W", true], ["S", false], ["E", true], ["D", false], ["F", false], ["T", true],
   ["G", false], ["Y", true], ["H", false], ["U", true], ["J", false], ["K", false],
+  ["O", true], ["L", false], ["P", true], [";", false], ["'", false],
 ].map(([key, black], semitone) => ({ semitone, key: key as string, black: black as boolean }));
 export const KEYS_BASE = 60;
 export const KEYS_RANGE: [number, number] = [36, 96];
@@ -167,6 +172,17 @@ const crash = (v: Voice) => {
   noiseHit(v, { frequency: 9000, duration: 0.5, gain: 0.2, type: "bandpass", q: 2 });
 };
 
+/** Two square tones a little over a fifth apart, through a narrow band,
+ *  the way the classic drum machines made one. */
+const cowbell = (v: Voice) => {
+  const band = v.ctx.createBiquadFilter();
+  band.type = "bandpass";
+  band.frequency.value = 2600;
+  band.Q.value = 1.2;
+  band.connect(v.out);
+  for (const frequency of [562, 845]) toneHit({ ...v, out: band }, { frequency, duration: 0.32, gain: 0.6, type: "square" });
+};
+
 /** A real kit: its own toms and cymbals, a deeper kick, a ride's ping. */
 export function playKit(piece: number, distance?: number) {
   const v = voice(1, distance, FALLOFF);
@@ -191,7 +207,7 @@ export function playKit(piece: number, distance?: number) {
       noiseHit(v, { frequency: 7000, duration: 0.9, gain: 0.16, type: "highpass" });
       break;
     case KIT.kick:
-      toneHit(v, { frequency: 120, sweepTo: 36, duration: 0.5, gain: 1.1 });
+      toneHit(v, { frequency: 120, sweepTo: 36, duration: 0.5, gain: 0.92 });
       noiseHit(v, { frequency: 2500, duration: 0.025, gain: 0.3 });
       break;
     case KIT.snare:
@@ -204,6 +220,20 @@ export function playKit(piece: number, distance?: number) {
     case KIT.rim:
       toneHit(v, { frequency: 1700, duration: 0.05, gain: 0.35, type: "square" });
       noiseHit(v, { frequency: 3000, duration: 0.03, gain: 0.3, q: 3 });
+      break;
+    case KIT.splash:
+      // Small and quick: bright, gone in half a second.
+      noiseHit(v, { frequency: 7500, duration: 0.55, gain: 0.32, type: "highpass" });
+      noiseHit(v, { frequency: 11000, duration: 0.25, gain: 0.18, type: "bandpass", q: 1.5 });
+      break;
+    case KIT.china:
+      // Trashy: a narrow, honking band over the wash, and a long tail.
+      noiseHit(v, { frequency: 3200, duration: 1.2, gain: 0.32, type: "bandpass", q: 4 });
+      noiseHit(v, { frequency: 6000, duration: 1.0, gain: 0.22, type: "highpass" });
+      toneHit(v, { frequency: 410, duration: 0.5, gain: 0.05, type: "square" });
+      break;
+    case KIT.cowbell:
+      cowbell(v);
       break;
     default: // closed hat
       noiseHit(v, { frequency: 9500, duration: 0.05, gain: 0.32, type: "highpass" });
@@ -221,12 +251,23 @@ export function playKey(midi: number, distance?: number) {
 }
 
 // --- strings: plucked, for the guitars and the bass ----------------------------------
-// Karplus-Strong: a burst of noise round a short loop, averaged as it goes,
-// rings like a string at the loop's pitch. Rendered once per note and kept.
+// Karplus-Strong: a burst of noise round a short loop, averaged as it goes
+// (a low-pass inside the loop, so it darkens as it rings, as a string
+// does), rings at the loop's pitch. Rendered once per note and kept.
+// Then each instrument's own body: an acoustic's resonant box, an amp
+// and its speaker cabinet, a bass's growl and weight.
+
+interface Pluck {
+  /** Seconds more ring than a guitar string's. */
+  sustain?: number;
+  /** How rounded the attack is, 0 a pick's snap to 1 a thumb's thud: the
+   *  burst smoothed before it starts round the loop. */
+  soft?: number;
+}
 
 const plucks = new Map<string, AudioBuffer>();
-function pluck(ctx: AudioContext, midi: number, sustain = 0): AudioBuffer {
-  const key = `${ctx.sampleRate}:${midi}:${sustain}`;
+function pluck(ctx: AudioContext, midi: number, { sustain = 0, soft = 0 }: Pluck = {}): AudioBuffer {
+  const key = `${ctx.sampleRate}:${midi}:${sustain}:${soft}`;
   const cached = plucks.get(key);
   if (cached) return cached;
   const rate = ctx.sampleRate;
@@ -236,65 +277,126 @@ function pluck(ctx: AudioContext, midi: number, sustain = 0): AudioBuffer {
   const period = Math.max(2, Math.round(rate / hz(midi)));
   const loop = new Float32Array(period);
   for (let i = 0; i < period; i++) loop[i] = Math.random() * 2 - 1;
+  // Plucked a fifth of the way along, as a string usually is: that point's
+  // harmonics cancel, which is most of what makes it sound plucked.
+  const at = Math.max(1, Math.round(period * 0.2));
+  const picked = loop.map((x, i) => x - loop[(i + at) % period] * 0.9);
+  for (let pass = 0; pass < Math.round(soft * 6); pass++) for (let i = 0; i < period; i++) picked[i] = (picked[i] + picked[(i + 1) % period]) * 0.5;
+  loop.set(picked);
   // Higher strings die away faster, like real ones; `sustain` holds them longer.
   const decay = Math.min(0.9995, 0.996 - Math.min(0.006, (midi - 40) * 0.00008) + sustain * 0.0015);
+  let peak = 0;
   for (let i = 0; i < length; i++) {
     const j = i % period;
     const next = loop[(j + 1) % period];
     out[i] = loop[j];
+    peak = Math.max(peak, Math.abs(out[i]));
     loop[j] = decay * 0.5 * (loop[j] + next);
   }
+  // Every note as loud as every other, however its burst came out, dying
+  // away as a string does (low notes barely decay in the loop alone) and
+  // faded right out before the buffer ends, so it never clicks off.
+  const tau = (0.7 + sustain * 0.7) * rate;
+  const fade = Math.floor(rate * 0.12);
+  if (peak > 0) for (let i = 0; i < length; i++) out[i] *= (Math.exp(-i / tau) * Math.min(1, (length - i) / fade)) / peak;
   plucks.set(key, buffer);
   return buffer;
 }
 
-function strum(v: Voice, notes: number[], to: AudioNode = v.out, gain = 0.3, spread = 0.014, sustain = 0) {
+/** Each note of `notes` plucked into `to`, `spread` seconds apart (a strum). */
+function strum(v: Voice, notes: number[], to: AudioNode, gain: number, spread: number, options: Pluck = {}, delay = 0, rate = 1) {
   return notes.map((midi, i) => {
     const source = v.ctx.createBufferSource();
-    source.buffer = pluck(v.ctx, midi, sustain);
+    source.buffer = pluck(v.ctx, midi, options);
+    source.playbackRate.value = rate;
     const g = v.ctx.createGain();
     g.gain.value = gain;
     source.connect(g).connect(to);
-    source.start(v.t + i * spread);
+    source.start(v.t + delay + i * spread);
     return source;
   });
 }
 
+const filter = (ctx: AudioContext, type: BiquadFilterType, frequency: number, q = 0.7, gain = 0) => {
+  const f = ctx.createBiquadFilter();
+  f.type = type;
+  f.frequency.value = frequency;
+  f.Q.value = q;
+  f.gain.value = gain;
+  return f;
+};
+/** Nodes wired one into the next; returns the first. */
+const chain = (...nodes: AudioNode[]) => {
+  for (let i = 0; i < nodes.length - 1; i++) nodes[i].connect(nodes[i + 1]);
+  return nodes[0];
+};
+
+/** The acoustic: steel strings over a wooden box, which booms a little
+ *  low down and rings in the upper mids, and the pick's tick first. */
 export function playChord(chord: number, distance?: number) {
   const notes = CHORDS[chord]?.notes;
   if (!notes) return;
   const v = voice(1, distance, FALLOFF);
-  if (v) strum(v, notes);
+  if (!v) return;
+  const body = chain(filter(v.ctx, "peaking", 105, 1.2, 5), filter(v.ctx, "peaking", 230, 1.4, 2.5), filter(v.ctx, "peaking", 2800, 1, 2), filter(v.ctx, "highshelf", 5000, 0.7, -6), v.out);
+  strum(v, notes, body, 0.48, 0.016);
+  noiseHit(v, { frequency: 3500, duration: 0.025, gain: 0.07, q: 1.5 });
 }
 
-let drive: Float32Array | null = null;
-/** An overdriven amp's curve: soft at the edges, hard in the middle. */
-function overdrive() {
-  if (drive) return drive;
-  const n = 1024;
-  drive = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    const x = (i / (n - 1)) * 2 - 1;
-    drive[i] = Math.tanh(x * 6) * 0.8;
+const curves = new Map<string, Float32Array>();
+/** A waveshaper's curve: `drive` how hard it's pushed, `lean` how lopsided
+ *  (a valve amp's even harmonics); soft at the edges either way. */
+function shaper(drive: number, lean = 0) {
+  const key = `${drive}:${lean}`;
+  let curve = curves.get(key);
+  if (!curve) {
+    const n = 2048;
+    curve = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const x = (i / (n - 1)) * 2 - 1;
+      curve[i] = Math.tanh(x * drive + lean) - Math.tanh(lean);
+    }
+    curves.set(key, curve);
   }
-  return drive;
+  return curve as Float32Array<ArrayBuffer>;
 }
 
-/** The lead guitar: strings through an overdriven amp and its cabinet
- *  (a low-pass); a lead note held, with vibrato coming in as it rings. */
+/**
+ * The lead guitar, as a rock rig is: the strings into a tight low cut, an
+ * overdriven valve amp (oversampled, so the fizz doesn't alias), a mid
+ * shape (scooped for chords, pushed for a lead), a presence lift, and a
+ * speaker cabinet rolling the top off. A power chord is double-tracked, a
+ * second strum a hair later and a few cents up, for its width; a lead note
+ * holds, with vibrato coming in as it rings.
+ */
 export function playElectric(note: number, distance?: number) {
   const spec = ELECTRIC[note];
   if (!spec) return;
-  const v = voice(0.85, distance, FALLOFF);
+  const v = voice(0.7, distance, FALLOFF);
   if (!v) return;
-  const amp = v.ctx.createWaveShaper();
-  amp.curve = overdrive() as Float32Array<ArrayBuffer>;
-  const cabinet = v.ctx.createBiquadFilter();
-  cabinet.type = "lowpass";
-  cabinet.frequency.value = spec.notes.length > 1 ? 2600 : 3400;
-  amp.connect(cabinet).connect(v.out);
   const lead = spec.notes.length === 1;
-  const sources = strum(v, spec.notes, amp, lead ? 0.5 : 0.36, lead ? 0 : 0.006, lead ? 1.2 : 0.4);
+  const amp = v.ctx.createWaveShaper();
+  amp.curve = shaper(lead ? 5 : 6, 0.2);
+  amp.oversample = "4x";
+  const level = v.ctx.createGain();
+  level.gain.value = lead ? 0.6 : 0.5;
+  const input = chain(
+    filter(v.ctx, "highpass", lead ? 150 : 90),
+    amp,
+    // Chords: chunk low down and a little scoop; a lead: the mids pushed.
+    filter(v.ctx, "peaking", lead ? 900 : 220, lead ? 0.9 : 0.8, lead ? 4 : 3),
+    filter(v.ctx, "peaking", lead ? 2200 : 600, 0.9, lead ? 2 : -2),
+    filter(v.ctx, "peaking", 1800, 1, lead ? 0 : 2),
+    // The cabinet: a speaker rolls off the fizz above a few kHz.
+    filter(v.ctx, "lowpass", lead ? 3800 : 3000, 0.9),
+    filter(v.ctx, "lowpass", 5200, 0.6),
+    filter(v.ctx, "highpass", 70),
+    level,
+    v.out
+  );
+  const sustain = { sustain: lead ? 1.2 : 0.4 };
+  const sources = strum(v, spec.notes, input, lead ? 0.9 : 0.6, lead ? 0 : 0.007, sustain);
+  if (!lead) strum(v, spec.notes, input, 0.45, 0.007, sustain, 0.012, Math.pow(2, 6 / 1200));
   if (lead) {
     // Vibrato: the pitch wavering a little, a beat after the note starts.
     const lfo = v.ctx.createOscillator();
@@ -309,19 +411,32 @@ export function playElectric(note: number, distance?: number) {
   }
 }
 
-/** The bass: a low plucked string, a sine under it for weight, its top
- *  rolled off. */
+/**
+ * The bass: a thick string plucked with a soft thumb, warmed by a little
+ * saturation, through a low-pass that opens on the pluck and closes as it
+ * rings, a lift round 90 Hz for the weight in the chest and round 220 for
+ * the growl (the harmonics a laptop or phone can play, so the note is
+ * heard where its fundamental can't be), and a sine at the root under it.
+ * The old one was nearly all sine, which small speakers barely play.
+ */
 export function playBass(note: number, distance?: number) {
   const root = CHORDS[note]?.root;
   if (root === undefined) return;
   const v = voice(1, distance, FALLOFF);
   if (!v) return;
-  const tone = v.ctx.createBiquadFilter();
-  tone.type = "lowpass";
-  tone.frequency.value = 900;
-  tone.connect(v.out);
-  strum(v, [root], tone, 0.7, 0, 0.6);
-  toneHit(v, { frequency: hz(root), duration: 1.1, gain: 0.35, attack: 0.01 });
+  const warm = v.ctx.createWaveShaper();
+  warm.curve = shaper(1.6, 0.1);
+  warm.oversample = "2x";
+  const tone = filter(v.ctx, "lowpass", 1200, 1.4);
+  tone.frequency.setValueAtTime(1200, v.t);
+  tone.frequency.exponentialRampToValueAtTime(350, v.t + 0.4);
+  const level = v.ctx.createGain();
+  level.gain.value = 0.8;
+  const input = chain(warm, tone, filter(v.ctx, "peaking", 90, 1, 5), filter(v.ctx, "peaking", 220, 1.2, 3), filter(v.ctx, "highpass", 30), level, v.out);
+  strum(v, [root], input, 0.8, 0, { sustain: 0.8, soft: 0.6 });
+  toneHit(v, { frequency: hz(root), duration: 1.3, gain: 0.22, attack: 0.008 });
+  // The thumb's thump on the string.
+  noiseHit(v, { frequency: 700, duration: 0.03, gain: 0.05, q: 0.8 });
 }
 
 /** Any musician's note, by instrument. */
@@ -345,7 +460,7 @@ export function prepareGuitar() {
   if (!output) return;
   for (const chord of CHORDS) {
     for (const midi of chord.notes) pluck(output.ctx, midi);
-    pluck(output.ctx, chord.root, 0.6);
+    pluck(output.ctx, chord.root, { sustain: 0.8, soft: 0.6 });
   }
-  for (const e of ELECTRIC) for (const midi of e.notes) pluck(output.ctx, midi, e.notes.length === 1 ? 1.2 : 0.4);
+  for (const e of ELECTRIC) for (const midi of e.notes) pluck(output.ctx, midi, { sustain: e.notes.length === 1 ? 1.2 : 0.4 });
 }

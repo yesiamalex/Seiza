@@ -51,7 +51,7 @@ export const WEAPON_SPECS: Record<Weapon, WeaponSpec> = {
   naginata: {
     label: ["Naginata", "薙刀"],
     note: ["Longest reach: sweeps up to three for 9 each. Widest special.", "最長リーチ:最大3人をなぎ払い各9。必殺技の範囲が最大。"],
-    reach: 3.0, damage: 9, cooldown: 0.55, targets: 3, special: 26, specialRadius: 4.8, otherHand: 0.38, blade: [0.55, 1.0],
+    reach: 3.0, damage: 9, cooldown: 0.55, targets: 3, special: 26, specialRadius: 4.8, otherHand: 0.3, blade: [0.55, 1.0],
   },
   lightsaber: {
     label: ["Light saber", "ライトセーバー"],
@@ -121,20 +121,6 @@ function group(parts: [THREE.BufferGeometry[], THREE.Material][]) {
   return out;
 }
 
-/** The bright strip along a curved blade's cutting edge (+x), from the
- *  same segments as the blade. */
-function edgeStrip(from: number, length: number, width: number, bend: number, segments = 4) {
-  const parts: THREE.BufferGeometry[] = [];
-  const step = length / segments;
-  for (let i = 0; i < segments; i++) {
-    const s = (i + 0.5) / segments;
-    const w = width * (1 - 0.25 * s);
-    // Slightly proud of the blade's faces, so it shows on both sides.
-    parts.push(box(w * 0.34, step * 1.04, 0.0084, from + step * (i + 0.5), -bend * s * s + w * 0.33, bend * 1.6 * s / segments));
-  }
-  return parts;
-}
-
 /** A wrapped grip: cord bands crossing a pale core, as rings. */
 function wrapBands(from: number, to: number, radius: number, count: number) {
   const parts: THREE.BufferGeometry[] = [];
@@ -143,18 +129,38 @@ function wrapBands(from: number, to: number, radius: number, count: number) {
   return parts;
 }
 
-/** A curved blade from straight segments, bending toward the back (-x).
- *  `fat` widens and thickens it, for the glow round it. */
-function curvedBlade(from: number, length: number, width: number, bend: number, segments = 4, fat = 0) {
-  const parts: THREE.BufferGeometry[] = [];
-  const step = length / segments;
-  const thick = 0.007 + fat * 2.5;
-  for (let i = 0; i < segments; i++) {
-    const s = (i + 0.5) / segments;
-    parts.push(box(width * (1 - 0.25 * s) + fat * 2, step * 1.04, thick, from + step * (i + 0.5), -bend * s * s, bend * 1.6 * s / segments));
+/**
+ * A curved, single-edged blade as one smooth outline: the cutting edge on
+ * +x, the back curving toward -x, narrowing to a point, extruded thin with
+ * its edges rounded. `part` is the whole blade, or the bright band along
+ * its edge (the hamon's side), a little proud of its faces. `fat` grows
+ * it all round in a rounded bevel, for the glow: a soft aura, where the
+ * old boxes showed their corners once it lit.
+ */
+function curvedBlade(from: number, length: number, width: number, bend: number, part: "blade" | "edge" = "blade", fat = 0) {
+  const steps = 10;
+  const back = (s: number) => -bend * s * s;
+  const half = (s: number) => (width * (1 - 0.3 * s)) / 2;
+  const edge: THREE.Vector2[] = [];
+  const spine: THREE.Vector2[] = [];
+  for (let i = 0; i <= steps; i++) {
+    const s = (i / steps) * 0.9;
+    const y = from + length * s;
+    const outer = back(s) + half(s);
+    edge.push(new THREE.Vector2(outer, y));
+    spine.push(new THREE.Vector2(part === "edge" ? outer - half(s) * 0.62 : back(s) - half(s), y));
   }
-  parts.push(tip(width * 0.75 + fat * 2, 0.07 + fat * 2, thick, from + length, -bend));
-  return parts;
+  // The point: the edge sweeps up and round to meet the back.
+  const point = new THREE.Vector2(back(1) - half(1) * 0.7, from + length + 0.05);
+  const shape = new THREE.Shape([...spine.slice(0, 1), ...edge]);
+  // Round to it carrying on the way the edge was going, with no kink.
+  const last = edge[edge.length - 1];
+  const slope = (-2 * bend * 0.9 - 0.15 * width) / length;
+  shape.quadraticCurveTo(last.x + slope * 0.04, last.y + 0.04, part === "edge" ? point.x + half(1) * 0.35 : point.x, point.y);
+  for (let i = spine.length - 1; i >= 0; i--) shape.lineTo(spine[i].x, spine[i].y);
+  const depth = part === "edge" ? 0.0052 : 0.003;
+  const round = fat || 0.0016;
+  return [new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: true, bevelThickness: round, bevelSize: fat || round * 0.8, bevelSegments: fat ? 3 : 1, curveSegments: 6 }).translate(0, 0, -depth / 2)];
 }
 
 /**
@@ -210,14 +216,14 @@ export function buildWeapon(weapon: Weapon, element: Element): THREE.Group {
       // capped in gold.
       return withGlow(
         group([
-          [curvedBlade(0.09, 0.7, 0.032, 0.05, 6), bladeBody()],
-          [edgeStrip(0.09, 0.7, 0.032, 0.05, 6), bladeEdge()],
+          [curvedBlade(0.09, 0.7, 0.032, 0.05), bladeBody()],
+          [curvedBlade(0.09, 0.7, 0.032, 0.05, "edge"), bladeEdge()],
           [[rod(0.0155, -0.17, 0.066, 10)], samegawa()],
           [wrapBands(-0.16, 0.06, 0.0172, 7), dark()],
           [[rod(0.044, 0.07, 0.08, 18)], iron()],
           [[rod(0.046, 0.073, 0.077, 18), box(0.022, 0.03, 0.014, 0.096, 0.004), rod(0.019, -0.185, -0.165, 10)], gold()],
         ]),
-        curvedBlade(0.09, 0.7, 0.032, 0.05, 4, 0.016),
+        curvedBlade(0.09, 0.7, 0.032, 0.05, "blade", 0.016),
         element
       );
     case "naginata":
@@ -225,13 +231,13 @@ export function buildWeapon(weapon: Weapon, element: Element): THREE.Group {
       // wrapped grip below the blade, and a metal butt cap.
       return withGlow(
         group([
-          [curvedBlade(0.6, 0.42, 0.04, 0.06, 5), bladeBody()],
-          [edgeStrip(0.6, 0.42, 0.04, 0.06, 5), bladeEdge()],
-          [[rod(0.016, -0.95, 0.57, 10)], lacquer()],
+          [curvedBlade(0.6, 0.42, 0.04, 0.06), bladeBody()],
+          [curvedBlade(0.6, 0.42, 0.04, 0.06, "edge"), bladeEdge()],
+          [[rod(0.016, -0.55, 0.57, 10)], lacquer()],
           [wrapBands(0.28, 0.52, 0.0185, 6), dark()],
-          [[rod(0.021, 0.54, 0.6, 12), rod(0.019, 0.24, 0.27, 10), rod(0.019, -0.98, -0.93, 10), box(0.028, 0.034, 0.016, 0.618, 0.004)], gold()],
+          [[rod(0.021, 0.54, 0.6, 12), rod(0.019, 0.24, 0.27, 10), rod(0.019, -0.58, -0.53, 10), box(0.028, 0.034, 0.016, 0.618, 0.004)], gold()],
         ]),
-        curvedBlade(0.6, 0.42, 0.04, 0.06, 3, 0.018),
+        curvedBlade(0.6, 0.42, 0.04, 0.06, "blade", 0.018),
         element
       );
     case "lightsaber": {

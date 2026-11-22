@@ -312,7 +312,10 @@ comes from a headset 10 times a second, and each client solves it locally.
 - **Overlay.** Tracking writes through a `PoseOverlay`, which records each
   bone's animated pose before writing and restores it next frame. Tracking
   can then fade in and out over the animation without either one owning
-  the bones.
+  the bones. Tracking and the room modes share one overlay per avatar
+  (`sharedOverlay`), restored once a frame before any of them writes: with
+  one each, the second to write recorded the first's pose as the animated
+  one, and a hand posed by Band or Fantasy stayed posed after both stopped.
 
 Gestures, including together gestures, are clips, not IK. Every client
 plays the same clip from the same name, so a gesture needs no per-frame

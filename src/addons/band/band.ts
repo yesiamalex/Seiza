@@ -14,6 +14,8 @@ export interface LocalMusician {
   color: number;
   /** A light stick swaying overhead. */
   waving: boolean;
+  /** A light stick in each hand. */
+  pair: boolean;
   /** The play panel is open: keys play notes instead of moving you. */
   playing: boolean;
   /** Keys: octaves up or down from middle C. */
@@ -22,12 +24,13 @@ export interface LocalMusician {
   menuOpen: boolean;
 }
 
-export const band = createStore<LocalMusician>({ instrument: null, color: 0, waving: false, playing: false, octave: 0, menuOpen: false });
+export const band = createStore<LocalMusician>({ instrument: null, color: 0, waving: false, pair: false, playing: false, octave: 0, menuOpen: false });
 
 export interface RemoteMusician {
   instrument: Instrument | null;
   color: number;
   waving: boolean;
+  pair: boolean;
   /** The last note, for the hand that plays it. */
   note: { n: number; at: number } | null;
 }
@@ -39,8 +42,8 @@ export const localNote = { note: null as { n: number; at: number } | null };
 export const tapped = { at: -Infinity };
 
 export function announceBand() {
-  const { instrument, color, waving } = band.get();
-  sendAddonEvent("band", { k: "lo", i: instrument ?? "", c: color, wv: waving ? 1 : 0 });
+  const { instrument, color, waving, pair } = band.get();
+  sendAddonEvent("band", { k: "lo", i: instrument ?? "", c: color, wv: waving ? 1 : 0, ...(pair ? { p2: 1 } : {}) });
 }
 
 export function setInstrument(instrument: Instrument | null) {
@@ -55,6 +58,11 @@ export function setLightColor(color: number) {
 
 export function setWaving(waving: boolean) {
   band.set((s) => ({ ...s, waving }));
+  announceBand();
+}
+
+export function setPair(pair: boolean) {
+  band.set((s) => ({ ...s, pair }));
   announceBand();
 }
 
@@ -84,7 +92,7 @@ export function validNote(instrument: Instrument, note: number) {
   return note >= 0 && note < noteCount(instrument);
 }
 
-export type BandEvent = { k: "hi" } | { k: "lo"; instrument: Instrument | null; color: number; waving: boolean } | { k: "n"; note: number };
+export type BandEvent = { k: "hi" } | { k: "lo"; instrument: Instrument | null; color: number; waving: boolean; pair: boolean } | { k: "n"; note: number };
 
 export function parseBandEvent(data: AddonEvent): BandEvent | null {
   if (data.k === "hi") return { k: "hi" };
@@ -92,7 +100,7 @@ export function parseBandEvent(data: AddonEvent): BandEvent | null {
     const instrument = data.i === "" ? null : oneOf(data.i, INSTRUMENTS);
     const color = readNumber(data.c, 0, LIGHT_COLORS.length - 1);
     if ((instrument === null && data.i !== "") || color === null) return null;
-    return { k: "lo", instrument, color: Math.round(color), waving: data.wv === 1 };
+    return { k: "lo", instrument, color: Math.round(color), waving: data.wv === 1, pair: data.p2 === 1 };
   }
   if (data.k === "n") {
     const note = readNumber(data.n, 0, 127);
@@ -103,6 +111,6 @@ export function parseBandEvent(data: AddonEvent): BandEvent | null {
 
 export function musicianOf(id: string): RemoteMusician {
   let m = remoteMusicians.get(id);
-  if (!m) remoteMusicians.set(id, (m = { instrument: null, color: 0, waving: false, note: null }));
+  if (!m) remoteMusicians.set(id, (m = { instrument: null, color: 0, waving: false, pair: false, note: null }));
   return m;
 }

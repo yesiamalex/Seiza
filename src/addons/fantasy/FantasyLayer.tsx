@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type MutableRefObject } from "rea
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import type { VRM } from "@pixiv/three-vrm";
-import { PoseOverlay } from "../../xr/body/bodyIk";
+import { sharedOverlay, type PoseOverlay } from "../../xr/body/bodyIk";
 import { LOCAL_TRACKING_SOURCE, trackingStore } from "../../xr/body/trackingStore";
 import { PooledLight } from "../../scene/LightPool";
 import { TRACKING_STALE_MS } from "../../xr/body/trackingWire";
@@ -333,8 +333,29 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
     }
   };
 
-  /** An arrow: it flies where this visitor looks, and stops at the first
-   *  body or guarding blade on its way. */
+  /** The first armed body, or guarding blade, between two points of an
+   *  arrow's flight; `except` is the archer, and someone else's arrow
+   *  stops at this visitor too, if they're armed. */
+  const arrowMeets = (from: THREE.Vector3, to: THREE.Vector3, except: string) => {
+    let best: { id: string; at: THREE.Vector3; s: number; block: boolean } | null = null;
+    const me = except && fantasy.get().weapon && !fantasy.get().ko ? bodyOf(LOCAL_AVATAR) : null;
+    for (const t of me ? [...targets(), { id: LOCAL_AVATAR, ...me }] : targets()) {
+      if (t.id === except) continue;
+      const guard = bladeOf(t.id);
+      if (guard && segmentDistance(from, to, guard.base, guard.tip, closest).distance < BLADE_CONTACT + 0.03 && (!best || closest.s < best.s)) {
+        best = { id: t.id, at: closest.point.clone(), s: closest.s, block: true };
+      }
+      bodyCapsule(t.feet, t.eye, capsule);
+      if (segmentDistance(from, to, capsule.a, capsule.b, closest).distance < capsule.radius + 0.04 && (!best || closest.s < best.s)) {
+        best = { id: t.id, at: closest.point.clone(), s: closest.s, block: false };
+      }
+    }
+    return best;
+  };
+
+  /** An arrow: it flies where this visitor looks, a real projectile, and
+   *  lands on the first body or guarding blade it actually reaches, so
+   *  stepping out of its way works. A few segment tests a frame. */
   const loose = (element: Element, special: boolean) => {
     const me = bodyOf(LOCAL_AVATAR);
     if (!me) return;
@@ -343,26 +364,21 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
     // Third person looks down at the avatar; aim no lower than level-ish.
     if (aim.y < -0.25) aim.setY(-0.25).normalize();
     const far = origin.clone().addScaledVector(aim, ARROW_RANGE);
-    let best: { id: string; at: THREE.Vector3; s: number; block: boolean } | null = null;
-    for (const t of targets()) {
-      const guard = bladeOf(t.id);
-      if (guard && segmentDistance(origin, far, guard.base, guard.tip, closest).distance < BLADE_CONTACT + 0.03 && (!best || closest.s < best.s)) {
-        best = { id: t.id, at: closest.point.clone(), s: closest.s, block: true };
-      }
-      bodyCapsule(t.feet, t.eye, capsule);
-      if (segmentDistance(origin, far, capsule.a, capsule.b, closest).distance < capsule.radius + 0.04 && (!best || closest.s < best.s)) {
-        best = { id: t.id, at: closest.point.clone(), s: closest.s, block: false };
-      }
-    }
-    const end = best ? best.at : far;
-    sendAddonEvent("fantasy", { k: "ar", o: round(origin), d: round(end), ...(special ? { e: element } : {}) });
+    sendAddonEvent("fantasy", { k: "ar", o: round(origin), d: round(far), ...(special ? { e: element } : {}) });
     playSwing("bow");
-    const landing = best;
-    effects.arrow(origin, end, special ? element : null, seconds(), (landed) => {
-      if (landing?.block) blocked(landing.id, landed.clone(), "bow");
-      else if (special) blast(element, landed.clone(), "bow");
-      else if (landing) hit([landing.id], WEAPON_SPECS.bow.damage, false, "bow", [landed.clone()]);
-    });
+    let landing: ReturnType<typeof arrowMeets> = null;
+    effects.arrow(
+      origin,
+      far,
+      special ? element : null,
+      seconds(),
+      (landed) => {
+        if (landing?.block) blocked(landing.id, landed.clone(), "bow");
+        else if (special) blast(element, landed.clone(), "bow");
+        else if (landing) hit([landing.id], WEAPON_SPECS.bow.damage, false, "bow", [landed.clone()]);
+      },
+      (a, b) => (landing = arrowMeets(a, b, ""))?.at ?? null
+    );
   };
 
   /** A special gathering at its wielder's feet, with its rising sound,
@@ -509,7 +525,9 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
             const from3 = new THREE.Vector3(...event.from);
             const to3 = new THREE.Vector3(...event.to);
             if (from3.distanceTo(to3) > ARROW_RANGE + 2) return;
-            effects.arrow(from3, to3, event.element, seconds());
+            // Seen stopping where it does on the archer's screen: at the first
+            // armed body it reaches (yours is the archer's to judge).
+            effects.arrow(from3, to3, event.element, seconds(), undefined, (a, b) => arrowMeets(a, b, from)?.at ?? null);
             playSwing("bow", distanceTo(from3));
             break;
           }
@@ -589,7 +607,8 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
 
   // --- every frame ------------------------------------------------------------------------
 
-  useFrame((_, rawDelta) => {
+  useFrame((state, rawDelta) => {
+    const frame = state.clock.elapsedTime;
     const dt = Math.min(rawDelta, 0.05);
     const now = seconds();
     const me = fantasy.get();
@@ -628,7 +647,7 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
       if (!holder) {
         holder = {
           vrm,
-          overlay: new PoseOverlay(),
+          overlay: sharedOverlay(vrm, frame),
           weight: 0,
           pose: { right: null, left: null, trail: false },
           hands: { right: newTrackedHand(), left: newTrackedHand() },
@@ -656,8 +675,9 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
         effects.group.add(holder.trail.mesh);
         holders.set(key, holder);
       }
-      // Always first: takes last frame's pose back off the bones.
-      holder.overlay.restore();
+      // Always first: takes last frame's pose back off the bones, once a
+      // frame for everything that poses them (bodyIk.ts).
+      holder.overlay = sharedOverlay(vrm, frame);
 
       const held = ko ? null : weapon;
       // Every weapon is built in its element's colour now: its aura is.

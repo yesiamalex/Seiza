@@ -8,7 +8,10 @@ import { bandBody } from "./band/moves";
 import { cancelSelfPush, pushSelf, takeSelfPush } from "../player/selfPush";
 import { WEAPON_SPECS, WEAPONS } from "./fantasy/weapons";
 import { parseBandEvent, validNote } from "./band/band";
-import { INSTRUMENTS } from "./band/instruments";
+import { INSTRUMENTS, KEY_LAYOUT, KIT } from "./band/instruments";
+import { KIT_PIECES_AT, kitPose, stickPose, type Hands } from "./band/BandLayer";
+import { FantasyEffects } from "./fantasy/effects";
+import { PoseOverlay, sharedOverlay } from "../xr/body/bodyIk";
 import { BLADE_CONTACT, bodyCapsule, segmentDistance, sweep } from "./fantasy/contact";
 
 describe("blade contact", () => {
@@ -129,11 +132,15 @@ describe("fighting poses", () => {
     }
   });
 
-  it("puts the other hand down the grip for two-handed weapons only", () => {
-    expect(heldPose("sword", null, 0).left).toBeNull();
-    const katana = heldPose("katana", null, 0);
+  it("puts the other hand down the grip for two-handed weapons only, and only to guard or cut", () => {
+    expect(heldPose("sword", null, 0, undefined, true).left).toBeNull();
+    // At rest a two-handed weapon is carried in one hand: reaching the other
+    // across to the grip at the hip put the arm through the belly.
+    expect(heldPose("katana", null, 0).left).toBeNull();
+    const katana = heldPose("katana", null, 0, undefined, true);
     const gap = Math.hypot(...katana.right!.pos.map((v, k) => v - katana.left!.pos[k]));
     expect(gap).toBeCloseTo(WEAPON_SPECS.katana.otherHand!, 5);
+    expect(heldPose("katana", { kind: "swing", n: 0, start: 0 }, 0.1).left).not.toBeNull();
     // A bow is in the left hand, and the right only draws while shooting.
     expect(heldPose("bow", null, 0).right).toBeNull();
     expect(heldPose("bow", { kind: "shoot", n: 0, start: 0 }, 0.2).right).not.toBeNull();
@@ -180,6 +187,18 @@ describe("fighting poses", () => {
     }
   });
 
+  it("rests a naginata upright, its shaft clear of the face", () => {
+    // Held like a sword's guard, tip down, the long shaft ran up past the face.
+    const rest = heldPose("naginata", null, 0);
+    const [x, y, z] = rest.right!.blade;
+    expect(y / Math.hypot(x, y, z)).toBeGreaterThan(0.9);
+    // On guard, the shaft lies across the chest, blade out to the right.
+    expect(heldPose("naginata", null, 0, undefined, true).right!.blade[0]).toBeGreaterThan(0.8);
+    // Swings start from and come back to its own rest, not the sword's.
+    const end = heldPose("naginata", { kind: "swing", n: 0, start: 0 }, timingOf("naginata", "swing").duration * 0.999);
+    for (let k = 0; k < 3; k++) expect(end.right!.pos[k]).toBeCloseTo(rest.right!.pos[k], 2);
+  });
+
   it("draws the bowstring back until the arrow flies", () => {
     const shot = { kind: "shoot" as const, n: 0, start: 0 };
     const t = timingOf("bow", "shoot");
@@ -198,15 +217,16 @@ describe("band events", () => {
     expect(validNote("keys", 20)).toBe(false);
     expect(validNote("guitar", 11)).toBe(true);
     expect(validNote("guitar", 12)).toBe(false);
-    expect(validNote("kit", 9)).toBe(true);
-    expect(validNote("kit", 10)).toBe(false);
+    expect(validNote("kit", KIT.cowbell)).toBe(true);
+    expect(validNote("kit", KIT.cowbell + 1)).toBe(false);
     expect(validNote("electric", 11)).toBe(true);
     expect(validNote("bass", 12)).toBe(false);
     expect(validNote("lightstick", 0)).toBe(false);
   });
 
   it("reads only well-formed events", () => {
-    expect(parseBandEvent({ k: "lo", i: "guitar", c: 2, wv: 0 })).toEqual({ k: "lo", instrument: "guitar", color: 2, waving: false });
+    expect(parseBandEvent({ k: "lo", i: "guitar", c: 2, wv: 0 })).toEqual({ k: "lo", instrument: "guitar", color: 2, waving: false, pair: false });
+    expect(parseBandEvent({ k: "lo", i: "lightstick", c: 1, wv: 1, p2: 1 })).toEqual({ k: "lo", instrument: "lightstick", color: 1, waving: true, pair: true });
     expect(parseBandEvent({ k: "lo", i: "theremin", c: 2 })).toBeNull();
     expect(parseBandEvent({ k: "n", n: "C" })).toBeNull();
     expect(parseBandEvent({ k: "n", n: 61.4 })).toEqual({ k: "n", note: 61 });
@@ -330,5 +350,103 @@ describe("body poses", () => {
       expect(finite(calm) && finite(into)).toBe(true);
       expect(into.drop, instrument).toBeGreaterThan(calm.drop);
     }
+  });
+});
+
+describe("the band's instruments", () => {
+  const hands = (): Hands => {
+    const t = () => ({ pos: [0, 0, 0] as [number, number, number], blade: [0, 1, 0] as [number, number, number], fingers: [0, 0, -1] as [number, number, number], curl: 0.35 });
+    return { right: t(), left: t(), lastX: { left: -0.1, right: 0.1 }, last: "right", lastPiece: { left: KIT.snare, right: KIT.hat } };
+  };
+
+  it("brings each stick's tip down onto the piece it strikes, the hands low", () => {
+    const REACH = 0.21;
+    for (const [index, piece] of Object.entries(KIT_PIECES_AT)) {
+      if (piece.hand === "foot") continue;
+      const h = hands();
+      // Just after the hit, the stick is down on it.
+      kitPose(h, { n: Number(index), at: 0 }, 0.05);
+      const hand = h[piece.hand];
+      const length = Math.hypot(...hand.blade);
+      const tip = hand.pos.map((v, k) => v + (hand.blade[k] / length) * REACH);
+      const top = piece.depth > 0 ? piece.at[1] + piece.depth / 2 : piece.at[1];
+      expect(Math.hypot(tip[0] - piece.at[0], tip[2] - piece.at[2]), "piece " + index).toBeLessThan(piece.r + 0.02);
+      expect(Math.abs(tip[1] - top), "piece " + index).toBeLessThan(0.03);
+      // Seated, a drum's hands stay below the shoulders and ahead of the belly.
+      if (piece.depth > 0) {
+        expect(hand.pos[1], "piece " + index).toBeLessThan(0.62);
+        expect(hand.pos[2], "piece " + index).toBeLessThan(-0.08);
+      }
+    }
+  });
+
+  it("holds one light stick or one in each hand", () => {
+    const h = hands();
+    expect(stickPose(h, true, false, 0)).toBe(false);
+    expect(stickPose(h, true, true, 0)).toBe(true);
+    // A pair is held either side, both overhead.
+    expect(h.right.pos[0]).toBeGreaterThan(h.left.pos[0]);
+    expect(Math.min(h.right.pos[1], h.left.pos[1])).toBeGreaterThan(1);
+  });
+
+  it("plays an octave and a half on the keys, each on its own key", () => {
+    expect(KEY_LAYOUT.length).toBe(18);
+    expect(new Set(KEY_LAYOUT.map((k) => k.key)).size).toBe(18);
+    expect(KEY_LAYOUT.filter((k) => !k.black).length).toBe(11);
+    // None of the keys the octave buttons use.
+    expect(KEY_LAYOUT.some((k) => k.key === "Z" || k.key === "X")).toBe(false);
+  });
+});
+
+describe("posing an avatar from two places", () => {
+  it("takes every pose back off, however many wrote it", () => {
+    // Band and Fantasy both on, both posing the same hand: each with its
+    // own overlay, the second recorded the first's pose as where the bone
+    // was, and put it back every frame, so the hand stayed posed.
+    const avatar = {};
+    const bone = new THREE.Object3D();
+    const a = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.8);
+    const b = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), 0.5);
+    for (let frame = 0; frame < 3; frame++) {
+      sharedOverlay(avatar, frame).setQuaternion(bone, a, 1);
+      sharedOverlay(avatar, frame).setQuaternion(bone, b, 1);
+    }
+    sharedOverlay(avatar, 3);
+    expect(bone.quaternion.angleTo(new THREE.Quaternion())).toBeLessThan(1e-6);
+
+    // What two overlays of their own did, for the record.
+    const bone2 = new THREE.Object3D();
+    const first = new PoseOverlay();
+    const second = new PoseOverlay();
+    for (let frame = 0; frame < 3; frame++) {
+      first.restore();
+      first.setQuaternion(bone2, a, 1);
+      second.restore();
+      second.setQuaternion(bone2, b, 1);
+    }
+    first.restore();
+    second.restore();
+    expect(bone2.quaternion.angleTo(new THREE.Quaternion())).toBeGreaterThan(0.1);
+  });
+});
+
+describe("arrows", () => {
+  it("land on what they reach in flight, not where the target stood when loosed", () => {
+    const effects = new FantasyEffects();
+    const from = new THREE.Vector3(0, 1, 0);
+    const to = new THREE.Vector3(0, 1, -30);
+    let wall = -10;
+    let landed: THREE.Vector3 | null = null;
+    // Something standing 10 m out, that steps closer before the arrow gets there.
+    const meets = (a: THREE.Vector3, b: THREE.Vector3) => (a.z > wall && b.z <= wall ? new THREE.Vector3(0, 1, wall) : null);
+    effects.arrow(from, to, null, 0, (at) => (landed = at), meets);
+    const camera = new THREE.PerspectiveCamera();
+    for (let t = 0; t <= 1.2 && !landed; t += 1 / 60) {
+      if (t > 0.1) wall = -6;
+      effects.update(t, 1 / 60, camera);
+    }
+    expect(landed).not.toBeNull();
+    expect(landed!.z).toBeCloseTo(-6, 5);
+    effects.dispose();
   });
 });

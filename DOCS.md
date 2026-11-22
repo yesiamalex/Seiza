@@ -1049,12 +1049,19 @@ adds its own coloured button to the bar while it is on.
   - Swings in a row become a combo of different cuts, and each blade has
     its own: a sword cuts diagonally, backhand, then thrusts; a katana
     comes down overhead, then cuts diagonally, then rises; a naginata sweeps
-    backhand, thrusts, then rises. A pause of more than about a second and
-    a half starts the combo over. Two-handed grips stay in front of the
-    body, so the arms don't pass through it on a slim avatar.
+    backhand, slashes diagonally, then brings the blade down from over the
+    shoulder. A pause of more than about a second and a half starts the
+    combo over. Two-handed weapons rest in one hand, the other joining to
+    guard and to cut, and the grips stay in front of the body, so the arms
+    don't pass through it on a slim avatar. A naginata rests upright at
+    your side and guards with its shaft across the chest.
+  - The katana's and the naginata's blades are curved, tapered, and
+    pointed, with a bright edge, and so is their glow.
   - The bow takes turns between a standing shot, a kneeling one, and a
-    canted one. Its string pulls back with the drawing hand, an arrow sits
-    nocked until it flies, and arrows arc to where they land.
+    canted one. The bow arm straightens and the string comes back to the
+    face, an arrow sits nocked until it flies, and arrows arc. An arrow is
+    a real projectile: it lands on the first body or guarding blade it
+    reaches in flight, so stepping out of its way works.
   - Raising a guard, lowering it, and changing weapons ease the body and
     hands into the new stance instead of snapping to it. A new weapon grows
     into the hand as it's drawn.
@@ -1079,17 +1086,21 @@ adds its own coloured button to the bar while it is on.
     pulses when the special is ready, so others can see it coming.
 - **Band** (violet): pick a drum pad, a drum kit, keys, an acoustic guitar,
   a lead guitar, a bass, or a light stick.
-  - The instruments are 3D models you carry: a guitar or bass slung on you,
-    a light stick in your hand, a drum pad or keys on a stand in front of
-    you, and a whole kit (crash, ride, three toms, kick, snare, rim, and an
-    open and closed hi-hat) around a stool you sit on, with a stick in each
-    hand. Tap or click the model itself to play it: a pad, a key, a drum,
+  - The instruments are 3D models you carry: a guitar or bass slung low on
+    your right hip with the neck forward, strings and all, one light stick
+    or one in each hand, a drum pad or keys on a stand in front of you, and
+    a whole kit (crash, splash, ride, china, three toms, a cowbell, kick,
+    snare, rim, and an open and closed hi-hat) around a stool you sit on,
+    with a stick in each hand. Tap or click the model itself to play it: a pad, a key, a drum,
     or a fret on the neck (tap a guitar's body to strum the last chord
     again). Others see what you play light up.
   - The acoustic guitar has twelve chords (C, G, Am, F, Em, D, A, E, Dm,
-    Bm, Cmaj7, G7). The lead guitar is overdriven, with six power chords
-    and a minor pentatonic run for solos. The bass plays the root of each
-    chord, deep and round.
+    Bm, Cmaj7, G7), played from the nut up the neck, as on a real one. The
+    lead guitar goes through an amp and speaker cabinet, with six
+    double-tracked power chords and a minor pentatonic run for solos. The
+    bass plays the root of each chord, warm and growling, with weight a
+    laptop or phone can still play. The keys span an octave and a half
+    (A to K, then O, L, P, ;, and ', with Z and X for the octave).
   - **Start playing** also opens the instrument flat on the screen. Its
     keyboard keys are shown on it, and they play the instrument instead of
     moving you until you press Esc.
@@ -1098,11 +1109,13 @@ adds its own coloured button to the bar while it is on.
     guitar while your other hand picks the chord along its neck.
   - Notes are sent as events and played by each visitor's own browser, so
     no audio is streamed. Everyone hears the whole room.
-  - Light sticks come in seven colours and sway on the same beat for
-    everyone.
+  - Light sticks come in seven colours, one or a pair, and sway on the
+    same beat for everyone.
   - Musicians move to the music, easing from one hit to the next rather
     than bobbing. Drummers dip into each hit, and a kit drummer sits with
-    their heel lifting for the kick. Keyboard players sway and lean toward
+    their hands low over the lap, flicks each stick from the wrist onto
+    the piece it plays, crosses the right hand over to the hats, and lifts
+    a heel for the kick. Keyboard players sway and lean toward
     their hands, guitarists rock back on the strum and tap a foot, lead
     guitarists take a wide rock stance, bassists sit low, and light-stick
     holders sway with the crowd. Everyone moves to the same beat, so a band

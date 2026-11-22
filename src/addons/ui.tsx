@@ -98,7 +98,23 @@ export function Choices<T extends string>({
   );
 }
 
-export const Hint = ({ children }: { children: ReactNode }) => <small style={{ opacity: 0.68, lineHeight: 1.45 }}>{children}</small>;
+/** A mode's help text. In a string, **these** are set bold in the mode's
+ *  colour: the controls, so they stand out of the paragraph. */
+export const Hint = ({ children, accent }: { children: ReactNode; accent?: string }) => (
+  <small style={{ opacity: 0.75, lineHeight: 1.45 }}>
+    {typeof children === "string"
+      ? children.split(/\*\*(.+?)\*\*/g).map((part, i) =>
+          i % 2 ? (
+            <strong key={i} style={{ color: accent, fontWeight: 700 }}>
+              {part}
+            </strong>
+          ) : (
+            part
+          )
+        )
+      : children}
+  </small>
+);
 
 /** A switch for a room mode, for whoever may change the room. */
 export function ModeSwitch({ label, description, on, accent, onChange, disabled }: { label: string; description: string; on: boolean; accent: string; onChange: (on: boolean) => void; disabled?: boolean }) {

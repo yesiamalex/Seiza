@@ -76,8 +76,8 @@ export function bandBody(instrument: Instrument, note: { at: number; n?: number 
       out.lean = 0.12 + 0.03 * accent;
       out.twist = 0.02 * sway * e;
       out.nod = 0.07 * bob * e + 0.05 * accent;
-      out.left = [-0.08, -0.17, 0.012 * bob * e];
-      out.right = [0.08, -0.24, 0.035 * kick];
+      out.left = [-0.1, -0.24, 0.012 * bob * e];
+      out.right = [0.08, -0.32, 0.035 * kick];
       out.carry = 0;
       out.head = 0.45;
       break;
