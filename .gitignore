@@ -24,3 +24,4 @@ worlds/*/media-src/
 # home.seiza.cc: written by home/build.mjs at deploy.
 home/public/index.html
 home/public/sitemap.xml
+home/public/news.mjs

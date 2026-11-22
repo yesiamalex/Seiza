@@ -1,74 +1,72 @@
 {
-  "note": "What's new in Seiza, for visitors. Written by hand in plain words; home/build.mjs adds the commits made after `through` (see home/README.md), so a month can be rewritten here whenever it's worth it.",
-  "through": "2026-11-20",
+  "note": "What's new in Seiza, for visitors. Written by hand in plain words, each month with a one-line summary; home/build.mjs adds the commits made after `through` (see home/README.md), so a month can be rewritten here whenever it's worth it.",
+  "through": "2026-11-22T19:46:57+08:00",
   "months": [
     {
       "month": "2026-11",
+      "summary": "Play comes to Seiza: Fantasy and Band modes, six new worlds, and avatars that move like people.",
       "items": [
         {
           "tag": "new",
-          "text": "Fantasy mode: swords, a katana, a naginata, a light saber, and a bow, with health bars and elemental specials. A blow lands only where a blade really meets someone, and blades parry. Plays on a PC, a phone, or in VR, where you swing for real."
+          "text": "Fantasy mode: a sword, katana, naginata, scythe, light saber, and bow. Blades really parry, combos chain, and arrows can be dodged."
         },
         {
           "tag": "new",
-          "text": "Band mode: play a drum pad, keys, or a guitar for the whole room, or wave a light stick that sways in time with everyone else's. In VR, play with your hands."
+          "text": "Six elements for specials, each with its own move and burst: Spectro, Havoc, Aero, Electro, Fusion, and Glacio."
         },
         {
           "tag": "new",
-          "text": "Play the instruments themselves: tap a pad, a key, or the guitar's neck, and everyone sees the note light up."
+          "text": "Band mode: a drum kit, keys, acoustic, lead, and bass guitars, and light sticks, heard by the whole room."
         },
         {
-          "tag": "better",
-          "text": "In VR, other people's avatars lean with their feet planted, turn their chest with their head, and lift their shoulders to reach."
-        },
-        {
-          "tag": "better",
-          "text": "Designed avatars look more like VRoid ones: a softer V-shaped face, bigger eyes, a shorter neck, and fuller arms and legs."
-        },
-        {
-          "tag": "better",
-          "text": "Every weapon glows in its special's colour as the meter fills, and pulses when the special is ready."
+          "tag": "new",
+          "text": "Play an instrument by tapping it, and everyone sees the note light up. In VR, play with your hands."
         },
         {
           "tag": "world",
-          "text": "Tulay, Seiza's Filipino home: a bahay kubo hall, beach cottages, coconut palms, banig and capiz."
+          "text": "Tulay, Seiza's Filipino home: a bahay kubo hall, beach cottages, and coconut palms."
         },
         {
           "tag": "world",
-          "text": "ISCOLab, UP Open University's Immersive Science Communication Open Laboratory, as a lab you can walk through."
+          "text": "ISCOLab, UP Open University's science communication lab, to walk through."
         },
         {
           "tag": "world",
-          "text": "SeiOU, a walkable twin of UP Open University's campus with two guides, and Seinag, the same campus with rooftop solar running live on the sky."
+          "text": "SeiOU and Seinag: UP Open University's campus, with guides, live rooftop solar, and a permaculture garden tour."
         },
         {
           "tag": "world",
-          "text": "Seisugbo, the Meiji × UP arts-based research exhibition, and Seizorai, where Ilaw-san answers questions about the microgrid."
+          "text": "Seisugbo, the Meiji × UP art exhibition with Tala as its guide, and Seizorai, where Ilaw-san explains the microgrid."
         },
         {
           "tag": "better",
-          "text": "A beach and the sea past the meadow, seasons that blend in, falling leaves, and rain you can hear, with thunder and lightning."
+          "text": "Fighters and musicians move their whole body, and no pose sticks after a mode ends."
         },
         {
           "tag": "better",
-          "text": "Everything in English and Japanese, including chat translation and the guides."
+          "text": "More natural avatars: softer designer faces and eyes, real hair and clothes, and relaxed arms."
         },
         {
           "tag": "better",
-          "text": "Portals between the worlds, and a way home to Seiza from each."
+          "text": "In VR, avatars lean, reach, and step like you, with a comfort vignette and admin tools on your wrist."
         },
         {
           "tag": "better",
-          "text": "Avaturn avatars hold their arms naturally, and designer avatars have real hair, shoes, and clothing details."
+          "text": "A beach, the sea, seasons, falling leaves, and rain with thunder."
         },
         {
           "tag": "better",
-          "text": "In VR: a comfort vignette while you move, smoother rendering, and the admin tools in your wrist menu."
+          "text": "English and Japanese everywhere, chat translation and guides included."
+        },
+        {
+          "tag": "better",
+          "text": "Portals between every world, and a way home from each."
         }
       ]
     },
     {
       "month": "2026-10",
+      "summary": "Seizora and Seilaya open, the sky follows the real weather, and together gestures arrive.",
       "items": [
         {
           "tag": "world",
@@ -110,6 +108,7 @@
     },
     {
       "month": "2026-09",
+      "summary": "Gestures, postures, boards, and screens.",
       "items": [
         {
           "tag": "new",
@@ -127,6 +126,7 @@
     },
     {
       "month": "2026-08",
+      "summary": "The first Seiza.",
       "items": [
         {
           "tag": "new",

@@ -16,14 +16,25 @@ with no code of its own.
   `through` date is added on its own, reworded for visitors: only features
   and fixes, the world named instead of the code's scope, the first point
   of the message only, and a few technical words swapped for everyday ones
-  (see `item()` in `build.mjs`). Plain commit messages make a plain
+  (see `item()` in `news.mjs`). Plain commit messages make a plain
   changelog.
+- `public/news.mjs`: a copy of `news.mjs`, for the page itself.
+
+Between deploys, the page keeps up on its own: a "Just landed" strip
+above the months asks GitHub's public commit list for anything committed
+after the build's newest commit, and words it with the same `news.mjs`.
+There's no key and no tracking, the text is only ever set as text, and if
+GitHub doesn't answer (offline, or its limit of 60 requests an hour per
+visitor), the strip just stays hidden. A deploy folds those commits into
+the months. Visitors' browsers do contact `api.github.com` for this.
 
 To rewrite a month by hand, add it to `changelog.json` and move `through`
-past it.
+past it: a day, or an exact time (`2026-11-22T19:46:57+08:00`) when the
+day was only partly written up, so later commits that day still show. A hand-written month can also have a `summary`: one line on what
+it was about, shown above its changes.
 
 On the page, each month is headed by its counts (changes, new, worlds,
-better). It shows its first six changes with a "Show all", the two latest
+better) and its summary, if it has one. It shows its first six changes with a "Show all", the two latest
 months show and the rest fold behind a button, and chips filter by kind.
 All of it is the page's script working on what the build wrote into the
 HTML, so without JavaScript, and for search engines, every change shows.
