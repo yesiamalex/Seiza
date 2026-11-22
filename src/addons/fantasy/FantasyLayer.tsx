@@ -1,16 +1,17 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import type { VRM } from "@pixiv/three-vrm";
 import { PoseOverlay } from "../../xr/body/bodyIk";
 import { LOCAL_TRACKING_SOURCE, trackingStore } from "../../xr/body/trackingStore";
+import { PooledLight } from "../../scene/LightPool";
 import { TRACKING_STALE_MS } from "../../xr/body/trackingWire";
 import type { PlayerState } from "../../multiplayer/types";
 import { cancelSelfPush, pushSelf } from "../../player/selfPush";
 import { getAddonAvatar, LOCAL_AVATAR } from "../avatars";
-import { carryHand, Gait, newBodyPose, poseBody, type BodyPose } from "../body";
+import { blendBody, carryHand, copyBody, Gait, newBodyPose, poseBody, type BodyPose } from "../body";
 import { onAddonEvent, sendAddonEvent } from "../bus";
-import { disposeTree, facing, feetAndEye, holdInHand, newTrackedHand, poseHands, rigFor, toTrackedHand } from "../rig";
+import { disposeTree, facing, feetAndEye, holdInHand, newTrackedHand, poseHands, rigFor, toTrackedHand, type HandTarget } from "../rig";
 import {
   acceptHit,
   announce,
@@ -41,9 +42,9 @@ import {
 } from "./combat";
 import { BLADE_CONTACT, bodyCapsule, segmentDistance, sweep, type Capsule, type Closest } from "./contact";
 import { FantasyEffects, Trail } from "./effects";
-import { bodyPose, heldPose, KNOCKED_OUT, timingOf, type Action, type ActionKind, type HeldPose } from "./poses";
-import { playCharged, playClash, playHit, playKnockedOut, playSpecial, playSwing } from "./sounds";
-import { buildWeapon, ELEMENT_COLORS, MAX_HP, SABER_HALO, weaponGlow, WEAPON_SPECS, type Element, type Weapon } from "./weapons";
+import { bodyPose, bowDraw, heldPose, KNOCKED_OUT, timingOf, type Action, type ActionKind, type HeldPose } from "./poses";
+import { playCharged, playClash, playHit, playKnockedOut, playSpecial, playSpecialCharge, playSwing } from "./sounds";
+import { buildWeapon, ELEMENT_COLORS, MAX_HP, SABER_HALO, setBowString, weaponGlow, WEAPON_SPECS, type Element, type Weapon } from "./weapons";
 
 interface FantasyLayerProps {
   selfId: string | null;
@@ -84,11 +85,59 @@ interface Holder {
   bodyWeight: number;
   gait: Gait;
   seed: number;
+  /** What's actually drawn: the pose above, eased toward each frame, so a
+   *  guard raised, a weapon changed, or a move's end never snaps. Each
+   *  hand fades in and out on its own share. */
+  settled: { body: BodyPose | null; right: Settled; left: Settled };
+  /** When the weapon in hand was drawn, for it to grow into the hand. */
+  drawnAt: number;
+}
+
+interface Settled {
+  target: HandTarget;
+  valid: boolean;
+  share: number;
+  /** The settled target moved with the body this frame (scratch). */
+  carried: HandTarget;
 }
 
 const approach = (current: number, target: number, rate: number, dt: number) => current + (target - current) * (1 - Math.exp(-rate * dt));
+/** How fast what's drawn follows the pose, a second: tightly through a
+ *  move (its timing is what lands a blow), gently between moves. */
+const EASE_ACTING = 40;
+const EASE_RESTING = 9;
+/** Seconds a newly drawn weapon takes to grow into the hand. */
+const DRAW_SECONDS = 0.22;
+
+const newTarget = (): HandTarget => ({ pos: [0, 0, 0], blade: [0, 1, 0], fingers: [0, 0, -1] });
+const newSettled = (): Settled => ({ target: newTarget(), valid: false, share: 0, carried: newTarget() });
+function copyTarget(from: HandTarget, out: HandTarget) {
+  for (let k = 0; k < 3; k++) {
+    out.pos[k] = from.pos[k];
+    out.blade[k] = from.blade[k];
+    out.fingers[k] = from.fingers[k];
+  }
+  return out;
+}
+/** Eases a hand toward `goal` (or holds it, fading, when there's none). */
+function settleHand(hand: Settled, goal: HandTarget | null, k: number, dt: number) {
+  hand.share = approach(hand.share, goal ? 1 : 0, 12, dt);
+  if (!goal) return;
+  if (!hand.valid) {
+    copyTarget(goal, hand.target);
+    hand.valid = true;
+    return;
+  }
+  for (let i = 0; i < 3; i++) {
+    hand.target.pos[i] += (goal.pos[i] - hand.target.pos[i]) * k;
+    hand.target.blade[i] += (goal.blade[i] - hand.target.blade[i]) * k;
+    hand.target.fingers[i] += (goal.fingers[i] - hand.target.fingers[i]) * k;
+  }
+}
 const seconds = () => performance.now() / 1000;
 const ARROW_RANGE = 40;
+/** How long a special gathers before it's released (effects.ts's gather). */
+const WIND_UP_SECONDS = 0.42;
 /** Trigger (index curl, see xrPose.ts) past this fires; under the second re-arms. */
 const TRIGGER_FIRE = 0.85;
 const TRIGGER_RELEASE = 0.55;
@@ -316,6 +365,19 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
     });
   };
 
+  /** A special gathering at its wielder's feet, with its rising sound,
+   *  timed to end as it's released `release` seconds from now. */
+  const windUp = (element: Element, who: string, release: number, distance?: number) => {
+    const gather = () => {
+      const body = bodyOf(who);
+      if (body) effects.gather(element, body.feet, seconds());
+      playSpecialCharge(element, distance);
+    };
+    const wait = Math.max(0, release - WIND_UP_SECONDS) * 1000;
+    if (wait > 0) setTimeout(gather, wait);
+    else gather();
+  };
+
   // Everything that starts an attack (mouse, touch button, VR trigger)
   // ends up here. A blade's swing lands by contact, frame by frame; its
   // special and a bow's arrows go off at the action's moment.
@@ -330,6 +392,7 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
     // The body goes with the blow: a step in on a cut, a long lunge on a
     // blade's special, a step back off a bow's.
     const at = (share: number) => timing.duration * share;
+    if (action.kind === "special") windUp(element, LOCAL_AVATAR, at(timing.impact));
     if (weapon === "bow") {
       if (action.kind === "special") step(-0.18, 0.15, at(timing.impact));
     } else if (action.kind === "special") step(0.6, 0.22, at(0.36));
@@ -374,6 +437,7 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
             fighter.action = action;
             if (action.kind === "special") fighter.ready = false;
             const timing = timingOf(fighter.weapon, action.kind);
+            if (action.kind === "special") windUp(fighter.element, from, timing.duration * timing.impact, distance);
             const weapon = fighter.weapon;
             if (weapon !== "bow" && action.kind !== "recoil") setTimeout(() => playSwing(weapon, distance), timing.duration * timing.impact * 450);
             break;
@@ -586,6 +650,8 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
           bodyWeight: 0,
           gait: new Gait(),
           seed: Math.random() * 6,
+          settled: { body: null, right: newSettled(), left: newSettled() },
+          drawnAt: -Infinity,
         };
         effects.group.add(holder.trail.mesh);
         holders.set(key, holder);
@@ -604,7 +670,10 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
         holder.propKey = propKey;
         holder.trail.setColor(held === "lightsaber" ? ELEMENT_COLORS[element] : "#dfe8ff");
         holder.hadBlade = false;
+        holder.drawnAt = now;
       }
+      // A new weapon grows into the hand rather than appearing in it.
+      if (holder.prop) holder.prop.scale.setScalar(THREE.MathUtils.smoothstep((now - holder.drawnAt) / DRAW_SECONDS, 0, 1));
 
       const rig = rigFor(vrm);
       const source = key === LOCAL_AVATAR ? LOCAL_TRACKING_SOURCE : key;
@@ -618,32 +687,49 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
       // headset, the player's own body is the pose.
       holder.bodyWeight = approach(holder.bodyWeight, (held || (ko && weapon)) && !holder.inHeadset && !seated ? 1 : 0, ko ? 3 : 6, dt);
       let legs = 0;
+      const timing = action && holder.posed ? timingOf(holder.posed, action.kind) : null;
+      const acting = timing !== null && now - action!.start < timing.duration;
+      const ease = 1 - Math.exp(-(acting ? EASE_ACTING : EASE_RESTING) * dt);
+      const settled = holder.settled;
       if (rig) {
         const moving = holder.gait.update(rig, dt);
         if (holder.bodyWeight > 0.001 && (holder.posed || ko)) {
-          const timing = action && holder.posed ? timingOf(holder.posed, action.kind) : null;
-          const acting = timing !== null && now - action!.start < timing.duration;
           if (ko || !holder.posed) copyKnockedOut(holder.body);
           else bodyPose(holder.posed, action, now, guard, holder.body, hurtAt, holder.seed);
+          if (!settled.body) settled.body = copyBody(holder.body, newBodyPose());
+          else blendBody(settled.body, holder.body, ease);
           const upper = holder.bodyWeight * (acting ? 1 : 1 - 0.5 * moving);
           legs = Math.min(upper, holder.bodyWeight * (acting ? 1 : 1 - moving));
-          poseBody(rig, holder.overlay, holder.body, upper, legs);
-        }
+          poseBody(rig, holder.overlay, settled.body, upper, legs);
+        } else settled.body = null;
       }
       if (rig && holder.posed && holder.weight > 0.001) {
         const pose = heldPose(holder.posed, action, now, holder.pose, guard);
-        if (holder.bodyWeight > 0.001) {
-          if (pose.right) carryHand(pose.right, holder.body, holder.bodyWeight, legs);
-          if (pose.left) carryHand(pose.left, holder.body, holder.bodyWeight, legs);
-        }
-        poseHands(
-          rig,
-          holder.overlay,
-          pose.right ? toTrackedHand("right", pose.right, holder.hands.right) : null,
-          pose.left ? toTrackedHand("left", pose.left, holder.hands.left) : null,
-          holder.weight
-        );
-      } else if (holder.weight <= 0.001) holder.posed = null;
+        settleHand(settled.right, pose.right, ease, dt);
+        settleHand(settled.left, pose.left, ease, dt);
+        const drawn = (hand: Settled, side: "left" | "right") => {
+          if (!hand.valid || hand.share < 0.01) return null;
+          copyTarget(hand.target, hand.carried);
+          if (holder.bodyWeight > 0.001 && settled.body) carryHand(hand.carried, settled.body, holder.bodyWeight, legs);
+          return toTrackedHand(side, hand.carried, holder.hands[side]);
+        };
+        poseHands(rig, holder.overlay, drawn(settled.right, "right"), drawn(settled.left, "left"), holder.weight, settled.right.share, settled.left.share);
+      } else if (holder.weight <= 0.001) {
+        holder.posed = null;
+        settled.right.valid = settled.left.valid = false;
+        settled.right.share = settled.left.share = 0;
+      }
+
+      // The bow's string follows the drawing hand back, with an arrow on it,
+      // and snaps forward when the arrow goes.
+      if (held === "bow" && holder.prop) {
+        const draw = bowDraw(action, now);
+        const hand = draw > 0 ? vrm.humanoid.getNormalizedBoneNode("rightHand") : null;
+        if (hand) {
+          hand.updateWorldMatrix(true, false);
+          setBowString(holder.prop, holder.prop.worldToLocal(v3.setFromMatrixPosition(hand.matrixWorld)), draw);
+        } else setBowString(holder.prop, null, 0);
+      }
 
       // Where the blade is now, and how fast its tip is going.
       holder.hasBlade = !!holder.prop && !!held && held !== "bow";
@@ -741,7 +827,50 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
     effects.update(now, dt, camera);
   }, -0.4);
 
-  return null;
+  return <SpecialLights effects={effects} />;
+}
+
+/** How bright a special's light is at its peak, and how far it reaches. */
+const SPECIAL_LIGHT = { intensity: 26, distance: 16 };
+
+/**
+ * Real light from the specials: a pooled light (src/scene/LightPool.tsx)
+ * per burst, at it, in its element's colour, flaring and fading with it.
+ * Each takes a light from the pool only while it's bright, so lamps lose
+ * theirs only for the moment a special lights the place.
+ */
+function SpecialLights({ effects }: { effects: FantasyEffects }) {
+  const lights = effects.lights;
+  const anchors = useRef<(THREE.Group | null)[]>([]);
+  const levels = useMemo(() => lights.map(() => ({ current: 0 }) as MutableRefObject<number>), [lights.length]);
+  const [colors, setColors] = useState(() => lights.map(() => "#ffffff"));
+  const shown = useRef(colors);
+  useFrame(() => {
+    let changed = false;
+    const next = [...shown.current];
+    effects.lights.forEach((light, i) => {
+      anchors.current[i]?.position.set(light.at.x, light.at.y + 1.2, light.at.z);
+      levels[i].current = SPECIAL_LIGHT.intensity * light.level;
+      const hex = `#${light.color.getHexString()}`;
+      if (light.level > 0 && hex !== next[i]) {
+        next[i] = hex;
+        changed = true;
+      }
+    });
+    if (changed) {
+      shown.current = next;
+      setColors(next);
+    }
+  });
+  return (
+    <>
+      {levels.map((level, i) => (
+        <group key={i} ref={(g) => (anchors.current[i] = g)}>
+          <PooledLight position={[0, 0, 0]} color={colors[i]} intensityRef={level} distance={SPECIAL_LIGHT.distance} />
+        </group>
+      ))}
+    </>
+  );
 }
 
 function copyKnockedOut(out: BodyPose) {

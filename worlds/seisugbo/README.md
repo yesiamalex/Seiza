@@ -44,6 +44,22 @@ Visitors wake at the tent on the meadow and look east down the lane.
   with its group, its words, and a caption, and Previous and Next walk along
   its line or the lane. In a headset it opens as a panel in front of you
   (`?seisugboXrPreview` shows that panel on a flat screen, for checking).
+- **Tala, the guide.** A guide in a cap and a sunset-orange shirt waits by
+  the tent, greeting arrivals, and now and then strolls to the court or the
+  portals. Click her to ask about the forum (3–5 November 2026, its
+  organizers and participants, each day), the Urbanity Walk and the places
+  it passed (Parián, Magellan's Cross, the Basilica Minore del Santo Niño,
+  Puso Village and tuslob buwa, the Provincial Capitol), the metaverse
+  workshop, the art and the groups, a climate-resilient Cebu and SDG 11,
+  and how this world reads as design science research: the problem it
+  answers, its objectives, the artifact, and how it's evaluated. She
+  answers in English or Japanese, opens the matching board, photo, or
+  portal, and walks you there, round the houses (a small graph of open
+  ground in `client/guide.ts`, since the meadow has no navmesh). She's a
+  designed avatar, built in code, so there's no model file. Like Seiza's
+  other guides (`src/guides/`), she only gives answers written in
+  `client/knowledge.ts`, and says so when she doesn't know: she doesn't
+  have the paper's evaluation results, for one.
 
 Everything else is Seiza's own: voice, chat, gestures, editing, the sky
 over Cebu, and the screens in the hall and classroom for presenting.
@@ -86,6 +102,9 @@ on a phone and a standalone headset:
   The captions describe what each photo shows; check the place names (the
   first photo names the Heritage of Cebu Monument in Parián).
 - **Board text:** `client/info.ts`.
+- **What Tala knows:** `client/knowledge.ts`, one topic per answer, each
+  with the questions it answers and its Japanese. `client/knowledge.test.ts`
+  checks the main questions still find the right answer.
 - **A new or replaced picture:** put the original in `media-src/` (not
   committed), named like the others (`GroupB_7.jpg` becomes `b7`), run
   `node worlds/seisugbo/scripts/optimize-media.mjs`, and add an entry to
@@ -119,6 +138,8 @@ worlds/seisugbo/
     art.tsx                 A picture, its labels, and pins
     Hud.tsx, Xr.tsx         The close-up view, on a screen and in a headset
     viewer.ts               Which piece is open
+    guide.ts                Tala: who she is, her avatar, her day, her paths
+    knowledge.ts            What Tala knows
     kit.tsx                 Merged geometry, lazy pictures, night lighting
   favicon.svg               Seisugbo's tab icon
   build.mjs                 Builds the deployment into dist/

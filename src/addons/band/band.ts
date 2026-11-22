@@ -1,6 +1,6 @@
 import { createStore } from "../store";
 import { oneOf, readNumber, sendAddonEvent, type AddonEvent } from "../bus";
-import { CHORDS, DRUM_PADS, INSTRUMENTS, KEYS_RANGE, LIGHT_COLORS, playNote, type Instrument } from "./instruments";
+import { INSTRUMENTS, KEYS_RANGE, LIGHT_COLORS, noteCount, playNote, type Instrument } from "./instruments";
 
 /**
  * Band mode's state. Notes are events, played by every client from its own
@@ -79,10 +79,9 @@ export function play(note: number) {
 
 export function validNote(instrument: Instrument, note: number) {
   if (!Number.isInteger(note)) return false;
-  if (instrument === "drums") return note >= 0 && note < DRUM_PADS.length;
+  if (instrument === "lightstick") return false;
   if (instrument === "keys") return note >= KEYS_RANGE[0] && note <= KEYS_RANGE[1];
-  if (instrument === "guitar") return note >= 0 && note < CHORDS.length;
-  return false;
+  return note >= 0 && note < noteCount(instrument);
 }
 
 export type BandEvent = { k: "hi" } | { k: "lo"; instrument: Instrument | null; color: number; waving: boolean } | { k: "n"; note: number };

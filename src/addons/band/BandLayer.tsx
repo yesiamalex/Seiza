@@ -9,25 +9,26 @@ import { LOCAL_TRACKING_SOURCE, trackingStore } from "../../xr/body/trackingStor
 import { TRACKING_STALE_MS, type TrackedHand } from "../../xr/body/trackingWire";
 import type { PlayerState } from "../../multiplayer/types";
 import { getAddonAvatar, LOCAL_AVATAR } from "../avatars";
-import { carryHand, Gait, newBodyPose, poseBody, type BodyPose } from "../body";
+import { blendBody, carryHand, copyBody, Gait, newBodyPose, poseBody, type BodyPose } from "../body";
 import { onAddonEvent, sendAddonEvent } from "../bus";
 import { disposeTree, feetAndEye, holdInHand, newTrackedHand, poseHands, rigFor, toTrackedHand, wearOnChest, type HandTarget } from "../rig";
 import { announceBand, band, localNote, musicianOf, parseBandEvent, play, remoteMusicians, resetBand, tapped, validNote } from "./band";
-import { CHORDS, KEY_LAYOUT, LIGHT_COLORS, playNote, prepareGuitar, type Instrument } from "./instruments";
+import { CHORDS, ELECTRIC, isWorn, KEY_LAYOUT, KIT, LIGHT_COLORS, playNote, prepareGuitar, type Instrument, type Worn } from "./instruments";
 import { bandBody, updateGroove, type Groove } from "./moves";
 
 /**
  * Band mode in the scene: each musician's instrument in front of them (a
- * drum pad, a keyboard) or on them (a guitar, a light stick), hands that
- * play the notes they play, light sticks swaying overhead in time with
- * everyone else's, and in VR, instruments you play by touch.
+ * drum pad, a keyboard, a drum kit they sit at) or on them (a guitar, a
+ * lead guitar, a bass, a light stick), hands that play the notes they
+ * play, a body that moves to them, light sticks swaying overhead in time
+ * with everyone else's, and in VR, instruments you play by touch.
  *
- * The drum pad and keyboard are drawn in the avatar's own frame scaled by
- * its eye height, the same frame the arm IK takes targets in, so a key's
- * position is also where the hand goes to play it.
+ * The stands (pad, keyboard, kit) are drawn in the avatar's own frame scaled
+ * by its eye height, the same frame the arm IK takes targets in, so a key's
+ * or a drum's position is also where the hand goes to play it.
  */
 
-// --- the instruments, in eye heights: x right, y up, z back --------------------
+// --- the stands, in eye heights: x right, y up, z back -------------------------
 
 const DESK_Y = 0.6;
 const DESK_Z = -0.3;
@@ -50,6 +51,7 @@ function merged(parts: THREE.BufferGeometry[], mat: THREE.Material) {
 }
 const boxAt = (w: number, h: number, d: number, x: number, y: number, z: number) => new THREE.BoxGeometry(w, h, d).translate(x, y, z);
 const legAt = (x: number, z: number, top: number) => new THREE.CylinderGeometry(0.008, 0.008, top, 6).translate(x, top / 2, z);
+const discAt = (r: number, h: number, x: number, y: number, z: number, tilt = 0) => new THREE.CylinderGeometry(r, r, h, 24).rotateX(tilt).translate(x, y, z);
 
 function buildDrumPad() {
   const group = new THREE.Group();
@@ -75,68 +77,196 @@ function buildKeyboard() {
   return group;
 }
 
+// --- the drum kit -------------------------------------------------------------------
+// A full kit round a seated drummer: the kick in front with its pedal under
+// the right foot, the snare between the knees, the hi-hat to the left with
+// its pedal under the left foot, two toms on the kick, a floor tom on the
+// right, a crash high left and a ride high right. The right hand crosses
+// over to the hats, as most drummers' does.
+
+interface Piece {
+  at: [number, number, number];
+  r: number;
+  /** A drum's shell depth; a cymbal's is 0. */
+  depth: number;
+  /** Which hand plays it; the kick is the right foot's. */
+  hand: "left" | "right" | "foot";
+  /** A tilt toward the drummer, radians. */
+  tilt: number;
+}
+
+const KIT_PIECES_AT: Record<number, Piece> = {
+  [KIT.crash]: { at: [-0.3, 0.9, -0.38], r: 0.15, depth: 0, hand: "left", tilt: 0.25 },
+  [KIT.hiTom]: { at: [-0.08, 0.66, -0.42], r: 0.08, depth: 0.07, hand: "left", tilt: 0.3 },
+  [KIT.midTom]: { at: [0.1, 0.66, -0.42], r: 0.09, depth: 0.08, hand: "right", tilt: 0.3 },
+  [KIT.floorTom]: { at: [0.27, 0.42, -0.2], r: 0.12, depth: 0.16, hand: "right", tilt: 0.05 },
+  [KIT.ride]: { at: [0.36, 0.82, -0.32], r: 0.17, depth: 0, hand: "right", tilt: 0.2 },
+  [KIT.kick]: { at: [0.02, 0.18, -0.44], r: 0.18, depth: 0.26, hand: "foot", tilt: 0 },
+  [KIT.snare]: { at: [-0.1, 0.47, -0.24], r: 0.1, depth: 0.05, hand: "left", tilt: 0.12 },
+  [KIT.hat]: { at: [-0.27, 0.62, -0.2], r: 0.11, depth: 0, hand: "right", tilt: 0 },
+  [KIT.openHat]: { at: [-0.27, 0.62, -0.2], r: 0.11, depth: 0, hand: "right", tilt: 0 },
+  [KIT.rim]: { at: [-0.1, 0.47, -0.24], r: 0.1, depth: 0.05, hand: "left", tilt: 0.12 },
+};
+const pieceTop = (p: Piece) => p.at[1] + p.depth / 2;
+const THRONE = { at: [0, 0.3, 0.06] as [number, number, number], r: 0.12 };
+
+export function buildKit() {
+  const group = new THREE.Group();
+  const shell = material("#7a1f2b", { roughness: 0.35, metalness: 0.15 });
+  const head = material("#f1ede4", { roughness: 0.8 });
+  const brass = material("#d7b25a", { roughness: 0.3, metalness: 0.6 });
+  const chrome = material("#b9bec6", { roughness: 0.3, metalness: 0.7 });
+  const seat = material("#1a1a1c", { roughness: 0.7 });
+  const stands: THREE.BufferGeometry[] = [];
+  for (const [index, piece] of Object.entries(KIT_PIECES_AT)) {
+    const n = Number(index);
+    if (n === KIT.openHat || n === KIT.rim) continue;
+    const [x, y, z] = piece.at;
+    const parts = new THREE.Group();
+    parts.userData.piece = n;
+    if (n === KIT.kick) {
+      // On its side, facing the drummer.
+      const drum = new THREE.Mesh(new THREE.CylinderGeometry(piece.r, piece.r, piece.depth, 28).rotateX(Math.PI / 2).translate(x, y, z), shell);
+      const face = new THREE.Mesh(new THREE.CircleGeometry(piece.r * 0.96, 28).translate(x, y, z + piece.depth / 2 + 0.002), head);
+      parts.add(drum, face);
+      stands.push(boxAt(0.05, 0.015, 0.12, x + 0.08, 0.01, z + piece.depth / 2 + 0.1));
+    } else if (piece.depth > 0) {
+      const drum = new THREE.Mesh(new THREE.CylinderGeometry(piece.r, piece.r, piece.depth, 24).rotateX(piece.tilt).translate(x, y, z), shell);
+      const top = new THREE.Mesh(new THREE.CylinderGeometry(piece.r * 0.97, piece.r * 0.97, 0.004, 24).translate(0, piece.depth / 2 + 0.002, 0).rotateX(piece.tilt).translate(x, y, z), head);
+      parts.add(drum, top);
+      if (n !== KIT.hiTom && n !== KIT.midTom) stands.push(legAt(x, z, y - piece.depth / 2));
+    } else {
+      const cymbal = new THREE.Mesh(discAt(piece.r, 0.006, 0, 0, 0).rotateX(piece.tilt).translate(x, y, z), brass);
+      parts.add(cymbal);
+      if (n === KIT.hat) parts.add(new THREE.Mesh(discAt(piece.r, 0.006, x, y - 0.03, z), brass));
+      stands.push(legAt(x, z, y - 0.01));
+    }
+    for (const mesh of parts.children) mesh.userData.navIgnore = true;
+    group.add(parts);
+  }
+  stands.push(new THREE.CylinderGeometry(0.012, 0.012, 0.2, 6).translate(0.01, 0.5, -0.42));
+  group.add(merged(stands, chrome));
+  group.add(merged([new THREE.CylinderGeometry(THRONE.r, THRONE.r, 0.05, 20).translate(THRONE.at[0], THRONE.at[1], THRONE.at[2]), legAt(THRONE.at[0], THRONE.at[2], THRONE.at[1])], seat));
+  return group;
+}
+
+/** A drumstick, along +y from the grip. */
+export function buildStick() {
+  const group = new THREE.Group();
+  group.add(merged([new THREE.CylinderGeometry(0.006, 0.009, 0.4, 6).translate(0, 0.12, 0), new THREE.SphereGeometry(0.009, 6, 4).translate(0, 0.32, 0)], material("#d9b98a", { roughness: 0.6 })));
+  return group;
+}
+
+// --- the worn instruments: guitar, lead guitar, bass ----------------------------
+
 /** In metres, on the chest: x right, y up, z behind (-z out of the chest). */
 const GUITAR_BODY = new THREE.Vector3(0.03, -0.27, -0.13);
 const NECK = new THREE.Vector3(-0.88, 0.47, -0.04).normalize();
 const NECK_FROM = 0.15;
-const NECK_LENGTH = 0.55;
+const NECK_ANGLE = Math.atan2(NECK.y, NECK.x) - Math.PI / 2;
 
-function buildGuitar() {
+interface WornSpec {
+  body: string;
+  neck: string;
+  guard: string;
+  /** Neck length from the body, metres, and how many note zones along it. */
+  length: number;
+  zones: number;
+  /** A solid body (lead guitar, bass) is thinner, with horns. */
+  solid: boolean;
+}
+
+const WORN_SPECS: Record<Worn, WornSpec> = {
+  guitar: { body: "#c0452c", neck: "#3b2618", guard: "#111111", length: 0.55, zones: CHORDS.length, solid: false },
+  electric: { body: "#141414", neck: "#4a3020", guard: "#f2f0eb", length: 0.55, zones: ELECTRIC.length, solid: true },
+  bass: { body: "#2f5fa8", neck: "#4a3020", guard: "#f2f0eb", length: 0.72, zones: CHORDS.length, solid: true },
+};
+
+export function buildWorn(kind: Worn) {
+  const spec = WORN_SPECS[kind];
   const group = new THREE.Group();
-  const lower = new THREE.CylinderGeometry(0.16, 0.16, 0.08, 20).rotateX(Math.PI / 2).scale(1, 1.05, 1).translate(GUITAR_BODY.x + 0.03, GUITAR_BODY.y - 0.05, GUITAR_BODY.z);
-  const upper = new THREE.CylinderGeometry(0.12, 0.12, 0.08, 18).rotateX(Math.PI / 2).translate(GUITAR_BODY.x - 0.09, GUITAR_BODY.y + 0.08, GUITAR_BODY.z);
-  group.add(merged([lower, upper], material("#c0452c", { roughness: 0.35, metalness: 0.1 })));
-  const angle = Math.atan2(NECK.y, NECK.x) - Math.PI / 2;
-  const neckMid = GUITAR_BODY.clone().addScaledVector(NECK, NECK_FROM + NECK_LENGTH / 2);
-  const headAt = GUITAR_BODY.clone().addScaledVector(NECK, NECK_FROM + NECK_LENGTH + 0.07);
-  const neck = new THREE.BoxGeometry(0.05, NECK_LENGTH, 0.025).rotateZ(angle).translate(neckMid.x, neckMid.y, neckMid.z - 0.02);
-  const head = new THREE.BoxGeometry(0.07, 0.15, 0.022).rotateZ(angle).translate(headAt.x, headAt.y, headAt.z - 0.02);
-  group.add(merged([neck, head], material("#3b2618")));
-  // Frets marking the chord zones a tap picks (see chordOnNeck).
-  const frets = Array.from({ length: CHORDS.length + 1 }, (_, k) => {
-    const at = GUITAR_BODY.clone().addScaledVector(NECK, NECK_FROM + (k / CHORDS.length) * NECK_LENGTH);
-    return new THREE.BoxGeometry(0.052, 0.004, 0.004).rotateZ(angle).translate(at.x, at.y, at.z - 0.034);
+  const depth = spec.solid ? 0.045 : 0.08;
+  const b = GUITAR_BODY;
+  const shape = [
+    new THREE.CylinderGeometry(0.16, 0.16, depth, 20).rotateX(Math.PI / 2).scale(1, 1.05, 1).translate(b.x + 0.03, b.y - 0.05, b.z),
+    new THREE.CylinderGeometry(0.12, 0.12, depth, 18).rotateX(Math.PI / 2).translate(b.x - 0.09, b.y + 0.08, b.z),
+  ];
+  if (spec.solid) {
+    // The two horns either side of the neck, swept along it.
+    const horn = (r: number, x: number, y: number) =>
+      new THREE.CylinderGeometry(r, r, depth, 14).rotateX(Math.PI / 2).scale(1, 2.4, 1).rotateZ(NECK_ANGLE + 0.15).translate(b.x + x, b.y + y, b.z);
+    shape.push(horn(0.05, -0.15, 0.13), horn(0.04, -0.01, 0.16));
+  }
+  group.add(merged(shape, material(spec.body, { roughness: 0.3, metalness: spec.solid ? 0.2 : 0.1 })));
+  const neckMid = b.clone().addScaledVector(NECK, NECK_FROM + spec.length / 2);
+  const headAt = b.clone().addScaledVector(NECK, NECK_FROM + spec.length + 0.07);
+  const neck = new THREE.BoxGeometry(kind === "bass" ? 0.055 : 0.05, spec.length, 0.025).rotateZ(NECK_ANGLE).translate(neckMid.x, neckMid.y, neckMid.z - 0.02);
+  const headstock = new THREE.BoxGeometry(0.07, 0.15, 0.022).rotateZ(NECK_ANGLE).translate(headAt.x, headAt.y, headAt.z - 0.02);
+  group.add(merged([neck, headstock], material(spec.neck)));
+  // Frets marking the note zones a tap picks (see zoneOnNeck).
+  const frets = Array.from({ length: spec.zones + 1 }, (_, k) => {
+    const at = b.clone().addScaledVector(NECK, NECK_FROM + (k / spec.zones) * spec.length);
+    return new THREE.BoxGeometry(0.052, 0.004, 0.004).rotateZ(NECK_ANGLE).translate(at.x, at.y, at.z - 0.034);
   });
   group.add(merged(frets, material("#d8d2c4", { metalness: 0.4, roughness: 0.4 })));
-  const pickguard = new THREE.CylinderGeometry(0.045, 0.045, 0.004, 16).rotateX(Math.PI / 2).translate(GUITAR_BODY.x - 0.05, GUITAR_BODY.y + 0.02, GUITAR_BODY.z - 0.042);
-  group.add(merged([pickguard], material("#111111")));
+  const face = b.z - depth / 2;
+  // An acoustic's sound hole; a solid body's long scratchplate under the strings.
+  const guard = spec.solid
+    ? new THREE.CylinderGeometry(0.06, 0.06, 0.004, 18).rotateX(Math.PI / 2).scale(2, 0.85, 1).rotateZ(NECK_ANGLE + 1.2).translate(b.x + 0.06, b.y - 0.02, face - 0.002)
+    : new THREE.CylinderGeometry(0.045, 0.045, 0.004, 16).rotateX(Math.PI / 2).translate(b.x - 0.05, b.y + 0.02, face - 0.002);
+  group.add(merged([guard], material(spec.guard, { roughness: 0.4 })));
+  if (spec.solid) {
+    // Pickups and a bridge, across the strings.
+    const across = (w: number, h: number, along: number) => {
+      const at = b.clone().addScaledVector(NECK, along);
+      return new THREE.BoxGeometry(w, h, 0.01).rotateZ(NECK_ANGLE).translate(at.x, at.y, face - 0.007);
+    };
+    const hardware = [across(0.075, 0.024, 0.05), across(0.075, 0.024, -0.02), across(0.06, 0.014, -0.1)];
+    group.add(merged(hardware, material("#c9ccd1", { metalness: 0.8, roughness: 0.3 })));
+  }
   return group;
 }
 
-/** Which chord a point on a worn guitar picks: by how far up the neck it
- *  is, one zone per chord between the frets; on the body, null (strum
- *  the last chord again). `local` is in the guitar's own metres. */
-function chordOnNeck(local: THREE.Vector3): number | null {
+/** Which note zone a point on a worn instrument's neck picks; on the body,
+ *  null (play the last again). `local` is in the instrument's own metres. */
+function zoneOnNeck(kind: Worn, local: THREE.Vector3): number | null {
+  const spec = WORN_SPECS[kind];
   const along = local.clone().sub(GUITAR_BODY).dot(NECK);
   if (along < NECK_FROM - 0.02) return null;
-  return Math.max(0, Math.min(CHORDS.length - 1, Math.floor(((along - NECK_FROM) / NECK_LENGTH) * CHORDS.length)));
+  return Math.max(0, Math.min(spec.zones - 1, Math.floor(((along - NECK_FROM) / spec.length) * spec.zones)));
 }
 
 /** Where a note is on its instrument, in the instrument's own frame, and
  *  how big a patch to light there. */
-function noteSpot(instrument: Instrument, note: number): { at: THREE.Vector3; size: [number, number, number] } | null {
+function noteSpot(instrument: Instrument, note: number): { at: THREE.Vector3; size: [number, number, number]; tilt: number } | null {
   if (instrument === "drums") {
     const [x, z] = padAt(note);
-    return { at: new THREE.Vector3(x, PAD_TOP + 0.004, z), size: [0.078, 0.004, 0.075] };
+    return { at: new THREE.Vector3(x, PAD_TOP + 0.004, z), size: [0.078, 0.004, 0.075], tilt: 0 };
   }
   if (instrument === "keys") {
     const semitone = (((note - 60) % 12) + 12) % 12;
     const black = KEY_LAYOUT[semitone]?.black;
     return black
-      ? { at: new THREE.Vector3(keyX(semitone), PAD_TOP + 0.014, DESK_Z - 0.03), size: [WHITE_KEY * 0.55, 0.004, 0.06] }
-      : { at: new THREE.Vector3(keyX(semitone), PAD_TOP + 0.004, DESK_Z + 0.005), size: [WHITE_KEY * 0.92, 0.004, 0.11] };
+      ? { at: new THREE.Vector3(keyX(semitone), PAD_TOP + 0.014, DESK_Z - 0.03), size: [WHITE_KEY * 0.55, 0.004, 0.06], tilt: 0 }
+      : { at: new THREE.Vector3(keyX(semitone), PAD_TOP + 0.004, DESK_Z + 0.005), size: [WHITE_KEY * 0.92, 0.004, 0.11], tilt: 0 };
   }
-  if (instrument === "guitar") {
-    const at = GUITAR_BODY.clone().addScaledVector(NECK, NECK_FROM + ((note + 0.5) / CHORDS.length) * NECK_LENGTH);
+  if (instrument === "kit") {
+    const piece = KIT_PIECES_AT[note];
+    if (!piece || piece.hand === "foot") return null;
+    return { at: new THREE.Vector3(piece.at[0], pieceTop(piece) + 0.006, piece.at[2]), size: [piece.r * 1.8, 0.004, piece.r * 1.8], tilt: 0 };
+  }
+  if (isWorn(instrument)) {
+    const spec = WORN_SPECS[instrument];
+    const at = GUITAR_BODY.clone().addScaledVector(NECK, NECK_FROM + (((note % spec.zones) + 0.5) / spec.zones) * spec.length);
     at.z -= 0.036;
-    return { at, size: [0.054, NECK_LENGTH / CHORDS.length, 0.004] };
+    return { at, size: [0.054, spec.length / spec.zones, 0.004], tilt: NECK_ANGLE };
   }
   return null;
 }
 
 const FLASH_SECONDS = 0.18;
 
-/** A patch of light over the pad, key, or fret just played, seen by
+/** A patch of light over the pad, key, drum, or fret just played, seen by
  *  everyone; unlit and additive, so it costs nothing to light. */
 function buildFlash() {
   const mesh = new THREE.Mesh(
@@ -148,8 +278,8 @@ function buildFlash() {
   return mesh;
 }
 
-/** The last chord played here, for a strum on the guitar's body. */
-let lastChord = 0;
+/** The last note played on a worn instrument, for a strum on its body. */
+const lastNote: Record<Worn, number> = { guitar: 0, electric: 0, bass: 0 };
 
 let halo: THREE.Texture | null = null;
 function haloTexture() {
@@ -197,20 +327,22 @@ const set = (t: HandTarget, pos: [number, number, number], blade: [number, numbe
 };
 
 /** How high a playing hand is over the keys: down for a note, then back. */
-function lift(note: { at: number } | null, now: number) {
+function lift(note: { at: number } | null, now: number, height = 0.05) {
   const age = note ? now - note.at : 1;
-  if (age < 0.05) return 0.05 * (1 - age / 0.05);
-  if (age < 0.2) return 0.05 * ((age - 0.05) / 0.15);
-  return 0.05;
+  if (age < 0.05) return height * (1 - age / 0.05);
+  if (age < 0.2) return height * ((age - 0.05) / 0.15);
+  return height;
 }
 
-interface Hands {
+export interface Hands {
   right: HandTarget;
   left: HandTarget;
   /** Where each hand last played along the desk, so the idle one stays. */
   lastX: { left: number; right: number };
   /** Which hand played the last note. */
   last: "left" | "right";
+  /** The kit piece each hand last struck. */
+  lastPiece: { left: number; right: number };
 }
 
 /** A wrist sits behind the key its fingers play. */
@@ -228,6 +360,26 @@ function deskPose(hands: Hands, instrument: "drums" | "keys", note: { n: number;
     const playing = side === hands.last ? lift(note, now) : 0.05;
     const thumb: [number, number, number] = side === "right" ? [-1, 0, 0] : [1, 0, 0];
     set(hands[side], [hands.lastX[side], PAD_TOP + 0.03 + playing, z + WRIST_BACK], thumb, [0, -0.25, -1], instrument === "drums" ? 0.75 : 0.3);
+  }
+}
+
+/** How far behind a drum a hand holds its stick, along the stick. */
+const STICK_REACH = 0.17;
+
+/** Sticks over the kit: each hand over what it last struck, coming down
+ *  onto a piece as it's played. */
+export function kitPose(hands: Hands, note: { n: number; at: number } | null, now: number) {
+  const struck = note && now - note.at < 0.3 ? KIT_PIECES_AT[note.n] : null;
+  if (struck && struck.hand !== "foot") {
+    hands.lastPiece[struck.hand] = note!.n;
+    hands.last = struck.hand;
+  }
+  for (const side of ["left", "right"] as const) {
+    const piece = KIT_PIECES_AT[hands.lastPiece[side]];
+    const playing = side === hands.last && struck && struck.hand === side ? lift(note, now, 0.08) : 0.08;
+    const [x, , z] = piece.at;
+    // The stick points forward and down onto the piece from behind it.
+    set(hands[side], [x + (side === "right" ? 0.02 : -0.02), pieceTop(piece) + 0.04 + playing, z + STICK_REACH], [0, -0.42, -0.9], [0, -0.9, 0.42], 0.9);
   }
 }
 
@@ -259,26 +411,32 @@ const fretAt: [number, number, number] = [0, 0, 0];
 const guitarPoint = new THREE.Vector3();
 const offset = new THREE.Vector3();
 
-/** A point on a worn guitar, `along` its neck from the body's middle and
- *  then nudged, in the guitar's own metres, as body-frame coordinates. */
+/** A point on a worn instrument, `along` its neck from the body's middle
+ *  and then nudged, in its own metres, as body-frame coordinates. */
 function onGuitar(rig: BodyRig, guitar: THREE.Object3D, along: number, nudge: [number, number, number], out: [number, number, number]) {
   guitarPoint.copy(GUITAR_BODY).addScaledVector(NECK, along).add(offset.set(...nudge));
   return toBody(rig, guitar.localToWorld(guitarPoint), out);
 }
 
-/** Where the strumming hand and the fretting hand go on a worn guitar. */
-function guitarPoints(rig: BodyRig, guitar: THREE.Object3D, chord: number) {
+/** Where the strumming hand and the fretting hand go on a worn instrument. */
+function guitarPoints(rig: BodyRig, guitar: THREE.Object3D, kind: Worn, note: number) {
+  const spec = WORN_SPECS[kind];
   guitar.updateWorldMatrix(true, false);
   onGuitar(rig, guitar, 0, [0.02, 0, -0.1], strumAt);
-  onGuitar(rig, guitar, NECK_FROM + 0.08 + Math.min(3, chord) * 0.07, [0, -0.03, -0.06], fretAt);
+  onGuitar(rig, guitar, NECK_FROM + (((note % spec.zones) + 0.5) / spec.zones) * spec.length, [0, -0.03, -0.06], fretAt);
 }
 
-function guitarPose(hands: Hands, rig: BodyRig, guitar: THREE.Object3D, note: { n: number; at: number } | null, now: number) {
-  guitarPoints(rig, guitar, note?.n ?? 0);
+/** How far a strum sweeps: a guitar's chord the whole way, a lead note or
+ *  a bass note just a pick or a pluck. */
+const SWEEP: Record<Worn, number> = { guitar: 0.09, electric: 0.06, bass: 0.035 };
+
+export function guitarPose(hands: Hands, rig: BodyRig, guitar: THREE.Object3D, kind: Worn, note: { n: number; at: number } | null, now: number) {
+  guitarPoints(rig, guitar, kind, note?.n ?? lastNote[kind]);
   const age = note ? now - note.at : 1;
   // A strum sweeps down across the strings and comes back up.
-  const sweep = age < 0.12 ? (age / 0.12) * 0.09 : age < 0.35 ? 0.09 * (1 - (age - 0.12) / 0.23) : 0;
-  set(hands.right, [strumAt[0] + 0.03, strumAt[1] + 0.05 - sweep, strumAt[2] + 0.06], [0, -0.3, -1], [-0.6, -0.8, 0], 0.7);
+  const reach = SWEEP[kind];
+  const sweep = age < 0.12 ? (age / 0.12) * reach : age < 0.35 ? reach * (1 - (age - 0.12) / 0.23) : 0;
+  set(hands.right, [strumAt[0] + 0.03, strumAt[1] + 0.05 - sweep, strumAt[2] + 0.06], [0, -0.3, -1], [-0.6, -0.8, 0], kind === "bass" ? 0.45 : 0.7);
   set(hands.left, [fretAt[0] + 0.02, fretAt[1] - 0.02, fretAt[2] + 0.06], [0.2, 1, 0.1], [-0.9, 0.3, -0.3], 0.65);
 }
 
@@ -289,8 +447,28 @@ function stickPose(hands: Hands, waving: boolean) {
   }
   // Everyone's sway runs off the same clock, so a crowd waves together.
   const s = Math.sin((Date.now() / 1000) * Math.PI * 2 * 0.9);
-  set(hands.right, [0.08 + 0.13 * s, 1.1, -0.08], [0.55 * s, 1, 0.15], [0, 0, -1], 1);
+  set(hands.right, [0.08 + 0.1 * s, 1.1, -0.08], [0.45 * s, 1, 0.15], [0, 0, -1], 1);
 }
+
+/** Eases what's drawn toward a hand's target: quickly while playing, so a
+ *  note still lands on time, and gently between, so nothing snaps. */
+function ease(drawn: HandTarget, goal: HandTarget, k: number) {
+  for (let i = 0; i < 3; i++) {
+    drawn.pos[i] += (goal.pos[i] - drawn.pos[i]) * k;
+    drawn.blade[i] += (goal.blade[i] - drawn.blade[i]) * k;
+    drawn.fingers[i] += (goal.fingers[i] - drawn.fingers[i]) * k;
+  }
+  drawn.curl = (drawn.curl ?? 0.35) + ((goal.curl ?? 0.35) - (drawn.curl ?? 0.35)) * k;
+}
+const copyTarget = (from: HandTarget, to: HandTarget) => {
+  ease(to, from, 1);
+  return to;
+};
+/** A second: how fast the hands follow while notes come, and between. */
+const EASE_PLAYING = 26;
+const EASE_RESTING = 8;
+/** And the body, which never needs to be quick. */
+const EASE_BODY = 6;
 
 // --- the layer ------------------------------------------------------------------
 
@@ -299,6 +477,8 @@ interface Holder {
   overlay: PoseOverlay;
   weight: number;
   hands: Hands;
+  /** What's drawn: the hands eased toward `hands` (and moved with the body). */
+  drawn: { right: HandTarget; left: HandTarget; valid: boolean; carried: HandTarget };
   tracked: { right: TrackedHand; left: TrackedHand };
   propKey: string;
   prop: THREE.Object3D | null;
@@ -306,9 +486,10 @@ interface Holder {
   flash: THREE.Mesh | null;
   /** When the note the flash shows was played. */
   flashed: number;
-  /** The rest of the body while playing (moves.ts), and whether they're
-   *  walking, when the walk keeps the legs. */
+  /** The rest of the body while playing (moves.ts), eased, and whether
+   *  they're walking, when the walk keeps the legs. */
   body: BodyPose;
+  settled: BodyPose | null;
   gait: Gait;
   groove: Groove;
 }
@@ -330,7 +511,7 @@ export function BandLayer({ selfId, players, editMode }: BandLayerProps) {
   const selfIdRef = useRef(selfId);
   selfIdRef.current = selfId;
   // VR: whether each hand is above the instrument and may strike it.
-  const armed = useRef({ left: true, right: true, strum: true });
+  const armed = useRef({ left: true, right: true, strum: true, kick: true });
 
   // Ask once on starting, for anything announced before this client listened.
   useEffect(() => sendAddonEvent("band", { k: "hi" }), []);
@@ -360,9 +541,9 @@ export function BandLayer({ selfId, players, editMode }: BandLayerProps) {
     });
   }, [camera]);
 
-  // Tap or click your own instrument to play it: the pad, key, or fret
-  // under the pointer. Drums and keys stand in front of you, so they're
-  // under your hands in first person and in view in third.
+  // Tap or click your own instrument to play it: the pad, key, drum, or
+  // fret under the pointer. Stands are in front of you, so they're under
+  // your hands in first person and in view in third.
   useEffect(() => {
     if (editMode) return;
     const el = gl.domElement;
@@ -380,9 +561,10 @@ export function BandLayer({ selfId, players, editMode }: BandLayerProps) {
       if (!hit) return;
       const local = holder.prop.worldToLocal(hit.point.clone());
       let note: number | null = null;
-      if (instrument === "guitar") {
-        const chord = chordOnNeck(local);
-        note = chord ?? lastChord;
+      if (isWorn(instrument)) note = zoneOnNeck(instrument, local) ?? lastNote[instrument];
+      else if (instrument === "kit") {
+        const piece = hit.object.parent?.userData.piece;
+        if (typeof piece === "number") note = piece;
       } else if (local.y >= PAD_TOP - 0.025) {
         if (instrument === "drums") {
           for (let pad = 0; pad < 8 && note === null; pad++) {
@@ -395,7 +577,7 @@ export function BandLayer({ selfId, players, editMode }: BandLayerProps) {
         }
       }
       if (note === null) return;
-      if (instrument === "guitar") lastChord = note;
+      if (isWorn(instrument)) lastNote[instrument] = note;
       tapped.at = performance.now();
       play(note);
     };
@@ -440,7 +622,8 @@ export function BandLayer({ selfId, players, editMode }: BandLayerProps) {
           vrm,
           overlay: new PoseOverlay(),
           weight: 0,
-          hands: { right: target(), left: target(), lastX: { left: -0.1, right: 0.1 }, last: "right" },
+          hands: { right: target(), left: target(), lastX: { left: -0.1, right: 0.1 }, last: "right", lastPiece: { left: KIT.snare, right: KIT.hat } },
+          drawn: { right: target(), left: target(), valid: false, carried: target() },
           tracked: { right: newTrackedHand(), left: newTrackedHand() },
           propKey: "",
           prop: null,
@@ -448,6 +631,7 @@ export function BandLayer({ selfId, players, editMode }: BandLayerProps) {
           flash: null,
           flashed: 0,
           body: newBodyPose(),
+          settled: null,
           gait: new Gait(),
           groove: { energy: 0 },
         };
@@ -463,22 +647,33 @@ export function BandLayer({ selfId, players, editMode }: BandLayerProps) {
         holder.flash = null;
         holder.detach = () => {};
         holder.propKey = propKey;
+        holder.drawn.valid = false;
         if (instrument && rig) {
           if (instrument === "lightstick") {
             holder.prop = buildLightStick(LIGHT_COLORS[color] ?? LIGHT_COLORS[0]);
             holder.detach = holdInHand(vrm, "right", holder.prop);
-          } else if (instrument === "guitar") {
-            holder.prop = buildGuitar();
+          } else if (isWorn(instrument)) {
+            holder.prop = buildWorn(instrument);
             holder.detach = wearOnChest(vrm, rig, holder.prop);
           } else {
             // In front of them, in their body frame scaled to their size.
-            const stand = instrument === "drums" ? buildDrumPad() : buildKeyboard();
+            const stand = instrument === "drums" ? buildDrumPad() : instrument === "kit" ? buildKit() : buildKeyboard();
             const anchor = vrm.scene.parent;
             if (anchor) {
               stand.scale.setScalar(feetAndEye(rig, feet) / anchor.getWorldScale(scale).y);
               anchor.add(stand);
               holder.prop = stand;
-              holder.detach = () => anchor.remove(stand);
+              const detachStand = () => anchor.remove(stand);
+              if (instrument === "kit") {
+                // A stick in each hand.
+                const sticks = [buildStick(), buildStick()];
+                const letGo = [holdInHand(vrm, "right", sticks[0]), holdInHand(vrm, "left", sticks[1])];
+                holder.detach = () => {
+                  detachStand();
+                  letGo.forEach((f) => f());
+                  sticks.forEach(disposeTree);
+                };
+              } else holder.detach = detachStand;
             }
           }
           if (holder.prop && instrument !== "lightstick") {
@@ -490,18 +685,18 @@ export function BandLayer({ selfId, players, editMode }: BandLayerProps) {
 
       // Light up what was just played.
       if (holder.flash && instrument && note) {
+        const spot = noteSpot(instrument, note.n);
         if (note.at !== holder.flashed) {
           holder.flashed = note.at;
-          const spot = noteSpot(instrument, note.n);
           if (spot) {
             holder.flash.position.copy(spot.at);
             holder.flash.scale.set(...spot.size);
-            holder.flash.rotation.z = instrument === "guitar" ? Math.atan2(NECK.y, NECK.x) - Math.PI / 2 : 0;
+            holder.flash.rotation.z = spot.tilt;
           }
         }
         const age = now - note.at;
         const material = holder.flash.material as THREE.MeshBasicMaterial;
-        holder.flash.visible = age < FLASH_SECONDS;
+        holder.flash.visible = age < FLASH_SECONDS && spot !== null;
         material.opacity = Math.max(0, 0.9 * (1 - age / FLASH_SECONDS));
       }
 
@@ -509,28 +704,46 @@ export function BandLayer({ selfId, players, editMode }: BandLayerProps) {
       const sample = trackingStore.get(source);
       const inHeadset = sample !== null && performance.now() - sample.receivedAt < TRACKING_STALE_MS;
       const seated = !!playersRef.current[key === LOCAL_AVATAR ? (selfIdRef.current ?? "") : key]?.posture;
-      holder.weight = approach(holder.weight, instrument && !inHeadset && !seated ? 1 : 0, 8, dt);
+      holder.weight = approach(holder.weight, instrument && !inHeadset && !seated ? 1 : 0, 6, dt);
       const moving = rig ? holder.gait.update(rig, dt) : 0;
-      if (!rig || holder.weight <= 0.001 || !instrument) return;
+      if (!rig || holder.weight <= 0.001 || !instrument) {
+        holder.settled = null;
+        return;
+      }
       const hands = holder.hands;
-      // The body first: it grooves, and a guitar on the chest goes with it,
-      // so the hands are placed on it after. Drum pads and keys stand on the
-      // floor, so the hands stay on them while the body moves behind.
+      // The body first: it grooves, and an instrument on the chest goes with
+      // it, so the hands are placed on it after. Pads, keys, and the kit
+      // stand on the floor, so the hands stay on them while the body moves.
       const energy = updateGroove(holder.groove, instrument, note, waving, now, dt);
       const side = instrument === "drums" || instrument === "keys" ? hands.lastX[hands.last] : 0;
       bandBody(instrument, note, energy, side, Date.now() / 1000, now, holder.body);
+      if (!holder.settled) holder.settled = copyBody(holder.body, newBodyPose());
+      else blendBody(holder.settled, holder.body, 1 - Math.exp(-EASE_BODY * dt));
       const upper = holder.weight * (1 - 0.5 * moving);
-      const legs = holder.weight * (1 - moving);
-      poseBody(rig, holder.overlay, holder.body, upper, legs);
+      // A seated drummer stays seated, walking or not.
+      const legs = instrument === "kit" ? holder.weight : holder.weight * (1 - moving);
+      poseBody(rig, holder.overlay, holder.settled, upper, legs);
       let both = true;
       if (instrument === "drums" || instrument === "keys") deskPose(hands, instrument, note, now);
-      else if (instrument === "guitar" && holder.prop) guitarPose(hands, rig, holder.prop, note, now);
+      else if (instrument === "kit") kitPose(hands, note, now);
+      else if (isWorn(instrument) && holder.prop) guitarPose(hands, rig, holder.prop, instrument, note, now);
       else {
         stickPose(hands, waving);
-        carryHand(hands.right, holder.body, upper, legs);
         both = false;
       }
-      poseHands(rig, holder.overlay, toTrackedHand("right", hands.right, holder.tracked.right), both ? toTrackedHand("left", hands.left, holder.tracked.left) : null, holder.weight);
+      const playing = note !== null && now - note.at < 0.5;
+      const k = holder.drawn.valid ? 1 - Math.exp(-(playing ? EASE_PLAYING : EASE_RESTING) * dt) : 1;
+      ease(holder.drawn.right, hands.right, k);
+      ease(holder.drawn.left, hands.left, k);
+      holder.drawn.valid = true;
+      const settled = holder.settled;
+      const draw = (handSide: "left" | "right") => {
+        const t = copyTarget(holder!.drawn[handSide], holder!.drawn.carried);
+        // A light stick waves with the body's sway.
+        if (instrument === "lightstick") carryHand(t, settled, upper, legs);
+        return toTrackedHand(handSide, t, holder!.tracked[handSide]);
+      };
+      poseHands(rig, holder.overlay, draw("right"), both ? draw("left") : null, holder.weight);
     };
 
     tend(LOCAL_AVATAR, me.instrument, me.color, me.waving, localNote.note);
@@ -541,41 +754,72 @@ export function BandLayer({ selfId, players, editMode }: BandLayerProps) {
       holders.delete(key);
     }
 
-    // VR: play by touch. Hands come down onto the pads and keys, and a
-    // strum across a worn guitar's strings plays the chord the other hand
-    // is holding along its neck.
+    // VR: play by touch. Hands come down onto the pads, keys, and drums,
+    // and a strum across a worn instrument's strings plays the note the
+    // other hand is holding along its neck.
     const sample = trackingStore.get(LOCAL_TRACKING_SOURCE);
     if (!sample || performance.now() - sample.receivedAt >= TRACKING_STALE_MS || !me.instrument || me.instrument === "lightstick") return;
-    if (me.instrument === "guitar") {
+    if (isWorn(me.instrument)) {
+      const kind = me.instrument;
       const holder = holders.get(LOCAL_AVATAR);
       const rig = holder && rigFor(holder.vrm);
       const strumming = sample.pose.right;
       const fretting = sample.pose.left;
       if (!holder?.prop || !rig || !strumming) return;
-      guitarPoints(rig, holder.prop, 0);
+      guitarPoints(rig, holder.prop, kind, 0);
       const [x, y, z] = strumming.pose;
       const over = Math.abs(x - strumAt[0]) < 0.14 && Math.abs(z - strumAt[2]) < 0.16;
       if (y > strumAt[1] + 0.04) armed.current.strum = true;
       else if (over && armed.current.strum && y < strumAt[1]) {
         armed.current.strum = false;
-        // The chord: how far up the neck the other hand is, in four steps.
-        let chord = 0;
+        // The note: how far up the neck the other hand is, in the first six
+        // zones (the home row), which an arm can reach without looking.
+        let zone = 0;
         if (fretting) {
+          const spec = WORN_SPECS[kind];
           const start = onGuitar(rig, holder.prop, NECK_FROM, [0, 0, 0], [0, 0, 0]);
-          const end = onGuitar(rig, holder.prop, NECK_FROM + NECK_LENGTH, [0, 0, 0], [0, 0, 0]);
+          const end = onGuitar(rig, holder.prop, NECK_FROM + spec.length, [0, 0, 0], [0, 0, 0]);
           const length = Math.hypot(end[0] - start[0], end[1] - start[1], end[2] - start[2]) || 1;
           const u = ((fretting.pose[0] - start[0]) * (end[0] - start[0]) + (fretting.pose[1] - start[1]) * (end[1] - start[1]) + (fretting.pose[2] - start[2]) * (end[2] - start[2])) / (length * length);
-          chord = Math.max(0, Math.min(3, Math.floor(u * 4)));
+          zone = Math.max(0, Math.min(5, Math.floor(u * 6)));
         }
-        lastChord = chord;
-        play(chord);
+        lastNote[kind] = zone;
+        play(zone);
       }
       return;
+    }
+    if (me.instrument === "kit") {
+      // The trigger on the right controller is the kick pedal.
+      const squeeze = sample.pose.right?.curl[0] ?? 0;
+      if (squeeze >= 0.85 && armed.current.kick) {
+        armed.current.kick = false;
+        play(KIT.kick);
+      } else if (squeeze <= 0.55) armed.current.kick = true;
     }
     for (const side of ["left", "right"] as const) {
       const hand = sample.pose[side];
       if (!hand) continue;
       const [x, y, z] = hand.pose;
+      if (me.instrument === "kit") {
+        // The stick's tip, ahead of and below the hand.
+        const tip: [number, number, number] = [x, y - 0.07, z - STICK_REACH];
+        let hitPiece: number | null = null;
+        let above = true;
+        for (const [index, piece] of Object.entries(KIT_PIECES_AT)) {
+          const n = Number(index);
+          if (piece.hand === "foot" || n === KIT.openHat || n === KIT.rim) continue;
+          if (Math.hypot(tip[0] - piece.at[0], tip[2] - piece.at[2]) > piece.r + 0.03) continue;
+          const top = pieceTop(piece);
+          if (tip[1] < top + 0.05) above = false;
+          if (tip[1] <= top + 0.01) hitPiece = n;
+        }
+        if (above) armed.current[side] = true;
+        if (hitPiece !== null && armed.current[side]) {
+          armed.current[side] = false;
+          play(hitPiece);
+        }
+        continue;
+      }
       // The fingertips, a little ahead of the wrist.
       const tipZ = z - 0.07;
       if (y > PAD_TOP + 0.05) {

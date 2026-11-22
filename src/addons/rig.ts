@@ -75,14 +75,15 @@ const HEAD: TrackedPoint = [0, 1, 0, 0, 0, 0, 1];
 const pose: TrackedPose = { head: HEAD, left: null, right: null, height: 1 };
 const weights = { head: 0, arms: 1, hand: { left: 0, right: 0 }, legs: 0 };
 
-/** Puts one or both hands where they're asked, blended by `weight`. */
-export function poseHands(rig: BodyRig, overlay: PoseOverlay, right: TrackedHand | null, left: TrackedHand | null, weight: number) {
+/** Puts one or both hands where they're asked, blended by `weight`, and
+ *  each hand by its own share of that (so one can fade while the other holds). */
+export function poseHands(rig: BodyRig, overlay: PoseOverlay, right: TrackedHand | null, left: TrackedHand | null, weight: number, rightShare = 1, leftShare = 1) {
   if (weight <= 0.001 || (!right && !left)) return;
   pose.right = right;
   pose.left = left;
   weights.arms = Math.min(1, weight);
-  weights.hand.right = right ? 1 : 0;
-  weights.hand.left = left ? 1 : 0;
+  weights.hand.right = right ? Math.min(1, rightShare) : 0;
+  weights.hand.left = left ? Math.min(1, leftShare) : 0;
   applyTrackedPose(rig, overlay, pose, weights);
 }
 

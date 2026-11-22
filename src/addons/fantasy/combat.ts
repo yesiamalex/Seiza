@@ -1,6 +1,6 @@
 import { createStore } from "../store";
 import { oneOf, readNumber, readString, readVector, sendAddonEvent, type AddonEvent } from "../bus";
-import type { Action, ActionKind } from "./poses";
+import { COMBO_CYCLE, type Action, type ActionKind } from "./poses";
 import { ELEMENTS, MAX_HP, WEAPONS, WEAPON_SPECS, type Element, type Weapon } from "./weapons";
 
 /**
@@ -78,6 +78,8 @@ export const local = {
 };
 
 export const HOLD_SECONDS = 0.45;
+/** A pause this long between attacks starts a weapon's combo over. */
+const COMBO_RESET_SECONDS = 1.4;
 /** How far ahead of a blade's wielder its special bursts, in metres. */
 export const BLAST_AHEAD = 1.6;
 export const KO_SECONDS = 5;
@@ -181,7 +183,9 @@ export function startAction(kind: ActionKind): Action | null {
     fantasy.set((v) => ({ ...v, meter: 0, primed: false, charge: 0 }));
   }
   if (s.weapon === "bow" && kind === "swing") kind = "shoot";
-  local.combo = (local.combo + 1) % 2;
+  // Each attack is the next move of the weapon's combo (poses.ts); after a
+  // pause, the combo starts again from its first.
+  local.combo = now() - local.lastAttack > COMBO_RESET_SECONDS ? 0 : (local.combo + 1) % COMBO_CYCLE;
   local.lastAttack = now();
   local.action = { kind, n: local.combo, start: now() };
   local.struck.clear();
@@ -314,7 +318,7 @@ export function parseFantasyEvent(data: AddonEvent): FantasyEvent | null {
     }
     case "act": {
       const kind = oneOf(data.a, ["swing", "special", "shoot", "recoil"] as const);
-      const n = readNumber(data.n, 0, 1);
+      const n = readNumber(data.n, 0, COMBO_CYCLE - 1);
       return kind && n !== null ? { k: "act", kind, n: Math.round(n) } : null;
     }
     case "hit": {

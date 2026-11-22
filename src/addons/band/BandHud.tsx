@@ -4,7 +4,7 @@ import { panelStyle, pillButtonStyle } from "../../ui/styles";
 import { useStore } from "../store";
 import { Choices, Hint, MODE_ACCENTS, ModeButton, MusicIcon } from "../ui";
 import { band, play, setInstrument, setLightColor, setPlaying, setWaving } from "./band";
-import { CHORDS, DRUM_PADS, INSTRUMENT_LABELS, INSTRUMENTS, KEY_LAYOUT, KEYS_BASE, LIGHT_COLORS, type Instrument } from "./instruments";
+import { INSTRUMENT_LABELS, INSTRUMENTS, KEY_LAYOUT, KEYS_BASE, LIGHT_COLORS, PAD_COLUMNS, PADS, type Instrument } from "./instruments";
 
 const ACCENT = MODE_ACCENTS.band;
 const NONE = "none" as const;
@@ -128,8 +128,8 @@ export function BandStage() {
       }
       const { instrument, octave } = band.get();
       let note: number | null = null;
-      if (instrument === "drums") note = indexOf(DRUM_PADS.map((p) => p.key), key);
-      else if (instrument === "guitar") note = indexOf(CHORDS.map((c) => c.key), key);
+      const pads = instrument ? PADS[instrument] : undefined;
+      if (pads) note = indexOf(pads.map((p) => p.key), key);
       else if (instrument === "keys") {
         if (key === "Z" || key === "X") {
           e.preventDefault();
@@ -150,7 +150,8 @@ export function BandStage() {
       if (isTyping(e.target)) return;
       const key = e.key.length === 1 ? e.key.toUpperCase() : e.key;
       const { instrument } = band.get();
-      const keys = instrument === "drums" ? DRUM_PADS.map((p) => p.key) : instrument === "guitar" ? CHORDS.map((c) => c.key) : [...KEY_LAYOUT.map((l) => l.key), "Z", "X"];
+      const pads = instrument ? PADS[instrument] : undefined;
+      const keys = pads ? pads.map((p) => p.key) : [...KEY_LAYOUT.map((l) => l.key), "Z", "X"];
       if (keys.includes(key)) e.stopImmediatePropagation();
     };
     window.addEventListener("keydown", onKey, true);
@@ -182,17 +183,10 @@ export function BandStage() {
           {L("Done", "終了")} <kbd style={{ opacity: 0.6, fontSize: 10 }}>Esc</kbd>
         </button>
       </div>
-      {instrument === "drums" && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
-          {DRUM_PADS.map((pad, i) => (
-            <Pad key={pad.label} label={pad.label} hint={pad.key} lit={lit === i} onHit={() => hit(i)} height={58} />
-          ))}
-        </div>
-      )}
-      {instrument === "guitar" && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
-          {CHORDS.map((chord, i) => (
-            <Pad key={chord.name} label={chord.name} hint={chord.key} lit={lit === i} onHit={() => hit(i)} height={52} />
+      {instrument && PADS[instrument] && (
+        <div style={{ display: "grid", gridTemplateColumns: `repeat(${PAD_COLUMNS[instrument] ?? 4}, 1fr)`, gap: 6 }}>
+          {PADS[instrument]!.map((pad, i) => (
+            <Pad key={`${pad.label}${i}`} label={pad.label} hint={pad.key} lit={lit === i} onHit={() => hit(i)} height={instrument === "drums" ? 58 : 48} />
           ))}
         </div>
       )}

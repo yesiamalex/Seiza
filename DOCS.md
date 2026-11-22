@@ -715,8 +715,8 @@ something. `sit` is absent in Edit Mode, when nothing can be sat on.
 #### Guides
 
 A world can have guides: avatars who walk a round of the world and answer
-questions (`src/guides/`). Seizorai's Ilaw-san and SeiOU's Chancy Joan and
-Dean Rob are built this way. A guide:
+questions (`src/guides/`). Seizorai's Ilaw-san, SeiOU's Chancy Joan and
+Dean Rob, and Seisugbo's Tala are built this way. A guide:
 
 - has a home spot (usually where visitors arrive, facing them) and takes an
   occasional short stroll: a round of stops worked out from the wall clock
@@ -1046,6 +1046,22 @@ adds its own coloured button to the bar while it is on.
     any of them. Hits in quick succession build a combo, shown under the
     meter, and each one earns a quarter more, up to double. Stopping a blow
     with your blade earns a little too.
+  - Swings in a row become a combo of different cuts, and each blade has
+    its own: a sword cuts diagonally, backhand, then thrusts; a katana
+    comes down overhead, then cuts diagonally, then rises; a naginata sweeps
+    backhand, thrusts, then rises. A pause of more than about a second and
+    a half starts the combo over. Two-handed grips stay in front of the
+    body, so the arms don't pass through it on a slim avatar.
+  - The bow takes turns between a standing shot, a kneeling one, and a
+    canted one. Its string pulls back with the drawing hand, an arrow sits
+    nocked until it flies, and arrows arc to where they land.
+  - Raising a guard, lowering it, and changing weapons ease the body and
+    hands into the new stance instead of snapping to it. A new weapon grows
+    into the hand as it's drawn.
+  - A special winds up first: a ring of its element closes in, with a
+    rising sound, then it bursts in a flash with a pillar of light and
+    shards, and lights up the ground around it. Lightning cracks and
+    thunders, fire roars, and ice shatters.
   - Fighters move their whole body, not just the sword arm. They stand in a
     stance with their knees bent, twist into a swing and step through it,
     lunge forward with a blade's special, rock back when their blade is
@@ -1061,26 +1077,36 @@ adds its own coloured button to the bar while it is on.
     The weapon picker says what each is good at.
   - Every weapon glows in its special's colour as the meter fills. It
     pulses when the special is ready, so others can see it coming.
-- **Band** (violet): pick a drum pad, keys, a guitar, or a light stick.
-  - The instruments are 3D models you carry: a guitar slung on you, a light
-    stick in your hand, and a drum pad or keys on a stand in front of you.
-    Tap or click the model itself to play it: a pad, a key, or a fret on
-    the guitar's neck (tap its body to strum the last chord again). Others
-    see what you play light up.
+- **Band** (violet): pick a drum pad, a drum kit, keys, an acoustic guitar,
+  a lead guitar, a bass, or a light stick.
+  - The instruments are 3D models you carry: a guitar or bass slung on you,
+    a light stick in your hand, a drum pad or keys on a stand in front of
+    you, and a whole kit (crash, ride, three toms, kick, snare, rim, and an
+    open and closed hi-hat) around a stool you sit on, with a stick in each
+    hand. Tap or click the model itself to play it: a pad, a key, a drum,
+    or a fret on the neck (tap a guitar's body to strum the last chord
+    again). Others see what you play light up.
+  - The acoustic guitar has twelve chords (C, G, Am, F, Em, D, A, E, Dm,
+    Bm, Cmaj7, G7). The lead guitar is overdriven, with six power chords
+    and a minor pentatonic run for solos. The bass plays the root of each
+    chord, deep and round.
   - **Start playing** also opens the instrument flat on the screen. Its
     keyboard keys are shown on it, and they play the instrument instead of
     moving you until you press Esc.
-  - In VR, play with your hands. Tap the pads and keys, or strum the
+  - In VR, play with your hands. Tap the pads and keys, strike the kit with
+    the tips of your sticks (the right trigger is the kick), or strum a
     guitar while your other hand picks the chord along its neck.
   - Notes are sent as events and played by each visitor's own browser, so
     no audio is streamed. Everyone hears the whole room.
   - Light sticks come in seven colours and sway on the same beat for
     everyone.
-  - Musicians move to the music. Drummers bounce and dip into each hit,
-    keyboard players sway and lean toward their hands, guitarists rock back
-    on the strum and tap a foot, and light-stick holders sway with the
-    crowd. Everyone moves to the same beat, so a band on stage moves
-    together, and more the more they play.
+  - Musicians move to the music, easing from one hit to the next rather
+    than bobbing. Drummers dip into each hit, and a kit drummer sits with
+    their heel lifting for the kick. Keyboard players sway and lean toward
+    their hands, guitarists rock back on the strum and tap a foot, lead
+    guitarists take a wide rock stance, bassists sit low, and light-stick
+    holders sway with the crowd. Everyone moves to the same beat, so a band
+    on stage moves together, and more the more they play.
 
 The modes are add-ons in `src/addons/`, outside the rest of the code: see
 its README. Their events go through the room server only while their mode
@@ -2050,7 +2076,8 @@ public/worlds/  Per-deployment world configuration
 worlds/         Separate worlds built from this repository, each with
                 optional in-world code in client/ (seizora/: a solar,
                 wind, and storage world; seilaya/: a safe spaces lab;
-                seisugbo/: an arts-based research exhibition;
+                seisugbo/: an arts-based research exhibition, with a
+                guide, Tala;
                 seizorai/: Seizora with a guide, Ilaw-san;
                 seiou/: UP Open University's campus, with two guides)
 public/animations/, public/gestures/

@@ -152,7 +152,8 @@ thing, after first copying the repository into your GitHub account.
   world, [Seilaya](worlds/seilaya/README.md), a safe spaces lab for
   learning about gender, safety, and respect, and
   [Seisugbo](worlds/seisugbo/README.md), the Meiji × UP arts-based research
-  exhibition of 2026, in a model Cebu lane and covered court, and
+  exhibition of 2026, in a model Cebu lane and covered court, with Tala, a
+  guide to the forum's Urbanity Walk and the research, and
   [Seizorai](worlds/seizorai/README.md), Seizora with Ilaw-san, a guide
   who answers questions offline, with guardrails, and
   [SeiOU](worlds/seiou/README.md), a walkable digital twin of UP Open

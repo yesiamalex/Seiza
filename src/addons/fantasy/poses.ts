@@ -36,24 +36,78 @@ export interface Action {
 // puts it in the path of their swings.
 const GUARD: Key = { at: 0, pos: [0.18, 0.54, -0.14], blade: [0.3, -0.85, -0.43], fingers: [0.05, -0.45, 0.9] };
 
-const SWINGS: Key[][] = [
-  // A diagonal cut, high right to low left.
-  [
+/** The cuts a blade can make. Each weapon strings some of them into its
+ *  own combo (SWING_SETS), so no two weapons fight alike. */
+export type Cut = "diagonal" | "backhand" | "thrust" | "rising" | "overhead";
+
+const CUTS: Record<Cut, Key[]> = {
+  // High right to low left.
+  diagonal: [
     GUARD,
     { at: 0.22, pos: [0.2, 0.95, -0.06], blade: [0.25, 0.55, 0.8], fingers: [0, 0.82, -0.57] },
     { at: 0.5, pos: [0.02, 0.76, -0.4], blade: [-0.25, 0.1, -0.96], fingers: [0, -1, 0] },
     { at: 0.75, pos: [-0.16, 0.5, -0.28], blade: [-0.7, -0.5, -0.5], fingers: [0.3, -0.85, 0.42] },
     { ...GUARD, at: 1 },
   ],
-  // The backhand: flat, left to right.
-  [
+  // Flat, left to right.
+  backhand: [
     GUARD,
     { at: 0.22, pos: [-0.14, 0.74, -0.16], blade: [-0.85, 0.25, -0.45], fingers: [0.1, -0.9, 0.3] },
     { at: 0.5, pos: [0.04, 0.76, -0.42], blade: [0.15, 0.2, -0.97], fingers: [0, -1, 0] },
     { at: 0.75, pos: [0.24, 0.74, -0.2], blade: [0.9, 0.25, -0.35], fingers: [0, -1, 0] },
     { ...GUARD, at: 1 },
   ],
-];
+  // Drawn back to the hip, then driven straight ahead.
+  thrust: [
+    GUARD,
+    { at: 0.26, pos: [0.22, 0.66, 0.04], blade: [0.08, 0.06, -1], fingers: [0, -1, 0] },
+    { at: 0.5, pos: [0.05, 0.75, -0.56], blade: [0, 0.04, -1], fingers: [0, -1, 0] },
+    { at: 0.72, pos: [0.06, 0.74, -0.52], blade: [0.02, 0.02, -1], fingers: [0, -1, 0] },
+    { ...GUARD, at: 1 },
+  ],
+  // Low left, up and across to high right.
+  rising: [
+    GUARD,
+    { at: 0.24, pos: [-0.12, 0.5, -0.24], blade: [-0.55, -0.6, -0.58], fingers: [0.35, -0.5, -0.8] },
+    { at: 0.5, pos: [0.06, 0.8, -0.44], blade: [0.3, 0.45, -0.84], fingers: [0, -0.9, -0.4] },
+    { at: 0.75, pos: [0.24, 1.0, -0.16], blade: [0.6, 0.78, 0.15], fingers: [0.2, 0.2, -1] },
+    { ...GUARD, at: 1 },
+  ],
+  // Straight down from overhead.
+  overhead: [
+    GUARD,
+    { at: 0.26, pos: [0.07, 1.08, -0.06], blade: [0, 0.6, 0.8], fingers: [0, 0.8, -0.6] },
+    { at: 0.5, pos: [0.04, 0.72, -0.46], blade: [0, -0.2, -0.98], fingers: [0, -0.98, 0.2] },
+    { at: 0.74, pos: [0.04, 0.56, -0.4], blade: [0, -0.62, -0.78], fingers: [0, -0.78, 0.62] },
+    { ...GUARD, at: 1 },
+  ],
+};
+
+/**
+ * Each blade's combo, in order. The sword is the all-rounder; the katana
+ * opens with the overhead cut and answers with a diagonal and a rising
+ * one; the naginata sweeps and thrusts at range; the light saber, the
+ * fastest, chains four.
+ */
+export const SWING_SETS: Record<Exclude<Weapon, "bow">, Cut[]> = {
+  sword: ["diagonal", "backhand", "thrust"],
+  katana: ["overhead", "diagonal", "rising"],
+  naginata: ["backhand", "thrust", "rising"],
+  lightsaber: ["diagonal", "backhand", "rising", "thrust"],
+};
+
+/** The bow's shots, by turns: standing, kneeling low, and canted. */
+export type Shot = "standing" | "kneeling" | "canted";
+export const SHOTS: Shot[] = ["standing", "kneeling", "canted"];
+
+/** Combo numbers run 0 to COMBO_CYCLE - 1, a multiple of every set's
+ *  length, so each weapon's sequence comes round evenly. */
+export const COMBO_CYCLE = 12;
+
+export function cutOf(weapon: Exclude<Weapon, "bow">, n: number): Cut {
+  const set = SWING_SETS[weapon];
+  return set[((n % set.length) + set.length) % set.length];
+}
 
 // Guarding: the blade raised across the body at chest height, where an
 // incoming blade is likely, not certain, to meet it.
@@ -80,9 +134,13 @@ const DRAWN: Key = { at: 0, pos: [0.02, 0.88, -0.05], blade: [0, 1, 0], fingers:
 const LOOSED: Key = { at: 0, pos: [0.09, 0.9, 0.02], blade: [0, 1, 0], fingers: [-0.1, 0.3, -1] };
 const RIGHT_REST: Key = { at: 0, pos: [0.03, 0.8, -0.3], blade: [0, 1, 0], fingers: [-0.3, 0, -1] };
 
+// A canted shot: the bow tipped over to the right, the draw following it.
+const BOW_CANT: Key = { at: 0, pos: [-0.05, 0.82, -0.35], blade: [0.5, 0.86, 0], fingers: [0.1, 0, -1] };
+const DRAWN_CANT: Key = { at: 0, pos: [0.04, 0.85, -0.06], blade: [0.5, 0.86, 0], fingers: [-0.3, 0, -1] };
+
 const at = (key: Key, time: number): Key => ({ ...key, at: time });
-const BOW_HAND = (release: number): Key[] => [at(BOW_LOW, 0), at(BOW_UP, release * 0.55), at(BOW_UP, release + 0.15), at(BOW_LOW, 1)];
-const DRAW_HAND = (release: number): Key[] => [at(RIGHT_REST, 0), at(DRAWN, release * 0.6), at(DRAWN, release), at(LOOSED, release + 0.08), at(RIGHT_REST, 1)];
+const BOW_HAND = (release: number, up = BOW_UP): Key[] => [at(BOW_LOW, 0), at(up, release * 0.55), at(up, release + 0.15), at(BOW_LOW, 1)];
+const DRAW_HAND = (release: number, drawn = DRAWN): Key[] => [at(RIGHT_REST, 0), at(drawn, release * 0.6), at(drawn, release), at(LOOSED, release + 0.08), at(RIGHT_REST, 1)];
 
 /** Seconds each action takes, and the moment in it that counts (the blade
  *  meeting its target, the arrow leaving the string), as a fraction. */
@@ -102,8 +160,28 @@ export function timingOf(weapon: Weapon, kind: ActionKind) {
   return TIMING[kind];
 }
 
-/** Bow and drawing hand for a shot, and for a special's longer draw. */
-const BOW_TRACKS = [TIMING.shoot.impact, BOW_SPECIAL.impact].map((release) => ({ bow: BOW_HAND(release), draw: DRAW_HAND(release) }));
+/** Bow and drawing hand for each shot (a kneeling shot's hands are a
+ *  standing one's; the body lowers them), and for a special's longer draw. */
+const BOW_TRACKS: Record<Shot | "special", { bow: Key[]; draw: Key[] }> = {
+  standing: { bow: BOW_HAND(TIMING.shoot.impact), draw: DRAW_HAND(TIMING.shoot.impact) },
+  kneeling: { bow: BOW_HAND(TIMING.shoot.impact), draw: DRAW_HAND(TIMING.shoot.impact) },
+  canted: { bow: BOW_HAND(TIMING.shoot.impact, BOW_CANT), draw: DRAW_HAND(TIMING.shoot.impact, DRAWN_CANT) },
+  special: { bow: BOW_HAND(BOW_SPECIAL.impact), draw: DRAW_HAND(BOW_SPECIAL.impact) },
+};
+const shotOf = (action: Action) => (action.kind === "special" ? "special" : SHOTS[action.n % SHOTS.length]);
+
+/**
+ * How far the bow's string is drawn, 0 to 1, for an action at a moment:
+ * pulled back with the drawing hand, held, and snapped forward at release.
+ * The string follows the hand only while this is above 0.
+ */
+export function bowDraw(action: Action | null, now: number): number {
+  if (!action) return 0;
+  const timing = timingOf("bow", action.kind);
+  const t = (now - action.start) / timing.duration;
+  if (t < 0 || t >= timing.impact) return 0;
+  return Math.min(1, t / (timing.impact * 0.6));
+}
 
 const smooth = (x: number) => x * x * (3 - 2 * x);
 
@@ -153,7 +231,7 @@ export function heldPose(weapon: Weapon, action: Action | null, now: number, out
 
   if (weapon === "bow") {
     if (active) {
-      const tracks = BOW_TRACKS[action!.kind === "special" ? 1 : 0];
+      const tracks = BOW_TRACKS[shotOf(action!)];
       sample(tracks.bow, time, left);
       sample(tracks.draw, time, right);
     } else copy(BOW_LOW, left);
@@ -163,7 +241,7 @@ export function heldPose(weapon: Weapon, action: Action | null, now: number, out
     return out;
   }
 
-  const keys = !active ? null : action!.kind === "special" ? SLAM : action!.kind === "recoil" || action!.kind === "stagger" ? RECOIL : SWINGS[action!.n % SWINGS.length];
+  const keys = !active ? null : action!.kind === "special" ? SLAM : action!.kind === "recoil" || action!.kind === "stagger" ? RECOIL : CUTS[cutOf(weapon, action!.n)];
   if (keys) sample(keys, time, right);
   else copy(guard ? PARRY : GUARD, right);
   out.right = right;
@@ -180,9 +258,38 @@ export function heldPose(weapon: Weapon, action: Action | null, now: number, out
       left.blade[k] = right.blade[k];
       left.fingers[k] = right.fingers[k];
     }
+    clearOfBody(right, left);
     out.left = left;
   }
   return out;
+}
+
+/** The front of the torso, in eye heights: half its width, how far in
+ *  front of the body's centre line its middle is, and the heights it spans. */
+const TORSO = { halfWidth: 0.2, front: 0.12, bottom: 0.42, top: 1.0 };
+/** Room for the fist itself, and the forearm behind it. */
+const FIST = 0.07;
+
+/**
+ * Moves a two-handed grip forward, both hands together so the grip stays
+ * whole, until neither hand is inside the torso. A pole held across the
+ * body put its lower hand through the chest otherwise, on a slim avatar
+ * most of all. The torso's front is taken as an ellipse, deepest at the
+ * middle.
+ */
+export function clearOfBody(right: HandTarget, left: HandTarget) {
+  let push = 0;
+  for (const hand of [right, left]) {
+    const [x, y, z] = hand.pos;
+    if (y < TORSO.bottom || y > TORSO.top) continue;
+    const across = x / TORSO.halfWidth;
+    if (Math.abs(across) >= 1) continue;
+    const surface = -TORSO.front * Math.sqrt(1 - across * across) - FIST;
+    push = Math.max(push, z - surface);
+  }
+  if (push <= 0) return;
+  right.pos[2] -= push;
+  left.pos[2] -= push;
 }
 
 // --- the body ------------------------------------------------------------------
@@ -196,25 +303,49 @@ const stance = (at: number) => ({ ...STANCE, at });
 // Raised to guard: square to the blow, a little lower.
 const PARRY_BODY = bodyKey(0, { twist: 0.04, lean: 0.07, drop: 0.055, left: [-0.02, -0.08, 0], right: [0.03, 0.08, 0] });
 
-const SWING_BODY: BodyKey[][] = [
-  // The diagonal cut: wound up to the right, then a step in on the front
-  // foot as the chest turns through.
-  [
+const CUT_BODY: Record<Cut, BodyKey[]> = {
+  // Wound up to the right, then a step in on the front foot as the chest
+  // turns through.
+  diagonal: [
     stance(0),
     bodyKey(0.22, { twist: 0.5, lean: -0.04, drop: 0.03, shiftX: 0.01, shiftZ: 0.03, left: [-0.015, -0.07, 0], right: [0.02, 0.08, 0] }),
     bodyKey(0.5, { twist: -0.35, lean: 0.24, drop: 0.075, shiftZ: -0.07, left: [-0.02, -0.17, 0], right: [0.02, 0.07, 0] }),
     bodyKey(0.75, { twist: -0.5, lean: 0.2, drop: 0.07, shiftZ: -0.06, left: [-0.02, -0.17, 0], right: [0.02, 0.06, 0] }),
     stance(1),
   ],
-  // The backhand: wound to the left, then the back foot steps through.
-  [
+  // Wound to the left, then the back foot steps through.
+  backhand: [
     stance(0),
     bodyKey(0.22, { twist: -0.45, lean: 0.06, drop: 0.04, shiftX: -0.01, left: [-0.015, -0.07, 0], right: [0.02, 0.07, 0] }),
     bodyKey(0.5, { twist: 0.3, lean: 0.2, drop: 0.07, shiftZ: -0.05, left: [-0.02, -0.07, 0], right: [0.04, -0.06, 0] }),
     bodyKey(0.75, { twist: 0.5, lean: 0.14, drop: 0.06, shiftZ: -0.04, left: [-0.02, -0.07, 0], right: [0.04, -0.06, 0] }),
     stance(1),
   ],
-];
+  // Coiled back on the rear foot, then a long lunge behind the point.
+  thrust: [
+    stance(0),
+    bodyKey(0.26, { twist: 0.4, lean: -0.03, drop: 0.05, shiftZ: 0.04, left: [-0.015, -0.07, 0], right: [0.02, 0.1, 0] }),
+    bodyKey(0.5, { twist: -0.1, lean: 0.26, drop: 0.1, shiftZ: -0.11, left: [-0.02, -0.22, 0], right: [0.02, 0.1, 0] }),
+    bodyKey(0.72, { twist: -0.08, lean: 0.24, drop: 0.1, shiftZ: -0.1, left: [-0.02, -0.22, 0], right: [0.02, 0.1, 0] }),
+    stance(1),
+  ],
+  // Crouched low to the left, then rising and turning up through the cut.
+  rising: [
+    stance(0),
+    bodyKey(0.24, { twist: -0.35, lean: 0.14, drop: 0.09, shiftX: -0.01, left: [-0.02, -0.09, 0], right: [0.03, 0.08, 0] }),
+    bodyKey(0.5, { twist: 0.2, lean: 0.06, drop: 0.04, shiftZ: -0.04, left: [-0.02, -0.14, 0], right: [0.03, 0.06, 0] }),
+    bodyKey(0.75, { twist: 0.45, lean: -0.05, drop: 0.01, tilt: -0.05, shiftZ: -0.03, left: [-0.02, -0.14, 0], right: [0.03, 0.06, 0] }),
+    stance(1),
+  ],
+  // Up tall with the blade overhead, then a short step and drop into it.
+  overhead: [
+    stance(0),
+    bodyKey(0.26, { twist: 0.08, lean: -0.1, drop: 0, shiftZ: 0.02, left: [-0.015, -0.07, 0], right: [0.02, 0.08, 0] }),
+    bodyKey(0.5, { twist: 0, lean: 0.3, drop: 0.08, shiftZ: -0.07, left: [-0.02, -0.16, 0], right: [0.02, 0.07, 0] }),
+    bodyKey(0.74, { twist: 0, lean: 0.28, drop: 0.08, shiftZ: -0.06, left: [-0.02, -0.16, 0], right: [0.02, 0.07, 0] }),
+    stance(1),
+  ],
+};
 
 // The special: up onto the toes with the blade overhead, arched back, then
 // a deep lunge as it comes down.
@@ -244,10 +375,19 @@ const archerDrawn = (at: number, deeper = 0) =>
   bodyKey(at, { twist: -0.55, lean: -0.03, drop: 0.03 + deeper, left: [-0.03, -0.08, 0], right: [0.04, 0.07, 0], carry: 0, head: 0.85 });
 const archerLoosed = (at: number, kick = 0) =>
   bodyKey(at, { twist: -0.5, lean: -0.06 - kick, drop: 0.03, shiftZ: 0.02 + kick * 0.3, left: [-0.03, -0.08, 0], right: [0.04, 0.07, 0], carry: 0, head: 0.85 });
-const BOW_BODY = [
-  [archer(0), archerDrawn(TIMING.shoot.impact * 0.6), archerDrawn(TIMING.shoot.impact), archerLoosed(TIMING.shoot.impact + 0.12), archer(1)],
-  [archer(0), archerDrawn(BOW_SPECIAL.impact * 0.6, 0.04), archerDrawn(BOW_SPECIAL.impact, 0.04), archerLoosed(BOW_SPECIAL.impact + 0.1, 0.06), archer(1)],
-];
+const shoot = (release: number, deeper = 0, kick = 0, drawn = archerDrawn) => [archer(0), drawn(release * 0.6, deeper), drawn(release, deeper), archerLoosed(release + 0.12, kick), archer(1)];
+// Down on one knee: the back knee near the ground, the front foot forward.
+const kneelDrawn = (at: number) =>
+  bodyKey(at, { twist: -0.5, lean: 0.04, drop: 0.24, shiftZ: 0.03, left: [-0.03, -0.18, 0], right: [0.04, 0.16, 0], carry: 0, head: 0.85 });
+// Canted: the chest leaning over with the bow, a step out to the right.
+const cantDrawn = (at: number) =>
+  bodyKey(at, { twist: -0.45, lean: 0, tilt: 0.12, drop: 0.05, shiftX: 0.02, left: [-0.03, -0.08, 0], right: [0.1, 0.05, 0], carry: 0, head: 0.85 });
+const BOW_BODY: Record<Shot | "special", BodyKey[]> = {
+  standing: shoot(TIMING.shoot.impact),
+  kneeling: shoot(TIMING.shoot.impact, 0, 0, kneelDrawn),
+  canted: shoot(TIMING.shoot.impact, 0, 0, cantDrawn),
+  special: shoot(BOW_SPECIAL.impact, 0.04, 0.06),
+};
 
 /** Down and done: knelt, slumped, the head hanging. */
 export const KNOCKED_OUT: BodyPose = bodyKey(0, { twist: 0.1, lean: 0.5, tilt: 0.06, drop: 0.3, shiftZ: 0.06, left: [-0.03, -0.1, 0], right: [0.04, 0.14, 0], carry: 0, head: 0 });
@@ -266,10 +406,10 @@ export function bodyPose(weapon: Weapon, action: Action | null, now: number, gua
   const time = action && timing ? (now - action.start) / timing.duration : 1;
   const active = action !== null && time < 1;
   if (weapon === "bow") {
-    if (active) sampleBody(BOW_BODY[action!.kind === "special" ? 1 : 0], time, out);
+    if (active) sampleBody(BOW_BODY[shotOf(action!)], time, out);
     else copyBody(ARCHER, out);
   } else if (active) {
-    const keys = action!.kind === "special" ? SLAM_BODY : action!.kind === "recoil" ? RECOIL_BODY : action!.kind === "stagger" ? STAGGER_BODY : SWING_BODY[action!.n % SWING_BODY.length];
+    const keys = action!.kind === "special" ? SLAM_BODY : action!.kind === "recoil" ? RECOIL_BODY : action!.kind === "stagger" ? STAGGER_BODY : CUT_BODY[cutOf(weapon, action!.n)];
     sampleBody(keys, time, out);
   } else copyBody(guard ? PARRY_BODY : STANCE, out);
 

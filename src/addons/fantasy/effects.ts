@@ -195,21 +195,41 @@ class Sparks {
 
 const BOLT_POINTS = 12;
 
-/** One special's burst: a ring racing outward, a flash, and for lightning,
- *  bolts from the sky. */
+/** Shards round a burst: ice crystals, or for fire, tongues of flame. */
+const SHARDS = 9;
+
+/**
+ * One special's burst. Gathering first, while the wielder winds up: a ring
+ * closing in on them. Then the release: a flash, a first ring racing out
+ * and a second behind it, a column of light rising, shards (ice crystals,
+ * or flame tongues) jutting up and sinking back, and for lightning, bolts
+ * from the sky. Each also lights the place round it for a moment (`light`,
+ * read by FantasyLayer for a real pooled light).
+ */
 class Burst {
   readonly group = new THREE.Group();
   private ring: THREE.Mesh;
+  private ring2: THREE.Mesh;
   private flash: THREE.Mesh;
+  private pillar: THREE.Mesh;
+  private shards: THREE.InstancedMesh;
   private bolts: THREE.Mesh[] = [];
   private start = -1e9;
   private element: Element = "lightning";
   private nextBolt = 0;
+  private gathering = false;
+  /** How bright the burst's light is now, 0 to 1. */
+  light = 0;
+  readonly color = new THREE.Color();
 
   constructor() {
-    this.ring = new THREE.Mesh(new THREE.RingGeometry(0.85, 1, 40).rotateX(-Math.PI / 2), additive("#ffffff", { side: THREE.DoubleSide }));
+    this.ring = new THREE.Mesh(new THREE.RingGeometry(0.85, 1, 48).rotateX(-Math.PI / 2), additive("#ffffff", { side: THREE.DoubleSide }));
+    this.ring2 = new THREE.Mesh(new THREE.RingGeometry(0.93, 1, 48).rotateX(-Math.PI / 2), additive("#ffffff", { side: THREE.DoubleSide }));
     this.flash = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 10), additive("#ffffff"));
-    this.group.add(this.ring, this.flash);
+    this.pillar = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 24, 1, true).translate(0, 0.5, 0), additive("#ffffff", { side: THREE.DoubleSide }));
+    this.shards = new THREE.InstancedMesh(new THREE.ConeGeometry(0.12, 1, 5).translate(0, 0.5, 0), additive("#ffffff"), SHARDS);
+    this.shards.frustumCulled = false;
+    this.group.add(this.ring, this.ring2, this.flash, this.pillar, this.shards);
     for (let b = 0; b < 2; b++) {
       const geometry = new THREE.BufferGeometry();
       geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(BOLT_POINTS * 2 * 3), 3).setUsage(THREE.DynamicDrawUsage));
@@ -229,36 +249,89 @@ class Burst {
     return this.group.visible;
   }
 
-  fire(element: Element, at: THREE.Vector3, time: number) {
+  /** `gathering`: the wind-up at the wielder, rather than the release. */
+  fire(element: Element, at: THREE.Vector3, time: number, gathering = false) {
     this.element = element;
     this.start = time;
     this.nextBolt = 0;
+    this.gathering = gathering;
     this.group.position.copy(at);
-    const color = ELEMENT_COLORS[element];
-    for (const mesh of [this.ring, this.flash, ...this.bolts]) (mesh.material as THREE.MeshBasicMaterial).color.set(color);
+    this.color.set(ELEMENT_COLORS[element]);
+    for (const mesh of [this.ring, this.ring2, this.flash, this.pillar, this.shards, ...this.bolts]) (mesh.material as THREE.MeshBasicMaterial).color.copy(this.color);
     this.group.visible = true;
   }
 
   update(time: number, camera: THREE.Camera) {
     if (!this.group.visible) return;
     const age = time - this.start;
-    if (age > 0.9) {
-      this.group.visible = false;
+    const opacity = (mesh: THREE.Mesh, value: number) => ((mesh.material as THREE.MeshBasicMaterial).opacity = Math.max(0, value));
+    if (this.gathering) {
+      // Closing in over the wind-up, brightening as it tightens.
+      if (age > 0.42) {
+        this.group.visible = false;
+        this.light = 0;
+        return;
+      }
+      const k = age / 0.42;
+      this.ring.scale.setScalar(2.4 - 2 * k * k);
+      this.ring.position.y = 0.06;
+      opacity(this.ring, 0.25 + 0.6 * k);
+      this.ring2.visible = this.pillar.visible = this.shards.visible = false;
+      for (const bolt of this.bolts) bolt.visible = false;
+      this.flash.scale.setScalar(0.15 + 0.35 * k);
+      this.flash.position.y = 1;
+      opacity(this.flash, 0.35 * k);
+      this.light = 0.35 * k;
       return;
     }
+    if (age > 1.1) {
+      this.group.visible = false;
+      this.light = 0;
+      return;
+    }
+    this.ring2.visible = this.pillar.visible = this.shards.visible = true;
     const grow = 1 - Math.pow(1 - Math.min(1, age / 0.5), 3);
-    this.ring.scale.setScalar(0.3 + grow * 3.4);
+    this.ring.scale.setScalar(0.3 + grow * 3.6);
     this.ring.position.y = 0.08;
-    (this.ring.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 1 - age / 0.7);
-    this.flash.scale.setScalar(0.3 + Math.min(1, age / 0.15) * (this.element === "fire" ? 1.1 : 0.75));
+    opacity(this.ring, 1 - age / 0.7);
+    // The second shockwave, a beat behind and wider.
+    const late = Math.max(0, age - 0.12);
+    this.ring2.scale.setScalar(0.3 + (1 - Math.pow(1 - Math.min(1, late / 0.6), 3)) * 4.6);
+    this.ring2.position.y = 0.1;
+    opacity(this.ring2, 0.7 * (1 - late / 0.75));
+    this.flash.scale.setScalar(0.3 + Math.min(1, age / 0.12) * (this.element === "fire" ? 1.25 : 0.9));
     this.flash.position.y = 0.9;
-    (this.flash.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.4 - age * 1.8);
-    const bolting = this.element === "lightning" && age < 0.4;
+    opacity(this.flash, 0.55 - age * 2.2);
+    // The column: shooting up, then thinning out.
+    const rise = Math.min(1, age / 0.25);
+    this.pillar.scale.set(0.5 + age * 0.9, 0.5 + rise * (this.element === "lightning" ? 7 : 4.5), 0.5 + age * 0.9);
+    opacity(this.pillar, 0.4 * (1 - age / 0.8));
+    // Shards jut up round the burst and sink back down.
+    const up = age < 0.18 ? age / 0.18 : Math.max(0, 1 - (age - 0.18) / 0.7);
+    for (let i = 0; i < SHARDS; i++) {
+      const a = (i / SHARDS) * Math.PI * 2 + 0.35;
+      const r = 0.9 + (i % 3) * 0.35;
+      const tall = (this.element === "ice" ? 1.1 : this.element === "fire" ? 0.9 : 0.5) * (0.7 + (i % 2) * 0.5);
+      // Ice leans out from the middle; flame licks upward, flickering.
+      const lean = this.element === "ice" ? 0.35 : 0.08 * Math.sin(time * 30 + i);
+      shardMatrix.compose(
+        shardAt.set(Math.cos(a) * r, 0, Math.sin(a) * r),
+        shardQ.setFromEuler(shardE.set(Math.sin(a) * lean, 0, -Math.cos(a) * lean)),
+        shardS.set(1, Math.max(0.001, tall * up), 1)
+      );
+      this.shards.setMatrixAt(i, shardMatrix);
+    }
+    this.shards.instanceMatrix.needsUpdate = true;
+    opacity(this.shards as unknown as THREE.Mesh, 0.85 * up);
+    const bolting = this.element === "lightning" && age < 0.45;
     for (const bolt of this.bolts) bolt.visible = bolting;
     if (bolting && time >= this.nextBolt) {
       this.nextBolt = time + 0.05;
       for (const bolt of this.bolts) jag(bolt, camera, this.group.position);
     }
+    // Lightning flickers its light; fire and ice glow and fade.
+    const fade = Math.max(0, 1 - age / 0.7);
+    this.light = this.element === "lightning" ? fade * (0.55 + 0.45 * Math.sin(time * 60)) : fade * fade;
   }
 
   dispose() {
@@ -269,6 +342,12 @@ class Burst {
     });
   }
 }
+
+const shardMatrix = new THREE.Matrix4();
+const shardAt = new THREE.Vector3();
+const shardQ = new THREE.Quaternion();
+const shardE = new THREE.Euler();
+const shardS = new THREE.Vector3();
 
 const side = new THREE.Vector3();
 const toCamera = new THREE.Vector3();
@@ -292,6 +371,8 @@ function jag(bolt: THREE.Mesh, camera: THREE.Camera, origin: THREE.Vector3) {
 }
 
 // --- arrows ---------------------------------------------------------------------------
+
+const ahead = new THREE.Vector3();
 
 const ARROW_SPEED = 30;
 export const arrowSeconds = (distance: number) => distance / ARROW_SPEED;
@@ -346,7 +427,12 @@ class Arrows {
         f.onLanded(f.to);
         continue;
       }
-      f.mesh.position.lerpVectors(f.from, f.to, s);
+      // A shallow arc, highest midway, longer shots arcing more; the arrow
+      // turned along it.
+      const arc = (from: THREE.Vector3, to: THREE.Vector3, t: number, out: THREE.Vector3) =>
+        out.lerpVectors(from, to, t).setY(out.y + Math.sin(Math.PI * t) * Math.min(1.6, from.distanceTo(to) * 0.04));
+      arc(f.from, f.to, s, f.mesh.position);
+      f.mesh.lookAt(arc(f.from, f.to, Math.min(1, s + 0.02), ahead));
     }
   }
 
@@ -376,6 +462,18 @@ export class FantasyEffects {
 
   sparksAt(at: THREE.Vector3, color: string, count = 14, speed = 3) {
     this.sparks.burst(at, this.scratch.set(color), count, speed);
+  }
+
+  /** The bursts' lights: where each is, how bright, and in what colour. */
+  get lights(): { at: THREE.Vector3; level: number; color: THREE.Color }[] {
+    return this.bursts.map((b) => ({ at: b.group.position, level: b.group.visible ? b.light : 0, color: b.color }));
+  }
+
+  /** A special winding up at its wielder's feet. */
+  gather(element: Element, at: THREE.Vector3, time: number) {
+    (this.bursts.find((b) => !b.busy) ?? this.bursts[0]).fire(element, at, time, true);
+    const lift = at.clone().setY(at.y + 1);
+    this.sparks.burst(lift, this.scratch.set(ELEMENT_COLORS[element]), 16, 1.2, { up: 1.5, gravity: -0.5, life: 0.5 });
   }
 
   special(element: Element, at: THREE.Vector3, time: number) {

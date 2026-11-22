@@ -46,21 +46,43 @@ export function playClash(lightsaber: boolean, distance?: number) {
   for (const [f, g] of [[1870, 0.14], [2960, 0.1], [4410, 0.06]] as const) toneHit(v, { frequency: f, duration: 0.6, gain: g, type: "triangle" });
 }
 
-/** A special landing, in its element's voice. */
-export function playSpecial(element: Element, distance?: number) {
-  const v = voice(1.1, distance, 30);
+/** A special winding up: air drawn in, rising, in its element's colour. */
+export function playSpecialCharge(element: Element, distance?: number) {
+  const v = voice(0.9, distance, 24);
   if (!v) return;
+  // A swell of air sweeping up to the release, and a rising tone under it.
+  noiseHit(v, { frequency: 300, sweepTo: 3200, duration: 0.42, gain: 0.45, q: 1.2, attack: 0.36 });
+  const base = element === "ice" ? 520 : element === "fire" ? 110 : 160;
+  toneHit(v, { frequency: base, sweepTo: base * 3, duration: 0.42, gain: 0.16, type: element === "fire" ? "sawtooth" : "triangle", attack: 0.34 });
+  if (element === "lightning") for (let i = 0; i < 5; i++) noiseHit(v, { frequency: 6000, duration: 0.03, gain: 0.25, type: "highpass", delay: 0.08 + i * 0.065 });
+}
+
+/**
+ * A special landing, in its element's voice, over a boom that every one
+ * shares: the low thump you feel more than hear, then the element's own
+ * signature, then a tail that carries.
+ */
+export function playSpecial(element: Element, distance?: number) {
+  const v = voice(1.15, distance, 34);
+  if (!v) return;
+  toneHit(v, { frequency: 70, sweepTo: 28, duration: 0.9, gain: 0.7 });
+  noiseHit(v, { frequency: 180, sweepTo: 50, duration: 0.6, gain: 0.7, type: "lowpass" });
   if (element === "lightning") {
-    noiseHit(v, { frequency: 5000, sweepTo: 600, duration: 0.25, gain: 1, type: "highpass" });
-    noiseHit(v, { frequency: 400, sweepTo: 60, duration: 1.1, gain: 0.8, type: "lowpass", delay: 0.05 });
-    toneHit(v, { frequency: 60, sweepTo: 32, duration: 0.8, gain: 0.5, delay: 0.03 });
+    // The crack, a sizzle, and thunder rolling in after.
+    noiseHit(v, { frequency: 6500, sweepTo: 900, duration: 0.18, gain: 1, type: "highpass" });
+    noiseHit(v, { frequency: 2600, duration: 0.5, gain: 0.3, type: "bandpass", q: 6, delay: 0.02 });
+    noiseHit(v, { frequency: 260, sweepTo: 45, duration: 1.8, gain: 0.85, type: "lowpass", delay: 0.12, attack: 0.08 });
+    noiseHit(v, { frequency: 160, sweepTo: 40, duration: 1.4, gain: 0.5, type: "lowpass", delay: 0.55, attack: 0.1 });
   } else if (element === "fire") {
-    noiseHit(v, { frequency: 200, sweepTo: 1400, duration: 0.5, gain: 0.9, type: "lowpass", attack: 0.12 });
-    noiseHit(v, { frequency: 3000, duration: 0.7, gain: 0.25, type: "bandpass", q: 3, delay: 0.1 });
-    toneHit(v, { frequency: 70, sweepTo: 40, duration: 0.6, gain: 0.5 });
+    // A rushing whoosh, a roar, and crackle as it burns down.
+    noiseHit(v, { frequency: 240, sweepTo: 1800, duration: 0.45, gain: 0.95, type: "lowpass", attack: 0.06 });
+    noiseHit(v, { frequency: 700, sweepTo: 220, duration: 1.3, gain: 0.55, type: "bandpass", q: 0.8, delay: 0.12, attack: 0.1 });
+    for (let i = 0; i < 9; i++) noiseHit(v, { frequency: 3000 + (i % 3) * 900, duration: 0.04, gain: 0.3, type: "bandpass", q: 4, delay: 0.25 + i * 0.09 + (i % 2) * 0.03 });
   } else {
-    for (const [i, f] of [1568, 2093, 2637, 3136].entries()) toneHit(v, { frequency: f, duration: 0.9, gain: 0.12, type: "triangle", delay: i * 0.035 });
-    noiseHit(v, { frequency: 6000, sweepTo: 2500, duration: 0.35, gain: 0.5, type: "highpass" });
+    // Shatter: glassy partials falling over a bright hiss, and a ringing tail.
+    for (const [i, f] of [1568, 2093, 2637, 3136, 3951].entries()) toneHit(v, { frequency: f, sweepTo: f * 0.96, duration: 1.2, gain: 0.1, type: "triangle", delay: i * 0.03 });
+    noiseHit(v, { frequency: 7000, sweepTo: 2600, duration: 0.4, gain: 0.6, type: "highpass" });
+    for (let i = 0; i < 6; i++) toneHit(v, { frequency: 4200 - i * 330, duration: 0.12, gain: 0.06, type: "sine", delay: 0.1 + i * 0.07 });
   }
 }
 

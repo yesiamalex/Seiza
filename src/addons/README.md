@@ -21,10 +21,12 @@ store.ts     A tiny store shared by the HUD and the 3D scene.
 sound.ts     Synthesized sound through the world sounds' output (and mute).
 ui.tsx       The coloured mode button, choice chips, the switch.
 fantasy/     Weapons, health, swings and specials; blade contact
-             (contact.ts) for hits and parries; the body's part of each
-             move (poses.ts).
-band/        Instruments (synthesized), light sticks, touch play in VR;
-             how each instrument's player grooves (moves.ts).
+             (contact.ts) for hits and parries; each weapon's set of cuts
+             and the bow's shots, hands and body (poses.ts); special
+             bursts, their wind-up and pooled lights (effects.ts).
+band/        Instruments (synthesized: pad, kit, keys, acoustic, lead and
+             bass), light sticks, touch play in VR; how each instrument's
+             player grooves (moves.ts).
 ```
 
 ## How it hooks in

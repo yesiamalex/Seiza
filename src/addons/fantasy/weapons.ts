@@ -87,6 +87,14 @@ const steel = () => new THREE.MeshStandardMaterial({ color: "#e6eaf0", metalness
 const dark = () => new THREE.MeshStandardMaterial({ color: "#2a2422", roughness: 0.8 });
 const gold = () => new THREE.MeshStandardMaterial({ color: "#d4ad55", metalness: 0.35, roughness: 0.4 });
 const wood = () => new THREE.MeshStandardMaterial({ color: "#6b4a2e", roughness: 0.75 });
+// A Japanese blade's two steels: a darker, blued body, and the hardened
+// edge (the hamon's side) bright and catching the light.
+const bladeBody = () => new THREE.MeshStandardMaterial({ color: "#b9c2cf", metalness: 0.35, roughness: 0.28 });
+const bladeEdge = () => new THREE.MeshStandardMaterial({ color: "#f4f7fb", metalness: 0.2, roughness: 0.18, emissive: "#9fb6cc", emissiveIntensity: 0.18 });
+const iron = () => new THREE.MeshStandardMaterial({ color: "#2b2a2c", metalness: 0.4, roughness: 0.55 });
+// The handle: white ray skin under a black silk wrap.
+const samegawa = () => new THREE.MeshStandardMaterial({ color: "#e8e2d2", roughness: 0.85 });
+const lacquer = () => new THREE.MeshStandardMaterial({ color: "#4d1416", metalness: 0.1, roughness: 0.3 });
 
 function box(w: number, h: number, d: number, y: number, x = 0, rz = 0) {
   return new THREE.BoxGeometry(w, h, d).rotateZ(rz).translate(x, y, 0);
@@ -111,6 +119,28 @@ function group(parts: [THREE.BufferGeometry[], THREE.Material][]) {
     out.add(mesh);
   }
   return out;
+}
+
+/** The bright strip along a curved blade's cutting edge (+x), from the
+ *  same segments as the blade. */
+function edgeStrip(from: number, length: number, width: number, bend: number, segments = 4) {
+  const parts: THREE.BufferGeometry[] = [];
+  const step = length / segments;
+  for (let i = 0; i < segments; i++) {
+    const s = (i + 0.5) / segments;
+    const w = width * (1 - 0.25 * s);
+    // Slightly proud of the blade's faces, so it shows on both sides.
+    parts.push(box(w * 0.34, step * 1.04, 0.0084, from + step * (i + 0.5), -bend * s * s + w * 0.33, bend * 1.6 * s / segments));
+  }
+  return parts;
+}
+
+/** A wrapped grip: cord bands crossing a pale core, as rings. */
+function wrapBands(from: number, to: number, radius: number, count: number) {
+  const parts: THREE.BufferGeometry[] = [];
+  const step = (to - from) / count;
+  for (let i = 0; i < count; i++) parts.push(rod(radius, from + step * (i + 0.2), from + step * (i + 0.65), 8));
+  return parts;
 }
 
 /** A curved blade from straight segments, bending toward the back (-x).
@@ -175,21 +205,31 @@ export function buildWeapon(weapon: Weapon, element: Element): THREE.Group {
         element
       );
     case "katana":
+      // Blade, the gold collar (habaki) at its foot, an iron guard (tsuba)
+      // rimmed in gold, and a handle of black cord over white ray skin,
+      // capped in gold.
       return withGlow(
         group([
-          [curvedBlade(0.09, 0.7, 0.032, 0.05), steel()],
-          [[rod(0.016, -0.17, 0.07)], dark()],
-          [[rod(0.045, 0.072, 0.084, 14), rod(0.018, 0.084, 0.1)], gold()],
+          [curvedBlade(0.09, 0.7, 0.032, 0.05, 6), bladeBody()],
+          [edgeStrip(0.09, 0.7, 0.032, 0.05, 6), bladeEdge()],
+          [[rod(0.0155, -0.17, 0.066, 10)], samegawa()],
+          [wrapBands(-0.16, 0.06, 0.0172, 7), dark()],
+          [[rod(0.044, 0.07, 0.08, 18)], iron()],
+          [[rod(0.046, 0.073, 0.077, 18), box(0.022, 0.03, 0.014, 0.096, 0.004), rod(0.019, -0.185, -0.165, 10)], gold()],
         ]),
         curvedBlade(0.09, 0.7, 0.032, 0.05, 4, 0.016),
         element
       );
     case "naginata":
+      // A curved blade on a lacquered shaft: gold fittings at both ends, a
+      // wrapped grip below the blade, and a metal butt cap.
       return withGlow(
         group([
-          [curvedBlade(0.6, 0.42, 0.04, 0.06, 3), steel()],
-          [[rod(0.016, -0.95, 0.57)], wood()],
-          [[rod(0.021, 0.54, 0.6), rod(0.019, -0.98, -0.93)], gold()],
+          [curvedBlade(0.6, 0.42, 0.04, 0.06, 5), bladeBody()],
+          [edgeStrip(0.6, 0.42, 0.04, 0.06, 5), bladeEdge()],
+          [[rod(0.016, -0.95, 0.57, 10)], lacquer()],
+          [wrapBands(0.28, 0.52, 0.0185, 6), dark()],
+          [[rod(0.021, 0.54, 0.6, 12), rod(0.019, 0.24, 0.27, 10), rod(0.019, -0.98, -0.93, 10), box(0.028, 0.034, 0.016, 0.618, 0.004)], gold()],
         ]),
         curvedBlade(0.6, 0.42, 0.04, 0.06, 3, 0.018),
         element
@@ -219,20 +259,75 @@ export function buildWeapon(weapon: Weapon, element: Element): THREE.Group {
     }
     case "bow": {
       // Limbs bend away from the archer (+x is where the fingers point,
-      // toward the target); the string runs tip to tip behind them.
+      // toward the target); the string runs tip to tip behind them, in two
+      // halves that meet at the nock, so it can be drawn back (setBowString).
       const curve = new THREE.QuadraticBezierCurve3(new THREE.Vector3(-0.16, -0.66, 0), new THREE.Vector3(0.12, 0, 0), new THREE.Vector3(-0.16, 0.66, 0));
       const limbs = new THREE.TubeGeometry(curve, 16, 0.014, 6, false);
-      const string = new THREE.CylinderGeometry(0.0025, 0.0025, 1.3, 3).translate(-0.16, 0, 0);
-      return withGlow(
+      const out = withGlow(
         group([
           [[limbs], wood()],
           [[rod(0.022, -0.07, 0.07)], dark()],
-          [[string], new THREE.MeshBasicMaterial({ color: "#efe7d6" })],
         ]),
         [new THREE.TubeGeometry(curve, 16, 0.03, 6, false)],
         element
       );
+      // A unit length of string along +y, from its foot: stretched and
+      // turned between a tip and the nock.
+      const stringGeometry = new THREE.CylinderGeometry(0.0028, 0.0028, 1, 3).translate(0, 0.5, 0);
+      const stringMaterial = new THREE.MeshBasicMaterial({ color: "#efe7d6" });
+      const halves = [new THREE.Mesh(stringGeometry, stringMaterial), new THREE.Mesh(stringGeometry, stringMaterial)];
+      // The arrow on the string while it's drawn: points along +x, its
+      // tail at the nock.
+      const arrow = new THREE.Group();
+      const shaft = buildArrow();
+      shaft.rotation.y = Math.PI / 2;
+      shaft.position.x = 0.35;
+      arrow.add(shaft);
+      arrow.visible = false;
+      for (const m of [...halves, arrow]) {
+        m.userData.navIgnore = true;
+        out.add(m);
+      }
+      out.userData.bow = { halves, arrow };
+      setBowString(out, null, 0);
+      return out;
     }
+  }
+}
+
+const BOW_TIPS = [new THREE.Vector3(-0.16, 0.66, 0), new THREE.Vector3(-0.16, -0.66, 0)];
+const NOCK_REST = new THREE.Vector3(-0.16, 0, 0);
+const nock = new THREE.Vector3();
+const span = new THREE.Vector3();
+const yAxis = new THREE.Vector3(0, 1, 0);
+const xAxis = new THREE.Vector3(1, 0, 0);
+
+/**
+ * Draws a bow's string back to `hand` (a point in the bow's own frame),
+ * with an arrow on it, `draw` of the way; null lets it rest straight, tip
+ * to tip. Cheap: two stretched cylinders and one moved arrow.
+ */
+export function setBowString(bow: THREE.Object3D, hand: THREE.Vector3 | null, draw: number) {
+  const parts = bow.userData.bow as { halves: THREE.Mesh[]; arrow: THREE.Group } | undefined;
+  if (!parts) return;
+  nock.copy(NOCK_REST);
+  if (hand && draw > 0) {
+    // Behind the bow only, never past an archer's reach, and kept near the
+    // bow's own plane.
+    nock.set(Math.max(-0.95, Math.min(-0.16, hand.x)), THREE.MathUtils.clamp(hand.y, -0.12, 0.12), THREE.MathUtils.clamp(hand.z, -0.12, 0.12));
+    nock.lerpVectors(NOCK_REST, nock, Math.min(1, draw));
+  }
+  parts.halves.forEach((half, i) => {
+    span.subVectors(BOW_TIPS[i], nock);
+    half.position.copy(nock);
+    half.scale.set(1, span.length(), 1);
+    half.quaternion.setFromUnitVectors(yAxis, span.normalize());
+  });
+  parts.arrow.visible = !!hand && draw > 0.05;
+  if (parts.arrow.visible) {
+    parts.arrow.position.copy(nock);
+    // From the nock, through the grip, toward the target.
+    parts.arrow.quaternion.setFromUnitVectors(xAxis, span.set(0.05, 0, 0).sub(nock).normalize());
   }
 }
 

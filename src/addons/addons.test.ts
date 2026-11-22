@@ -2,12 +2,13 @@ import { describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import { handQuaternion } from "./rig";
 import { acceptHit, fantasy, landedHits, meterForHits, METER_CHAIN, METER_PER_HIT, MIN_HIT_GAP, parseFantasyEvent, resetFantasy } from "./fantasy/combat";
-import { bodyPose, heldPose, timingOf } from "./fantasy/poses";
+import { bodyPose, bowDraw, COMBO_CYCLE, cutOf, heldPose, timingOf } from "./fantasy/poses";
 import { carryHand, key as bodyKey, newBodyPose, sampleBody } from "./body";
 import { bandBody } from "./band/moves";
 import { cancelSelfPush, pushSelf, takeSelfPush } from "../player/selfPush";
 import { WEAPON_SPECS, WEAPONS } from "./fantasy/weapons";
 import { parseBandEvent, validNote } from "./band/band";
+import { INSTRUMENTS } from "./band/instruments";
 import { BLADE_CONTACT, bodyCapsule, segmentDistance, sweep } from "./fantasy/contact";
 
 describe("blade contact", () => {
@@ -143,6 +144,50 @@ describe("fighting poses", () => {
     expect(heldPose("katana", { kind: "swing", n: 0, start: 0 }, t.duration * 0.05).trail).toBe(false);
     expect(heldPose("katana", { kind: "swing", n: 0, start: 0 }, t.duration * 0.5).trail).toBe(true);
   });
+
+  it("strings different cuts together for every bladed weapon", () => {
+    for (const weapon of ["sword", "katana", "naginata", "lightsaber"] as const) {
+      const cuts = new Set(Array.from({ length: COMBO_CYCLE }, (_, n) => cutOf(weapon, n)));
+      expect(cuts.size, weapon).toBeGreaterThanOrEqual(3);
+      // The first two cuts of a combo take the hand along different paths.
+      let apart = 0;
+      for (const f of [0.2, 0.3, 0.4, 0.5, 0.6]) {
+        const at = timingOf(weapon, "swing").duration * f;
+        const a = heldPose(weapon, { kind: "swing", n: 0, start: 0 }, at).right!.pos;
+        const b = heldPose(weapon, { kind: "swing", n: 1, start: 0 }, at).right!.pos;
+        apart = Math.max(apart, Math.hypot(...a.map((v, k) => v - b[k])));
+      }
+      expect(apart, weapon).toBeGreaterThan(0.1);
+    }
+  });
+
+  it("keeps both hands of a two-handed weapon in front of the body", () => {
+    for (const weapon of ["katana", "naginata"] as const) {
+      for (let n = 0; n < 3; n++) {
+        for (const f of [0, 0.2, 0.4, 0.6, 0.8]) {
+          const pose = heldPose(weapon, { kind: "swing", n, start: 0 }, timingOf(weapon, "swing").duration * f);
+          for (const hand of [pose.right!, pose.left!]) {
+            const [x, y, z] = hand.pos;
+            // Within the torso's width and height, a fist stays ahead of its
+            // rounded front.
+            if (Math.abs(x) < 0.2 && y > 0.42 && y < 1) {
+              const front = -0.12 * Math.sqrt(1 - (x / 0.2) ** 2) - 0.07;
+              expect(z, `${weapon} ${n} ${f}`).toBeLessThanOrEqual(front + 1e-6);
+            }
+          }
+        }
+      }
+    }
+  });
+
+  it("draws the bowstring back until the arrow flies", () => {
+    const shot = { kind: "shoot" as const, n: 0, start: 0 };
+    const t = timingOf("bow", "shoot");
+    expect(bowDraw(null, 0)).toBe(0);
+    expect(bowDraw(shot, t.duration * t.impact * 0.3)).toBeGreaterThan(0);
+    expect(bowDraw(shot, t.duration * t.impact * 0.9)).toBe(1);
+    expect(bowDraw(shot, t.duration * t.impact * 1.01)).toBe(0);
+  });
 });
 
 describe("band events", () => {
@@ -151,7 +196,12 @@ describe("band events", () => {
     expect(validNote("drums", 8)).toBe(false);
     expect(validNote("keys", 60)).toBe(true);
     expect(validNote("keys", 20)).toBe(false);
-    expect(validNote("guitar", 5)).toBe(true);
+    expect(validNote("guitar", 11)).toBe(true);
+    expect(validNote("guitar", 12)).toBe(false);
+    expect(validNote("kit", 9)).toBe(true);
+    expect(validNote("kit", 10)).toBe(false);
+    expect(validNote("electric", 11)).toBe(true);
+    expect(validNote("bass", 12)).toBe(false);
     expect(validNote("lightstick", 0)).toBe(false);
   });
 
@@ -274,7 +324,7 @@ describe("body poses", () => {
   });
 
   it("grooves for every instrument, more when playing", () => {
-    for (const instrument of ["drums", "keys", "guitar", "lightstick"] as const) {
+    for (const instrument of INSTRUMENTS) {
       const calm = bandBody(instrument, null, 0.2, 0, 0.25, 1, newBodyPose());
       const into = bandBody(instrument, { at: 1 }, 1, 0, 0.25, 1, newBodyPose());
       expect(finite(calm) && finite(into)).toBe(true);
