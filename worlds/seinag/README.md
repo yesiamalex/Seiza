@@ -56,6 +56,39 @@ could do, so students and staff can see and talk about it.
   now?", 「今日はどのくらい発電した?」). Ask them to take you to the
   panels.
 
+- **The imagined campus:** four "what if" layers over UPOU as it is, each
+  something you can feel on a real walk across the campus. None of them is
+  UPOU's plan. The **Imagined campus** board beside the station's study
+  boards switches each on or off for everyone in the room (editors only,
+  like the console), so a group can walk the same route with and without
+  it.
+  - **A covered walkway** from the Academic Residences' south door to the
+    WCMPB's north corner, about 225 m over the lawn people cross in the
+    open today. Its shade falls where the real sun casts it at that hour:
+    under the roof at noon, east of it in the afternoon, thin under cloud.
+    The world's shadow map covers only the rooms near its origin, so the
+    walkway's and the trees' shade is their outline on the ground, moved
+    each frame along the sun's direction (`shadeOffset` in
+    `client/futures.ts`).
+  - **Solar lampposts** along the walkway and at the garden's gate. Each
+    has its own panel and battery, and switches itself on at dusk with the
+    shared sky. They are real lights, drawn from the world's pool of four
+    (src/scene/LightPool.tsx), so a dozen cost no more than four.
+  - **More shade trees:** narra and acacia (rain tree), instanced, along
+    the drive from the Oblation, the Main Building's back lawn, and the
+    walkway's lawn, each with its moving shade.
+  - **The FMDS Perma G.A.R.D.E.N.**, behind the Teaching and Learning Hub,
+    which the campus model doesn't have, built out. Its Adopt-A-Plot beds
+    (2 m × 2 m, organic) are as UPOU describes them. The compost bays,
+    rainwater tanks fed by the learning hut's gutter, herb spiral, food
+    forest (mango, banana, papaya, malunggay, calamansi), seedling nursery,
+    and pollinator flowers are imagined, and the boards and guides say so.
+  Each layer has a board that says what it is, with a live line (where the
+  shade is now; whether the lamps are on), and a card. The guides know all
+  four, answer "Where is the shade now?" and "Are the lamps on?" live, and
+  give a seven-stop **permaculture tour** of the garden ("Give me a
+  permaculture tour"), walking you from stop to stop.
+
 Everything is in English and Japanese, like the rest of Seiza.
 
 ## Changing the solar
@@ -66,6 +99,20 @@ Everything is in English and Japanese, like the rest of Seiza.
 - **The battery and the demand:** `CAMPUS` and `campusLoad` in
   `client/plant.ts`.
 - **What the guides say about it:** `client/knowledge.ts`.
+
+## Changing the imagined campus
+
+- **Where things go:** `client/futures.ts`: the walkway's centre line
+  (`WALKWAY`), the lampposts, the trees (`treeList`), and the garden's
+  place, beds, and stations (`GARDEN`, `GARDEN_SPOTS`). Positions are
+  metres on the campus model; its lawn is at y 0.1. `futures.test.ts`
+  checks they stay clear of each other, the station, and where the guides
+  take people.
+- **How they look:** `client/Imagined.tsx`.
+- **What the guides and cards say:** `client/futuresKnowledge.ts` and
+  `client/cards.tsx`. Keep what's real about the garden apart from what's
+  imagined, and check the garden's facts with FMDS before a public
+  deployment: programmes and terms change.
 
 ## Layout
 
@@ -85,6 +132,10 @@ worlds/seinag/
     Dashboard.tsx              The live display on the station's back wall
     cards.tsx                  How it's worked out, the battery, and the campus's demand
     knowledge.ts               SeiOU's knowledge, plus the solar
+    futures.ts                 The imagined campus: where each layer goes, its shade, its switches
+    Imagined.tsx               The walkway, lampposts, trees, garden, their boards, and the switch board
+    futuresKnowledge.ts        What the guides know about it, and the permaculture tour
+    futures.test.ts            Placements, shade, and the guides' answers
   build.mjs                    Builds the deployment into dist/
   wrangler.jsonc               Seinag's own Worker
   favicon.svg                  The arch, with panels, under the sun
@@ -133,5 +184,13 @@ npx wrangler deploy --config worlds/seinag/wrangler.jsonc
 ## References
 
 The physics and the grid's emission factor are Seizora's; see
-worlds/seizora/README.md. The campus model and what the guides know about
+worlds/seizora/README.md.
+
+The Perma G.A.R.D.E.N.'s name, place, purpose, and Adopt-A-Plot's terms
+come from FMDS's own pages; the permaculture course from FLIP Science:
+
+- Faculty of Management and Development Studies, UPOU. (2024, March 9).
+  *Adopt-A-Plot*. https://fmds.upou.edu.ph/public-service/adopt-a-plot/
+- FLIP Science. *Permaculture Systems Design Thinking, UPOU*.
+  https://www.flipscience.ph/?p=14204 The campus model and what the guides know about
 UPOU are SeiOU's; see worlds/seiou/README.md.

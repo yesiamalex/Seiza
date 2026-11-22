@@ -6,6 +6,7 @@ import type { Knowledge, LiveIntent, Mood, Place, Topic } from "../../../src/gui
 import { seiouKnowledge } from "../../seiou/client/campus";
 import { CAMPUS, ROOFTOP_MWP } from "./plant";
 import { dayTotals, live } from "./live";
+import { FUTURE_CARD_TITLES, FUTURE_SYNONYMS, FUTURE_TOPICS, futureLiveIntents } from "./futuresKnowledge";
 import solar from "../world/solar.json";
 
 const kw = (mw: number) => `${Math.round(mw * 1000)} kW`;
@@ -146,20 +147,24 @@ function liveIntents(): LiveIntent[] {
   ];
 }
 
-/** SeiOU's knowledge, with the solar added. */
+/** SeiOU's knowledge, with the solar and the imagined campus added. */
 export function seinagKnowledge(): Knowledge {
   const base = seiouKnowledge();
   return {
     ...base,
-    topics: [...TOPICS, ...base.topics.filter((t) => t.id !== "world")],
-    starters: ["What is Seinag?", "How much are the roofs making now?", "Where are the solar panels?", "Give me a tour", "What is UPOU?"],
-    startersJa: ["Seinagって何?", "今、屋根はどのくらい発電している?", "太陽光パネルはどこ?", "キャンパスを案内して", "UPOUって何?"],
-    subject: "UPOU, this campus, its rooftop solar, and finding your way",
-    subjectJa: "UPOUとこのキャンパス、屋根の太陽光、そして道案内",
-    live: liveIntents(),
-    liveSuggestions: ["What did the roofs make today?", "Take me to the solar station"],
-    liveSuggestionsJa: ["今日はどのくらい発電した?", "ソーラーステーションに連れて行って"],
-    cardTitle: (card, lang) => (card === "load" ? (lang === "ja" ? "キャンパスの使用量" : "What the campus uses") : lang === "ja" ? "キャンパスの太陽光" : "Campus solar"),
-    synonyms: { ...base.synonyms, pv: "solar", photovoltaic: "solar", araw: "sun", sinag: "seinag" },
+    topics: [...TOPICS, ...FUTURE_TOPICS, ...base.topics.filter((t) => t.id !== "world")],
+    starters: ["What is Seinag?", "How much are the roofs making now?", "What if UPOU had more shade?", "Give me a permaculture tour", "Give me a tour"],
+    startersJa: ["Seinagって何?", "今、屋根はどのくらい発電している?", "想像のキャンパスって何?", "パーマカルチャーの案内をして", "キャンパスを案内して"],
+    subject: "UPOU, this campus, its rooftop solar, the imagined walkway, lamps, trees, and garden, and finding your way",
+    subjectJa: "UPOUとこのキャンパス、屋根の太陽光、想像の通路・街灯・木・菜園、そして道案内",
+    live: [...liveIntents(), ...futureLiveIntents()],
+    liveSuggestions: ["What did the roofs make today?", "Where is the shade now?", "Take me to the solar station"],
+    liveSuggestionsJa: ["今日はどのくらい発電した?", "今、日陰はどこ?", "ソーラーステーションに連れて行って"],
+    cardTitle: (card, lang) => {
+      const future = FUTURE_CARD_TITLES[card];
+      if (future) return lang === "ja" ? future[1] : future[0];
+      return card === "load" ? (lang === "ja" ? "キャンパスの使用量" : "What the campus uses") : lang === "ja" ? "キャンパスの太陽光" : "Campus solar";
+    },
+    synonyms: { ...base.synonyms, pv: "solar", photovoltaic: "solar", araw: "sun", sinag: "seinag", ...FUTURE_SYNONYMS },
   };
 }

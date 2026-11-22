@@ -13,7 +13,9 @@ import { Lifts } from "../../seiou/client/Lifts";
 import { RoomLights } from "../../seiou/client/RoomLights";
 import { CHANCY, CHANCY_AVATAR, CHANCY_ROUTE, DEAN_ROB, DEAN_ROB_AVATAR, DEAN_ROB_ROUTE, SPAWN } from "../../seiou/client/campus";
 import { ConferenceHalls, conferenceObstacles } from "../../seiou/client/Conference";
-import { CardHost, openCard, type CardKey } from "./cards";
+import { CardHost, cardTitle, openCard, type CardKey } from "./cards";
+import { Futures, KIOSK_AT } from "./Imagined";
+import { futuresObstacles, LAYER_KEY, LAYERS } from "./futures";
 import { Station, stationObstacles } from "./Station";
 import { controlsFrom, live } from "./live";
 import { seinagKnowledge } from "./knowledge";
@@ -26,7 +28,7 @@ function Hud() {
   useLang();
   return (
     <>
-      <GuideHud onOpenCard={(card) => openCard(card as CardKey)} cardTitle={(card) => (card === "load" ? L("What the campus uses", "キャンパスの使用量") : L("Campus solar", "キャンパスの太陽光"))} />
+      <GuideHud onOpenCard={(card) => openCard(card as CardKey)} cardTitle={(card) => cardTitle(card)} />
       <CardHost />
     </>
   );
@@ -35,11 +37,19 @@ function Hud() {
 export function Scene({ warp, getSelfPosition, findPath, canEdit, connected, roomSky, setRoomSky, worldState, setWorldState, sit, occupiedSeatId }: WorldSceneProps) {
   // The console's switches, shared through the room, drive the plant.
   live.controls = controlsFrom(worldState);
+  // The station's, the conference halls' tables (SeiOU's campus), and
+  // whichever imagined layers are switched on (futures.ts).
+  const layers = LAYERS.map((layer) => worldState[LAYER_KEY[layer]] !== false).join(",");
   useEffect(() => {
-    // The station's, and the conference halls' tables (SeiOU's campus).
-    setWorldObstacles([...stationObstacles(), ...conferenceObstacles()]);
+    setWorldObstacles([
+      ...stationObstacles(),
+      ...conferenceObstacles(),
+      ...futuresObstacles(worldState),
+      { x: KIOSK_AT[0], z: KIOSK_AT[2], halfX: 0.08, halfZ: 0.7, rotationY: 0 },
+    ]);
     return () => setWorldObstacles([]);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layers]);
   useEffect(() => {
     const knowledge = seinagKnowledge();
     registerGuides([
@@ -64,6 +74,7 @@ export function Scene({ warp, getSelfPosition, findPath, canEdit, connected, roo
     <>
       <Panels />
       <Station canEdit={canEdit} connected={connected} roomSky={roomSky} setRoomSky={setRoomSky} worldState={worldState} setWorldState={setWorldState} />
+      <Futures worldState={worldState} setWorldState={setWorldState} canEdit={canEdit} connected={connected} />
       <Lifts warp={warp} worldState={worldState} setWorldState={setWorldState} />
       <RoomLights worldState={worldState} />
       <ConferenceHalls sit={sit} occupiedSeatId={occupiedSeatId} />

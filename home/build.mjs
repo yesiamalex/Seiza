@@ -121,12 +121,23 @@ const worldCards = worlds
   )
   .join("\n");
 
+/** How many of a month's items show before its "Show all" (the page's
+ *  script folds the rest; without it, everything shows). */
+const MONTH_PREVIEW = 6;
 const changes = months
-  .map(({ month, items }) => {
+  .map(({ month, items }, index) => {
     const [y, m] = month.split("-").map(Number);
-    const list = items.map((i) => `          <li><span class="tag ${esc(i.tag)}">${esc(TAGS[i.tag] ?? i.tag)}</span><span>${esc(i.text)}</span></li>`).join("\n");
+    const list = items
+      .map((i, k) => `          <li data-tag="${esc(i.tag)}"${k >= MONTH_PREVIEW ? ' class="extra"' : ""}><span class="tag ${esc(i.tag)}">${esc(TAGS[i.tag] ?? i.tag)}</span><span>${esc(i.text)}</span></li>`)
+      .join("\n");
+    // "17 changes · 9 new · 2 worlds · 6 better", under the month's name.
+    const kinds = Object.keys(TAGS)
+      .map((tag) => [tag, items.filter((i) => i.tag === tag).length])
+      .filter(([, n]) => n > 0)
+      .map(([tag, n]) => `${n} ${tag === "world" ? (n === 1 ? "world" : "worlds") : TAGS[tag].toLowerCase()}`);
+    const counts = [`${items.length} change${items.length === 1 ? "" : "s"}`, ...kinds].join(" · ");
     return `      <div class="month">
-        <h3><time datetime="${esc(month)}">${MONTH_NAMES[m - 1]} ${y}</time></h3>
+        <h3><time datetime="${esc(month)}">${MONTH_NAMES[m - 1]} ${y}</time>${index === 0 ? ' <span class="latest">Latest</span>' : ""}<small>${esc(counts)}</small></h3>
         <ul>
 ${list}
         </ul>

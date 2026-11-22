@@ -22,6 +22,12 @@ with no code of its own.
 To rewrite a month by hand, add it to `changelog.json` and move `through`
 past it.
 
+On the page, each month is headed by its counts (changes, new, worlds,
+better). It shows its first six changes with a "Show all", the two latest
+months show and the rest fold behind a button, and chips filter by kind.
+All of it is the page's script working on what the build wrote into the
+HTML, so without JavaScript, and for search engines, every change shows.
+
 ## Deploy
 
 ```bash
