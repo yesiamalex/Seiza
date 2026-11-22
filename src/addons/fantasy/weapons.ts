@@ -1,10 +1,17 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
-export const WEAPONS = ["sword", "katana", "naginata", "lightsaber", "bow"] as const;
+export const WEAPONS = ["sword", "katana", "naginata", "scythe", "lightsaber", "bow"] as const;
 export type Weapon = (typeof WEAPONS)[number];
-/** What a special attack carries. Also a lightsaber's colour. */
-export const ELEMENTS = ["lightning", "fire", "ice"] as const;
+/** The long-hafted weapons, held and swung on a pole's own poses. */
+export const isPole = (weapon: Weapon) => weapon === "naginata" || weapon === "scythe";
+/**
+ * What a special carries, each with its own move, burst, glow, and sound:
+ * Spectro's light let go from the palm, Havoc's dark plunge, Aero's
+ * updraft, Electro called down from the sky, Fusion's fire from the hand,
+ * Glacio's ice raised from the ground. Also a light saber's colour.
+ */
+export const ELEMENTS = ["spectro", "havoc", "aero", "electro", "fusion", "glacio"] as const;
 export type Element = (typeof ELEMENTS)[number];
 
 export interface WeaponSpec {
@@ -26,6 +33,9 @@ export interface WeaponSpec {
   otherHand: number | null;
   /** Blade from the grip to the tip, in metres, for the swing's trail. */
   blade: [number, number];
+  /** How far the tip stands out to the side of the haft, in metres: a
+   *  scythe's blade, which cuts out there rather than along the shaft. */
+  bladeOut?: number;
 }
 
 /**
@@ -33,9 +43,10 @@ export interface WeaponSpec {
  * the same damage a second to one opponent (about 25), and each buys
  * something with the rest. The sword is the all-rounder; the katana cuts
  * hardest but slowest, one at a time; the naginata reaches furthest and
- * sweeps three, for less each; the light saber is light and fast; the bow
- * hits from forty metres but slowly. Specials follow suit: the katana's
- * hits hardest in a small blast, the naginata's widest and softest.
+ * sweeps three, for less each; the scythe reaps two at a time from out to
+ * the side, slower; the light saber is light and fast; the bow hits from
+ * forty metres but slowly. Specials follow suit: the katana's hits hardest
+ * in a small blast, the naginata's widest and softest.
  */
 export const WEAPON_SPECS: Record<Weapon, WeaponSpec> = {
   sword: {
@@ -53,6 +64,11 @@ export const WEAPON_SPECS: Record<Weapon, WeaponSpec> = {
     note: ["Longest reach: sweeps up to three for 9 each. Widest special.", "最長リーチ:最大3人をなぎ払い各9。必殺技の範囲が最大。"],
     reach: 3.0, damage: 9, cooldown: 0.55, targets: 3, special: 26, specialRadius: 4.8, otherHand: 0.3, blade: [0.55, 1.0],
   },
+  scythe: {
+    label: ["Scythe", "大鎌"],
+    note: ["Reaping sweeps: 14 a hit, up to two, from out to the side. Slower.", "刈り払い:1撃14、横から最大2人。やや遅い。"],
+    reach: 2.6, damage: 14, cooldown: 0.56, targets: 2, special: 32, specialRadius: 4, otherHand: 0.32, blade: [0.6, 1.02], bladeOut: 0.5,
+  },
   lightsaber: {
     label: ["Light saber", "ライトセーバー"],
     note: ["Fastest: 7 a hit, nearly four a second. Takes your element's colour.", "最速:1撃7、毎秒約4回。属性の色に光ります。"],
@@ -65,12 +81,47 @@ export const WEAPON_SPECS: Record<Weapon, WeaponSpec> = {
   },
 };
 
-export const ELEMENT_COLORS: Record<Element, string> = { lightning: "#7fc8ff", fire: "#ff5a36", ice: "#9ff4ff" };
-export const ELEMENT_LABELS: Record<Element, [string, string]> = {
-  lightning: ["Lightning", "雷"],
-  fire: ["Fire", "炎"],
-  ice: ["Ice", "氷"],
+export const ELEMENT_COLORS: Record<Element, string> = {
+  spectro: "#ffe27a",
+  havoc: "#c42b74",
+  aero: "#5ff0b8",
+  electro: "#a77bff",
+  fusion: "#ff5a36",
+  glacio: "#9ff4ff",
 };
+export const ELEMENT_LABELS: Record<Element, [string, string]> = {
+  spectro: ["Spectro", "スペクトロ(光)"],
+  havoc: ["Havoc", "ハヴォック(闇)"],
+  aero: ["Aero", "エアロ(風)"],
+  electro: ["Electro", "エレクトロ(雷)"],
+  fusion: ["Fusion", "フュージョン(炎)"],
+  glacio: ["Glacio", "グレイシオ(氷)"],
+};
+
+/**
+ * How a charged weapon's glow breathes, 0 to 1, by element: Spectro
+ * shimmers and twinkles, Havoc throbs slow and deep, Aero ebbs and flows,
+ * Electro crackles on and off, Fusion flickers like a flame, Glacio holds
+ * a cold, slow pulse.
+ */
+export function elementPulse(element: Element, t: number): number {
+  switch (element) {
+    case "spectro":
+      return 0.7 + 0.18 * Math.sin(t * 9) + (Math.sin(t * 31) > 0.85 ? 0.12 : 0);
+    case "havoc":
+      return 0.4 + 0.5 * Math.pow(0.5 + 0.5 * Math.sin(t * 2.4), 3);
+    case "aero":
+      return 0.62 + 0.25 * Math.sin(t * 4 + 2 * Math.sin(t * 1.3));
+    case "electro": {
+      const flick = Math.sin(Math.floor(t * 22) * 12.9898) * 43758.5453;
+      return flick - Math.floor(flick) > 0.5 ? 0.95 : 0.35;
+    }
+    case "fusion":
+      return 0.62 + 0.18 * Math.sin(t * 13) + 0.14 * Math.sin(t * 29 + 1);
+    case "glacio":
+      return 0.62 + 0.2 * Math.sin(t * 1.6);
+  }
+}
 
 export const MAX_HP = 100;
 /** The most any special does, for checking what arrives. */
@@ -137,7 +188,7 @@ function wrapBands(from: number, to: number, radius: number, count: number) {
  * it all round in a rounded bevel, for the glow: a soft aura, where the
  * old boxes showed their corners once it lit.
  */
-function curvedBlade(from: number, length: number, width: number, bend: number, part: "blade" | "edge" = "blade", fat = 0) {
+function curvedBlade(from: number, length: number, width: number, bend: number, part: "blade" | "edge" = "blade", fat = 0, inner = false) {
   const steps = 10;
   const back = (s: number) => -bend * s * s;
   const half = (s: number) => (width * (1 - 0.3 * s)) / 2;
@@ -147,8 +198,15 @@ function curvedBlade(from: number, length: number, width: number, bend: number, 
     const s = (i / steps) * 0.9;
     const y = from + length * s;
     const outer = back(s) + half(s);
-    edge.push(new THREE.Vector2(outer, y));
-    spine.push(new THREE.Vector2(part === "edge" ? outer - half(s) * 0.62 : back(s) - half(s), y));
+    const inside = back(s) - half(s);
+    // A scythe's edge is on the inside of its curve; a sword's, the outside.
+    if (part === "edge" && inner) {
+      edge.push(new THREE.Vector2(inside + half(s) * 0.62, y));
+      spine.push(new THREE.Vector2(inside, y));
+    } else {
+      edge.push(new THREE.Vector2(outer, y));
+      spine.push(new THREE.Vector2(part === "edge" ? outer - half(s) * 0.62 : inside, y));
+    }
   }
   // The point: the edge sweeps up and round to meet the back.
   const point = new THREE.Vector2(back(1) - half(1) * 0.7, from + length + 0.05);
@@ -156,12 +214,20 @@ function curvedBlade(from: number, length: number, width: number, bend: number, 
   // Round to it carrying on the way the edge was going, with no kink.
   const last = edge[edge.length - 1];
   const slope = (-2 * bend * 0.9 - 0.15 * width) / length;
-  shape.quadraticCurveTo(last.x + slope * 0.04, last.y + 0.04, part === "edge" ? point.x + half(1) * 0.35 : point.x, point.y);
+  shape.quadraticCurveTo(last.x + slope * 0.04, last.y + 0.04, part === "edge" && !inner ? point.x + half(1) * 0.35 : point.x, point.y);
   for (let i = spine.length - 1; i >= 0; i--) shape.lineTo(spine[i].x, spine[i].y);
   const depth = part === "edge" ? 0.0052 : 0.003;
   const round = fat || 0.0016;
   return [new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: true, bevelThickness: round, bevelSize: fat || round * 0.8, bevelSegments: fat ? 3 : 1, curveSegments: 6 }).translate(0, 0, -depth / 2)];
 }
+
+/** Where a scythe's blade meets its haft, and the blade: out to the side
+ *  (+x, where the cut goes), curving down toward the wielder, its edge on
+ *  the inside of the curve. */
+const SCYTHE_TOP = 1.02;
+const scytheBlade = (part: "blade" | "edge", fat = 0) =>
+  curvedBlade(0, 0.5, 0.085, 0.16, part, fat, true).map((g) => g.rotateZ(-Math.PI / 2).rotateX(Math.PI).translate(-0.01, SCYTHE_TOP, 0));
+const darkSteel = () => new THREE.MeshStandardMaterial({ color: "#6c7380", metalness: 0.4, roughness: 0.35 });
 
 /**
  * The aura round a weapon: its blade's shape, fattened, in its special's
@@ -238,6 +304,20 @@ export function buildWeapon(weapon: Weapon, element: Element): THREE.Group {
           [[rod(0.021, 0.54, 0.6, 12), rod(0.019, 0.24, 0.27, 10), rod(0.019, -0.58, -0.53, 10), box(0.028, 0.034, 0.016, 0.618, 0.004)], gold()],
         ]),
         curvedBlade(0.6, 0.42, 0.04, 0.06, "blade", 0.018),
+        element
+      );
+    case "scythe":
+      // A long dark haft with two wrapped grips, an iron collar at the head,
+      // and the blade sweeping out from it.
+      return withGlow(
+        group([
+          [scytheBlade("blade"), darkSteel()],
+          [scytheBlade("edge"), bladeEdge()],
+          [[rod(0.017, -0.56, SCYTHE_TOP + 0.04, 10)], dark()],
+          [[...wrapBands(-0.06, 0.12, 0.019, 4), ...wrapBands(-0.52, -0.36, 0.019, 4)], lacquer()],
+          [[rod(0.024, SCYTHE_TOP - 0.05, SCYTHE_TOP + 0.05, 10), rod(0.02, -0.6, -0.55, 10)], iron()],
+        ]),
+        scytheBlade("blade", 0.018),
         element
       );
     case "lightsaber": {

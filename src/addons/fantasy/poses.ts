@@ -1,6 +1,6 @@
 import { copyBody, key as bodyKey, sampleBody, type BodyKey, type BodyPose } from "../body";
 import type { HandTarget, Vec3 } from "../rig";
-import { WEAPON_SPECS, type Weapon } from "./weapons";
+import { isPole, WEAPON_SPECS, type Element, type Weapon } from "./weapons";
 
 /**
  * Fighting poses as a handful of keys each: where the weapon hand is, which
@@ -14,6 +14,8 @@ interface Key {
   pos: Vec3;
   blade: Vec3;
   fingers: Vec3;
+  /** How closed the hand is (a fist, if not said): open for a gesture. */
+  curl?: number;
 }
 
 /** "recoil": a swing bounced off a blade. "stagger": a guard that stopped a
@@ -96,6 +98,7 @@ export const SWING_SETS: Record<Exclude<Weapon, "bow">, Cut[]> = {
   sword: ["diagonal", "backhand", "thrust"],
   katana: ["overhead", "diagonal", "rising"],
   naginata: ["backhand", "diagonal", "overhead"],
+  scythe: ["diagonal", "backhand", "overhead"],
   lightsaber: ["diagonal", "backhand", "rising", "thrust"],
 };
 
@@ -117,31 +120,22 @@ export function cutOf(weapon: Exclude<Weapon, "bow">, n: number): Cut {
 const PARRY: Key = { at: 0, pos: [0.14, 0.82, -0.3], blade: [-0.96, 0.25, -0.1], fingers: [0.1, 0, -1] };
 // A naginata's: the shaft across the chest, blade out to the right.
 const POLE_PARRY: Key = { at: 0, pos: [0.16, 0.84, -0.3], blade: [0.96, 0.25, -0.12], fingers: [0, 0, -1] };
-const restOf = (weapon: Weapon) => (weapon === "naginata" ? POLE_REST : GUARD);
-const parryOf = (weapon: Weapon) => (weapon === "naginata" ? POLE_PARRY : PARRY);
+const restOf = (weapon: Weapon) => (isPole(weapon) ? POLE_REST : GUARD);
+const parryOf = (weapon: Weapon) => (isPole(weapon) ? POLE_PARRY : PARRY);
 
 // Knocked back by a block: the blade thrown up and away, then on guard.
 const RECOIL: Key[] = [{ at: 0, pos: [0.16, 0.9, -0.14], blade: [0.35, 0.85, 0.4], fingers: [0, 0.4, -0.9] }, { ...GUARD, at: 1 }];
 
-// Raised high behind the head, then brought down in front.
-const SLAM: Key[] = [
-  GUARD,
-  { at: 0.35, pos: [0.06, 1.1, -0.02], blade: [0, 0.45, 0.9], fingers: [0, 0.9, -0.45] },
-  { at: 0.55, pos: [0.02, 0.55, -0.45], blade: [0, -0.45, -0.9], fingers: [0, -0.9, 0.45] },
-  { at: 0.8, pos: [0.02, 0.55, -0.45], blade: [0, -0.45, -0.9], fingers: [0, -0.9, 0.45] },
-  { ...GUARD, at: 1 },
-];
-
-/** Every blade's moves, and a naginata's, which start from and end at its
- *  own rest instead of the sword's. */
+/** Every blade's moves, and a pole's, which start from and end at its own
+ *  rest instead of the sword's. */
 const fromRest = (keys: Key[], rest: Key) => keys.map((k) => (k.pos === GUARD.pos ? { ...rest, at: k.at } : k));
-const BLADE_KEYS = { cuts: CUTS, slam: SLAM, recoil: RECOIL };
-// Raised for a naginata's overhead blow, the blade goes back over the right
+const BLADE_KEYS = { cuts: CUTS, recoil: RECOIL };
+// Raised for a pole's overhead blow, the blade goes back over the right
 // shoulder: straight up, its long shaft came down in front of the face.
-const raised = (keys: Key[]) => keys.map((k, i) => (i === 1 ? { ...k, pos: [0.16, 0.96, -0.08] as Vec3, blade: [0.25, 0.55, 0.8] as Vec3, fingers: [0, 0.82, -0.57] as Vec3 } : k));
+const OVER_SHOULDER = { pos: [0.16, 0.96, -0.08] as Vec3, blade: [0.25, 0.55, 0.8] as Vec3, fingers: [0, 0.82, -0.57] as Vec3 };
+const raised = (keys: Key[]) => keys.map((k, i) => (i === 1 ? { ...k, ...OVER_SHOULDER } : k));
 const POLE_KEYS = {
   cuts: Object.fromEntries(Object.entries(CUTS).map(([cut, keys]) => [cut, fromRest(cut === "overhead" ? raised(keys) : keys, POLE_REST)])) as Record<Cut, Key[]>,
-  slam: fromRest(raised(SLAM), POLE_REST),
   recoil: fromRest(RECOIL, POLE_REST),
 };
 
@@ -218,6 +212,7 @@ function sample(keys: Key[], time: number, out: HandTarget) {
     out.blade[k] = a.blade[k] + (b.blade[k] - a.blade[k]) * s;
     out.fingers[k] = a.fingers[k] + (b.fingers[k] - a.fingers[k]) * s;
   }
+  out.curl = (a.curl ?? 1) + ((b.curl ?? 1) - (a.curl ?? 1)) * s;
   return out;
 }
 
@@ -227,6 +222,7 @@ const copy = (key: Key, out: HandTarget) => {
     out.blade[k] = key.blade[k];
     out.fingers[k] = key.fingers[k];
   }
+  out.curl = key.curl ?? 1;
   return out;
 };
 
@@ -243,7 +239,7 @@ const newTarget = (): HandTarget => ({ pos: [0, 0, 0], blade: [0, 1, 0], fingers
  * Where the hands are for a weapon at a moment: on guard, or partway
  * through an action. Writes into `out` (pass the same one every frame).
  */
-export function heldPose(weapon: Weapon, action: Action | null, now: number, out: HeldPose = { right: newTarget(), left: newTarget(), trail: false }, guard = false): HeldPose {
+export function heldPose(weapon: Weapon, action: Action | null, now: number, out: HeldPose = { right: newTarget(), left: newTarget(), trail: false }, guard = false, element: Element = "spectro"): HeldPose {
   const right = out.right ?? newTarget();
   const left = out.left ?? newTarget();
   const timing = action ? timingOf(weapon, action.kind) : null;
@@ -262,8 +258,9 @@ export function heldPose(weapon: Weapon, action: Action | null, now: number, out
     return out;
   }
 
-  const set = weapon === "naginata" ? POLE_KEYS : BLADE_KEYS;
-  const keys = !active ? null : action!.kind === "special" ? set.slam : action!.kind === "recoil" || action!.kind === "stagger" ? set.recoil : set.cuts[cutOf(weapon, action!.n)];
+  const set = isPole(weapon) ? POLE_KEYS : BLADE_KEYS;
+  const move = active && action!.kind === "special" ? movesFor(weapon)[element] : null;
+  const keys = !active ? null : move ? move.right : action!.kind === "recoil" || action!.kind === "stagger" ? set.recoil : set.cuts[cutOf(weapon, action!.n)];
   if (keys) sample(keys, time, right);
   else copy(guard ? parryOf(weapon) : restOf(weapon), right);
   out.right = right;
@@ -273,21 +270,33 @@ export function heldPose(weapon: Weapon, action: Action | null, now: number, out
   // it across to the grip at the hip put the arm through the belly. Both
   // hands come on to guard and to cut.
   const other = WEAPON_SPECS[weapon].otherHand;
-  if (other === null || (!active && !guard)) out.left = null;
+  if (move && move.left && (other === null || move.free)) {
+    // A special's gesture: the other hand off the grip, or free already.
+    sample(move.left, time, left);
+    out.left = left;
+    return out;
+  }
+  // A one-handed weapon's special without a gesture is held in both hands.
+  // (letting go just before the end, so it comes back to rest one-handed).
+  const gap = other ?? (move && time < 0.9 ? ONE_HAND_GRIP : null);
+  if (gap === null || (!active && !guard)) out.left = null;
   else {
     // The other hand further down the same grip, holding the same way. The
     // blade is normalized first, so the spacing stays true mid-blend.
     const length = Math.hypot(...right.blade) || 1;
     for (let k = 0; k < 3; k++) {
-      left.pos[k] = right.pos[k] - (right.blade[k] / length) * other;
+      left.pos[k] = right.pos[k] - (right.blade[k] / length) * gap;
       left.blade[k] = right.blade[k];
       left.fingers[k] = right.fingers[k];
     }
+    left.curl = 1;
     clearOfBody(right, left);
     out.left = left;
   }
   return out;
 }
+/** Both hands on a one-handed hilt, the second just below the first. */
+const ONE_HAND_GRIP = 0.085;
 
 /** The front of the torso, in eye heights: half its width, how far in
  *  front of the body's centre line its middle is, and the heights it spans. */
@@ -372,16 +381,6 @@ const CUT_BODY: Record<Cut, BodyKey[]> = {
   ],
 };
 
-// The special: up onto the toes with the blade overhead, arched back, then
-// a deep lunge as it comes down.
-const SLAM_BODY: BodyKey[] = [
-  stance(0),
-  bodyKey(0.35, { twist: 0.05, lean: -0.16, drop: -0.012, shiftZ: 0.02, left: [-0.015, -0.07, 0], right: [0.02, 0.08, 0] }),
-  bodyKey(0.55, { twist: -0.05, lean: 0.42, drop: 0.16, shiftZ: -0.12, left: [-0.03, -0.24, 0], right: [0.03, 0.1, 0] }),
-  bodyKey(0.8, { twist: -0.04, lean: 0.36, drop: 0.15, shiftZ: -0.11, left: [-0.03, -0.24, 0], right: [0.03, 0.1, 0] }),
-  stance(1),
-];
-
 // Bounced off a blade: rocked back onto the back foot.
 const RECOIL_BODY: BodyKey[] = [stance(0), bodyKey(0.25, { twist: 0.35, lean: -0.14, drop: 0.03, shiftZ: 0.05, left: [-0.015, -0.06, 0], right: [0.02, 0.12, 0] }), stance(1)];
 // A guard knocked aside: thrown further, and a step back to recover.
@@ -414,6 +413,139 @@ const BOW_BODY: Record<Shot | "special", BodyKey[]> = {
   special: shoot(BOW_SPECIAL.impact, 0.04, 0.06),
 };
 
+// --- specials: a move for each element ----------------------------------------------
+// The weapon hand, the other hand, and the body, timed to the special's
+// moment (TIMING.special.impact, 0.56). Where the other hand makes the
+// gesture (light let go from the palm, fire thrust from it, a palm pressed
+// to the ground), a two-handed weapon is held in one hand for it; the rest
+// keep both hands on the grip, and with a one-handed weapon raise the
+// other hand with it.
+
+/** The free hand hanging easy at the side, where its gestures start and end. */
+const HAND_DOWN: Key = { at: 0, pos: [-0.2, 0.52, -0.08], blade: [0.2, 0, -1], fingers: [0, -1, 0], curl: 0.4 };
+/** An open left hand: palm out ahead (thumb in), palm down, palm up. */
+const PALM_OUT = { blade: [1, 0, 0] as Vec3, fingers: [0, 1, 0] as Vec3, curl: 0.05 };
+const PALM_DOWN = { blade: [1, 0, 0] as Vec3, fingers: [0, 0, -1] as Vec3, curl: 0.1 };
+const PALM_UP = { blade: [-1, 0, 0] as Vec3, fingers: [0, 0.3, -1] as Vec3, curl: 0.1 };
+/** A blade held out of a gesture's way, low at the right, tip down; and
+ *  out wide and back, clear of a crouch. */
+const ASIDE: Key = { at: 0, pos: [0.26, 0.62, -0.06], blade: [0.35, -0.85, 0.2], fingers: [0, -0.25, 1] };
+const WIDE: Key = { at: 0, pos: [0.3, 0.74, 0.02], blade: [0.8, -0.3, 0.5], fingers: [0, -1, 0] };
+/** Overhead, the blade back behind the head. */
+const OVERHEAD: Key = { at: 0, pos: [0.06, 1.12, -0.06], blade: [0, 0.5, 0.86], fingers: [0, 0.86, -0.5] };
+/** Held straight up to the sky; and swept up there at the end of Aero's rise. */
+const SKYWARD: Key = { at: 0, pos: [0.16, 1.18, -0.2], blade: [0.04, 1, -0.05], fingers: [0, 0, -1] };
+const SWEPT_UP: Key = { at: 0, pos: [0.16, 1.1, -0.22], blade: [0.25, 0.96, -0.1], fingers: [0, 0.1, -1] };
+
+const STANCE_FEET = { left: [-0.015, -0.07, 0] as [number, number, number], right: [0.02, 0.07, 0] as [number, number, number] };
+const pose = (time: number, parts: Partial<BodyPose>) => bodyKey(time, { ...STANCE_FEET, ...parts });
+const LUNGE_FEET = { left: [-0.03, -0.2, 0] as [number, number, number], right: [0.03, 0.12, 0] as [number, number, number] };
+
+interface Move {
+  /** The weapon hand, from the weapon's rest and back to it. */
+  right: Key[];
+  /** The other hand's gesture: always with a one-handed weapon, and with a
+   *  two-handed one if `free`. Null: on the grip. */
+  left: Key[] | null;
+  free: boolean;
+  body: BodyKey[];
+}
+
+const MOVES: Record<Element, Move> = {
+  // Spectro: light let go from the open palm, swept from left to right as
+  // the chest turns through, the blade held aside.
+  spectro: {
+    right: [GUARD, at(ASIDE, 0.3), at(ASIDE, 0.8), { ...GUARD, at: 1 }],
+    left: [at(HAND_DOWN, 0), { at: 0.3, pos: [-0.36, 0.86, -0.22], ...PALM_OUT }, { at: 0.56, pos: [-0.02, 0.88, -0.42], ...PALM_OUT }, { at: 0.76, pos: [0.14, 0.86, -0.34], ...PALM_OUT }, at(HAND_DOWN, 1)],
+    free: true,
+    body: [
+      stance(0),
+      pose(0.3, { twist: -0.45, lean: 0.02, drop: 0.05, carry: 0.3 }),
+      pose(0.56, { twist: 0.2, lean: 0.14, drop: 0.07, shiftZ: -0.04, carry: 0.3, left: [-0.02, -0.14, 0] }),
+      pose(0.76, { twist: 0.42, lean: 0.1, drop: 0.06, carry: 0.3, left: [-0.02, -0.14, 0] }),
+      stance(1),
+    ],
+  },
+  // Havoc: up onto the toes, the weapon overhead in both hands, then a
+  // plunge, driving it down into the ground in a deep crouch.
+  havoc: {
+    right: [GUARD, at(OVERHEAD, 0.3), at(OVERHEAD, 0.44), { at: 0.56, pos: [0.04, 0.6, -0.4], blade: [0.02, -0.98, -0.16], fingers: [0, -0.16, 0.98] }, { at: 0.82, pos: [0.04, 0.6, -0.4], blade: [0.02, -0.98, -0.16], fingers: [0, -0.16, 0.98] }, { ...GUARD, at: 1 }],
+    left: null,
+    free: false,
+    body: [
+      stance(0),
+      pose(0.3, { lean: -0.16, drop: -0.015, shiftZ: 0.02 }),
+      pose(0.44, { lean: -0.16, drop: -0.015, shiftZ: 0.02 }),
+      pose(0.56, { lean: 0.5, drop: 0.25, shiftZ: -0.1, ...LUNGE_FEET }),
+      pose(0.82, { lean: 0.44, drop: 0.23, shiftZ: -0.09, ...LUNGE_FEET }),
+      stance(1),
+    ],
+  },
+  // Aero: crouched low, the weapon and the open palm down by the left knee,
+  // then sweeping up and rising onto the toes, calling the wind up.
+  aero: {
+    right: [GUARD, { at: 0.28, pos: [-0.08, 0.48, -0.3], blade: [-0.45, -0.55, -0.7], fingers: [0.3, -0.7, 0.6] }, at(SWEPT_UP, 0.56), at(SWEPT_UP, 0.8), { ...GUARD, at: 1 }],
+    left: [at(HAND_DOWN, 0), { at: 0.28, pos: [-0.16, 0.5, -0.3], ...PALM_UP }, { at: 0.56, pos: [-0.2, 1.06, -0.2], ...PALM_UP }, { at: 0.8, pos: [-0.2, 1.06, -0.2], ...PALM_UP }, at(HAND_DOWN, 1)],
+    free: false,
+    body: [stance(0), pose(0.28, { twist: -0.22, lean: 0.24, drop: 0.14 }), pose(0.56, { twist: 0.15, lean: -0.14, drop: -0.02, tilt: -0.04 }), pose(0.8, { twist: 0.1, lean: -0.1 }), stance(1)],
+  },
+  // Electro: the weapon held up to the sky, arched back, looking up as
+  // the lightning is called down.
+  electro: {
+    right: [GUARD, at(SKYWARD, 0.35), at(SKYWARD, 0.75), { ...GUARD, at: 1 }],
+    left: [at(HAND_DOWN, 0), { at: 0.35, pos: [-0.18, 1.12, -0.16], ...PALM_OUT }, { at: 0.75, pos: [-0.18, 1.12, -0.16], ...PALM_OUT }, at(HAND_DOWN, 1)],
+    free: false,
+    body: [stance(0), pose(0.35, { lean: -0.18, drop: -0.012, head: 0.15 }), pose(0.56, { lean: -0.1, drop: 0.05, head: 0.3 }), pose(0.75, { lean: -0.08, drop: 0.05, head: 0.4 }), stance(1)],
+  },
+  // Fusion: the open hand drawn back to the chest, then thrust out, the
+  // shoulder behind it, fire let go from the palm.
+  fusion: {
+    right: [GUARD, at(ASIDE, 0.3), at(ASIDE, 0.8), { ...GUARD, at: 1 }],
+    left: [at(HAND_DOWN, 0), { at: 0.3, pos: [-0.18, 0.78, -0.02], ...PALM_OUT }, { at: 0.56, pos: [-0.04, 0.84, -0.46], ...PALM_OUT }, { at: 0.8, pos: [-0.04, 0.84, -0.46], ...PALM_OUT }, at(HAND_DOWN, 1)],
+    free: true,
+    body: [
+      stance(0),
+      pose(0.3, { twist: 0.4, lean: -0.04, drop: 0.05, shiftZ: 0.03, carry: 0.3 }),
+      pose(0.56, { twist: -0.35, lean: 0.18, drop: 0.08, shiftZ: -0.07, carry: 0.3, left: [-0.02, -0.18, 0] }),
+      pose(0.8, { twist: -0.3, lean: 0.15, drop: 0.07, shiftZ: -0.06, carry: 0.3, left: [-0.02, -0.18, 0] }),
+      stance(1),
+    ],
+  },
+  // Glacio: the palm raised, then brought down flat to the ground in a
+  // low crouch, the weapon out wide, as the ice comes up.
+  glacio: {
+    right: [GUARD, at(WIDE, 0.3), at(WIDE, 0.82), { ...GUARD, at: 1 }],
+    left: [at(HAND_DOWN, 0), { at: 0.3, pos: [-0.08, 0.92, -0.26], ...PALM_DOWN }, { at: 0.56, pos: [-0.06, 0.46, -0.26], ...PALM_DOWN }, { at: 0.82, pos: [-0.06, 0.46, -0.26], ...PALM_DOWN }, at(HAND_DOWN, 1)],
+    free: true,
+    body: [
+      stance(0),
+      pose(0.3, { lean: -0.05 }),
+      pose(0.56, { lean: 0.5, drop: 0.28, twist: -0.1, shiftZ: -0.04, left: [-0.03, -0.16, 0], right: [0.04, 0.14, 0] }),
+      pose(0.82, { lean: 0.46, drop: 0.27, twist: -0.1, shiftZ: -0.04, left: [-0.03, -0.16, 0], right: [0.04, 0.14, 0] }),
+      stance(1),
+    ],
+  },
+};
+
+/** A pole held up to the sky beside the shoulder, leaning out: straight
+ *  up, its haft stood in front of the face. */
+const POLE_SKYWARD = { pos: [0.28, 1.1, -0.14] as Vec3, blade: [0.3, 0.95, -0.05] as Vec3, fingers: [-0.3, 0, -1] as Vec3 };
+
+/** A pole's version of each move: from and to its own rest, held upright
+ *  out of a gesture's way, and raised over the shoulder, not overhead. */
+const POLE_MOVES = Object.fromEntries(
+  Object.entries(MOVES).map(([element, move]) => [
+    element,
+    {
+      ...move,
+      right: move.right.map((k) =>
+        k.pos === GUARD.pos || k.pos === ASIDE.pos || k.pos === WIDE.pos ? { ...POLE_REST, at: k.at } : k.pos === OVERHEAD.pos ? { ...k, ...OVER_SHOULDER } : k.pos === SKYWARD.pos || k.pos === SWEPT_UP.pos ? { ...k, ...POLE_SKYWARD } : k
+      ),
+    },
+  ])
+) as Record<Element, Move>;
+const movesFor = (weapon: Weapon) => (isPole(weapon) ? POLE_MOVES : MOVES);
+
 /** Down and done: knelt, slumped, the head hanging. */
 export const KNOCKED_OUT: BodyPose = bodyKey(0, { twist: 0.1, lean: 0.5, tilt: 0.06, drop: 0.3, shiftZ: 0.06, left: [-0.03, -0.1, 0], right: [0.04, 0.14, 0], carry: 0, head: 0 });
 
@@ -426,7 +558,7 @@ export const FLINCH_SECONDS = 0.38;
  * with a flinch on top if a hit landed in the last moment. `seed` keeps
  * everyone's breathing from being in step.
  */
-export function bodyPose(weapon: Weapon, action: Action | null, now: number, guard: boolean, out: BodyPose, hurtAt = -Infinity, seed = 0): BodyPose {
+export function bodyPose(weapon: Weapon, action: Action | null, now: number, guard: boolean, out: BodyPose, hurtAt = -Infinity, seed = 0, element: Element = "spectro"): BodyPose {
   const timing = action ? timingOf(weapon, action.kind) : null;
   const time = action && timing ? (now - action.start) / timing.duration : 1;
   const active = action !== null && time < 1;
@@ -434,7 +566,7 @@ export function bodyPose(weapon: Weapon, action: Action | null, now: number, gua
     if (active) sampleBody(BOW_BODY[shotOf(action!)], time, out);
     else copyBody(ARCHER, out);
   } else if (active) {
-    const keys = action!.kind === "special" ? SLAM_BODY : action!.kind === "recoil" ? RECOIL_BODY : action!.kind === "stagger" ? STAGGER_BODY : CUT_BODY[cutOf(weapon, action!.n)];
+    const keys = action!.kind === "special" ? MOVES[element].body : action!.kind === "recoil" ? RECOIL_BODY : action!.kind === "stagger" ? STAGGER_BODY : CUT_BODY[cutOf(weapon, action!.n)];
     sampleBody(keys, time, out);
   } else copyBody(guard ? PARRY_BODY : STANCE, out);
 

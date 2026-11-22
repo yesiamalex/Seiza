@@ -1,5 +1,6 @@
 import * as THREE from "three";
-import { buildArrow, ELEMENT_COLORS, type Element } from "./weapons";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { buildArrow, ELEMENT_COLORS, ELEMENTS, type Element } from "./weapons";
 
 /**
  * Fantasy mode's effects, all pooled and built once: a trail behind each
@@ -109,7 +110,7 @@ function dotTexture() {
   return dot;
 }
 
-const SPARKS = 220;
+const SPARKS = 320;
 
 class Sparks {
   readonly points: THREE.Points;
@@ -194,17 +195,92 @@ class Sparks {
 // --- specials ---------------------------------------------------------------------------
 
 const BOLT_POINTS = 12;
+/** The pieces round a burst: rays, feathers, beads, flames, or crystals. */
+const SHARDS = 18;
 
-/** Shards round a burst: ice crystals, or for fire, tongues of flame. */
-const SHARDS = 9;
+/** Each element's pieces, built once and shared by every burst. */
+const PIECES: Partial<Record<Element, THREE.BufferGeometry>> = {};
+function piecesFor(element: Element): THREE.BufferGeometry {
+  const made = PIECES[element];
+  if (made) return made;
+  let g: THREE.BufferGeometry;
+  switch (element) {
+    case "spectro":
+      // A ray: long and thin, from its foot.
+      g = new THREE.BoxGeometry(0.03, 1, 0.03).translate(0, 0.5, 0);
+      break;
+    case "havoc": {
+      // A feather: a tapered vane on a quill.
+      const s = new THREE.Shape();
+      s.moveTo(0, 0);
+      s.quadraticCurveTo(0.07, 0.12, 0.02, 0.32);
+      s.lineTo(0, 0.36);
+      s.quadraticCurveTo(-0.06, 0.18, 0, 0);
+      g = new THREE.ShapeGeometry(s, 4);
+      break;
+    }
+    case "electro":
+      g = new THREE.SphereGeometry(0.05, 8, 6);
+      break;
+    case "glacio":
+      // A crystal: six-sided, pointed.
+      g = new THREE.ConeGeometry(0.1, 1, 6).translate(0, 0.5, 0);
+      break;
+    default: {
+      // A tongue of flame: a teardrop, full low down, licking to a point
+      // (and Aero's, unused: it has its wind instead).
+      const profile: THREE.Vector2[] = [];
+      for (let i = 0; i <= 10; i++) {
+        const y = i / 10;
+        profile.push(new THREE.Vector2(0.16 * Math.sin(Math.PI * Math.pow(y, 0.55)) * (1 - 0.35 * y), y));
+      }
+      g = new THREE.LatheGeometry(profile, 8);
+    }
+  }
+  return (PIECES[element] = g);
+}
+
+/** Aero's wind: three ribbons wound round a rising column. */
+function buildWhirl() {
+  const parts: THREE.BufferGeometry[] = [];
+  for (let k = 0; k < 3; k++) {
+    const points: THREE.Vector3[] = [];
+    for (let i = 0; i <= 40; i++) {
+      const s = i / 40;
+      const a = s * Math.PI * 4 + (k * Math.PI * 2) / 3;
+      const r = 0.35 + s * 0.75;
+      points.push(new THREE.Vector3(Math.cos(a) * r, s * 2.6, Math.sin(a) * r));
+    }
+    parts.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), 60, 0.025 + k * 0.008, 4, false));
+  }
+  const merged = mergeGeometries(parts.map((p) => p.toNonIndexed()))!;
+  for (const p of parts) p.dispose();
+  return merged;
+}
+
+/** How long each element's burst lasts: Havoc's feathers and Glacio's
+ *  mist linger. */
+const BURST_SECONDS: Record<Element, number> = { spectro: 1.1, havoc: 1.6, aero: 1.3, electro: 1.1, fusion: 1.2, glacio: 1.5 };
+const GATHER_SECONDS = 0.42;
+const HAVOC_DARK = new THREE.Color("#3a0e2c");
 
 /**
- * One special's burst. Gathering first, while the wielder winds up: a ring
- * closing in on them. Then the release: a flash, a first ring racing out
- * and a second behind it, a column of light rising, shards (ice crystals,
- * or flame tongues) jutting up and sinking back, and for lightning, bolts
- * from the sky. Each also lights the place round it for a moment (`light`,
- * read by FantasyLayer for a real pooled light).
+ * One special's burst, the same everywhere it's seen. Gathering first,
+ * while the wielder winds up: a ring closing in, and for some elements
+ * more (Havoc's dark drawn in onto them, Aero's wind tightening, Spectro's
+ * rays converging). Then the release: a flash and two shockwaves for all,
+ * and each element's own:
+ *
+ * - Spectro: golden rays fanning out of a tall shaft of light.
+ * - Havoc: a dark dome welling up, and dark feathers drifting out and down.
+ * - Aero: a whirlwind winding up round the spot, rising and widening.
+ * - Electro: bolts from the sky, and beads of spark circling round.
+ * - Fusion: tongues of flame flickering up from a column of fire.
+ * - Glacio: crystals breaking up out of the ground, and a cold mist
+ *   sublimating off them as they sink (snowflakes are FantasyEffects').
+ *
+ * Each also lights the place round it for a moment (`light`, read by
+ * FantasyLayer for a real pooled light).
  */
 class Burst {
   readonly group = new THREE.Group();
@@ -212,10 +288,12 @@ class Burst {
   private ring2: THREE.Mesh;
   private flash: THREE.Mesh;
   private pillar: THREE.Mesh;
+  private dark: THREE.Mesh;
+  private whirl: THREE.Mesh;
   private shards: THREE.InstancedMesh;
   private bolts: THREE.Mesh[] = [];
   private start = -1e9;
-  private element: Element = "lightning";
+  private element: Element = "spectro";
   private nextBolt = 0;
   private gathering = false;
   /** How bright the burst's light is now, 0 to 1. */
@@ -227,10 +305,13 @@ class Burst {
     this.ring2 = new THREE.Mesh(new THREE.RingGeometry(0.93, 1, 48).rotateX(-Math.PI / 2), additive("#ffffff", { side: THREE.DoubleSide }));
     this.flash = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 10), additive("#ffffff"));
     this.pillar = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 24, 1, true).translate(0, 0.5, 0), additive("#ffffff", { side: THREE.DoubleSide }));
-    this.shards = new THREE.InstancedMesh(new THREE.ConeGeometry(0.12, 1, 5).translate(0, 0.5, 0), additive("#ffffff"), SHARDS);
+    // Havoc's dark is dark, so it can't be added light: drawn over the scene.
+    this.dark = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 12), new THREE.MeshBasicMaterial({ color: HAVOC_DARK, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+    this.whirl = new THREE.Mesh(buildWhirl(), additive("#ffffff", { side: THREE.DoubleSide }));
+    this.shards = new THREE.InstancedMesh(piecesFor("fusion"), additive("#ffffff", { side: THREE.DoubleSide }), SHARDS);
     this.shards.frustumCulled = false;
-    this.group.add(this.ring, this.ring2, this.flash, this.pillar, this.shards);
-    for (let b = 0; b < 2; b++) {
+    this.group.add(this.ring, this.ring2, this.flash, this.pillar, this.dark, this.whirl, this.shards);
+    for (let b = 0; b < 3; b++) {
       const geometry = new THREE.BufferGeometry();
       geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(BOLT_POINTS * 2 * 3), 3).setUsage(THREE.DynamicDrawUsage));
       const index: number[] = [];
@@ -257,97 +338,237 @@ class Burst {
     this.gathering = gathering;
     this.group.position.copy(at);
     this.color.set(ELEMENT_COLORS[element]);
-    for (const mesh of [this.ring, this.ring2, this.flash, this.pillar, this.shards, ...this.bolts]) (mesh.material as THREE.MeshBasicMaterial).color.copy(this.color);
+    for (const mesh of [this.ring, this.ring2, this.flash, this.pillar, this.whirl, ...this.bolts]) (mesh.material as THREE.MeshBasicMaterial).color.copy(this.color);
+    // Havoc's feathers are dark too; the rest of the pieces glow.
+    const pieces = this.shards.material as THREE.MeshBasicMaterial;
+    const dark = element === "havoc";
+    if ((pieces.blending === THREE.NormalBlending) !== dark) {
+      pieces.blending = dark ? THREE.NormalBlending : THREE.AdditiveBlending;
+      pieces.needsUpdate = true;
+    }
+    pieces.color.copy(dark ? HAVOC_DARK : this.color);
+    this.shards.geometry = piecesFor(element);
+    // Glacio's mist is white with a cold tint, not the element's colour.
+    if (element === "glacio") (this.flash.material as THREE.MeshBasicMaterial).color.set("#dff8ff");
     this.group.visible = true;
   }
 
   update(time: number, camera: THREE.Camera) {
     if (!this.group.visible) return;
     const age = time - this.start;
-    const opacity = (mesh: THREE.Mesh, value: number) => ((mesh.material as THREE.MeshBasicMaterial).opacity = Math.max(0, value));
+    const e = this.element;
+    posed = this.shards;
+    const opacity = (mesh: THREE.Object3D, value: number) => ((mesh as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>).material.opacity = Math.max(0, value));
+    const show = (mesh: THREE.Object3D, on: boolean) => (mesh.visible = on);
     if (this.gathering) {
-      // Closing in over the wind-up, brightening as it tightens.
-      if (age > 0.42) {
+      if (age > GATHER_SECONDS) {
         this.group.visible = false;
         this.light = 0;
         return;
       }
-      const k = age / 0.42;
+      const k = age / GATHER_SECONDS;
       this.ring.scale.setScalar(2.4 - 2 * k * k);
       this.ring.position.y = 0.06;
       opacity(this.ring, 0.25 + 0.6 * k);
-      this.ring2.visible = this.pillar.visible = this.shards.visible = false;
-      for (const bolt of this.bolts) bolt.visible = false;
+      for (const mesh of [this.ring2, this.pillar, ...this.bolts]) show(mesh, false);
       this.flash.scale.setScalar(0.15 + 0.35 * k);
       this.flash.position.y = 1;
       opacity(this.flash, 0.35 * k);
+      // The dark drawn in onto them, closing round them.
+      show(this.dark, e === "havoc");
+      if (e === "havoc") {
+        this.dark.scale.setScalar(2.2 - 1.8 * k);
+        this.dark.position.y = 1;
+        opacity(this.dark, 0.15 + 0.45 * k);
+      }
+      // The wind tightening round them, spinning faster.
+      show(this.whirl, e === "aero");
+      if (e === "aero") {
+        this.whirl.scale.set(1.6 - 0.9 * k, 0.6 + 0.2 * k, 1.6 - 0.9 * k);
+        this.whirl.rotation.y = -age * (6 + 10 * k);
+        opacity(this.whirl, 0.5 * k);
+      }
+      // Light gathering in from all round.
+      show(this.shards, e === "spectro");
+      if (e === "spectro") {
+        for (let i = 0; i < SHARDS; i++) {
+          rayDirection(i, shardDir);
+          const r = 2.2 * (1 - k);
+          pieceMatrix(i, shardAt.set(0, 1, 0).addScaledVector(shardDir, r + 0.3), shardQ.setFromUnitVectors(UP, shardDir.negate()), shardS.set(1, 0.6 * (1 - k) + 0.05, 1));
+        }
+        this.shards.instanceMatrix.needsUpdate = true;
+        opacity(this.shards, 0.7 * k);
+      }
       this.light = 0.35 * k;
       return;
     }
-    if (age > 1.1) {
+    const life = BURST_SECONDS[e];
+    if (age > life) {
       this.group.visible = false;
       this.light = 0;
       return;
     }
-    this.ring2.visible = this.pillar.visible = this.shards.visible = true;
+
+    // ---- what every element shares: two shockwaves and a flash ----------
     const grow = 1 - Math.pow(1 - Math.min(1, age / 0.5), 3);
+    show(this.ring, true);
+    show(this.ring2, true);
     this.ring.scale.setScalar(0.3 + grow * 3.6);
     this.ring.position.y = 0.08;
-    opacity(this.ring, 1 - age / 0.7);
-    // The second shockwave, a beat behind and wider.
+    opacity(this.ring, (e === "havoc" ? 0.7 : 1) - age / 0.7);
     const late = Math.max(0, age - 0.12);
     this.ring2.scale.setScalar(0.3 + (1 - Math.pow(1 - Math.min(1, late / 0.6), 3)) * 4.6);
     this.ring2.position.y = 0.1;
     opacity(this.ring2, 0.7 * (1 - late / 0.75));
-    this.flash.scale.setScalar(0.3 + Math.min(1, age / 0.12) * (this.element === "fire" ? 1.25 : 0.9));
-    this.flash.position.y = 0.9;
-    opacity(this.flash, 0.55 - age * 2.2);
-    // The column: shooting up, then thinning out.
-    const rise = Math.min(1, age / 0.25);
-    this.pillar.scale.set(0.5 + age * 0.9, 0.5 + rise * (this.element === "lightning" ? 7 : 4.5), 0.5 + age * 0.9);
-    opacity(this.pillar, 0.4 * (1 - age / 0.8));
-    // Shards jut up round the burst and sink back down.
-    const up = age < 0.18 ? age / 0.18 : Math.max(0, 1 - (age - 0.18) / 0.7);
-    for (let i = 0; i < SHARDS; i++) {
-      const a = (i / SHARDS) * Math.PI * 2 + 0.35;
-      const r = 0.9 + (i % 3) * 0.35;
-      const tall = (this.element === "ice" ? 1.1 : this.element === "fire" ? 0.9 : 0.5) * (0.7 + (i % 2) * 0.5);
-      // Ice leans out from the middle; flame licks upward, flickering.
-      const lean = this.element === "ice" ? 0.35 : 0.08 * Math.sin(time * 30 + i);
-      shardMatrix.compose(
-        shardAt.set(Math.cos(a) * r, 0, Math.sin(a) * r),
-        shardQ.setFromEuler(shardE.set(Math.sin(a) * lean, 0, -Math.cos(a) * lean)),
-        shardS.set(1, Math.max(0.001, tall * up), 1)
-      );
-      this.shards.setMatrixAt(i, shardMatrix);
+    if (e === "glacio") {
+      // A cold mist breathing out and lingering, rather than a flash.
+      this.flash.scale.set(0.6 + age * 2.2, 0.4 + age * 1.1, 0.6 + age * 2.2);
+      this.flash.position.y = 0.4;
+      opacity(this.flash, 0.22 * Math.min(1, age / 0.15) * (1 - age / life));
+    } else {
+      this.flash.scale.setScalar(0.3 + Math.min(1, age / 0.12) * (e === "fusion" ? 1.25 : e === "havoc" ? 0.6 : 0.9));
+      this.flash.position.y = 0.9;
+      opacity(this.flash, (e === "spectro" ? 0.75 : 0.55) - age * 2.2);
     }
-    this.shards.instanceMatrix.needsUpdate = true;
-    opacity(this.shards as unknown as THREE.Mesh, 0.85 * up);
-    const bolting = this.element === "lightning" && age < 0.45;
+
+    // ---- the column: Spectro's tall shaft of light, Electro's, Fusion's
+    // fire, and Havoc's plunging down from above onto the spot; Aero and
+    // Glacio have their own instead ----------------------------------------
+    const column = e === "spectro" || e === "electro" || e === "fusion" || e === "havoc";
+    show(this.pillar, column);
+    if (e === "havoc") {
+      const fall = Math.min(1, age / 0.12);
+      this.pillar.scale.set(0.22 + age * 0.3, 0.01 + fall * 6, 0.22 + age * 0.3);
+      this.pillar.position.y = 6 * (1 - fall);
+      opacity(this.pillar, 0.6 * (1 - age / 0.6));
+    } else if (column) {
+      this.pillar.position.y = 0;
+      const rise = Math.min(1, age / 0.25);
+      const wide = e === "fusion" ? 0.8 : e === "spectro" ? 0.28 : 0.45;
+      this.pillar.scale.set(wide + age * 0.6, 0.5 + rise * (e === "fusion" ? 3.5 : 8), wide + age * 0.6);
+      opacity(this.pillar, (e === "spectro" ? 0.55 : 0.4) * (1 - age / 0.8));
+    }
+
+    // ---- Havoc: a dark dome welling up and fading --------------------------
+    show(this.dark, e === "havoc");
+    if (e === "havoc") {
+      const swell = 1 - Math.pow(1 - Math.min(1, age / 0.35), 2);
+      this.dark.scale.set(0.4 + swell * 1.5, 0.25 + swell * 0.9, 0.4 + swell * 1.5);
+      this.dark.position.y = 0;
+      opacity(this.dark, 0.4 * (1 - age / life));
+    }
+
+    // ---- Aero: the whirlwind ------------------------------------------------
+    show(this.whirl, e === "aero");
+    if (e === "aero") {
+      const up = Math.min(1, age / 0.3);
+      this.whirl.scale.set(0.8 + age * 1.6, 0.4 + up * 1.2, 0.8 + age * 1.6);
+      this.whirl.rotation.y = -age * 9;
+      opacity(this.whirl, 0.75 * (1 - age / life));
+    }
+
+    // ---- the pieces -----------------------------------------------------------
+    show(this.shards, e !== "aero");
+    if (e !== "aero") {
+      const up = age < 0.18 ? age / 0.18 : Math.max(0, 1 - (age - 0.18) / 0.7);
+      let fade = 0.85 * up;
+      for (let i = 0; i < SHARDS; i++) {
+        const a = (i / SHARDS) * Math.PI * 2 + 0.35;
+        const ring = 0.9 + (i % 3) * 0.35;
+        switch (e) {
+          case "spectro": {
+            // Rays fanning out of the light, lengthening as they go.
+            rayDirection(i, shardDir);
+            const out = Math.min(1, age / 0.3);
+            pieceMatrix(i, shardAt.set(0, 1, 0).addScaledVector(shardDir, 0.2 + out * 0.5), shardQ.setFromUnitVectors(UP, shardDir), shardS.set(1, 0.3 + out * (1.6 + (i % 3) * 0.5), 1));
+            fade = 0.8 * (1 - age / 0.75);
+            break;
+          }
+          case "havoc": {
+            // Feathers thrown up and out, drifting down, turning as they fall.
+            const t = age;
+            const r = 0.4 + t * (1.2 + (i % 4) * 0.35);
+            const y = 0.4 + 2.2 * t - 1.4 * t * t + (i % 3) * 0.2;
+            pieceMatrix(i, shardAt.set(Math.cos(a) * r, Math.max(0.02, y), Math.sin(a) * r), shardQ.setFromEuler(shardE.set(t * (3 + (i % 3)), a + t * 2, Math.sin(t * 5 + i) * 0.8)), shardS.setScalar(1.9));
+            fade = 0.9 * Math.min(1, age / 0.1) * (1 - age / life);
+            break;
+          }
+          case "electro": {
+            // Beads of spark circling round in two rising rings.
+            const lap = i % 2 ? 1 : -1;
+            const r = 0.7 + age * 1.6;
+            const turn = a + lap * age * 9;
+            pieceMatrix(i, shardAt.set(Math.cos(turn) * r, 0.5 + (i % 2) * 0.6 + age * 0.8 + 0.08 * Math.sin(time * 40 + i), Math.sin(turn) * r), shardQ.identity(), shardS.setScalar(0.6 + 0.6 * Math.abs(Math.sin(time * 25 + i))));
+            fade = 0.95 * (1 - age / life);
+            break;
+          }
+          case "glacio": {
+            // Crystals breaking up out of the ground round the spot, leaning
+            // out, and sinking back as they turn to mist.
+            const tall = 1.1 * (0.6 + (i % 3) * 0.35);
+            const lean = 0.3 + (i % 2) * 0.15;
+            pieceMatrix(i, shardAt.set(Math.cos(a) * ring * 0.9, 0, Math.sin(a) * ring * 0.9), shardQ.setFromEuler(shardE.set(Math.sin(a) * lean, 0, -Math.cos(a) * lean)), shardS.set(1, Math.max(0.001, tall * up), 1));
+            break;
+          }
+          default: {
+            // Fusion: tongues of flame licking up round the spot, each
+            // flickering in height and width, swaying, and drawn in toward
+            // the middle as they burn.
+            const tall = 1.1 * (0.6 + (i % 3) * 0.35) * (0.75 + 0.35 * Math.sin(time * 23 + i * 1.7));
+            const fat = 0.9 + 0.35 * Math.sin(time * 17 + i * 2.3);
+            const sway = 0.12 * Math.sin(time * 9 + i);
+            const r = ring * (0.75 - 0.25 * Math.min(1, age / 0.8));
+            pieceMatrix(i, shardAt.set(Math.cos(a) * r, 0, Math.sin(a) * r), shardQ.setFromEuler(shardE.set(Math.sin(a) * sway, time * 2 + i, -Math.cos(a) * sway)), shardS.set(fat, Math.max(0.001, tall * up), fat));
+          }
+        }
+      }
+      this.shards.instanceMatrix.needsUpdate = true;
+      opacity(this.shards, fade);
+    }
+
+    // ---- Electro: bolts from the sky ------------------------------------------
+    const bolting = e === "electro" && age < 0.5;
     for (const bolt of this.bolts) bolt.visible = bolting;
     if (bolting && time >= this.nextBolt) {
       this.nextBolt = time + 0.05;
       for (const bolt of this.bolts) jag(bolt, camera, this.group.position);
     }
-    // Lightning flickers its light; fire and ice glow and fade.
+
+    // The light: Electro flickers, Fusion wavers, Havoc is a dim glow.
     const fade = Math.max(0, 1 - age / 0.7);
-    this.light = this.element === "lightning" ? fade * (0.55 + 0.45 * Math.sin(time * 60)) : fade * fade;
+    this.light =
+      e === "electro" ? fade * (0.55 + 0.45 * Math.sin(time * 60)) : e === "fusion" ? fade * (0.8 + 0.2 * Math.sin(time * 17)) : e === "havoc" ? 0.45 * fade : fade * fade;
   }
 
   dispose() {
     this.group.traverse((o) => {
       const mesh = o as THREE.Mesh;
+      if (mesh === (this.shards as unknown)) return;
       mesh.geometry?.dispose();
       (mesh.material as THREE.Material | undefined)?.dispose();
     });
+    (this.shards.material as THREE.Material).dispose();
   }
 }
 
 const shardMatrix = new THREE.Matrix4();
 const shardAt = new THREE.Vector3();
+const shardDir = new THREE.Vector3();
 const shardQ = new THREE.Quaternion();
 const shardE = new THREE.Euler();
 const shardS = new THREE.Vector3();
+const UP = new THREE.Vector3(0, 1, 0);
+let posed: THREE.InstancedMesh | null = null;
+function pieceMatrix(i: number, at: THREE.Vector3, q: THREE.Quaternion, s: THREE.Vector3) {
+  shardMatrix.compose(at, q, s);
+  posed!.setMatrixAt(i, shardMatrix);
+}
+/** The i-th of Spectro's rays: spread round, tipped up a little. */
+function rayDirection(i: number, out: THREE.Vector3) {
+  const a = (i / SHARDS) * Math.PI * 2;
+  const tip = ((i % 3) - 0.6) * 0.45;
+  return out.set(Math.cos(a) * Math.cos(tip), Math.sin(tip), Math.sin(a) * Math.cos(tip));
+}
 
 const side = new THREE.Vector3();
 const toCamera = new THREE.Vector3();
@@ -406,7 +627,7 @@ class Arrows {
       return { mesh, from: new THREE.Vector3(), to: new THREE.Vector3(), start: 0, seconds: 1, live: false, onLanded: () => {}, meets: null, last: new THREE.Vector3() };
     };
     for (let i = 0; i < 8; i++) this.plain.push(flight(buildArrow()));
-    for (const element of ["lightning", "fire", "ice"] as const) this.special[element] = flight(buildArrow(ELEMENT_COLORS[element]));
+    for (const element of ELEMENTS) this.special[element] = flight(buildArrow(ELEMENT_COLORS[element]));
     this.all = [...this.plain, ...Object.values(this.special)];
   }
 
@@ -463,6 +684,21 @@ class Arrows {
 
 // --- the whole set ------------------------------------------------------------------------
 
+/**
+ * What flies off each element's burst: Spectro's golden motes floating up,
+ * Havoc's dark-rose sparks falling, Aero's specks thrown up on the wind,
+ * Electro's quick crackle, Fusion's embers rising, Glacio's snowflakes
+ * drifting slowly down.
+ */
+const MOTES: Record<Element, { count: number; speed: number; up: number; gravity: number; life: number; height: number; color?: string }> = {
+  spectro: { count: 40, speed: 2, up: 1.2, gravity: -0.6, life: 1.1, height: 1 },
+  havoc: { count: 30, speed: 3, up: 0.5, gravity: 5, life: 0.7, height: 0.5, color: "#ff4f9a" },
+  aero: { count: 44, speed: 3.5, up: 4.5, gravity: 2.5, life: 1, height: 0.3 },
+  electro: { count: 46, speed: 6.5, up: 0, gravity: 5, life: 0.35, height: 0.8, color: "#d4c2ff" },
+  fusion: { count: 46, speed: 2.4, up: 3, gravity: -1.5, life: 1, height: 0.4, color: "#ffb35c" },
+  glacio: { count: 56, speed: 1.4, up: 2.2, gravity: 0.9, life: 2, height: 0.5, color: "#f4fdff" },
+};
+
 /** Everything above in one group, added to the scene once. */
 export class FantasyEffects {
   readonly group = new THREE.Group();
@@ -489,16 +725,15 @@ export class FantasyEffects {
   gather(element: Element, at: THREE.Vector3, time: number) {
     (this.bursts.find((b) => !b.busy) ?? this.bursts[0]).fire(element, at, time, true);
     const lift = at.clone().setY(at.y + 1);
-    this.sparks.burst(lift, this.scratch.set(ELEMENT_COLORS[element]), 16, 1.2, { up: 1.5, gravity: -0.5, life: 0.5 });
+    const p = MOTES[element];
+    this.sparks.burst(lift, this.scratch.set(p.color ?? ELEMENT_COLORS[element]), 16, p.speed * 0.4, { up: 1.2, gravity: p.gravity * 0.3 - 0.4, life: 0.5 });
   }
 
   special(element: Element, at: THREE.Vector3, time: number) {
     (this.bursts.find((b) => !b.busy) ?? this.bursts[0]).fire(element, at, time);
-    const color = this.scratch.set(ELEMENT_COLORS[element]);
-    const lift = at.clone().setY(at.y + 0.4);
-    if (element === "fire") this.sparks.burst(lift, color, 40, 2.2, { up: 3, gravity: -1.5, life: 0.9 });
-    else if (element === "ice") this.sparks.burst(lift, color, 36, 5, { up: 1, gravity: 9, life: 0.6 });
-    else this.sparks.burst(lift, color, 30, 4, { gravity: 4, life: 0.5 });
+    const p = MOTES[element];
+    const color = this.scratch.set(p.color ?? ELEMENT_COLORS[element]);
+    this.sparks.burst(at.clone().setY(at.y + p.height), color, p.count, p.speed, p);
   }
 
   arrow(from: THREE.Vector3, to: THREE.Vector3, element: Element | null, time: number, onLanded: (at: THREE.Vector3) => void = () => {}, meets: ArrowTest | null = null) {

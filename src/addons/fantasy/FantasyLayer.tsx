@@ -44,7 +44,7 @@ import { BLADE_CONTACT, bodyCapsule, segmentDistance, sweep, type Capsule, type 
 import { FantasyEffects, Trail } from "./effects";
 import { bodyPose, bowDraw, heldPose, KNOCKED_OUT, timingOf, type Action, type ActionKind, type HeldPose } from "./poses";
 import { playCharged, playClash, playHit, playKnockedOut, playSpecial, playSpecialCharge, playSwing } from "./sounds";
-import { buildWeapon, ELEMENT_COLORS, MAX_HP, SABER_HALO, setBowString, weaponGlow, WEAPON_SPECS, type Element, type Weapon } from "./weapons";
+import { buildWeapon, ELEMENT_COLORS, elementPulse, MAX_HP, SABER_HALO, setBowString, weaponGlow, WEAPON_SPECS, type Element, type Weapon } from "./weapons";
 
 interface FantasyLayerProps {
   selfId: string | null;
@@ -117,6 +117,7 @@ function copyTarget(from: HandTarget, out: HandTarget) {
     out.blade[k] = from.blade[k];
     out.fingers[k] = from.fingers[k];
   }
+  out.curl = from.curl;
   return out;
 }
 /** Eases a hand toward `goal` (or holds it, fading, when there's none). */
@@ -133,9 +134,14 @@ function settleHand(hand: Settled, goal: HandTarget | null, k: number, dt: numbe
     hand.target.blade[i] += (goal.blade[i] - hand.target.blade[i]) * k;
     hand.target.fingers[i] += (goal.fingers[i] - hand.target.fingers[i]) * k;
   }
+  // An open hand for a special's gesture opens and closes with the rest.
+  hand.target.curl = (hand.target.curl ?? 1) + ((goal.curl ?? 1) - (hand.target.curl ?? 1)) * k;
 }
 const seconds = () => performance.now() / 1000;
 const ARROW_RANGE = 40;
+/** How far each element's special carries you forward: Havoc lunges into
+ *  its plunge, Electro and Glacio hold their ground. */
+const SPECIAL_STEP: Record<Element, number> = { spectro: 0.2, havoc: 0.6, aero: 0.12, electro: 0, fusion: 0.3, glacio: 0.08 };
 /** How long a special gathers before it's released (effects.ts's gather). */
 const WIND_UP_SECONDS = 0.42;
 /** Trigger (index curl, see xrPose.ts) past this fires; under the second re-arms. */
@@ -411,7 +417,7 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
     if (action.kind === "special") windUp(element, LOCAL_AVATAR, at(timing.impact));
     if (weapon === "bow") {
       if (action.kind === "special") step(-0.18, 0.15, at(timing.impact));
-    } else if (action.kind === "special") step(0.6, 0.22, at(0.36));
+    } else if (action.kind === "special") step(SPECIAL_STEP[element], 0.22, at(0.36));
     else step(action.n === 0 ? 0.16 : 0.1, 0.16, at(0.3));
     if (weapon !== "bow" && action.kind !== "special") return;
     setTimeout(() => {
@@ -715,7 +721,7 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
         const moving = holder.gait.update(rig, dt);
         if (holder.bodyWeight > 0.001 && (holder.posed || ko)) {
           if (ko || !holder.posed) copyKnockedOut(holder.body);
-          else bodyPose(holder.posed, action, now, guard, holder.body, hurtAt, holder.seed);
+          else bodyPose(holder.posed, action, now, guard, holder.body, hurtAt, holder.seed, element);
           if (!settled.body) settled.body = copyBody(holder.body, newBodyPose());
           else blendBody(settled.body, holder.body, ease);
           const upper = holder.bodyWeight * (acting ? 1 : 1 - 0.5 * moving);
@@ -724,7 +730,7 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
         } else settled.body = null;
       }
       if (rig && holder.posed && holder.weight > 0.001) {
-        const pose = heldPose(holder.posed, action, now, holder.pose, guard);
+        const pose = heldPose(holder.posed, action, now, holder.pose, guard, element);
         settleHand(settled.right, pose.right, ease, dt);
         settleHand(settled.left, pose.left, ease, dt);
         const drawn = (hand: Settled, side: "left" | "right") => {
@@ -754,10 +760,11 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
       // Where the blade is now, and how fast its tip is going.
       holder.hasBlade = !!holder.prop && !!held && held !== "bow";
       if (holder.hasBlade) {
-        const [base, tip] = WEAPON_SPECS[held!].blade;
+        const { blade: [base, tip], bladeOut = 0 } = WEAPON_SPECS[held!];
         holder.prop!.updateWorldMatrix(true, false);
         holder.prop!.localToWorld(holder.base.set(0, base * 0.5, 0));
-        holder.prop!.localToWorld(holder.tip.set(0, tip, 0));
+        // A scythe cuts out at its blade's tip, off to the side of the haft.
+        holder.prop!.localToWorld(holder.tip.set(bladeOut, tip, 0));
         holder.speed = holder.hadBlade && rawDelta > 0 ? holder.tip.distanceTo(holder.prevTip) / Math.max(rawDelta, 1 / 120) : 0;
         if (!holder.hadBlade) {
           holder.prevBase.copy(holder.base);
@@ -770,12 +777,13 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
       } else holder.speed = 0;
       holder.trail.update(now);
 
-      // The aura: faint as the meter fills, pulsing once the special is
-      // ready, and flaring while it goes off.
+      // The aura: faint as the meter fills, breathing in its element's way
+      // once the special is ready (elementPulse), and flaring while it goes off.
       const glow = holder.prop && weaponGlow(holder.prop);
       if (glow) {
         const special = action?.kind === "special" && now - action.start < timingOf(held ?? "sword", "special").duration;
-        const level = special ? 1 : charge >= 1 ? 0.55 + 0.25 * Math.sin(now * 7) : 0.05 + 0.25 * charge * charge;
+        const pulse = elementPulse(element, now + holder.seed);
+        const level = special ? 1 : charge >= 1 ? 0.2 + 0.6 * pulse : (0.05 + 0.25 * charge * charge) * (0.75 + 0.25 * pulse);
         glow.opacity = holder.prop!.userData.saber ? SABER_HALO + (1 - SABER_HALO) * Math.max(0, level - 0.3) : level;
       }
 

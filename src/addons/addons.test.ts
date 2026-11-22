@@ -6,7 +6,7 @@ import { bodyPose, bowDraw, COMBO_CYCLE, cutOf, heldPose, timingOf } from "./fan
 import { carryHand, key as bodyKey, newBodyPose, sampleBody } from "./body";
 import { bandBody } from "./band/moves";
 import { cancelSelfPush, pushSelf, takeSelfPush } from "../player/selfPush";
-import { WEAPON_SPECS, WEAPONS } from "./fantasy/weapons";
+import { elementPulse, ELEMENTS, WEAPON_SPECS, WEAPONS } from "./fantasy/weapons";
 import { parseBandEvent, validNote } from "./band/band";
 import { INSTRUMENTS, KEY_LAYOUT, KIT } from "./band/instruments";
 import { KIT_PIECES_AT, kitPose, stickPose, type Hands } from "./band/BandLayer";
@@ -109,9 +109,11 @@ describe("fantasy rules", () => {
   });
 
   it("reads only well-formed events", () => {
-    expect(parseFantasyEvent({ k: "lo", w: "katana", e: "fire", hp: 80, ko: false })).toEqual({ k: "lo", weapon: "katana", element: "fire", hp: 80, ko: false, guard: false, ready: false });
-    expect(parseFantasyEvent({ k: "lo", w: "", e: "ice", hp: 100 })).toEqual({ k: "lo", weapon: null, element: "ice", hp: 100, ko: false, guard: false, ready: false });
-    expect(parseFantasyEvent({ k: "lo", w: "bazooka", e: "ice", hp: 100 })).toBeNull();
+    expect(parseFantasyEvent({ k: "lo", w: "katana", e: "fusion", hp: 80, ko: false })).toEqual({ k: "lo", weapon: "katana", element: "fusion", hp: 80, ko: false, guard: false, ready: false });
+    expect(parseFantasyEvent({ k: "lo", w: "", e: "glacio", hp: 100 })).toEqual({ k: "lo", weapon: null, element: "glacio", hp: 100, ko: false, guard: false, ready: false });
+    expect(parseFantasyEvent({ k: "lo", w: "bazooka", e: "glacio", hp: 100 })).toBeNull();
+    // The old elements are gone.
+    expect(parseFantasyEvent({ k: "lo", w: "katana", e: "lightning", hp: 100 })).toBeNull();
     expect(parseFantasyEvent({ k: "hit", t: "everyone", d: 10 })).toBeNull();
     expect(parseFantasyEvent({ k: "hit", t: ["a", 4], d: 500 })).toEqual({ k: "hit", targets: ["a"], damage: 100, special: false });
     expect(parseFantasyEvent({ k: "ar", o: [0, 1, 0], d: [0, 1, "far"] })).toBeNull();
@@ -153,7 +155,7 @@ describe("fighting poses", () => {
   });
 
   it("strings different cuts together for every bladed weapon", () => {
-    for (const weapon of ["sword", "katana", "naginata", "lightsaber"] as const) {
+    for (const weapon of ["sword", "katana", "naginata", "scythe", "lightsaber"] as const) {
       const cuts = new Set(Array.from({ length: COMBO_CYCLE }, (_, n) => cutOf(weapon, n)));
       expect(cuts.size, weapon).toBeGreaterThanOrEqual(3);
       // The first two cuts of a combo take the hand along different paths.
@@ -169,7 +171,7 @@ describe("fighting poses", () => {
   });
 
   it("keeps both hands of a two-handed weapon in front of the body", () => {
-    for (const weapon of ["katana", "naginata"] as const) {
+    for (const weapon of ["katana", "naginata", "scythe"] as const) {
       for (let n = 0; n < 3; n++) {
         for (const f of [0, 0.2, 0.4, 0.6, 0.8]) {
           const pose = heldPose(weapon, { kind: "swing", n, start: 0 }, timingOf(weapon, "swing").duration * f);
@@ -447,6 +449,79 @@ describe("arrows", () => {
     }
     expect(landed).not.toBeNull();
     expect(landed!.z).toBeCloseTo(-6, 5);
+    effects.dispose();
+  });
+});
+
+describe("the elements' specials", () => {
+  const special = { kind: "special" as const, n: 0, start: 0 };
+  const at = (weapon: "sword" | "katana" | "scythe", f: number) => timingOf(weapon, "special").duration * f;
+  const gap = (p: ReturnType<typeof heldPose>) => Math.hypot(...p.right!.pos.map((v, k) => v - p.left!.pos[k]));
+
+  it("moves each element its own way, and ends back on guard", () => {
+    const bodies = ELEMENTS.map((element) => bodyPose("sword", special, at("sword", 0.56), false, newBodyPose(), -Infinity, 0, element));
+    // No two elements strike the same pose at the moment of release.
+    for (let i = 0; i < bodies.length; i++)
+      for (let j = i + 1; j < bodies.length; j++) {
+        const a = bodies[i];
+        const b = bodies[j];
+        const hands = [heldPose("sword", special, at("sword", 0.56), undefined, false, ELEMENTS[i]), heldPose("sword", special, at("sword", 0.56), undefined, false, ELEMENTS[j])];
+        const apart = Math.abs(a.twist - b.twist) + Math.abs(a.lean - b.lean) + Math.abs(a.drop - b.drop) + Math.hypot(...hands[0].left!.pos.map((v, k) => v - hands[1].left!.pos[k]));
+        expect(apart, ELEMENTS[i] + " " + ELEMENTS[j]).toBeGreaterThan(0.1);
+      }
+    for (const element of ELEMENTS)
+      for (const weapon of ["sword", "scythe"] as const) {
+        const end = heldPose(weapon, special, at(weapon, 0.999), undefined, false, element);
+        const rest = heldPose(weapon, null, 0);
+        for (let k = 0; k < 3; k++) expect(end.right!.pos[k], element + " " + weapon).toBeCloseTo(rest.right!.pos[k], 2);
+      }
+  });
+
+  it("lets go of a two-handed grip for a gesture, and keeps both hands on it otherwise", () => {
+    // Spectro's palm, Fusion's thrust, Glacio's hand to the ground: the
+    // other hand leaves the katana, open.
+    for (const element of ["spectro", "fusion", "glacio"] as const) {
+      const p = heldPose("katana", special, at("katana", 0.56), undefined, false, element);
+      expect(gap(p), element).toBeGreaterThan(0.2);
+      expect(p.left!.curl!, element).toBeLessThan(0.5);
+    }
+    // Havoc's plunge is in both hands, on a katana and on a sword alike.
+    expect(gap(heldPose("katana", special, at("katana", 0.56), undefined, false, "havoc"))).toBeCloseTo(WEAPON_SPECS.katana.otherHand!, 5);
+    expect(gap(heldPose("sword", special, at("sword", 0.56), undefined, false, "havoc"))).toBeLessThan(0.1);
+  });
+
+  it("keeps a raised pole's haft out of the face", () => {
+    for (const element of ELEMENTS)
+      for (const f of [0.3, 0.44, 0.56, 0.75]) {
+        const p = heldPose("scythe", special, at("scythe", f), undefined, false, element);
+        if (!p.left || gap(p) > 0.35) continue;
+        // Where the haft between the hands passes face height, it's out to the side or well ahead.
+        for (let s = 0; s <= 1; s += 0.1) {
+          const point = p.right!.pos.map((v, k) => v + (p.left!.pos[k] - v) * s);
+          if (point[1] > 0.88 && point[1] < 1.08) expect(Math.abs(point[0]) > 0.12 || point[2] < -0.3, element + " " + f).toBe(true);
+        }
+      }
+  });
+
+  it("breathes each element's glow its own way, within bounds", () => {
+    for (const element of ELEMENTS) {
+      const samples = Array.from({ length: 200 }, (_, i) => elementPulse(element, i * 0.037));
+      expect(Math.min(...samples), element).toBeGreaterThanOrEqual(0);
+      expect(Math.max(...samples), element).toBeLessThanOrEqual(1);
+      expect(Math.max(...samples) - Math.min(...samples), element).toBeGreaterThan(0.1);
+    }
+  });
+
+  it("bursts every element, lights the place, and is done", () => {
+    const effects = new FantasyEffects();
+    const camera = new THREE.PerspectiveCamera();
+    for (const element of ELEMENTS) {
+      effects.special(element, new THREE.Vector3(), 0);
+      effects.update(0.1, 0.1, camera);
+      expect(Math.max(...effects.lights.map((l) => l.level)), element).toBeGreaterThan(0.2);
+      for (let t = 0.1; t < 2; t += 0.1) effects.update(t, 0.1, camera);
+      expect(Math.max(...effects.lights.map((l) => l.level)), element).toBe(0);
+    }
     effects.dispose();
   });
 });

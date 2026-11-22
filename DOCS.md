@@ -1029,8 +1029,9 @@ An editor (or an admin, from the admin panel) can switch on a room mode for
 everyone in the room under **Room modes** in the edit panel. Each mode
 adds its own coloured button to the bar while it is on.
 
-- **Fantasy** (red): pick a sword, katana, naginata, light saber, or bow,
-  and an element for your special (lightning, fire, or ice). Health bars
+- **Fantasy** (red): pick a sword, katana, naginata, scythe, light saber,
+  or bow, and an element for your special (Spectro, Havoc, Aero, Electro,
+  Fusion, or Glacio). Health bars
   show over everyone holding a weapon. Only people holding a weapon can be
   hit, so choosing None steps out.
   - A blow lands only where the blade really meets a body. Where two blades
@@ -1053,10 +1054,12 @@ adds its own coloured button to the bar while it is on.
     shoulder. A pause of more than about a second and a half starts the
     combo over. Two-handed weapons rest in one hand, the other joining to
     guard and to cut, and the grips stay in front of the body, so the arms
-    don't pass through it on a slim avatar. A naginata rests upright at
-    your side and guards with its shaft across the chest.
-  - The katana's and the naginata's blades are curved, tapered, and
-    pointed, with a bright edge, and so is their glow.
+    don't pass through it on a slim avatar. A naginata or a scythe rests
+    upright at your side and guards with its shaft across the chest. A
+    scythe reaps two at a time with the blade standing out from its haft.
+  - The katana's, the naginata's, and the scythe's blades are curved,
+    tapered, and pointed, with a bright edge (on the inside of a scythe's
+    curve), and so is their glow.
   - The bow takes turns between a standing shot, a kneeling one, and a
     canted one. The bow arm straightens and the string comes back to the
     face, an arrow sits nocked until it flies, and arrows arc. An arrow is
@@ -1065,10 +1068,26 @@ adds its own coloured button to the bar while it is on.
   - Raising a guard, lowering it, and changing weapons ease the body and
     hands into the new stance instead of snapping to it. A new weapon grows
     into the hand as it's drawn.
-  - A special winds up first: a ring of its element closes in, with a
-    rising sound, then it bursts in a flash with a pillar of light and
-    shards, and lights up the ground around it. Lightning cracks and
-    thunders, fire roars, and ice shatters.
+  - Each element's special is its own move, burst, and sound:
+    - Spectro: the open palm swept from left to right, letting go a burst
+      of golden rays round a shaft of light, with a bright, ringing chord.
+    - Havoc: the weapon raised overhead in both hands and plunged into the
+      ground in a deep crouch; a beam drives down, a dark dome wells up,
+      and dark feathers drift out and fall, over a heavy, growling boom.
+    - Aero: crouched low, then sweeping up onto the toes, calling up a
+      whirlwind that rises and widens, in rushing gusts.
+    - Electro (violet): the weapon held up to the sky, calling down bolts,
+      with beads of spark circling round, a crack, and thunder.
+    - Fusion: the hand drawn back and thrust out, fire roaring up in
+      flickering tongues and a column, with embers rising.
+    - Glacio: the palm pressed to the ground, ice crystals breaking up out
+      of it, a cold mist sublimating off them, and snowflakes drifting
+      down as it shatters.
+    A special winds up first, its element gathering in on its wielder (the
+    dark drawn in, the wind tightening, the light converging), then bursts
+    and lights the ground around it. A two-handed weapon is held in one
+    hand while the other makes a gesture, and a long haft is raised beside
+    the shoulder, never across the face.
   - Fighters move their whole body, not just the sword arm. They stand in a
     stance with their knees bent, twist into a swing and step through it,
     lunge forward with a blade's special, rock back when their blade is
@@ -1082,8 +1101,11 @@ adds its own coloured button to the bar while it is on.
     and the next hard swing is the special. The trigger shoots the bow.
   - The weapons trade off against each other rather than one being best.
     The weapon picker says what each is good at.
-  - Every weapon glows in its special's colour as the meter fills. It
-    pulses when the special is ready, so others can see it coming.
+  - Every weapon glows in its special's colour as the meter fills, and
+    when the special is ready it breathes in its element's way, so others
+    can see it coming: Spectro shimmers, Havoc throbs slow and deep, Aero
+    ebbs and flows, Electro crackles on and off, Fusion flickers, and
+    Glacio holds a cold, slow pulse.
 - **Band** (violet): pick a drum pad, a drum kit, keys, an acoustic guitar,
   a lead guitar, a bass, or a light stick.
   - The instruments are 3D models you carry: a guitar or bass slung low on

@@ -38,7 +38,7 @@ export interface LocalFighter {
 
 export const fantasy = createStore<LocalFighter>({
   weapon: null,
-  element: "lightning",
+  element: "spectro",
   hp: MAX_HP,
   meter: 0,
   ko: false,
@@ -92,7 +92,7 @@ const METER_PER_SECOND = 2.5;
  * bow, hard to land). Waiting for the meter to fill by itself takes forty
  * seconds, so it's fighting well that brings the special.
  */
-export const METER_PER_HIT: Record<Weapon, number> = { sword: 22, katana: 30, naginata: 24, lightsaber: 16, bow: 32 };
+export const METER_PER_HIT: Record<Weapon, number> = { sword: 22, katana: 30, naginata: 24, scythe: 28, lightsaber: 16, bow: 32 };
 /** Each hit within this many seconds of the last adds a share more, up to
  *  `max` shares: a combo fills the meter faster than the same hits spread out. */
 export const METER_CHAIN = { seconds: 2.2, share: 0.25, max: 4 } as const;
@@ -344,7 +344,7 @@ export function parseFantasyEvent(data: AddonEvent): FantasyEvent | null {
 
 export function fighterOf(id: string): RemoteFighter {
   let fighter = remoteFighters.get(id);
-  if (!fighter) remoteFighters.set(id, (fighter = { weapon: null, element: "lightning", hp: MAX_HP, ko: false, action: null, guard: false, ready: false, hurtAt: -Infinity }));
+  if (!fighter) remoteFighters.set(id, (fighter = { weapon: null, element: "spectro", hp: MAX_HP, ko: false, action: null, guard: false, ready: false, hurtAt: -Infinity }));
   return fighter;
 }
 

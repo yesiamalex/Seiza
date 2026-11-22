@@ -22,9 +22,11 @@ sound.ts     Synthesized sound through the world sounds' output (and mute).
 ui.tsx       The coloured mode button, choice chips, the switch.
 fantasy/     Weapons, health, swings and specials; blade contact
              (contact.ts) for hits and parries; each weapon's set of cuts,
-             a naginata's own rest and guard, and the bow's shots, hands
-             and body (poses.ts); special bursts, their wind-up, pooled
-             lights, and arrows that land on what they reach (effects.ts).
+             a pole's (naginata, scythe) own rest and guard, each
+             element's special move, and the bow's shots, hands and body
+             (poses.ts); each element's burst and wind-up, pooled lights,
+             and arrows that land on what they reach (effects.ts); each
+             element's sounds (sounds.ts).
 band/        Instruments (synthesized: pad, kit, keys, acoustic, lead
              through an amp and cabinet, and bass), one or two light
              sticks, touch play in VR; how each instrument's player
