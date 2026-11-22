@@ -31,6 +31,9 @@ export interface LocalFighter {
    *  across the body, where a blow is likely to meet it. Not a wall: blades
    *  parry only where they really touch. */
   guard: boolean;
+  /** Hits landed one soon after another (see METER_CHAIN), for the
+   *  combo count on screen; 0 when the chain has lapsed. */
+  chain: number;
 }
 
 export const fantasy = createStore<LocalFighter>({
@@ -43,6 +46,7 @@ export const fantasy = createStore<LocalFighter>({
   primed: false,
   hurt: 0,
   guard: false,
+  chain: 0,
 });
 
 /** Someone else's fighter, as their events describe it. */
@@ -55,6 +59,8 @@ export interface RemoteFighter {
   guard: boolean;
   /** Their special is ready (the meter full): their weapon glows. */
   ready: boolean;
+  /** When they were last seen hit, for the flinch (seconds). */
+  hurtAt: number;
 }
 export const remoteFighters = new Map<string, RemoteFighter>();
 /** This visitor's own action in progress, for the pose and the trail. */
@@ -65,6 +71,10 @@ export const local = {
   invulnerableUntil: 0,
   /** Who this swing has already landed on (or been stopped by). */
   struck: new Set<string>(),
+  /** When this visitor last landed a hit, for the chain. */
+  lastLanded: -Infinity,
+  /** When this visitor was last hit, for the flinch. */
+  hurtAt: -Infinity,
 };
 
 export const HOLD_SECONDS = 0.45;
@@ -72,8 +82,23 @@ export const HOLD_SECONDS = 0.45;
 export const BLAST_AHEAD = 1.6;
 export const KO_SECONDS = 5;
 const METER_PER_SECOND = 2.5;
-const METER_PER_HIT = 18;
-const METER_PER_HURT = 6;
+/**
+ * What a landed hit puts in the meter, by weapon. A slower weapon lands
+ * fewer hits, so each earns more: about four clean hits in a row fill it
+ * with any of them (five with the light saber, which lands nearly four a
+ * second; three with the katana or the bow, which are slow and, for the
+ * bow, hard to land). Waiting for the meter to fill by itself takes forty
+ * seconds, so it's fighting well that brings the special.
+ */
+export const METER_PER_HIT: Record<Weapon, number> = { sword: 22, katana: 30, naginata: 24, lightsaber: 16, bow: 32 };
+/** Each hit within this many seconds of the last adds a share more, up to
+ *  `max` shares: a combo fills the meter faster than the same hits spread out. */
+export const METER_CHAIN = { seconds: 2.2, share: 0.25, max: 4 } as const;
+/** A naginata's sweep catching several: each after the first earns half. */
+const METER_EXTRA_TARGET = 0.5;
+/** Stopping someone's blow with your blade earns a little too. */
+export const METER_PER_PARRY = 12;
+const METER_PER_HURT = 8;
 const INVULNERABLE_SECONDS = 2;
 const now = () => performance.now() / 1000;
 
@@ -136,9 +161,10 @@ export function setElement(element: Element) {
 
 /** Back to nothing: the mode was switched off, or this visitor left. */
 export function resetFantasy() {
-  fantasy.set({ weapon: null, element: fantasy.get().element, hp: MAX_HP, meter: 0, ko: false, charge: 0, primed: false, hurt: 0, guard: false });
+  fantasy.set({ weapon: null, element: fantasy.get().element, hp: MAX_HP, meter: 0, ko: false, charge: 0, primed: false, hurt: 0, guard: false, chain: 0 });
   remoteFighters.clear();
   local.action = null;
+  local.lastLanded = -Infinity;
 }
 
 export function canAct() {
@@ -205,13 +231,38 @@ export function gainMeter(amount: number) {
 }
 
 export const meterPerSecond = METER_PER_SECOND;
-export const meterPerHit = METER_PER_HIT;
+
+/**
+ * What landing `targets` hits at once with `weapon` earns, `chain` hits
+ * into a combo (0 for the first).
+ */
+export function meterForHits(weapon: Weapon, targets: number, chain: number) {
+  if (targets <= 0) return 0;
+  const base = METER_PER_HIT[weapon] * (1 + METER_EXTRA_TARGET * (targets - 1));
+  return Math.round(base * (1 + METER_CHAIN.share * Math.min(chain, METER_CHAIN.max)));
+}
+
+/** This visitor landed `targets` hits (not a special's): the meter and the
+ *  combo. Returns whether that filled the meter. */
+export function landedHits(weapon: Weapon, targets: number) {
+  const t = now();
+  const chain = t - local.lastLanded <= METER_CHAIN.seconds ? fantasy.get().chain : 0;
+  local.lastLanded = t;
+  fantasy.set((s) => ({ ...s, chain: chain + 1 }));
+  return gainMeter(meterForHits(weapon, targets, chain));
+}
+
+/** The combo count lapses once no hit has landed for a while. */
+export function lapseChain() {
+  if (fantasy.get().chain > 0 && now() - local.lastLanded > METER_CHAIN.seconds) fantasy.set((s) => ({ ...s, chain: 0 }));
+}
 
 /** A blow on this visitor that passed acceptHit. */
 export function takeDamage(amount: number, onKnockedOut: () => void) {
   const s = fantasy.get();
   const hp = Math.max(0, s.hp - amount);
   const ko = hp === 0;
+  local.hurtAt = now();
   fantasy.set({ ...s, hp, ko, hurt: s.hurt + 1, meter: Math.min(100, s.meter + METER_PER_HURT), primed: false, charge: 0, guard: ko ? false : s.guard });
   announce();
   if (!ko) return;
@@ -289,7 +340,7 @@ export function parseFantasyEvent(data: AddonEvent): FantasyEvent | null {
 
 export function fighterOf(id: string): RemoteFighter {
   let fighter = remoteFighters.get(id);
-  if (!fighter) remoteFighters.set(id, (fighter = { weapon: null, element: "lightning", hp: MAX_HP, ko: false, action: null, guard: false, ready: false }));
+  if (!fighter) remoteFighters.set(id, (fighter = { weapon: null, element: "lightning", hp: MAX_HP, ko: false, action: null, guard: false, ready: false, hurtAt: -Infinity }));
   return fighter;
 }
 

@@ -271,7 +271,7 @@ const q3 = new THREE.Quaternion();
 const basis = new THREE.Matrix4();
 
 /** Sets a bone's *world* rotation, by way of its parent's. */
-function setWorldQuaternion(overlay: PoseOverlay, node: THREE.Object3D, world: THREE.Quaternion, weight: number) {
+export function setWorldQuaternion(overlay: PoseOverlay, node: THREE.Object3D, world: THREE.Quaternion, weight: number) {
   if (!node.parent) return;
   node.parent.getWorldQuaternion(q2);
   q3.copy(q2).invert().multiply(world);
@@ -329,7 +329,7 @@ function alignBone(
  * solution, done on world positions so it is indifferent to how the bones
  * are oriented.
  */
-function solveTwoBone(
+export function solveTwoBone(
   overlay: PoseOverlay,
   root: THREE.Object3D,
   mid: THREE.Object3D,

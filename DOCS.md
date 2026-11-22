@@ -1041,6 +1041,19 @@ adds its own coloured button to the bar while it is on.
     stops one is knocked aside for a moment.
   - When the meter under your health is full, hold the click or the sword
     button for your special.
+  - The meter fills slowly by itself, but mostly by landing hits. Each hit
+    earns more with a slower weapon, so about four clean hits fill it with
+    any of them. Hits in quick succession build a combo, shown under the
+    meter, and each one earns a quarter more, up to double. Stopping a blow
+    with your blade earns a little too.
+  - Fighters move their whole body, not just the sword arm. They stand in a
+    stance with their knees bent, twist into a swing and step through it,
+    lunge forward with a blade's special, rock back when their blade is
+    blocked, flinch when hit, and kneel when knocked out. Archers turn
+    side-on as they draw. On a screen, a swing also moves you a short way
+    forward, a blocked blow pushes you back, and a hit knocks you back away
+    from whoever struck you, further for a special. Walls still stop you,
+    and none of this moves you in VR.
   - In VR, swing for real, and the blade cuts and parries wherever you
     hold it. Draw your hand back over your shoulder with the meter full,
     and the next hard swing is the special. The trigger shoots the bow.
@@ -1063,6 +1076,11 @@ adds its own coloured button to the bar while it is on.
     no audio is streamed. Everyone hears the whole room.
   - Light sticks come in seven colours and sway on the same beat for
     everyone.
+  - Musicians move to the music. Drummers bounce and dip into each hit,
+    keyboard players sway and lean toward their hands, guitarists rock back
+    on the strum and tap a foot, and light-stick holders sway with the
+    crowd. Everyone moves to the same beat, so a band on stage moves
+    together, and more the more they play.
 
 The modes are add-ons in `src/addons/`, outside the rest of the code: see
 its README. Their events go through the room server only while their mode

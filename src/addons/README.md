@@ -13,12 +13,18 @@ bus.ts       The mode's events: sent on the room socket as `addon`,
 avatars.ts   Every loaded avatar by player id, for putting things in hands.
 rig.ts       Hand poses through the VR arm IK (src/xr/body/bodyIk.ts), and
              props held in a hand or worn on the chest.
+body.ts      The rest of the body: hips that drop and shift, a spine that
+             turns and bends, feet that step (the same leg IK), a nodding
+             head. Posed before the hands, which reach from where the
+             shoulders went. The walk keeps the legs while walking.
 store.ts     A tiny store shared by the HUD and the 3D scene.
 sound.ts     Synthesized sound through the world sounds' output (and mute).
 ui.tsx       The coloured mode button, choice chips, the switch.
 fantasy/     Weapons, health, swings and specials; blade contact
-             (contact.ts) for hits and parries.
-band/        Instruments (synthesized), light sticks, touch play in VR.
+             (contact.ts) for hits and parries; the body's part of each
+             move (poses.ts).
+band/        Instruments (synthesized), light sticks, touch play in VR;
+             how each instrument's player grooves (moves.ts).
 ```
 
 ## How it hooks in
@@ -35,6 +41,10 @@ The rest of Seiza knows about this folder in a few places:
 - `src/edit/EditToolbar.tsx`, `src/admin/AdminButton.tsx`: hold the
   switches as children.
 - `src/audio/sfx.ts`: `sfxOutput()`.
+- `src/player/selfPush.ts`, spent by `src/player/PlayerRig.tsx` before its
+  walls: a fighter's lunges and knockbacks (never in VR).
+- `src/xr/body/bodyIk.ts`: `solveTwoBone` and `setWorldQuaternion`, shared
+  with the VR body.
 
 ## Adding a mode
 

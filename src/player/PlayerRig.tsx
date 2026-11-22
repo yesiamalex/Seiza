@@ -6,6 +6,7 @@ import type { TouchMoveInput } from "./touchInput";
 import { isGizmoDragging } from "../edit/gizmoState";
 import { readXrHead } from "../xr/body/xrPose";
 import { selfViewStore } from "../xr/body/selfViewStore";
+import { takeSelfPush } from "./selfPush";
 import {
   CAMERA_RADIUS,
   ceilingHeightAt,
@@ -139,6 +140,8 @@ const SEIZA_EYE_HEIGHT = 0.82;
 /** A frame that moves further than this isn't a step, it's a teleport
  *  (spawning, standing up off a seat) — don't advance the stride for it. */
 const BOB_TELEPORT_DISTANCE = 0.6;
+/** This frame's share of any push (selfPush.ts). */
+const pushStep = { x: 0, z: 0 };
 
 // How quickly the avatar turns to face where it's walking (1/s). Turning
 // smoothly instead of snapping to the camera is also what keeps spring-bone
@@ -1088,6 +1091,13 @@ export function PlayerRig({
     // eye height rather than separate ground detection. The ground is not
     // always y=0: the tatami platform is a step up, and a model world's
     // ground has stairs and upper floors (layout.ts, constrainWalker).
+    // A room mode's lunge or knockback (selfPush.ts), before the walls
+    // have their say. Never in a headset.
+    takeSelfPush(delta, pushStep);
+    if (!isPresenting && (pushStep.x !== 0 || pushStep.z !== 0)) {
+      vcam.position.x += pushStep.x;
+      vcam.position.z += pushStep.z;
+    }
     const floorY = constrainWalker(vcam.position);
     const postureTarget = postureHeldRef.current
       ? postureEyeHeightRef.current ?? SEIZA_EYE_HEIGHT

@@ -99,6 +99,12 @@ export function FantasyStatus({ touch }: { touch: boolean }) {
                 : null}
         </small>
         {state.charge > 0 && <Bar share={state.charge} color="#ffffff" height={3} />}
+        {state.chain >= 2 && !state.ko && (
+          // Hits in a row fill the special faster (combat.ts), so say so.
+          <small key={state.chain} style={{ textAlign: "center", fontSize: 12, fontWeight: 700, color: full ? ELEMENT_COLORS[state.element] : "#ffe3a3" }}>
+            {L(`Combo ×${state.chain}`, `コンボ ×${state.chain}`)}
+          </small>
+        )}
       </div>
       {touch && !state.ko && state.weapon !== "bow" && (
         <button

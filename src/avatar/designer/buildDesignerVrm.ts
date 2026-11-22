@@ -3,7 +3,7 @@ import { VRM, VRMHumanoid, type VRM1Meta, type VRMHumanBoneName, type VRMHumanBo
 import type { AvatarSpec } from "./avatarSpec";
 import { buildDesignerExpressions, type DesignerFaceParts } from "./designerExpressions";
 import { chainWeights, sampleProfile, sweepGeometry, type ProfileKey } from "./designerBody";
-import { decalMaterial, faceDecalGeometry, paintBlush, paintBrow, paintEye, paintMouth, raycastFaceSurface, sculptedHeadGeometry } from "./designerFace";
+import { decalMaterial, faceDecalGeometry, paintBlush, paintBrow, paintClosedEye, paintEye, paintMouth, raycastFaceSurface, sculptedHeadGeometry } from "./designerFace";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { HEAD_OFFSET, hairLock, SCALP, scalpLock } from "./designerHair";
 import { mergeParts, OUTLINE_WIDTH, outlineMaterial, rigidPart, torsoPanel } from "./designerMesh";
@@ -411,8 +411,15 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
   face(sphere(0.005), faceSkin, [0, -0.052, headSurface(0, -0.052) - 0.0015], [0, 0, 0], [1, 0.75, 1], headGroup, false);
 
   // Painted features (designerFace.ts), each in the group the expression
-  // system animates. Eye and brow are painted once and mirrored.
-  const eyeMat = decalMaterial(paintEye(spec.eyeColor), 0.18);
+  // system animates. The brow is painted once and mirrored; each eye has
+  // its own painting, so its catch-lights fall on the same side as the
+  // other's (see paintEye).
+  const eyeMats = { left: decalMaterial(paintEye(spec.eyeColor), 0.18), right: decalMaterial(paintEye(spec.eyeColor, true), 0.18) };
+  // The closed eye, faded in by the blink, and the laughing one, by a big
+  // smile (see designerExpressions.ts).
+  const lidMat = decalMaterial(paintClosedEye(spec.eyeColor));
+  const smileMat = decalMaterial(paintClosedEye(spec.eyeColor, true));
+  lidMat.opacity = smileMat.opacity = 0;
   const browMat = decalMaterial(paintBrow(spec.hairColor));
   const blushMat = decalMaterial(paintBlush());
   const eyeGroups: Record<string, THREE.Group> = {};
@@ -425,12 +432,18 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
     face(sphere(0.022), faceSkin, [0.106 * side, -0.012, -0.006], [0, 0, 0], [0.5, 1, 0.75]);
 
     // Large, set low (the middle of the eye just under the head's
-    // equator), and close together, as on a VRoid face.
-    const eyeDecal = faceDecalGeometry(headSurface, 0.04 * side, -0.024, 0.07, 0.086, 0.0015, side < 0);
+    // equator), and close together, as on a VRoid face. The patch is a
+    // little bigger than the eye painted in it (see paintEye).
+    const eyeDecal = faceDecalGeometry(headSurface, 0.04 * side, -0.024, 0.078, 0.084, 0.0015, side < 0);
     const eye = facePart(eyeDecal.origin);
     eye.name = key;
     eyeGroups[key] = eye;
-    face(eyeDecal.geometry, eyeMat, [0, 0, 0], [0, 0, 0], [1, 1, 1], eye);
+    face(eyeDecal.geometry, side > 0 ? eyeMats.left : eyeMats.right, [0, 0, 0], [0, 0, 0], [1, 1, 1], eye);
+    // Beside the eye, not in its group, so the blink's squash leaves it whole.
+    const lidDecal = faceDecalGeometry(headSurface, 0.04 * side, -0.024, 0.078, 0.084, 0.0018, side < 0);
+    const lids = facePart(lidDecal.origin);
+    face(lidDecal.geometry, lidMat, [0, 0, 0], [0, 0, 0], [1, 1, 1], lids);
+    face(lidDecal.geometry.clone(), smileMat, [0, 0, 0], [0, 0, 0], [1, 1, 1], lids);
 
     // Kept below the bangs on every hair style, so the brows (which carry
     // most of an expression) are never buried.
@@ -819,6 +832,7 @@ export function buildDesignerVrm(spec: AvatarSpec): VRM {
     leftBrow: browGroups.leftBrow,
     rightBrow: browGroups.rightBrow,
     mouth,
+    lids: { closed: lidMat, smile: smileMat, open: [eyeMats.left, eyeMats.right] },
   };
   const expressionManager = buildDesignerExpressions(faceParts);
 

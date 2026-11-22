@@ -128,106 +128,194 @@ function texture(element: HTMLCanvasElement): THREE.CanvasTexture {
   return map;
 }
 
+type Point = [number, number];
+/** A point on a cubic Bézier, for drawing along a curve. */
+const bezier = (a: Point, b: Point, c: Point, d: Point, t: number): Point => {
+  const u = 1 - t;
+  return [
+    u * u * u * a[0] + 3 * u * u * t * b[0] + 3 * u * t * t * c[0] + t * t * t * d[0],
+    u * u * u * a[1] + 3 * u * u * t * b[1] + 3 * u * t * t * c[1] + t * t * t * d[1],
+  ];
+};
+
 /**
- * The character's left eye, outer corner on the right of the canvas
- * (mirror the geometry for the right eye). Proportioned like an anime
- * eye: taller than wide, a heavy upper lash line, a large iris that the
- * upper lid partly covers, and two catch-lights.
+ * A line along a curve that thickens from `thin` to `thick`, drawn as one
+ * filled ribbon: what an inked lash line is, where a stroke of one width
+ * reads as a cartoon outline.
  */
-export function paintEye(irisHex: string): THREE.CanvasTexture {
+function taperedLine(g: CanvasRenderingContext2D, curve: [Point, Point, Point, Point], thin: number, thick: number, below = 0.35) {
+  const steps = 24;
+  const top: Point[] = [];
+  const bottom: Point[] = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const [x, y] = bezier(...curve, t);
+    const [nx0, ny0] = bezier(...curve, Math.min(1, t + 0.01));
+    const [px0, py0] = bezier(...curve, Math.max(0, t - 0.01));
+    // The normal, pointing up (out of the eye).
+    let nx = ny0 - py0;
+    let ny = -(nx0 - px0);
+    const length = Math.hypot(nx, ny) || 1;
+    nx /= length;
+    ny /= length;
+    if (ny > 0) {
+      nx = -nx;
+      ny = -ny;
+    }
+    const width = thin + (thick - thin) * Math.sin(Math.min(1, t * 1.15) * Math.PI * 0.5);
+    top.push([x + nx * width * (1 - below), y + ny * width * (1 - below)]);
+    bottom.push([x - nx * width * below, y - ny * width * below]);
+  }
+  g.beginPath();
+  g.moveTo(...top[0]);
+  for (const p of top) g.lineTo(...p);
+  for (const p of bottom.reverse()) g.lineTo(...p);
+  g.closePath();
+  g.fill();
+}
+
+/**
+ * One eye, painted. The character's left eye has its outer corner on the
+ * right of the canvas; the right eye's geometry is mirrored, so it passes
+ * `mirrored` and gets its catch-lights painted on the other side, which
+ * puts them on the same side of the face in both eyes, as one light would.
+ *
+ * Proportioned the way VRoid and most anime-styled avatars draw a calm,
+ * friendly eye, which the earlier one missed in ways that added up to a
+ * stare: it was taller than wide and filled almost entirely by iris and a
+ * near-black pupil, and its iris sat toward the nose, so the white showed
+ * only at the outer corner and the eyes looked crossed. Here the eye is a
+ * little wider than tall, the iris is centred with white either side, the
+ * pupil is small and soft, the lash line tapers into a short wing at the
+ * outer corner, and a faint crease sits above the lid.
+ */
+export function paintEye(irisHex: string, mirrored = false): THREE.CanvasTexture {
   const [element, g] = canvas(256, 256);
 
-  // Taller than wide, the inner corner lower than the outer, the way
-  // VRoid draws them: the shape is most of the style.
+  const inner: Point = [30, 148];
+  const outer: Point = [228, 112];
+  const upper: [Point, Point, Point, Point] = [inner, [58, 76], [168, 52], outer];
+  const lower: [Point, Point, Point, Point] = [outer, [222, 190], [120, 214], inner];
   const eyeShape = () => {
     g.beginPath();
-    g.moveTo(22, 132);
-    g.bezierCurveTo(40, 50, 170, 22, 240, 78); // upper lid
-    g.bezierCurveTo(244, 170, 210, 240, 128, 242); // outer, lower
-    g.bezierCurveTo(62, 242, 24, 200, 22, 132); // inner corner
+    g.moveTo(...inner);
+    g.bezierCurveTo(...upper[1], ...upper[2], ...outer);
+    g.bezierCurveTo(...lower[1], ...lower[2], ...inner);
     g.closePath();
   };
   // The bottom of the iris glows in a brighter, more saturated version of
   // its colour, so even a dark brown reads as an eye, not a grey disc.
-  const vivid = (() => {
-    const c = new THREE.Color(irisHex);
-    const hsl = { h: 0, s: 0, l: 0 };
-    c.getHSL(hsl);
-    return "#" + c.setHSL(hsl.h, Math.max(hsl.s, 0.55), Math.max(0.52, hsl.l + 0.3)).getHexString();
-  })();
+  const hsl = { h: 0, s: 0, l: 0 };
+  new THREE.Color(irisHex).getHSL(hsl);
+  const vivid = "#" + new THREE.Color().setHSL(hsl.h, Math.max(hsl.s, 0.5), Math.min(0.7, Math.max(0.5, hsl.l + 0.28))).getHexString();
+  // A very dark iris (near-black brown is the default) is lifted a little,
+  // or it reads as one black blob with the pupil lost in it.
+  const base = "#" + new THREE.Color().setHSL(hsl.h, hsl.s, Math.max(hsl.l, 0.24)).getHexString();
+  const deep = mix(base, "#0a0608", 0.55);
+
+  // Iris centred under the lid's highest point, so the eye looks ahead.
+  const cx = 130;
+  const cy = 140;
+  const rx = 58;
+  const ry = 70;
 
   g.save();
   eyeShape();
-  g.fillStyle = "#fbf8f5";
+  // The white is never pure: it shades toward the lid.
+  const white = g.createLinearGradient(0, 60, 0, 210);
+  white.addColorStop(0, "#e6e3ec");
+  white.addColorStop(0.4, "#ffffff");
+  white.addColorStop(1, "#f8f6f4");
+  g.fillStyle = white;
   g.fill();
   g.clip();
 
-  // Iris: dark under the lid, brightening toward the bottom, with a
-  // darker rim. This gradient is most of what makes it read as an eye.
-  const iris = g.createLinearGradient(0, 40, 0, 236);
-  iris.addColorStop(0, mix(irisHex, "#000000", 0.72));
-  iris.addColorStop(0.45, irisHex);
-  iris.addColorStop(0.8, vivid);
-  iris.addColorStop(1, mix(vivid, "#ffffff", 0.35));
+  // Iris: shaded under the lid, brightening toward the bottom.
+  const iris = g.createLinearGradient(0, cy - ry, 0, cy + ry);
+  iris.addColorStop(0, deep);
+  iris.addColorStop(0.42, base);
+  iris.addColorStop(0.82, vivid);
+  iris.addColorStop(1, mix(vivid, "#ffffff", 0.3));
   g.beginPath();
-  g.ellipse(136, 146, 84, 100, 0, 0, Math.PI * 2);
+  g.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
   g.fillStyle = iris;
   g.fill();
-  g.lineWidth = 8;
-  g.strokeStyle = mix(irisHex, "#000000", 0.75);
+  g.lineWidth = 5;
+  g.strokeStyle = mix(base, "#0a0608", 0.7);
   g.stroke();
 
-  // Pupil, and a soft ring of light round the bottom of the iris.
+  // Pupil: small, soft-edged, the iris's own dark rather than black.
+  const pupil = g.createRadialGradient(cx, cy + 4, 4, cx, cy + 4, 30);
+  pupil.addColorStop(0, mix(base, "#0a0608", 0.85));
+  pupil.addColorStop(0.7, mix(base, "#0a0608", 0.72));
+  pupil.addColorStop(1, mix(base, "#0a0608", 0));
+  g.fillStyle = pupil;
   g.beginPath();
-  g.ellipse(136, 150, 30, 46, 0, 0, Math.PI * 2);
-  g.fillStyle = mix(irisHex, "#05040a", 0.88);
+  g.ellipse(cx, cy + 4, 24, 32, 0, 0, Math.PI * 2);
   g.fill();
-  g.strokeStyle = "rgba(255,255,255,0.35)";
-  g.lineWidth = 6;
+
+  // A crescent of light round the bottom of the iris.
+  g.strokeStyle = "rgba(255,255,255,0.3)";
+  g.lineWidth = 5;
   g.beginPath();
-  g.ellipse(136, 152, 64, 76, 0, Math.PI * 0.2, Math.PI * 0.8);
+  g.ellipse(cx, cy + 4, rx - 14, ry - 16, 0, Math.PI * 0.22, Math.PI * 0.78);
   g.stroke();
 
-  // The upper lid's shadow across the top of the eye.
-  const lidShadow = g.createLinearGradient(0, 30, 0, 118);
-  lidShadow.addColorStop(0, "rgba(40,22,30,0.6)");
-  lidShadow.addColorStop(1, "rgba(40,22,30,0)");
+  // The upper lid's shadow over the top of the eye.
+  const lidShadow = g.createLinearGradient(0, 56, 0, 118);
+  lidShadow.addColorStop(0, "rgba(46,26,34,0.5)");
+  lidShadow.addColorStop(1, "rgba(46,26,34,0)");
   g.fillStyle = lidShadow;
-  g.fillRect(0, 0, 256, 130);
+  g.fillRect(0, 0, 256, 124);
 
-  // Catch-lights: one large, one small, on opposite sides.
-  g.fillStyle = "rgba(255,255,255,0.95)";
+  // Catch-lights, toward the light: a large one high on the iris, a small
+  // one low on the other side.
+  const toward = mirrored ? 1 : -1;
+  g.fillStyle = "rgba(255,255,255,0.96)";
   g.beginPath();
-  g.ellipse(104, 104, 24, 28, -0.3, 0, Math.PI * 2);
+  g.ellipse(cx + toward * 24, cy - 26, 17, 21, toward * 0.35, 0, Math.PI * 2);
   g.fill();
+  g.fillStyle = "rgba(255,255,255,0.8)";
   g.beginPath();
-  g.ellipse(174, 196, 11, 9, 0, 0, Math.PI * 2);
+  g.ellipse(cx - toward * 26, cy + 34, 8, 6, 0, 0, Math.PI * 2);
   g.fill();
   g.restore();
 
-  // Upper lash line, thickest toward the outer corner, with a flick.
-  g.lineCap = "round";
-  g.lineJoin = "round";
-  g.strokeStyle = "#1d1416";
-  g.lineWidth = 24;
-  g.beginPath();
-  g.moveTo(26, 128);
-  g.bezierCurveTo(42, 50, 170, 22, 240, 78);
-  g.stroke();
-  g.lineWidth = 15;
-  g.beginPath();
-  g.moveTo(224, 70);
-  g.lineTo(252, 58);
-  g.stroke();
+  const ink = mix(irisHex, "#1a1214", 0.82);
+  g.fillStyle = ink;
+  // Upper lash line: fine at the inner corner, full toward the outer, and
+  // a short wing past it.
+  taperedLine(g, upper, 4, 22);
+  taperedLine(g, [[204, 106], [222, 98], [238, 90], [250, 78]], 12, 3, 0.5);
+  // A faint crease above the lid.
+  g.globalAlpha = 0.16;
+  taperedLine(g, [[72, 70], [110, 40], [176, 34], [220, 66]], 1, 3.5, 0.5);
+  // Lower lid: a soft line on its outer half only.
+  g.globalAlpha = 0.5;
+  taperedLine(g, [[224, 128], [218, 176], [180, 204], [140, 210]], 3.5, 1, 0.5);
+  g.globalAlpha = 1;
 
-  // A light lower lash, outer half only.
-  g.strokeStyle = "rgba(29,20,22,0.55)";
-  g.lineWidth = 5;
-  g.beginPath();
-  g.moveTo(236, 168);
-  g.bezierCurveTo(226, 218, 192, 240, 140, 242);
-  g.stroke();
+  return texture(element);
+}
 
+/**
+ * A closed eye, on the same patch as paintEye: the lid's lash line, bowed
+ * down, with a little flick of lashes at the outer corner. Shown as the
+ * eye closes (see the blink in designerExpressions.ts), because an open eye
+ * squashed flat is only a faint smear, never the clean line a drawn
+ * character closes its eyes with. `smile` bows the line up instead, the
+ * closed, laughing eyes of a big smile.
+ */
+export function paintClosedEye(irisHex: string, smile = false): THREE.CanvasTexture {
+  const [element, g] = canvas(256, 256);
+  g.fillStyle = mix(irisHex, "#1a1214", 0.82);
+  if (smile) {
+    taperedLine(g, [[40, 160], [80, 96], [172, 92], [222, 150]], 5, 15, 0.5);
+    taperedLine(g, [[210, 128], [226, 124], [238, 116], [248, 104]], 7, 2, 0.5);
+  } else {
+    taperedLine(g, [[34, 140], [80, 168], [176, 170], [228, 132]], 4, 16, 0.5);
+    taperedLine(g, [[214, 146], [228, 150], [238, 156], [248, 166]], 8, 2, 0.5);
+  }
   return texture(element);
 }
 

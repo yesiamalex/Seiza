@@ -30,6 +30,9 @@ export interface DesignerFaceParts {
   leftBrow: THREE.Object3D;
   rightBrow: THREE.Object3D;
   mouth: THREE.Object3D;
+  /** The painted closed eye, and the open eyes' materials, which the blink
+   *  crossfades between (see LidBind). */
+  lids?: { closed: THREE.Material; smile: THREE.Material; open: THREE.Material[] };
 }
 
 interface Delta {
@@ -85,6 +88,48 @@ class TransformBind implements VRMExpressionBind {
     this.target.position.copy(this.restPosition);
     this.target.scale.copy(this.restScale);
     this.target.rotation.copy(this.restRotation);
+  }
+}
+
+/**
+ * Crossfades the open eyes into a painted closed one as a blink closes
+ * them (an open eye squashed flat is only a faint smear), or into laughing
+ * ones, bowed up, in a big smile. Whichever is most closed wins; the open
+ * eyes fade by as much.
+ */
+class LidBind implements VRMExpressionBind {
+  private static levels = new WeakMap<THREE.Material, { closed: number; smile: number }>();
+
+  constructor(
+    private readonly lids: NonNullable<DesignerFaceParts["lids"]>,
+    private readonly which: "closed" | "smile"
+  ) {}
+
+  private get state() {
+    let state = LidBind.levels.get(this.lids.closed);
+    if (!state) LidBind.levels.set(this.lids.closed, (state = { closed: 0, smile: 0 }));
+    return state;
+  }
+
+  private show() {
+    const { closed, smile } = this.state;
+    // One closed eye at a time: a blink in a smile is still the smile's.
+    const smiling = smile >= closed;
+    this.lids.smile.opacity = smiling ? smile : 0;
+    this.lids.closed.opacity = smiling ? 0 : closed;
+    for (const open of this.lids.open) open.opacity = 1 - Math.max(closed, smile);
+  }
+
+  applyWeight(weight: number): void {
+    // Only the last stretch of the close: a half blink is still an eye.
+    const shown = this.which === "closed" ? THREE.MathUtils.smoothstep(weight, 0.55, 0.9) : THREE.MathUtils.smoothstep(weight, 0.45, 0.85);
+    this.state[this.which] = Math.max(this.state[this.which], shown);
+    this.show();
+  }
+
+  clearAppliedWeight(): void {
+    this.state[this.which] = 0;
+    this.show();
   }
 }
 
@@ -189,6 +234,8 @@ export function buildDesignerExpressions(parts: DesignerFaceParts): VRMExpressio
     if (recipe.mouth) {
       expression.addBind(new TransformBind(parts.mouth, recipe.mouth));
     }
+    if (name === "blink" && parts.lids) expression.addBind(new LidBind(parts.lids, "closed"));
+    if (name === "happy" && parts.lids) expression.addBind(new LidBind(parts.lids, "smile"));
 
     manager.registerExpression(expression);
   }

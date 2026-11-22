@@ -1,8 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import { handQuaternion } from "./rig";
-import { acceptHit, MIN_HIT_GAP, parseFantasyEvent } from "./fantasy/combat";
-import { heldPose, timingOf } from "./fantasy/poses";
+import { acceptHit, fantasy, landedHits, meterForHits, METER_CHAIN, METER_PER_HIT, MIN_HIT_GAP, parseFantasyEvent, resetFantasy } from "./fantasy/combat";
+import { bodyPose, heldPose, timingOf } from "./fantasy/poses";
+import { carryHand, key as bodyKey, newBodyPose, sampleBody } from "./body";
+import { bandBody } from "./band/moves";
+import { cancelSelfPush, pushSelf, takeSelfPush } from "../player/selfPush";
 import { WEAPON_SPECS, WEAPONS } from "./fantasy/weapons";
 import { parseBandEvent, validNote } from "./band/band";
 import { BLADE_CONTACT, bodyCapsule, segmentDistance, sweep } from "./fantasy/contact";
@@ -157,5 +160,125 @@ describe("band events", () => {
     expect(parseBandEvent({ k: "lo", i: "theremin", c: 2 })).toBeNull();
     expect(parseBandEvent({ k: "n", n: "C" })).toBeNull();
     expect(parseBandEvent({ k: "n", n: 61.4 })).toEqual({ k: "n", note: 61 });
+  });
+});
+
+describe("the special's meter", () => {
+  it("pays more per hit for slower weapons, so a few clean hits fill it with any", () => {
+    for (const weapon of WEAPONS) {
+      // Hits in a row, each a step further into the combo.
+      let meter = 0;
+      let hits = 0;
+      while (meter < 100) meter += meterForHits(weapon, 1, hits++);
+      expect(hits, weapon).toBeGreaterThanOrEqual(3);
+      expect(hits, weapon).toBeLessThanOrEqual(5);
+    }
+    expect(meterForHits("katana", 1, 0)).toBeGreaterThan(meterForHits("lightsaber", 1, 0));
+  });
+
+  it("grows with a combo, up to a cap, and pays half for each extra target", () => {
+    const first = meterForHits("sword", 1, 0);
+    expect(meterForHits("sword", 1, 2)).toBeGreaterThan(first);
+    expect(meterForHits("sword", 1, METER_CHAIN.max + 5)).toBe(meterForHits("sword", 1, METER_CHAIN.max));
+    expect(meterForHits("naginata", 3, 0)).toBe(Math.round(METER_PER_HIT.naginata * 2));
+    expect(meterForHits("sword", 0, 0)).toBe(0);
+  });
+
+  it("counts a combo while hits keep coming, and resets it after a pause", () => {
+    resetFantasy();
+    landedHits("sword", 1);
+    landedHits("sword", 1);
+    expect(fantasy.get().chain).toBe(2);
+    expect(fantasy.get().meter).toBe(meterForHits("sword", 1, 0) + meterForHits("sword", 1, 1));
+    resetFantasy();
+    expect(fantasy.get().chain).toBe(0);
+  });
+});
+
+describe("pushing this visitor", () => {
+  it("spreads a push over the frames after it, and only once", () => {
+    let ms = 1000;
+    const clock = vi.spyOn(performance, "now").mockImplementation(() => ms);
+    try {
+      cancelSelfPush();
+      pushSelf(0.5, 0, 0.2, 0.1);
+      const out = { x: 0, z: 0 };
+      // Before it starts: nothing.
+      ms += 100;
+      expect(takeSelfPush(0.1, out).x).toBe(0);
+      // Half of it in one frame, the rest in the next.
+      ms += 100;
+      expect(takeSelfPush(0.1, out).x).toBeCloseTo(0.25, 6);
+      ms += 100;
+      expect(takeSelfPush(0.1, out).x).toBeCloseTo(0.25, 6);
+      ms += 100;
+      expect(takeSelfPush(0.1, out).x).toBe(0);
+      // One that nobody collected in time lapses.
+      pushSelf(1, 0, 0.1);
+      ms += 5000;
+      expect(takeSelfPush(0.016, out).x).toBe(0);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it("ignores nonsense", () => {
+    cancelSelfPush();
+    pushSelf(Number.NaN, 0, 0.2);
+    pushSelf(1, 1, 0);
+    expect(takeSelfPush(10, { x: 0, z: 0 })).toEqual({ x: 0, z: 0 });
+  });
+});
+
+describe("body poses", () => {
+  const finite = (pose: ReturnType<typeof newBodyPose>) =>
+    [pose.twist, pose.lean, pose.tilt, pose.drop, pose.shiftX, pose.shiftZ, pose.carry, pose.head, pose.nod, ...pose.left, ...pose.right].every(Number.isFinite);
+
+  it("has one for every weapon, action, and moment, within sensible bounds", () => {
+    const out = newBodyPose();
+    for (const weapon of WEAPONS) {
+      for (const kind of ["swing", "special", "shoot", "recoil", "stagger"] as const) {
+        for (let t = 0; t <= 1.2; t += 0.05) {
+          bodyPose(weapon, { kind, n: 1, start: 0 }, t * timingOf(weapon, kind).duration, false, out, 0.1, 2);
+          expect(finite(out), `${weapon} ${kind} ${t}`).toBe(true);
+          expect(Math.abs(out.twist)).toBeLessThan(1);
+          expect(out.drop).toBeLessThan(0.35);
+          expect(Math.hypot(out.left[0], out.left[1])).toBeLessThan(0.3);
+          expect(Math.hypot(out.right[0], out.right[1])).toBeLessThan(0.3);
+        }
+      }
+    }
+  });
+
+  it("comes back to its stance when an action ends", () => {
+    const after = bodyPose("sword", { kind: "swing", n: 0, start: 0 }, 5, false, newBodyPose());
+    const idle = bodyPose("sword", null, 5, false, newBodyPose());
+    expect(after).toEqual(idle);
+  });
+
+  it("lifts a foot on its way between two places", () => {
+    const keys = [bodyKey(0, { left: [0, 0, 0] }), bodyKey(1, { left: [0, -0.2, 0] })];
+    expect(sampleBody(keys, 0.5, newBodyPose()).left[2]).toBeGreaterThan(0.01);
+    expect(sampleBody(keys, 1, newBodyPose()).left[2]).toBeCloseTo(0, 6);
+  });
+
+  it("carries a hand round with the chest, but not a bow's", () => {
+    const hand = { pos: [0, 0.8, -0.3] as [number, number, number], blade: [0, 1, 0] as [number, number, number], fingers: [0, 0, -1] as [number, number, number] };
+    const turned = { ...newBodyPose(), twist: 0.5, carry: 1 };
+    carryHand(hand, turned, 1, 1);
+    // Turned to the right, a hand in front swings to the right.
+    expect(hand.pos[0]).toBeGreaterThan(0.1);
+    const still = { pos: [0, 0.8, -0.3] as [number, number, number], blade: [0, 1, 0] as [number, number, number], fingers: [0, 0, -1] as [number, number, number] };
+    carryHand(still, { ...turned, carry: 0 }, 1, 1);
+    expect(still.pos[0]).toBeCloseTo(0, 6);
+  });
+
+  it("grooves for every instrument, more when playing", () => {
+    for (const instrument of ["drums", "keys", "guitar", "lightstick"] as const) {
+      const calm = bandBody(instrument, null, 0.2, 0, 0.25, 1, newBodyPose());
+      const into = bandBody(instrument, { at: 1 }, 1, 0, 0.25, 1, newBodyPose());
+      expect(finite(calm) && finite(into)).toBe(true);
+      expect(into.drop, instrument).toBeGreaterThan(calm.drop);
+    }
   });
 });

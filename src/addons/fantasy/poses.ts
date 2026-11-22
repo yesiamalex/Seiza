@@ -1,3 +1,4 @@
+import { copyBody, key as bodyKey, sampleBody, type BodyKey, type BodyPose } from "../body";
 import type { HandTarget, Vec3 } from "../rig";
 import { WEAPON_SPECS, type Weapon } from "./weapons";
 
@@ -180,6 +181,112 @@ export function heldPose(weapon: Weapon, action: Action | null, now: number, out
       left.fingers[k] = right.fingers[k];
     }
     out.left = left;
+  }
+  return out;
+}
+
+// --- the body ------------------------------------------------------------------
+// Timed to the hand keys above, so the arm and the body arrive together.
+// Twist turns the chest to the right; feet are [right, back, lift] from
+// where the animation stands them; all in eye heights (see ../body.ts).
+// A blade is held in the right hand, so the left foot leads.
+
+const STANCE = bodyKey(0, { twist: 0.18, lean: 0.05, drop: 0.035, shiftZ: 0.01, left: [-0.015, -0.07, 0], right: [0.02, 0.07, 0] });
+const stance = (at: number) => ({ ...STANCE, at });
+// Raised to guard: square to the blow, a little lower.
+const PARRY_BODY = bodyKey(0, { twist: 0.04, lean: 0.07, drop: 0.055, left: [-0.02, -0.08, 0], right: [0.03, 0.08, 0] });
+
+const SWING_BODY: BodyKey[][] = [
+  // The diagonal cut: wound up to the right, then a step in on the front
+  // foot as the chest turns through.
+  [
+    stance(0),
+    bodyKey(0.22, { twist: 0.5, lean: -0.04, drop: 0.03, shiftX: 0.01, shiftZ: 0.03, left: [-0.015, -0.07, 0], right: [0.02, 0.08, 0] }),
+    bodyKey(0.5, { twist: -0.35, lean: 0.24, drop: 0.075, shiftZ: -0.07, left: [-0.02, -0.17, 0], right: [0.02, 0.07, 0] }),
+    bodyKey(0.75, { twist: -0.5, lean: 0.2, drop: 0.07, shiftZ: -0.06, left: [-0.02, -0.17, 0], right: [0.02, 0.06, 0] }),
+    stance(1),
+  ],
+  // The backhand: wound to the left, then the back foot steps through.
+  [
+    stance(0),
+    bodyKey(0.22, { twist: -0.45, lean: 0.06, drop: 0.04, shiftX: -0.01, left: [-0.015, -0.07, 0], right: [0.02, 0.07, 0] }),
+    bodyKey(0.5, { twist: 0.3, lean: 0.2, drop: 0.07, shiftZ: -0.05, left: [-0.02, -0.07, 0], right: [0.04, -0.06, 0] }),
+    bodyKey(0.75, { twist: 0.5, lean: 0.14, drop: 0.06, shiftZ: -0.04, left: [-0.02, -0.07, 0], right: [0.04, -0.06, 0] }),
+    stance(1),
+  ],
+];
+
+// The special: up onto the toes with the blade overhead, arched back, then
+// a deep lunge as it comes down.
+const SLAM_BODY: BodyKey[] = [
+  stance(0),
+  bodyKey(0.35, { twist: 0.05, lean: -0.16, drop: -0.012, shiftZ: 0.02, left: [-0.015, -0.07, 0], right: [0.02, 0.08, 0] }),
+  bodyKey(0.55, { twist: -0.05, lean: 0.42, drop: 0.16, shiftZ: -0.12, left: [-0.03, -0.24, 0], right: [0.03, 0.1, 0] }),
+  bodyKey(0.8, { twist: -0.04, lean: 0.36, drop: 0.15, shiftZ: -0.11, left: [-0.03, -0.24, 0], right: [0.03, 0.1, 0] }),
+  stance(1),
+];
+
+// Bounced off a blade: rocked back onto the back foot.
+const RECOIL_BODY: BodyKey[] = [stance(0), bodyKey(0.25, { twist: 0.35, lean: -0.14, drop: 0.03, shiftZ: 0.05, left: [-0.015, -0.06, 0], right: [0.02, 0.12, 0] }), stance(1)];
+// A guard knocked aside: thrown further, and a step back to recover.
+const STAGGER_BODY: BodyKey[] = [
+  stance(0),
+  bodyKey(0.2, { twist: 0.4, lean: -0.2, tilt: 0.08, drop: 0.05, shiftZ: 0.08, left: [-0.02, 0.02, 0], right: [0.03, 0.16, 0] }),
+  bodyKey(0.5, { twist: 0.3, lean: -0.1, tilt: 0.04, drop: 0.05, shiftZ: 0.06, left: [-0.02, 0.02, 0], right: [0.03, 0.16, 0] }),
+  stance(1),
+];
+
+// The bow: side-on to the target, the chest turning further as it draws.
+// The hands keep their aim (carry 0) while the chest turns under them.
+const ARCHER = bodyKey(0, { twist: -0.15, drop: 0.02, left: [-0.02, -0.05, 0], right: [0.03, 0.05, 0], carry: 0, head: 0.85 });
+const archer = (at: number) => ({ ...ARCHER, at });
+const archerDrawn = (at: number, deeper = 0) =>
+  bodyKey(at, { twist: -0.55, lean: -0.03, drop: 0.03 + deeper, left: [-0.03, -0.08, 0], right: [0.04, 0.07, 0], carry: 0, head: 0.85 });
+const archerLoosed = (at: number, kick = 0) =>
+  bodyKey(at, { twist: -0.5, lean: -0.06 - kick, drop: 0.03, shiftZ: 0.02 + kick * 0.3, left: [-0.03, -0.08, 0], right: [0.04, 0.07, 0], carry: 0, head: 0.85 });
+const BOW_BODY = [
+  [archer(0), archerDrawn(TIMING.shoot.impact * 0.6), archerDrawn(TIMING.shoot.impact), archerLoosed(TIMING.shoot.impact + 0.12), archer(1)],
+  [archer(0), archerDrawn(BOW_SPECIAL.impact * 0.6, 0.04), archerDrawn(BOW_SPECIAL.impact, 0.04), archerLoosed(BOW_SPECIAL.impact + 0.1, 0.06), archer(1)],
+];
+
+/** Down and done: knelt, slumped, the head hanging. */
+export const KNOCKED_OUT: BodyPose = bodyKey(0, { twist: 0.1, lean: 0.5, tilt: 0.06, drop: 0.3, shiftZ: 0.06, left: [-0.03, -0.1, 0], right: [0.04, 0.14, 0], carry: 0, head: 0 });
+
+/** Hit: a flinch back, on top of whatever else is going on. */
+export const FLINCH_SECONDS = 0.38;
+
+/**
+ * Where the body is for a weapon at a moment, like heldPose for the
+ * hands: on guard (breathing, a little), or partway through an action,
+ * with a flinch on top if a hit landed in the last moment. `seed` keeps
+ * everyone's breathing from being in step.
+ */
+export function bodyPose(weapon: Weapon, action: Action | null, now: number, guard: boolean, out: BodyPose, hurtAt = -Infinity, seed = 0): BodyPose {
+  const timing = action ? timingOf(weapon, action.kind) : null;
+  const time = action && timing ? (now - action.start) / timing.duration : 1;
+  const active = action !== null && time < 1;
+  if (weapon === "bow") {
+    if (active) sampleBody(BOW_BODY[action!.kind === "special" ? 1 : 0], time, out);
+    else copyBody(ARCHER, out);
+  } else if (active) {
+    const keys = action!.kind === "special" ? SLAM_BODY : action!.kind === "recoil" ? RECOIL_BODY : action!.kind === "stagger" ? STAGGER_BODY : SWING_BODY[action!.n % SWING_BODY.length];
+    sampleBody(keys, time, out);
+  } else copyBody(guard ? PARRY_BODY : STANCE, out);
+
+  if (!active) {
+    // Breathing, and a slow sway: alive, not posed.
+    out.drop += 0.006 * Math.sin(now * 2.2 + seed);
+    out.twist += 0.025 * Math.sin(now * 0.8 + seed * 1.7);
+  }
+  const since = (now - hurtAt) / FLINCH_SECONDS;
+  if (since >= 0 && since < 1) {
+    // Sharp in, slower out.
+    const e = Math.sin(Math.pow(since, 0.6) * Math.PI);
+    // Which way it turns comes from the seed, so it varies by person.
+    out.twist += 0.12 * e * (seed % 2 < 1 ? 1 : -1);
+    out.lean -= 0.14 * e;
+    out.drop += 0.03 * e;
+    out.shiftZ += 0.04 * e;
   }
   return out;
 }

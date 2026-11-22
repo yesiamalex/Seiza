@@ -6,7 +6,9 @@ import { PoseOverlay } from "../../xr/body/bodyIk";
 import { LOCAL_TRACKING_SOURCE, trackingStore } from "../../xr/body/trackingStore";
 import { TRACKING_STALE_MS } from "../../xr/body/trackingWire";
 import type { PlayerState } from "../../multiplayer/types";
+import { cancelSelfPush, pushSelf } from "../../player/selfPush";
 import { getAddonAvatar, LOCAL_AVATAR } from "../avatars";
+import { carryHand, Gait, newBodyPose, poseBody, type BodyPose } from "../body";
 import { onAddonEvent, sendAddonEvent } from "../bus";
 import { disposeTree, facing, feetAndEye, holdInHand, newTrackedHand, poseHands, rigFor, toTrackedHand } from "../rig";
 import {
@@ -19,8 +21,10 @@ import {
   gainMeter,
   HOLD_SECONDS,
   isInvulnerable,
+  landedHits,
+  lapseChain,
   local,
-  meterPerHit,
+  METER_PER_PARRY,
   meterPerSecond,
   parseFantasyEvent,
   pressCancel,
@@ -37,7 +41,7 @@ import {
 } from "./combat";
 import { BLADE_CONTACT, bodyCapsule, segmentDistance, sweep, type Capsule, type Closest } from "./contact";
 import { FantasyEffects, Trail } from "./effects";
-import { heldPose, timingOf, type Action, type ActionKind, type HeldPose } from "./poses";
+import { bodyPose, heldPose, KNOCKED_OUT, timingOf, type Action, type ActionKind, type HeldPose } from "./poses";
 import { playCharged, playClash, playHit, playKnockedOut, playSpecial, playSwing } from "./sounds";
 import { buildWeapon, ELEMENT_COLORS, MAX_HP, SABER_HALO, weaponGlow, WEAPON_SPECS, type Element, type Weapon } from "./weapons";
 
@@ -73,6 +77,13 @@ interface Holder {
   /** How fast the tip is moving, metres a second. */
   speed: number;
   inHeadset: boolean;
+  /** The rest of the body (../body.ts): its pose this frame, how far it's
+   *  blended in, whether the avatar is walking, and a number of its own
+   *  so no two fighters breathe in step. */
+  body: BodyPose;
+  bodyWeight: number;
+  gait: Gait;
+  seed: number;
 }
 
 const approach = (current: number, target: number, rate: number, dt: number) => current + (target - current) * (1 - Math.exp(-rate * dt));
@@ -194,7 +205,15 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
       if (point) effects.sparksAt(point, special ? "#ffffff" : "#ffe3a3");
     });
     playHit(weapon);
-    if (!special && gainMeter(meterPerHit * ids.length)) playCharged();
+    if (!special && landedHits(weapon, ids.length)) playCharged();
+  };
+
+  /** This visitor, moved a little along where they face (back, if
+   *  negative), in metres: a lunge into a swing, a step back off a blow.
+   *  PlayerRig does the moving, through its walls, and never in VR. */
+  const step = (distance: number, seconds: number, after = 0) => {
+    const me = bodyOf(LOCAL_AVATAR);
+    if (me) pushSelf(me.face.x * distance, me.face.z * distance, seconds, after);
   };
 
   const blocked = (id: string, at: THREE.Vector3, weapon: Weapon) => {
@@ -250,7 +269,10 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
       if (outcome === "block") {
         blocked(t.id, closest.point.clone(), weapon);
         if (inVr) buzz(gl, "right", 0.9, 90);
-        else recoil();
+        else {
+          recoil();
+          step(-0.1, 0.14);
+        }
         return; // Stopped: nothing past the blade is reached.
       }
       ids.push(t.id);
@@ -305,6 +327,13 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
     const timing = timingOf(weapon, action.kind);
     const impact = timing.duration * timing.impact * 1000;
     if (weapon !== "bow") setTimeout(() => playSwing(weapon), impact * 0.45);
+    // The body goes with the blow: a step in on a cut, a long lunge on a
+    // blade's special, a step back off a bow's.
+    const at = (share: number) => timing.duration * share;
+    if (weapon === "bow") {
+      if (action.kind === "special") step(-0.18, 0.15, at(timing.impact));
+    } else if (action.kind === "special") step(0.6, 0.22, at(0.36));
+    else step(action.n === 0 ? 0.16 : 0.1, 0.16, at(0.3));
     if (weapon !== "bow" && action.kind !== "special") return;
     setTimeout(() => {
       const now = fantasy.get();
@@ -359,8 +388,13 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
             effects.sparksAt(at, "#cfe6ff", 22, 4);
             playClash(fighter.weapon === "lightsaber", distanceTo(at));
             if (event.target === selfIdRef.current) {
+              // Your blade stopped their blow: you're knocked aside (a
+              // guard held up further), and it counts toward your special.
+              const guarding = fantasy.get().guard;
               recoil();
+              step(guarding ? -0.22 : -0.1, 0.18);
               buzz(gl, "right", 0.7, 70);
+              if (gainMeter(METER_PER_PARRY)) playCharged();
             } else {
               const other = remoteFighters.get(event.target);
               if (other?.weapon && other.weapon !== "bow") other.action = { kind: other.guard ? "stagger" : "recoil", n: 0, start: seconds() };
@@ -371,6 +405,7 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
             for (const id of event.targets) {
               const chest = chestOf(id);
               if (chest) effects.sparksAt(chest, event.special ? "#ffffff" : "#ffe3a3");
+              if (id !== selfIdRef.current) fighterOf(id).hurtAt = seconds();
             }
             playHit(fighter.weapon, distance);
             const self = selfIdRef.current;
@@ -389,6 +424,12 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
             if (amount > 0) {
               recordHit(from, event.special);
               takeDamage(amount, () => playKnockedOut());
+              // Knocked back, away from whoever hit you; a special throws further.
+              if (theirs) {
+                const away = Math.hypot(mine[0] - theirs[0], mine[2] - theirs[2]);
+                const distance = event.special ? 0.55 : 0.18;
+                if (away > 0.01) pushSelf(((mine[0] - theirs[0]) / away) * distance, ((mine[2] - theirs[2]) / away) * distance, event.special ? 0.3 : 0.16);
+              }
               buzz(gl, "left", 0.4, 60);
               buzz(gl, "right", 0.4, 60);
             }
@@ -430,6 +471,7 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
       for (const holder of holders.values()) releaseHolder(holder);
       holders.clear();
       resetFantasy();
+      cancelSelfPush();
     },
     [holders]
   );
@@ -499,6 +541,7 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
         if (gainMeter(whole)) playCharged();
       }
     }
+    lapseChain();
     // A held click or button shows its charge once the meter is full.
     if (controls.pressedAt !== null && me.meter >= 100) {
       const charge = Math.min(1, (now - controls.pressedAt) / HOLD_SECONDS);
@@ -509,7 +552,7 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
     const inVr = sample !== null && performance.now() - sample.receivedAt < TRACKING_STALE_MS;
 
     const seen = new Set<string>();
-    const tend = (key: string, weapon: Weapon | null, element: Element, ko: boolean, action: Action | null, hp: number | null, guard: boolean, charge: number) => {
+    const tend = (key: string, weapon: Weapon | null, element: Element, ko: boolean, action: Action | null, hp: number | null, guard: boolean, charge: number, hurtAt: number) => {
       const vrm = getAddonAvatar(key);
       if (!vrm) return;
       seen.add(key);
@@ -539,6 +582,10 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
           hadBlade: false,
           speed: 0,
           inHeadset: false,
+          body: newBodyPose(),
+          bodyWeight: 0,
+          gait: new Gait(),
+          seed: Math.random() * 6,
         };
         effects.group.add(holder.trail.mesh);
         holders.set(key, holder);
@@ -566,8 +613,29 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
       const seated = !!playersRef.current[key === LOCAL_AVATAR ? (selfIdRef.current ?? "") : key]?.posture;
       if (held) holder.posed = held;
       holder.weight = approach(holder.weight, held && !holder.inHeadset && !seated ? 1 : 0, 8, dt);
+      // The body first, so the hands then reach from wherever the shoulders
+      // went. Knocked out, it slumps; walking, the walk keeps the legs; in a
+      // headset, the player's own body is the pose.
+      holder.bodyWeight = approach(holder.bodyWeight, (held || (ko && weapon)) && !holder.inHeadset && !seated ? 1 : 0, ko ? 3 : 6, dt);
+      let legs = 0;
+      if (rig) {
+        const moving = holder.gait.update(rig, dt);
+        if (holder.bodyWeight > 0.001 && (holder.posed || ko)) {
+          const timing = action && holder.posed ? timingOf(holder.posed, action.kind) : null;
+          const acting = timing !== null && now - action!.start < timing.duration;
+          if (ko || !holder.posed) copyKnockedOut(holder.body);
+          else bodyPose(holder.posed, action, now, guard, holder.body, hurtAt, holder.seed);
+          const upper = holder.bodyWeight * (acting ? 1 : 1 - 0.5 * moving);
+          legs = Math.min(upper, holder.bodyWeight * (acting ? 1 : 1 - moving));
+          poseBody(rig, holder.overlay, holder.body, upper, legs);
+        }
+      }
       if (rig && holder.posed && holder.weight > 0.001) {
         const pose = heldPose(holder.posed, action, now, holder.pose, guard);
+        if (holder.bodyWeight > 0.001) {
+          if (pose.right) carryHand(pose.right, holder.body, holder.bodyWeight, legs);
+          if (pose.left) carryHand(pose.left, holder.body, holder.bodyWeight, legs);
+        }
         poseHands(
           rig,
           holder.overlay,
@@ -618,10 +686,10 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
       }
     };
 
-    tend(LOCAL_AVATAR, me.weapon, me.element, me.ko, local.action, null, me.guard, me.meter / 100);
+    tend(LOCAL_AVATAR, me.weapon, me.element, me.ko, local.action, null, me.guard, me.meter / 100, local.hurtAt);
     for (const [id, fighter] of remoteFighters) {
       // Others' meters aren't sent, only whether it's full.
-      if (fighter.weapon || holders.has(id)) tend(id, fighter.weapon, fighter.element, fighter.ko, fighter.action, fighter.hp, fighter.guard, fighter.ready ? 1 : 0);
+      if (fighter.weapon || holders.has(id)) tend(id, fighter.weapon, fighter.element, fighter.ko, fighter.action, fighter.hp, fighter.guard, fighter.ready ? 1 : 0, fighter.hurtAt);
     }
     for (const [key, holder] of holders) {
       if (seen.has(key)) continue;
@@ -674,6 +742,13 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
   }, -0.4);
 
   return null;
+}
+
+function copyKnockedOut(out: BodyPose) {
+  Object.assign(out, KNOCKED_OUT);
+  out.left = [...KNOCKED_OUT.left];
+  out.right = [...KNOCKED_OUT.right];
+  return out;
 }
 
 function releaseHolder(holder: Holder) {

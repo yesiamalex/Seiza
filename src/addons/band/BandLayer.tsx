@@ -9,10 +9,12 @@ import { LOCAL_TRACKING_SOURCE, trackingStore } from "../../xr/body/trackingStor
 import { TRACKING_STALE_MS, type TrackedHand } from "../../xr/body/trackingWire";
 import type { PlayerState } from "../../multiplayer/types";
 import { getAddonAvatar, LOCAL_AVATAR } from "../avatars";
+import { carryHand, Gait, newBodyPose, poseBody, type BodyPose } from "../body";
 import { onAddonEvent, sendAddonEvent } from "../bus";
 import { disposeTree, feetAndEye, holdInHand, newTrackedHand, poseHands, rigFor, toTrackedHand, wearOnChest, type HandTarget } from "../rig";
 import { announceBand, band, localNote, musicianOf, parseBandEvent, play, remoteMusicians, resetBand, tapped, validNote } from "./band";
 import { CHORDS, KEY_LAYOUT, LIGHT_COLORS, playNote, prepareGuitar, type Instrument } from "./instruments";
+import { bandBody, updateGroove, type Groove } from "./moves";
 
 /**
  * Band mode in the scene: each musician's instrument in front of them (a
@@ -304,6 +306,11 @@ interface Holder {
   flash: THREE.Mesh | null;
   /** When the note the flash shows was played. */
   flashed: number;
+  /** The rest of the body while playing (moves.ts), and whether they're
+   *  walking, when the walk keeps the legs. */
+  body: BodyPose;
+  gait: Gait;
+  groove: Groove;
 }
 
 const approach = (current: number, goal: number, rate: number, dt: number) => current + (goal - current) * (1 - Math.exp(-rate * dt));
@@ -440,6 +447,9 @@ export function BandLayer({ selfId, players, editMode }: BandLayerProps) {
           detach: () => {},
           flash: null,
           flashed: 0,
+          body: newBodyPose(),
+          gait: new Gait(),
+          groove: { energy: 0 },
         };
         holders.set(key, holder);
       }
@@ -500,13 +510,24 @@ export function BandLayer({ selfId, players, editMode }: BandLayerProps) {
       const inHeadset = sample !== null && performance.now() - sample.receivedAt < TRACKING_STALE_MS;
       const seated = !!playersRef.current[key === LOCAL_AVATAR ? (selfIdRef.current ?? "") : key]?.posture;
       holder.weight = approach(holder.weight, instrument && !inHeadset && !seated ? 1 : 0, 8, dt);
+      const moving = rig ? holder.gait.update(rig, dt) : 0;
       if (!rig || holder.weight <= 0.001 || !instrument) return;
       const hands = holder.hands;
+      // The body first: it grooves, and a guitar on the chest goes with it,
+      // so the hands are placed on it after. Drum pads and keys stand on the
+      // floor, so the hands stay on them while the body moves behind.
+      const energy = updateGroove(holder.groove, instrument, note, waving, now, dt);
+      const side = instrument === "drums" || instrument === "keys" ? hands.lastX[hands.last] : 0;
+      bandBody(instrument, note, energy, side, Date.now() / 1000, now, holder.body);
+      const upper = holder.weight * (1 - 0.5 * moving);
+      const legs = holder.weight * (1 - moving);
+      poseBody(rig, holder.overlay, holder.body, upper, legs);
       let both = true;
       if (instrument === "drums" || instrument === "keys") deskPose(hands, instrument, note, now);
       else if (instrument === "guitar" && holder.prop) guitarPose(hands, rig, holder.prop, note, now);
       else {
         stickPose(hands, waving);
+        carryHand(hands.right, holder.body, upper, legs);
         both = false;
       }
       poseHands(rig, holder.overlay, toTrackedHand("right", hands.right, holder.tracked.right), both ? toTrackedHand("left", hands.left, holder.tracked.left) : null, holder.weight);
