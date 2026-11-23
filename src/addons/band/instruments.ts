@@ -1,16 +1,19 @@
 import { sfxOutput } from "../../audio/sfx";
 import { noiseHit, toneHit, voice, type Voice } from "../sound";
 
-export const INSTRUMENTS = ["drums", "kit", "keys", "guitar", "electric", "bass", "lightstick"] as const;
+export const INSTRUMENTS = ["drums", "kit", "taiko", "keys", "kulintang", "guitar", "electric", "bass", "shaker", "lightstick"] as const;
 export type Instrument = (typeof INSTRUMENTS)[number];
 
 export const INSTRUMENT_LABELS: Record<Instrument, [string, string]> = {
   drums: ["Drum pad", "ドラムパッド"],
   kit: ["Drum kit", "ドラムセット"],
+  taiko: ["Taiko", "和太鼓"],
   keys: ["Keys", "キーボード"],
+  kulintang: ["Kulintang", "クリンタン"],
   guitar: ["Guitar", "ギター"],
   electric: ["Lead guitar", "エレキギター"],
   bass: ["Bass", "ベース"],
+  shaker: ["Shaker", "シェイカー"],
   lightstick: ["Light stick", "ペンライト"],
 };
 
@@ -20,9 +23,10 @@ export type Worn = (typeof WORN)[number];
 export const isWorn = (i: Instrument | null): i is Worn => (WORN as readonly string[]).includes(i ?? "");
 
 /** The instruments that stand on the floor in front of their player (a
- *  pad, a keyboard, a kit): set up where they are, and left there, so their
- *  player stays at them while they're out (PlayerRig's `rooted`). */
-export const STANDS = ["drums", "kit", "keys"] as const;
+ *  pad, a keyboard, a kit, a row of gongs, a taiko): set up where they
+ *  are, and left there, so their player stays at them while they're out
+ *  (PlayerRig's `rooted`). */
+export const STANDS = ["drums", "kit", "keys", "kulintang", "taiko"] as const;
 export const isStand = (i: Instrument | null) => (STANDS as readonly string[]).includes(i ?? "");
 
 export const LIGHT_COLORS = ["#ff4fa3", "#4fb2ff", "#59ff8a", "#ffe14f", "#b36bff", "#ff8a3d", "#ffffff"] as const;
@@ -61,6 +65,31 @@ export const KIT_PIECES: Pad[] = [
   { label: "Cowbell", key: "C" },
 ];
 export const KIT = { crash: 0, hiTom: 1, midTom: 2, floorTom: 3, ride: 4, kick: 5, snare: 6, hat: 7, openHat: 8, rim: 9, splash: 10, china: 11, cowbell: 12 } as const;
+
+/**
+ * The kulintang: a row of eight small bossed gongs, the melody of a
+ * Maguindanao and Maranao gong ensemble, struck with two light mallets.
+ * Each set is tuned by ear and none matches a Western scale; this one is
+ * pentatonic (D E G A C D E G), so any gongs struck together, or one after
+ * another, sound right.
+ */
+export const GONGS = [62, 64, 67, 69, 72, 74, 76, 79];
+
+/** The taiko: the drum's face (don) with either hand, and its rim (ka),
+ *  left to right as they lie under the hands: ka, don, don, ka. */
+export const TAIKO = { kaLeft: 0, donLeft: 1, donRight: 2, kaRight: 3 } as const;
+export const TAIKO_PADS: Pad[] = [
+  { label: "Ka", key: "D" },
+  { label: "Don", key: "F" },
+  { label: "Don", key: "J" },
+  { label: "Ka", key: "K" },
+];
+
+/** The shaker: a shake on the beat, and a softer one between. */
+export const SHAKER_PADS: Pad[] = [
+  { label: "Shake", key: "F" },
+  { label: "Soft", key: "J" },
+];
 
 /** An octave and a half, C up to the F above the next C, on the keys
  *  music software's typing keyboard uses (A to K, then O L P ; '). */
@@ -152,9 +181,12 @@ export const PADS: Partial<Record<Instrument, Pad[]>> = {
   guitar: CHORDS.map((c) => ({ label: c.name, key: c.key })),
   electric: ELECTRIC,
   bass: BASS,
+  kulintang: GONGS.map((midi, i) => ({ label: noteName(midi), key: "ASDFGHJK"[i] })),
+  taiko: TAIKO_PADS,
+  shaker: SHAKER_PADS,
 };
 /** How many pads a row, on screen. */
-export const PAD_COLUMNS: Partial<Record<Instrument, number>> = { drums: 4, kit: 5, guitar: 6, electric: 6, bass: 6 };
+export const PAD_COLUMNS: Partial<Record<Instrument, number>> = { drums: 4, kit: 5, guitar: 6, electric: 6, bass: 6, kulintang: 8, taiko: 4, shaker: 2 };
 
 const hz = (midi: number) => 440 * Math.pow(2, (midi - 69) / 12);
 /** Bands carry further than footsteps. */
@@ -534,6 +566,46 @@ function bassNote(root: number, distance?: number) {
   noiseHit(v, { frequency: 700, duration: 0.03, gain: 0.05, q: 0.8 });
 }
 
+/**
+ * A gong of the kulintang: a bossed gong rings near a pure tone, with a
+ * soft second partial a little off the octave and a quick, higher third,
+ * and it rings long; the mallet's padded tap first.
+ */
+export function playGong(gong: number, distance?: number) {
+  const midi = GONGS[gong];
+  if (midi === undefined) return;
+  const v = voice(0.85, distance, FALLOFF, 3);
+  if (!v) return;
+  const f = hz(midi);
+  toneHit(v, { frequency: f, sweepTo: f * 0.996, duration: 2.2, gain: 0.5 });
+  toneHit(v, { frequency: f * 2.01, duration: 0.9, gain: 0.14 });
+  toneHit(v, { frequency: f * 2.76, duration: 0.4, gain: 0.07 });
+  noiseHit(v, { frequency: 1600, duration: 0.02, gain: 0.07, q: 1.2 });
+}
+
+/** The taiko: a deep, long don on the face, a dry wooden ka on the rim. */
+export function playTaiko(note: number, distance?: number) {
+  const v = voice(1, distance, FALLOFF, 2);
+  if (!v) return;
+  if (note === TAIKO.donLeft || note === TAIKO.donRight) {
+    toneHit(v, { frequency: 92, sweepTo: 64, duration: 1.1, gain: 1 });
+    toneHit(v, { frequency: 180, sweepTo: 138, duration: 0.3, gain: 0.35, type: "triangle" });
+    noiseHit(v, { frequency: 500, duration: 0.09, gain: 0.35, q: 0.7 });
+  } else {
+    toneHit(v, { frequency: 1250, duration: 0.05, gain: 0.28, type: "triangle" });
+    noiseHit(v, { frequency: 2600, duration: 0.04, gain: 0.45, q: 3 });
+  }
+}
+
+/** The shaker: seeds hitting the shell, a rattle of two quick grains. */
+export function playShaker(note: number, distance?: number) {
+  const v = voice(1, distance, FALLOFF);
+  if (!v) return;
+  const g = note === 0 ? 1 : 0.5;
+  noiseHit(v, { frequency: 6500, duration: 0.06, gain: 0.3 * g, q: 1.4 });
+  noiseHit(v, { frequency: 8200, duration: 0.05, gain: 0.18 * g, q: 1.2, delay: 0.018 });
+}
+
 /** One string picked (see PICK_BASE), on whichever worn instrument. */
 export function playPick(instrument: Worn, note: number, distance?: number) {
   const pick = unpick(note);
@@ -553,6 +625,9 @@ export function playNote(instrument: Instrument, note: number, distance?: number
   else if (instrument === "guitar") playChord(note, distance);
   else if (instrument === "electric") playElectric(note, distance);
   else if (instrument === "bass") playBass(note, distance);
+  else if (instrument === "kulintang") playGong(note, distance);
+  else if (instrument === "taiko") playTaiko(note, distance);
+  else if (instrument === "shaker") playShaker(note, distance);
 }
 
 /** How many notes an instrument has (keys excepted, which go by MIDI). */

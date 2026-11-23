@@ -132,6 +132,39 @@ export function bandBody(instrument: Instrument, note: { at: number; n?: number 
       out.carry = 0;
       out.head = 0.4;
       break;
+    case "kulintang":
+      // Tall over the row of gongs, swaying toward the hand that's playing,
+      // light in the body: the mallets do the work.
+      out.lean = 0.08 + 0.02 * accent;
+      out.drop = 0.02 + 0.012 * bob * e;
+      out.shiftX = side * 0.15;
+      out.twist = -side * 0.3;
+      out.tilt = 0.03 * sway * e;
+      out.nod = 0.05 * bob * e + 0.04 * accent;
+      out.carry = 0;
+      out.head = 0.5;
+      break;
+    case "taiko":
+      // The taiko stance: feet wide, knees bent low, hips square to the
+      // drum, and the whole body behind each don.
+      out.drop = 0.07 + 0.02 * bob * e + 0.03 * accent;
+      out.lean = 0.1 + 0.06 * accent;
+      out.twist = 0.03 * sway * e;
+      out.nod = 0.05 * bob * e + 0.05 * accent;
+      out.left = [-0.09, -0.02, 0];
+      out.right = [0.09, 0.04, 0];
+      out.carry = 0;
+      out.head = 0.35;
+      break;
+    case "shaker":
+      // A bounce on the beat and a sway, the shaker going with the body.
+      out.drop = 0.02 + 0.025 * bob * e;
+      out.twist = 0.08 * sway * e;
+      out.tilt = 0.04 * sway * e;
+      out.nod = 0.06 * bob * e + 0.03 * accent;
+      out.carry = 0.4;
+      out.head = 0.45;
+      break;
     case "lightstick": {
       // A concert crowd: swaying with the stick overhead, and a small
       // bounce on the beat. The stick's own sway runs off the same clock.

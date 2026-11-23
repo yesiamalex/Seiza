@@ -28,9 +28,10 @@ fantasy/     Weapons, health, swings and specials; blade contact
              arrows and rod bolts that land on what they reach
              (effects.ts); each element's sounds (sounds.ts); the
              necromancer's undead (undead.ts); your record (record.ts).
-band/        Instruments (synthesized: pad, kit, keys, acoustic, lead
-             through an amp and cabinet, and bass), one or two light
-             sticks, touch play in VR; how each instrument's player
+band/        Instruments (synthesized: pad, kit, taiko, keys, kulintang
+             gongs, acoustic, lead through an amp and cabinet, bass, and
+             shaker; single strings picked from a chord), one or two
+             light sticks, touch play in VR; how each instrument's player
              grooves (moves.ts).
 
 Both modes pose an avatar through the overlay VR tracking uses, shared

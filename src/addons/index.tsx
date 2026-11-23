@@ -104,7 +104,7 @@ export function RoomModes({ worldState, setWorldState, disabled }: { worldState:
       />
       <ModeSwitch
         label={L("Band mode", "バンドモード")}
-        description={L("Everyone gets a Band button: drum pad, keys, guitar, and light sticks, heard by the whole room.", "全員にバンドボタンが出ます:ドラムパッド、キーボード、ギター、ペンライト。部屋の全員に聞こえます。")}
+        description={L("Everyone gets a Band button: drums, taiko, keys, kulintang, guitars, a shaker, and light sticks, heard by the whole room.", "全員にバンドボタンが出ます:ドラム、和太鼓、キーボード、クリンタン、ギター、シェイカー、ペンライト。部屋の全員に聞こえます。")}
         on={on(worldState, "band")}
         accent={MODE_ACCENTS.band}
         disabled={disabled}

@@ -13,7 +13,7 @@ import { blendBody, carryHand, copyBody, Gait, newBodyPose, poseBody, type BodyP
 import { onAddonEvent, sendAddonEvent } from "../bus";
 import { disposeTree, feetAndEye, holdInHand, newTrackedHand, poseHands, rigFor, toTrackedHand, wearOnChest, type HandTarget } from "../rig";
 import { announceBand, atOnce, band, localNote, musicianOf, NoteGate, parseBandEvent, play, remoteMusicians, resetBand, tapped, validNote } from "./band";
-import { CHORDS, chordOf, ELECTRIC, holdKey, isWorn, KEY_LAYOUT, KEYS_BASE, KIT, LIGHT_COLORS, PICK_BASE, playNote, prepareGuitar, type Instrument, type Worn } from "./instruments";
+import { CHORDS, chordOf, ELECTRIC, GONGS, holdKey, isWorn, KEY_LAYOUT, KEYS_BASE, KIT, LIGHT_COLORS, PICK_BASE, playNote, prepareGuitar, TAIKO, type Instrument, type Worn } from "./instruments";
 import { bandBody, updateGroove, type Groove } from "./moves";
 
 /** Keys others are holding down, each with its release, by "player:note". */
@@ -109,6 +109,8 @@ export interface Piece {
   hand: "left" | "right" | "foot";
   /** A tilt toward the drummer, radians. */
   tilt: number;
+  /** How steeply the stick comes down onto it, if not a drum's or a cymbal's. */
+  pitch?: number;
 }
 
 export const KIT_PIECES_AT: Record<number, Piece> = {
@@ -179,10 +181,135 @@ export function buildKit() {
   return group;
 }
 
-/** A drumstick, along +y from the grip. */
-export function buildStick() {
+// --- the kulintang and the taiko: played standing, with a stick in each hand --------
+
+/** The kulintang's eight gongs in a row on their frame, low gongs left. */
+const GONG_R = 0.05;
+export const GONGS_AT: Record<number, Piece> = Object.fromEntries(
+  GONGS.map((_, i) => {
+    const x = (i - 3.5) * 0.105;
+    return [i, { at: [x, 0.53, -0.36], r: GONG_R, depth: 0.03, hand: x < 0 ? "left" : "right", tilt: 0 } satisfies Piece];
+  })
+);
+
+/** The taiko on a slanted stand, its face tilted toward the player: the
+ *  face's middle (don) for either hand, its rim (ka) either side. */
+const TAIKO_FACE = { at: [0, 0.58, -0.42] as [number, number, number], r: 0.2, tilt: 0.35, length: 0.34 };
+const facePoint = (x: number): [number, number, number] => [x, TAIKO_FACE.at[1], TAIKO_FACE.at[2]];
+export const TAIKO_AT: Record<number, Piece> = {
+  // Struck from above, the bachi coming down steeply onto the tilted face.
+  [TAIKO.kaLeft]: { at: facePoint(-0.185), r: 0.035, depth: 0.002, hand: "left", tilt: 0, pitch: 0.8 },
+  [TAIKO.donLeft]: { at: facePoint(-0.065), r: 0.075, depth: 0.002, hand: "left", tilt: 0, pitch: 0.8 },
+  [TAIKO.donRight]: { at: facePoint(0.065), r: 0.075, depth: 0.002, hand: "right", tilt: 0, pitch: 0.8 },
+  [TAIKO.kaRight]: { at: facePoint(0.185), r: 0.035, depth: 0.002, hand: "right", tilt: 0, pitch: 0.8 },
+};
+
+/** The instruments played with a stick in each hand: their pieces, where
+ *  each hand rests, and the sticks. */
+interface StickSet {
+  pieces: Record<number, Piece>;
+  rest: { left: number; right: number };
+  stick: StickKind;
+}
+const STICK_SETS: Partial<Record<Instrument, StickSet>> = {
+  kit: { pieces: KIT_PIECES_AT, rest: { left: KIT.snare, right: KIT.hat }, stick: "stick" },
+  kulintang: { pieces: GONGS_AT, rest: { left: 2, right: 5 }, stick: "mallet" },
+  taiko: { pieces: TAIKO_AT, rest: { left: TAIKO.donLeft, right: TAIKO.donRight }, stick: "bachi" },
+};
+
+export function buildKulintang() {
   const group = new THREE.Group();
-  group.add(merged([new THREE.CylinderGeometry(0.006, 0.009, 0.4, 6).translate(0, 0.12, 0), new THREE.SphereGeometry(0.009, 6, 4).translate(0, 0.32, 0)], material("#d9b98a", { roughness: 0.6 })));
+  const wood = material("#6b3f22", { roughness: 0.7 });
+  const bronze = material("#e0b04f", { roughness: 0.3, metalness: 0.5 });
+  const xs = Object.values(GONGS_AT).map((g) => g.at[0]);
+  const half = (Math.max(...xs) - Math.min(...xs)) / 2 + GONG_R * 1.6;
+  const [, y, z] = GONGS_AT[0].at;
+  const frameY = y - 0.03;
+  // The frame (an antangan): two rails the gongs rest on, cords between, on legs.
+  group.add(
+    merged(
+      [
+        boxAt(half * 2, 0.02, 0.012, 0, frameY, z - GONG_R * 0.7),
+        boxAt(half * 2, 0.02, 0.012, 0, frameY, z + GONG_R * 0.7),
+        boxAt(0.02, 0.03, GONG_R * 2.2, -half, frameY, z),
+        boxAt(0.02, 0.03, GONG_R * 2.2, half, frameY, z),
+        legAt(-half + 0.02, z, frameY),
+        legAt(half - 0.02, z, frameY),
+      ],
+      wood
+    )
+  );
+  for (const [index, gong] of Object.entries(GONGS_AT)) {
+    const [gx, gy, gz] = gong.at;
+    const parts = new THREE.Group();
+    parts.userData.piece = Number(index);
+    // A shallow bowl, mouth down, with its boss on top: the boss is struck.
+    parts.add(
+      new THREE.Mesh(
+        mergeGeometries([
+          new THREE.CylinderGeometry(gong.r * 0.9, gong.r, gong.depth, 20).translate(gx, gy, gz),
+          new THREE.SphereGeometry(gong.r * 0.36, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2).translate(gx, gy + gong.depth / 2, gz),
+        ]),
+        bronze
+      )
+    );
+    for (const mesh of parts.children) mesh.userData.navIgnore = true;
+    group.add(parts);
+  }
+  return group;
+}
+
+export function buildTaiko() {
+  const group = new THREE.Group();
+  const { at, r, tilt, length } = TAIKO_FACE;
+  // The barrel bulges at its middle, as a taiko's does.
+  const profile = Array.from({ length: 9 }, (_, i) => {
+    const u = i / 8;
+    return new THREE.Vector2(r * (1 + 0.14 * Math.sin(u * Math.PI)), (u - 1) * length);
+  });
+  // Its axis tilted toward the player, the face at `at`.
+  const place = (g: THREE.BufferGeometry) => g.rotateX(tilt).translate(at[0], at[1], at[2]);
+  const barrel = new THREE.Mesh(place(new THREE.LatheGeometry(profile, 28)), material("#7a3b1c", { roughness: 0.45, metalness: 0.05, side: THREE.DoubleSide }));
+  const heads = new THREE.Mesh(
+    mergeGeometries([place(new THREE.CylinderGeometry(r * 1.01, r * 1.01, 0.006, 28)), place(new THREE.CylinderGeometry(r * 1.01, r * 1.01, 0.006, 28).translate(0, -length, 0))]),
+    material("#e9dcc0", { roughness: 0.85 })
+  );
+  // A ring of tacks round each face.
+  const tacks: THREE.BufferGeometry[] = [];
+  for (let k = 0; k < 24; k++) {
+    const a = (k / 24) * Math.PI * 2;
+    for (const y of [-0.012, -length + 0.012]) tacks.push(place(new THREE.SphereGeometry(0.006, 5, 4).translate(Math.cos(a) * r * 1.02, y, Math.sin(a) * r * 1.02)));
+  }
+  const stand = [
+    // A slanted wooden stand: two feet, two posts up to the barrel.
+    boxAt(0.04, 0.03, 0.5, -r * 0.8, 0.015, at[2] - 0.12),
+    boxAt(0.04, 0.03, 0.5, r * 0.8, 0.015, at[2] - 0.12),
+    boxAt(0.035, at[1] - 0.12, 0.035, -r * 0.9, (at[1] - 0.12) / 2, at[2] - 0.2),
+    boxAt(0.035, at[1] - 0.12, 0.035, r * 0.9, (at[1] - 0.12) / 2, at[2] - 0.2),
+  ];
+  for (const mesh of [barrel, heads]) mesh.userData.navIgnore = true;
+  group.add(barrel, heads, merged(tacks, material("#2a2522", { metalness: 0.5, roughness: 0.4 })), merged(stand, material("#3a2414", { roughness: 0.75 })));
+  return group;
+}
+
+type StickKind = "stick" | "mallet" | "bachi";
+
+/** A drumstick, a kulintang's padded mallet, or a taiko's thick bachi,
+ *  along +y from the grip, all the same length. */
+export function buildStick(kind: StickKind = "stick") {
+  const group = new THREE.Group();
+  if (kind === "bachi") group.add(merged([new THREE.CylinderGeometry(0.011, 0.013, 0.4, 8).translate(0, 0.12, 0)], material("#e2c896", { roughness: 0.6 })));
+  else group.add(merged([new THREE.CylinderGeometry(0.006, 0.009, 0.4, 6).translate(0, 0.12, 0), new THREE.SphereGeometry(0.009, 6, 4).translate(0, 0.32, 0)], material("#d9b98a", { roughness: 0.6 })));
+  // A mallet's head, wrapped in cloth.
+  if (kind === "mallet") group.add(merged([new THREE.SphereGeometry(0.018, 10, 8).scale(1, 1.3, 1).translate(0, 0.32, 0)], material("#7a2230", { roughness: 0.9 })));
+  return group;
+}
+
+/** A shaker: an egg-shaped shell of seeds, held in the right hand. */
+export function buildShaker() {
+  const group = new THREE.Group();
+  group.add(merged([new THREE.SphereGeometry(0.028, 14, 10).scale(1, 1.6, 1).translate(0, 0.06, 0)], material("#e0a526", { roughness: 0.45 })));
+  group.add(merged([new THREE.CylinderGeometry(0.029, 0.029, 0.012, 14).translate(0, 0.06, 0)], material("#b2341c", { roughness: 0.5 })));
   return group;
 }
 
@@ -300,8 +427,9 @@ function noteSpot(instrument: Instrument, note: number, octave: number): { at: T
       ? { at: new THREE.Vector3(keyX(semitone), PAD_TOP + 0.014, DESK_Z - 0.03), size: [WHITE_KEY * 0.55, 0.004, 0.06], tilt: 0 }
       : { at: new THREE.Vector3(keyX(semitone), PAD_TOP + 0.004, DESK_Z + 0.005), size: [WHITE_KEY * 0.92, 0.004, 0.11], tilt: 0 };
   }
-  if (instrument === "kit") {
-    const piece = KIT_PIECES_AT[note];
+  const set = STICK_SETS[instrument];
+  if (set) {
+    const piece = set.pieces[note];
     if (!piece || piece.hand === "foot") return null;
     return { at: new THREE.Vector3(piece.at[0], pieceTop(piece) + 0.006, piece.at[2]), size: [piece.r * 1.8, 0.004, piece.r * 1.8], tilt: 0 };
   }
@@ -466,19 +594,26 @@ const STICK_FLICK = 0.75;
  * lifting the whole arm.
  */
 export function kitPose(hands: Hands, note: Note, now: number, prev: Note = null) {
+  malletPose(hands, KIT_PIECES_AT, note, now, prev);
+}
+
+/** The same for any instrument played with a stick in each hand: the kit,
+ *  the kulintang's gongs, the taiko's face and rim. */
+export function malletPose(hands: Hands, pieces: Record<number, Piece>, note: Note, now: number, prev: Note = null) {
   strikes(
     hands,
     note,
     prev,
     now,
     (n) => {
-      const piece = KIT_PIECES_AT[n];
+      const piece = pieces[n];
       return !piece || piece.hand === "foot" ? null : piece.hand;
     },
     (hand, n) => (hands.lastPiece[hand] = n)
   );
   for (const side of SIDES) {
-    const piece = KIT_PIECES_AT[hands.lastPiece[side]];
+    const piece = pieces[hands.lastPiece[side]];
+    if (!piece) continue;
     const up = lift({ at: hands.hitAt[side] }, now, 1);
     const cymbal = piece.depth === 0;
     // Where the tip lands: a drum's head, a cymbal's near edge.
@@ -491,7 +626,7 @@ export function kitPose(hands: Hands, note: Note, now: number, prev: Note = null
     const across = Math.hypot(dx, dz) || 1;
     dx /= across;
     dz /= across;
-    const pitch = cymbal ? STICK_PITCH.cymbal : STICK_PITCH.drum;
+    const pitch = piece.pitch ?? (cymbal ? STICK_PITCH.cymbal : STICK_PITCH.drum);
     const along = Math.cos(pitch) * STICK_REACH;
     const raised = pitch - STICK_FLICK * up;
     set(
@@ -562,6 +697,16 @@ export function guitarPose(hands: Hands, rig: BodyRig, guitar: THREE.Object3D, k
   set(hands.left, [fretAt[0] + 0.02, fretAt[1] - 0.02, fretAt[2] + 0.06], [0.2, 1, 0.1], [-0.9, 0.3, -0.3], 0.65);
 }
 
+/** A shaker in the right hand, at the chest: each shake snaps it forward
+ *  and back. Returns false: one hand. */
+export function shakerPose(hands: Hands, note: Note, now: number) {
+  const age = note ? now - note.at : 1;
+  const snap = age < 0.06 ? age / 0.06 : age < 0.18 ? 1 - (age - 0.06) / 0.12 : 0;
+  const strength = note && note.n === 0 ? 1 : 0.6;
+  set(hands.right, [0.13, 0.76 + 0.02 * snap * strength, -0.24 - 0.06 * snap * strength], [0.05, 1, -0.15 - 0.4 * snap * strength], [-0.3, 0, -1], 1);
+  return false;
+}
+
 /** One light stick, or one in each hand; returns whether both are held.
  *  `clock` is the wall clock in seconds: everyone's sway runs off it, so a
  *  crowd waves together, and a pair sways as one. */
@@ -622,6 +767,8 @@ interface Holder {
 
 const approach = (current: number, goal: number, rate: number, dt: number) => current + (goal - current) * (1 - Math.exp(-rate * dt));
 const SIDES = ["right", "left"] as const;
+/** How fast (eye heights a second) a hand must be going to shake. */
+const SHAKE_SPEED = 0.9;
 
 interface BandLayerProps {
   selfId: string | null;
@@ -646,6 +793,8 @@ export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerPr
   selfIdRef.current = selfId;
   // VR: whether each hand is above the instrument and may strike it.
   const armed = useRef({ left: true, right: true, strum: true, kick: true });
+  // VR: the shaking hand's last place and speed, and its last shake.
+  const shaken = useRef({ at: [0, 0, 0] as [number, number, number], v: [0, 0, 0], last: 0 });
 
   // Ask once on starting, for anything announced before this client listened.
   useEffect(() => sendAddonEvent("band", { k: "hi" }), []);
@@ -719,9 +868,18 @@ export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerPr
       const local = holder.prop.worldToLocal(hit.point.clone());
       let note: number | null = null;
       if (isWorn(instrument)) note = zoneOnNeck(instrument, local) ?? band.get().chord;
-      else if (instrument === "kit") {
+      else if (instrument === "shaker") note = 0;
+      else if (STICK_SETS[instrument]) {
         const piece = hit.object.parent?.userData.piece;
         if (typeof piece === "number") note = piece;
+        else {
+          // One shell (the taiko): the piece nearest the tap, across.
+          let best = Infinity;
+          for (const [index, p] of Object.entries(STICK_SETS[instrument]!.pieces)) {
+            const d = Math.abs(local.x - p.at[0]);
+            if (p.hand !== "foot" && d < best) [best, note] = [d, Number(index)];
+          }
+        }
       } else if (local.y >= PAD_TOP - 0.025) {
         if (instrument === "drums") {
           for (let pad = 0; pad < 8 && note === null; pad++) {
@@ -810,6 +968,10 @@ export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerPr
         holder.detach = () => {};
         holder.propKey = propKey;
         holder.drawn.valid = false;
+        // Fresh hands for a new instrument, resting where it's played.
+        holder.hands = newHands();
+        const rest = instrument ? STICK_SETS[instrument]?.rest : undefined;
+        if (rest) holder.hands.lastPiece = { ...rest };
         if (instrument && rig) {
           if (instrument === "lightstick") {
             const hex = LIGHT_COLORS[color] ?? LIGHT_COLORS[0];
@@ -828,18 +990,23 @@ export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerPr
           } else if (isWorn(instrument)) {
             holder.prop = buildWorn(instrument);
             holder.detach = wearOnChest(vrm, rig, holder.prop);
+          } else if (instrument === "shaker") {
+            holder.prop = buildShaker();
+            holder.detach = holdInHand(vrm, "right", holder.prop);
           } else {
             // In front of them, in their body frame scaled to their size.
-            const stand = instrument === "drums" ? buildDrumPad() : instrument === "kit" ? buildKit() : buildKeyboard();
+            const builders: Partial<Record<Instrument, () => THREE.Group>> = { drums: buildDrumPad, kit: buildKit, kulintang: buildKulintang, taiko: buildTaiko };
+            const stand = (builders[instrument] ?? buildKeyboard)();
             const anchor = vrm.scene.parent;
             if (anchor) {
               stand.scale.setScalar(feetAndEye(rig, feet) / anchor.getWorldScale(scale).y);
               anchor.add(stand);
               holder.prop = stand;
               const detachStand = () => anchor.remove(stand);
-              if (instrument === "kit") {
+              const sticksOf = STICK_SETS[instrument]?.stick;
+              if (sticksOf) {
                 // A stick in each hand.
-                const sticks = [buildStick(), buildStick()];
+                const sticks = [buildStick(sticksOf), buildStick(sticksOf)];
                 const letGo = [holdInHand(vrm, "right", sticks[0]), holdInHand(vrm, "left", sticks[1])];
                 holder.detach = () => {
                   detachStand();
@@ -849,7 +1016,7 @@ export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerPr
               } else holder.detach = detachStand;
             }
           }
-          if (holder.prop && instrument !== "lightstick") {
+          if (holder.prop && instrument !== "lightstick" && instrument !== "shaker") {
             holder.flash = buildFlash();
             holder.prop.add(holder.flash);
           }
@@ -889,7 +1056,9 @@ export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerPr
       // it, so the hands are placed on it after. Pads, keys, and the kit
       // stand on the floor, so the hands stay on them while the body moves.
       const energy = updateGroove(holder.groove, instrument, note, waving, now, dt);
-      const side = instrument === "drums" || instrument === "keys" ? hands.lastX[hands.last] : 0;
+      // Where along the instrument the last note was, to lean toward.
+      const side =
+        instrument === "drums" || instrument === "keys" ? hands.lastX[hands.last] : instrument === "kulintang" ? (GONGS_AT[hands.lastPiece[hands.last]]?.at[0] ?? 0) : 0;
       bandBody(instrument, note, energy, side, Date.now() / 1000, now, holder.body);
       if (!holder.settled) holder.settled = copyBody(holder.body, newBodyPose());
       else blendBody(holder.settled, holder.body, 1 - Math.exp(-EASE_BODY * dt));
@@ -898,9 +1067,11 @@ export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerPr
       const legs = instrument === "kit" ? holder.weight : holder.weight * (1 - moving);
       poseBody(rig, holder.overlay, holder.settled, upper, legs);
       let both = true;
+      const sticks = STICK_SETS[instrument];
       if (instrument === "drums" || instrument === "keys") deskPose(hands, instrument, note, now, octave, prev);
-      else if (instrument === "kit") kitPose(hands, note, now, prev);
+      else if (sticks) malletPose(hands, sticks.pieces, note, now, prev);
       else if (isWorn(instrument) && holder.prop) guitarPose(hands, rig, holder.prop, instrument, note, now);
+      else if (instrument === "shaker") both = shakerPose(hands, note, now);
       else both = stickPose(hands, waving, pair, Date.now() / 1000);
       const playing = note !== null && now - note.at < 0.5;
       const k = holder.drawn.valid ? 1 - Math.exp(-(playing ? EASE_PLAYING : EASE_RESTING) * dt) : 1;
@@ -910,8 +1081,8 @@ export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerPr
       const settled = holder.settled;
       const draw = (handSide: "left" | "right") => {
         const t = copyTarget(holder!.drawn[handSide], holder!.drawn.carried);
-        // A light stick waves with the body's sway.
-        if (instrument === "lightstick") carryHand(t, settled, upper, legs);
+        // A light stick or a shaker moves with the body's sway.
+        if (instrument === "lightstick" || instrument === "shaker") carryHand(t, settled, upper, legs);
         return toTrackedHand(handSide, t, holder!.tracked[handSide]);
       };
       poseHands(rig, holder.overlay, draw("right"), both ? draw("left") : null, holder.weight);
@@ -959,6 +1130,22 @@ export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerPr
       }
       return;
     }
+    if (me.instrument === "shaker") {
+      // Shake it: a shake sounds where the hand turns back, harder the faster.
+      const hand = sample.pose.right;
+      if (!hand) return;
+      const s = shaken.current;
+      const dt = Math.max(1e-3, rawDelta);
+      const v = [(hand.pose[0] - s.at[0]) / dt, (hand.pose[1] - s.at[1]) / dt, (hand.pose[2] - s.at[2]) / dt];
+      const speed = Math.hypot(...s.v);
+      if (speed > SHAKE_SPEED && v[0] * s.v[0] + v[1] * s.v[1] + v[2] * s.v[2] < 0 && now - s.last > 0.08) {
+        s.last = now;
+        play(speed > SHAKE_SPEED * 2 ? 0 : 1);
+      }
+      s.at = [hand.pose[0], hand.pose[1], hand.pose[2]];
+      s.v = v;
+      return;
+    }
     if (me.instrument === "kit") {
       // The trigger on the right controller is the kick pedal.
       const squeeze = sample.pose.right?.curl[0] ?? 0;
@@ -971,12 +1158,13 @@ export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerPr
       const hand = sample.pose[side];
       if (!hand) continue;
       const [x, y, z] = hand.pose;
-      if (me.instrument === "kit") {
+      const sticks: StickSet | undefined = STICK_SETS[me.instrument];
+      if (sticks) {
         // The stick's tip, ahead of and below the hand.
         const tip: [number, number, number] = [x, y - 0.07, z - STICK_REACH * 0.9];
         let hitPiece: number | null = null;
         let above = true;
-        for (const [index, piece] of Object.entries(KIT_PIECES_AT)) {
+        for (const [index, piece] of Object.entries(sticks.pieces)) {
           const n = Number(index);
           if (piece.hand === "foot" || DRAWN_AS[n] !== undefined) continue;
           if (Math.hypot(tip[0] - piece.at[0], tip[2] - piece.at[2]) > piece.r + 0.03) continue;

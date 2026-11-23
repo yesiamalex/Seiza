@@ -9,8 +9,8 @@ import { cancelSelfPush, pushSelf, takeSelfPush } from "../player/selfPush";
 import { elementPulse, ELEMENTS, isBladed, WEAPON_SPECS, WEAPONS } from "./fantasy/weapons";
 import { comboReached, record, tally } from "./fantasy/record";
 import { NoteGate, parseBandEvent, validNote } from "./band/band";
-import { INSTRUMENTS, KEY_LAYOUT, KIT, pickedMidi, pickNote, unpick } from "./band/instruments";
-import { deskPose, KIT_PIECES_AT, kitPose, newHands, stickPose, type Hands } from "./band/BandLayer";
+import { GONGS, INSTRUMENTS, isStand, KEY_LAYOUT, KIT, pickedMidi, pickNote, TAIKO, unpick } from "./band/instruments";
+import { deskPose, GONGS_AT, KIT_PIECES_AT, kitPose, malletPose, newHands, shakerPose, stickPose, TAIKO_AT, type Hands } from "./band/BandLayer";
 import { FantasyEffects } from "./fantasy/effects";
 import { PoseOverlay, sharedOverlay } from "../xr/body/bodyIk";
 import { BLADE_CONTACT, bodyCapsule, segmentDistance, sweep } from "./fantasy/contact";
@@ -436,6 +436,47 @@ describe("the band's instruments", () => {
         expect(hand.pos[2], "piece " + index).toBeLessThan(-0.08);
       }
     }
+  });
+
+  it("brings a mallet down on each kulintang gong and a bachi on the taiko, standing", () => {
+    const REACH = 0.21;
+    for (const [name, pieces] of [["gong", GONGS_AT], ["taiko", TAIKO_AT]] as const) {
+      for (const [index, piece] of Object.entries(pieces)) {
+        const h = newHands();
+        malletPose(h, pieces, { n: Number(index), at: 0 }, 0.05);
+        const hand = h[piece.hand as "left" | "right"];
+        const length = Math.hypot(...hand.blade);
+        const tip = hand.pos.map((v, k) => v + (hand.blade[k] / length) * REACH);
+        expect(Math.hypot(tip[0] - piece.at[0], tip[2] - piece.at[2]), `${name} ${index}`).toBeLessThan(piece.r + 0.02);
+        expect(Math.abs(tip[1] - (piece.at[1] + piece.depth / 2)), `${name} ${index}`).toBeLessThan(0.03);
+        // Standing: the hands at the waist, below the shoulders, in front.
+        expect(hand.pos[1], `${name} ${index}`).toBeLessThan(0.8);
+        expect(hand.pos[2], `${name} ${index}`).toBeLessThan(-0.05);
+      }
+    }
+    // Low gongs to the left hand, high to the right; both dons at once, a hand each.
+    expect(GONGS_AT[0].hand).toBe("left");
+    expect(GONGS_AT[GONGS.length - 1].hand).toBe("right");
+    const h = newHands();
+    malletPose(h, TAIKO_AT, { n: TAIKO.donRight, at: 1.01 }, 1.05, { n: TAIKO.donLeft, at: 1 });
+    expect([h.hitAt.left, h.hitAt.right]).toEqual([1, 1.01]);
+  });
+
+  it("plays the new instruments' notes, and only theirs; stands keep you at them", () => {
+    expect(validNote("kulintang", 7)).toBe(true);
+    expect(validNote("kulintang", 8)).toBe(false);
+    expect(validNote("taiko", TAIKO.kaRight)).toBe(true);
+    expect(validNote("taiko", 4)).toBe(false);
+    expect(validNote("shaker", 1)).toBe(true);
+    expect(validNote("shaker", 2)).toBe(false);
+    expect(["drums", "kit", "keys", "kulintang", "taiko"].every((i) => isStand(i as never))).toBe(true);
+    expect(["guitar", "bass", "shaker", "lightstick", null].some((i) => isStand(i as never))).toBe(false);
+    // A shake snaps the hand forward, one hand only.
+    const h = newHands();
+    expect(shakerPose(h, { n: 0, at: 0 }, 0.06)).toBe(false);
+    const snapped = h.right.pos[2];
+    shakerPose(h, { n: 0, at: 0 }, 1);
+    expect(snapped).toBeLessThan(h.right.pos[2]);
   });
 
   it("holds one light stick or one in each hand", () => {
