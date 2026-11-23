@@ -3,8 +3,8 @@ import { L, useLang } from "../../i18n/lang";
 import { panelStyle, pillButtonStyle } from "../../ui/styles";
 import { useStore } from "../store";
 import { Choices, Hint, MODE_ACCENTS, ModeButton, MusicIcon } from "../ui";
-import { band, play, release, setInstrument, setLightColor, setPair, setPlaying, setWaving } from "./band";
-import { INSTRUMENT_LABELS, INSTRUMENTS, KEY_LAYOUT, KEYS_BASE, LIGHT_COLORS, PAD_COLUMNS, PADS, type Instrument } from "./instruments";
+import { band, fret, pick, play, release, setInstrument, setLightColor, setPair, setPlaying, setWaving } from "./band";
+import { INSTRUMENT_LABELS, INSTRUMENTS, isStand, isWorn, KEY_LAYOUT, KEYS_BASE, LIGHT_COLORS, noteName, PAD_COLUMNS, PADS, PICK_KEYS, pickedMidi, STRINGS, type Instrument } from "./instruments";
 
 const ACCENT = MODE_ACCENTS.band;
 const NONE = "none" as const;
@@ -58,6 +58,17 @@ export function BandButton() {
               "演奏中は、**楽器に表示されたキー**で演奏します(移動はしません。**Esc**で終了)。スマホは**楽器をタップ**。VRでは手で演奏します:パッドや鍵盤をたたき、ギターはもう一方の手でネックの位置でコードを選んでかき鳴らします。"
             )}
           </Hint>
+          {isWorn(state.instrument) && (
+            <Hint accent={ACCENT}>
+              {L(
+                "For a melody, **1 to 6** pick single strings of the chord you last played (**Shift** and a chord's key holds a chord without strumming it). Two at once ring together.",
+                "メロディーは、最後に弾いたコードの弦を **1〜6** で1本ずつ弾きます(**Shift** とコードのキーで、鳴らさずにコードを押さえます)。2本同時にも鳴らせます。"
+              )}
+            </Hint>
+          )}
+          {isStand(state.instrument) && (
+            <Hint>{L("It stands where you set it up, so you stay at it: pick Nothing to walk again.", "置いた場所に立てたままなので、その場から動きません。歩くには「なし」を選んでください。")}</Hint>
+          )}
         </>
       ) : (
         <Hint>{L("Pick an instrument to play for the room, or a light stick to cheer with.", "部屋に向けて演奏する楽器か、応援用のペンライトを選んでください。")}</Hint>
@@ -110,7 +121,8 @@ const isTyping = (target: EventTarget | null) =>
 export function BandStage() {
   useLang();
   const state = useStore(band);
-  const [lit, setLit] = useState<number | null>(null);
+  /** The pad (or "s" and a string) just played, lit for a moment. */
+  const [lit, setLit] = useState<string | null>(null);
   // Keys held down, for the keyboard: each lit, and ringing, until let go.
   const [down, setDown] = useState<ReadonlySet<number>>(() => new Set());
   const active = state.playing && state.instrument !== null && state.instrument !== "lightstick";
@@ -119,7 +131,11 @@ export function BandStage() {
 
   const hit = (note: number) => {
     play(note);
-    setLit(note);
+    setLit(String(note));
+  };
+  const pluck = (string: number) => {
+    pick(string);
+    setLit(`s${string}`);
   };
   /** A key pressed and held, on the keys: any number at once, for chords. */
   const press = (note: number) => {
@@ -155,6 +171,14 @@ export function BandStage() {
       const { instrument, octave } = band.get();
       let note: number | null = null;
       const pads = instrument ? PADS[instrument] : undefined;
+      // A string, picked from the chord held.
+      const string = isWorn(instrument) ? PICK_KEYS.indexOf(e.key) : -1;
+      if (isWorn(instrument) && string >= 0 && string < STRINGS[instrument]) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        if (!e.repeat) pluck(string);
+        return;
+      }
       if (pads) note = indexOf(pads.map((p) => p.key), key);
       else if (instrument === "keys") {
         if (key === "Z" || key === "X") {
@@ -173,7 +197,8 @@ export function BandStage() {
       if (instrument === "keys") {
         pressed.set(key, note);
         press(note);
-      } else hit(note);
+      } else if (isWorn(instrument) && e.shiftKey) fret(note);
+      else hit(note);
     };
     // Keyups too, so movement never sees half a key press.
     const swallow = (e: KeyboardEvent) => {
@@ -181,7 +206,7 @@ export function BandStage() {
       const key = e.key.length === 1 ? e.key.toUpperCase() : e.key;
       const { instrument } = band.get();
       const pads = instrument ? PADS[instrument] : undefined;
-      const keys = pads ? pads.map((p) => p.key) : [...KEY_LAYOUT.map((l) => l.key), "Z", "X"];
+      const keys = pads ? [...pads.map((p) => p.key), ...(isWorn(instrument) ? PICK_KEYS : [])] : [...KEY_LAYOUT.map((l) => l.key), "Z", "X"];
       if (keys.includes(key)) e.stopImmediatePropagation();
       const note = pressed.get(key);
       if (note !== undefined) {
@@ -208,7 +233,7 @@ export function BandStage() {
   }, [active]);
 
   if (!shown) return null;
-  const { instrument, octave } = state;
+  const { instrument, octave, chord } = state;
   return (
     <div role="group" aria-label={L("Instrument", "楽器")} style={stageStyle}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
@@ -231,8 +256,16 @@ export function BandStage() {
       {instrument && PADS[instrument] && (
         <div style={{ display: "grid", gridTemplateColumns: `repeat(${PAD_COLUMNS[instrument] ?? 4}, 1fr)`, gap: 6 }}>
           {PADS[instrument]!.map((pad, i) => (
-            <Pad key={`${pad.label}${i}`} label={pad.label} hint={pad.key} lit={lit === i} onHit={() => hit(i)} height={instrument === "drums" ? 58 : 48} />
+            <Pad key={`${pad.label}${i}`} label={pad.label} hint={pad.key} lit={lit === String(i)} held={isWorn(instrument) && chord === i} onHit={() => hit(i)} height={instrument === "drums" ? 58 : 48} />
           ))}
+        </div>
+      )}
+      {isWorn(instrument) && (
+        <div role="group" aria-label={L("Strings", "弦")} style={{ display: "grid", gridTemplateColumns: `repeat(${STRINGS[instrument]}, 1fr)`, gap: 6 }}>
+          {Array.from({ length: STRINGS[instrument] }, (_, s) => {
+            const midi = pickedMidi(instrument, chord, s);
+            return midi === null ? null : <Pad key={s} label={noteName(midi)} hint={PICK_KEYS[s]} lit={lit === `s${s}`} onHit={() => pluck(s)} height={36} />;
+          })}
         </div>
       )}
       {instrument === "keys" && (
@@ -257,7 +290,7 @@ const indexOf = (keys: string[], key: string) => {
   return i < 0 ? null : i;
 };
 
-function Pad({ label, hint, lit, onHit, height }: { label: string; hint: string; lit: boolean; onHit: () => void; height: number }) {
+function Pad({ label, hint, lit, held, onHit, height }: { label: string; hint: string; lit: boolean; held?: boolean; onHit: () => void; height: number }) {
   return (
     <button
       type="button"
@@ -275,7 +308,7 @@ function Pad({ label, hint, lit, onHit, height }: { label: string; hint: string;
         padding: 4,
         touchAction: "none",
         background: lit ? "rgba(180,140,255,0.55)" : "rgba(255,255,255,0.08)",
-        border: `1px solid ${lit ? ACCENT : "rgba(255,255,255,0.16)"}`,
+        border: `1px solid ${lit || held ? ACCENT : "rgba(255,255,255,0.16)"}`,
         transition: "background 80ms",
       }}
     >

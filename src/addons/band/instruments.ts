@@ -19,6 +19,12 @@ export const WORN = ["guitar", "electric", "bass"] as const;
 export type Worn = (typeof WORN)[number];
 export const isWorn = (i: Instrument | null): i is Worn => (WORN as readonly string[]).includes(i ?? "");
 
+/** The instruments that stand on the floor in front of their player (a
+ *  pad, a keyboard, a kit): set up where they are, and left there, so their
+ *  player stays at them while they're out (PlayerRig's `rooted`). */
+export const STANDS = ["drums", "kit", "keys"] as const;
+export const isStand = (i: Instrument | null) => (STANDS as readonly string[]).includes(i ?? "");
+
 export const LIGHT_COLORS = ["#ff4fa3", "#4fb2ff", "#59ff8a", "#ffe14f", "#b36bff", "#ff8a3d", "#ffffff"] as const;
 
 export interface Pad {
@@ -108,6 +114,36 @@ export const ELECTRIC: { label: string; key: string; notes: number[] }[] = [
 /** The bass plays each chord's root, an octave and more down: the same
  *  pads as the guitar's, so the two lock together. */
 export const BASS: Pad[] = CHORDS.map((c) => ({ label: c.name, key: c.key }));
+
+/**
+ * Single strings, for a melody: the fret hand holds a chord (the last one
+ * strummed, or fretted with Shift), and keys 1 to 6 pick its strings, low
+ * to high, an octave up past its top string. The bass picks the root, its
+ * fifth, the octave, and the fifth above, for the lines bassists walk. A
+ * pick is note PICK_BASE + chord × 6 + string, so it travels as any note
+ * does.
+ */
+export const PICK_BASE = 20;
+export const STRINGS: Record<Worn, number> = { guitar: 6, electric: 6, bass: 4 };
+export const PICK_KEYS = ["1", "2", "3", "4", "5", "6"];
+const BASS_PICKS = [0, 7, 12, 19];
+export const pickNote = (chord: number, string: number) => PICK_BASE + chord * 6 + string;
+export const unpick = (note: number) => (note >= PICK_BASE ? { chord: Math.floor((note - PICK_BASE) / 6), string: (note - PICK_BASE) % 6 } : null);
+/** The chord a note is played from: itself, or the one a pick is from. */
+export const chordOf = (note: number) => unpick(note)?.chord ?? note;
+/** Chords a pick can be from: the guitar's and bass's twelve, the lead's six power chords. */
+export const pickable = (instrument: Worn, chord: number) => Number.isInteger(chord) && chord >= 0 && chord < (instrument === "electric" ? 6 : CHORDS.length);
+
+/** The MIDI note a string picks from a chord, or null if there's no such string. */
+export function pickedMidi(instrument: Worn, chord: number, string: number): number | null {
+  if (!pickable(instrument, chord) || !Number.isInteger(string) || string < 0 || string >= STRINGS[instrument]) return null;
+  if (instrument === "bass") return CHORDS[chord].root + BASS_PICKS[string];
+  const notes = instrument === "guitar" ? CHORDS[chord].notes : ELECTRIC[chord].notes;
+  return notes[string % notes.length] + 12 * Math.floor(string / notes.length);
+}
+
+const NAMES = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
+export const noteName = (midi: number) => NAMES[midi % 12] + (Math.floor(midi / 12) - 1);
 
 /** Every instrument played from pads, its pads in order (a note is an index). */
 export const PADS: Partial<Record<Instrument, Pad[]>> = {
@@ -383,12 +419,17 @@ const chain = (...nodes: AudioNode[]) => {
  *  low down and rings in the upper mids, and the pick's tick first. */
 export function playChord(chord: number, distance?: number) {
   const notes = CHORDS[chord]?.notes;
-  if (!notes) return;
+  if (notes) acoustic(notes, distance);
+}
+
+function acoustic(notes: number[], distance?: number) {
   const v = voice(1, distance, FALLOFF);
   if (!v) return;
+  const single = notes.length === 1;
   const body = chain(filter(v.ctx, "peaking", 105, 1.2, 5), filter(v.ctx, "peaking", 230, 1.4, 2.5), filter(v.ctx, "peaking", 2800, 1, 2), filter(v.ctx, "highshelf", 5000, 0.7, -6), v.out);
-  strum(v, notes, body, 0.48, 0.016);
-  noiseHit(v, { frequency: 3500, duration: 0.025, gain: 0.07, q: 1.5 });
+  // One string picked rings a little louder than each of a strum's.
+  strum(v, notes, body, single ? 0.75 : 0.48, 0.016);
+  noiseHit(v, { frequency: 3500, duration: 0.025, gain: single ? 0.045 : 0.07, q: 1.5 });
 }
 
 const curves = new Map<string, Float32Array>();
@@ -419,10 +460,13 @@ function shaper(drive: number, lean = 0) {
  */
 export function playElectric(note: number, distance?: number) {
   const spec = ELECTRIC[note];
-  if (!spec) return;
+  if (spec) amped(spec.notes, distance);
+}
+
+function amped(notes: number[], distance?: number) {
   const v = voice(0.7, distance, FALLOFF);
   if (!v) return;
-  const lead = spec.notes.length === 1;
+  const lead = notes.length === 1;
   const amp = v.ctx.createWaveShaper();
   amp.curve = shaper(lead ? 5 : 6, 0.2);
   amp.oversample = "4x";
@@ -443,8 +487,8 @@ export function playElectric(note: number, distance?: number) {
     v.out
   );
   const sustain = { sustain: lead ? 1.2 : 0.4 };
-  const sources = strum(v, spec.notes, input, lead ? 0.9 : 0.6, lead ? 0 : 0.007, sustain);
-  if (!lead) strum(v, spec.notes, input, 0.45, 0.007, sustain, 0.012, Math.pow(2, 6 / 1200));
+  const sources = strum(v, notes, input, lead ? 0.9 : 0.6, lead ? 0 : 0.007, sustain);
+  if (!lead) strum(v, notes, input, 0.45, 0.007, sustain, 0.012, Math.pow(2, 6 / 1200));
   if (lead) {
     // Vibrato: the pitch wavering a little, a beat after the note starts.
     const lfo = v.ctx.createOscillator();
@@ -469,7 +513,10 @@ export function playElectric(note: number, distance?: number) {
  */
 export function playBass(note: number, distance?: number) {
   const root = CHORDS[note]?.root;
-  if (root === undefined) return;
+  if (root !== undefined) bassNote(root, distance);
+}
+
+function bassNote(root: number, distance?: number) {
   const v = voice(1, distance, FALLOFF);
   if (!v) return;
   const warm = v.ctx.createWaveShaper();
@@ -487,9 +534,20 @@ export function playBass(note: number, distance?: number) {
   noiseHit(v, { frequency: 700, duration: 0.03, gain: 0.05, q: 0.8 });
 }
 
+/** One string picked (see PICK_BASE), on whichever worn instrument. */
+export function playPick(instrument: Worn, note: number, distance?: number) {
+  const pick = unpick(note);
+  const midi = pick ? pickedMidi(instrument, pick.chord, pick.string) : null;
+  if (midi === null) return;
+  if (instrument === "guitar") acoustic([midi], distance);
+  else if (instrument === "electric") amped([midi], distance);
+  else bassNote(midi, distance);
+}
+
 /** Any musician's note, by instrument. */
 export function playNote(instrument: Instrument, note: number, distance?: number) {
-  if (instrument === "drums") playDrum(note, distance);
+  if (isWorn(instrument) && note >= PICK_BASE) playPick(instrument, note, distance);
+  else if (instrument === "drums") playDrum(note, distance);
   else if (instrument === "kit") playKit(note, distance);
   else if (instrument === "keys") playKey(note, distance);
   else if (instrument === "guitar") playChord(note, distance);
@@ -511,4 +569,11 @@ export function prepareGuitar() {
     pluck(output.ctx, chord.root, { sustain: 0.8, soft: 0.6 });
   }
   for (const e of ELECTRIC) for (const midi of e.notes) pluck(output.ctx, midi, { sustain: e.notes.length === 1 ? 1.2 : 0.4 });
+  // And every string a pick can sound, each the way its instrument plucks.
+  for (const kind of WORN)
+    for (let chord = 0; chord < CHORDS.length; chord++)
+      for (let string = 0; string < STRINGS[kind]; string++) {
+        const midi = pickedMidi(kind, chord, string);
+        if (midi !== null) pluck(output.ctx, midi, kind === "bass" ? { sustain: 0.8, soft: 0.6 } : kind === "electric" ? { sustain: 1.2 } : {});
+      }
 }

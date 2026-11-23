@@ -90,7 +90,7 @@ import { AvatarChooser } from "./ui/AvatarChooser";
 import { useMediaQuery, useWantsTouchControls } from "./ui/useMediaQuery";
 import { saveProfile } from "./profile/profileStore";
 import { deliverWorldMessage, unwrapWorldMessage, WorldExtension, WorldOverlay, wrapWorldMessage } from "./worlds/WorldExtension";
-import { AddonBarButtons, AddonOverlay, AddonScene, addonHoldsClicks, connectAddonBus, LOCAL_AVATAR, RoomModes, setAddonAvatar, useAddonXrSections } from "./addons";
+import { AddonBarButtons, AddonOverlay, AddonScene, addonHoldsClicks, connectAddonBus, LOCAL_AVATAR, RoomModes, setAddonAvatar, useAddonRooted, useAddonXrSections } from "./addons";
 import { PortalCard, Portals } from "./worlds/Portals";
 import { BAR_LABEL_CLASS, barButtonActiveStyle, barButtonStyle, inputStyle, panelStyle, pillButtonStyle, primaryButtonStyle } from "./ui/styles";
 import { CloseIcon, LockIcon, PersonIcon, VrHeadsetIcon } from "./ui/icons";
@@ -1259,6 +1259,8 @@ export default function App() {
   // headset menu: what their buttons on the flat control bar offer.
   // Editors and admins also get the switches that turn the modes on.
   const addonXrSections = useAddonXrSections(worldState, { allowed: (canEditWorld || isAdmin) && connected, setWorldState });
+  // At a drum pad, keys, or a kit, which stand on the floor: no walking off.
+  const rooted = useAddonRooted(worldState);
 
   if (worldError) return <CenteredMessage text={L(`Couldn't load world: ${worldError.message}`, `ワールドを読み込めませんでした:${worldError.message}`)} />;
   if (!world) return <CenteredMessage text={L("Loading world…", "ワールドを読み込み中…")} />;
@@ -1445,6 +1447,7 @@ export default function App() {
             {world.portals && <Portals config={world.portals} builtin={world.environment !== "model"} />}
           </group>
           <PlayerRig
+            rooted={rooted}
             spawnPoint={DEV_SPAWN?.point ?? [world.spawnPoint.x, world.spawnPoint.y, world.spawnPoint.z]}
             spawnRotationY={DEV_SPAWN?.yaw ?? world.spawnRotationY}
             positionRef={positionRef}

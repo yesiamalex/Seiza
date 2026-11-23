@@ -1140,6 +1140,18 @@ adds its own coloured button to the bar while it is on.
     key rings while it's held, as a piano's does: hold several for a
     chord, on the keyboard or the screen, and let go to stop them. The
     room hears them held and let go too.
+  - For a melody on a guitar, keys 1 to 6 (or the row of strings under the
+    chords) pick single strings of the chord you last played; Shift and a
+    chord's key holds a chord without strumming it. The bass picks the
+    root, its fifth, and the octaves on 1 to 4.
+  - Two notes at once ring together, and both hands come down for them: a
+    kick and a snare, a crash and a hat. Each player sounds up to two at a
+    moment (three on the kit, with the kick foot; eight held keys), so
+    nobody can drown a room out.
+  - A drum pad, keys, or a kit stands where you set it up, so you stay at
+    it: walking, jumping, and the thumbstick are off until you pick
+    Nothing, and in first person your body keeps facing it wherever you
+    look. A guitar, a bass, or a light stick goes where you go.
   - **Start playing** also opens the instrument flat on the screen. Its
     keyboard keys are shown on it, and they play the instrument instead of
     moving you until you press Esc.
@@ -1148,7 +1160,9 @@ adds its own coloured button to the bar while it is on.
     guitar while your other hand picks the chord along its neck. The wrist
     menu has both modes' choices: weapons and elements (with your record),
     instruments, light-stick colours and how many, and the keys' octave,
-    and a switch between English and Japanese.
+    and a switch between English and Japanese. Editors and admins also
+    get the room-mode switches there, to turn Fantasy or Band on without
+    taking the headset off.
   - Seated, or in a posture such as seiza, your avatar is the posture's,
     not the mode's, on your own screen as on everyone else's.
   - Notes are sent as events and played by each visitor's own browser, so

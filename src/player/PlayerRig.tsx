@@ -188,6 +188,11 @@ interface PlayerRigProps {
   /** True while the player holds any pose that moving should cancel, such
    *  as kneeling in seiza (which has no seat to sit on). */
   postureHeld?: boolean;
+  /** At an instrument that stands on the floor (a room mode's drum pad,
+   *  keys, or kit): it stays where it was set up, and so do they. Walking,
+   *  jumping, and the thumbstick do nothing, and the body keeps facing it
+   *  in first person, wherever they look; putting it away frees them. */
+  rooted?: boolean;
   /** Eye height for a held floor posture, or null when the posture is seated. */
   postureEyeHeight?: number | null;
   onStandUp?: () => void;
@@ -262,6 +267,7 @@ export function PlayerRig({
   touchInputRef,
   sitAnchor = null,
   postureHeld = false,
+  rooted = false,
   postureEyeHeight = null,
   onStandUp,
   warpTargetRef,
@@ -296,6 +302,8 @@ export function PlayerRig({
   sitAnchorRef.current = sitAnchor;
   const postureHeldRef = useRef(postureHeld);
   postureHeldRef.current = postureHeld;
+  const rootedRef = useRef(rooted);
+  rootedRef.current = rooted;
   const postureEyeHeightRef = useRef(postureEyeHeight);
   postureEyeHeightRef.current = postureEyeHeight;
   const lastPostureEyeHeightRef = useRef(SEIZA_EYE_HEIGHT);
@@ -405,6 +413,7 @@ export function PlayerRig({
           onStandUpRef.current?.();
           return;
         }
+        if (rootedRef.current) return;
         const vcam = virtualCameraRef.current!;
         if (vcam.position.y <= groundEyeYRef.current + GROUNDED_EPSILON) {
           verticalVelocityRef.current = JUMP_SPEED;
@@ -594,7 +603,9 @@ export function PlayerRig({
     };
   }, [isPresenting, editMode, camera, gl]);
 
-  useXRControllerLocomotion(xrOriginRef, { speed: MOVE_SPEED * 0.6 });
+  // The stick walks you, unless you're at an instrument (rooted). Turning
+  // stays: you can always turn to face it.
+  useXRControllerLocomotion(xrOriginRef, rooted ? false : { speed: MOVE_SPEED * 0.6 });
 
   // Scratch vectors for the XR branch, reused rather than allocated 72
   // times a second (90Hz headsets are the ones that can least afford it).
@@ -815,7 +826,7 @@ export function PlayerRig({
       if (touch.jumpRequested) {
         touch.jumpRequested = false; // consume — one press, one jump
         jumpPressed = true;
-        if (!sitAnchorRef.current && vcam.position.y <= groundEyeYRef.current + GROUNDED_EPSILON) {
+        if (!sitAnchorRef.current && !rootedRef.current && vcam.position.y <= groundEyeYRef.current + GROUNDED_EPSILON) {
           verticalVelocityRef.current = JUMP_SPEED;
         }
       }
@@ -827,6 +838,12 @@ export function PlayerRig({
       }
     }
     const running = !!(keys.ShiftLeft || keys.ShiftRight) || !!touch?.running;
+    if (rootedRef.current) {
+      move.set(0, 0, 0);
+      jumpPressed = false;
+      moveTargetRef.current = null;
+      if (movePathRef) movePathRef.current = null;
+    }
 
     /**
      * Advances the head bob and returns the offsets to apply to the render
@@ -1140,7 +1157,9 @@ export function PlayerRig({
       verticalVelocityRef.current = 0;
     }
 
-    if (viewMode === "first") {
+    if (rootedRef.current) {
+      // Facing the instrument, wherever they look.
+    } else if (viewMode === "first") {
       avatarYawRef.current = new THREE.Euler().setFromQuaternion(vcam.quaternion, "YXZ").y;
     } else if (heading.lengthSq() > 0) {
       // Avatars face -Z at yaw 0, so facing direction (x, z) is yaw atan2(-x, -z).

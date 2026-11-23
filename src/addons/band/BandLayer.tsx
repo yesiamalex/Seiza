@@ -12,11 +12,14 @@ import { getAddonAvatar, LOCAL_AVATAR } from "../avatars";
 import { blendBody, carryHand, copyBody, Gait, newBodyPose, poseBody, type BodyPose } from "../body";
 import { onAddonEvent, sendAddonEvent } from "../bus";
 import { disposeTree, feetAndEye, holdInHand, newTrackedHand, poseHands, rigFor, toTrackedHand, wearOnChest, type HandTarget } from "../rig";
-import { announceBand, band, localNote, musicianOf, parseBandEvent, play, remoteMusicians, resetBand, tapped, validNote } from "./band";
-import { CHORDS, ELECTRIC, holdKey, isWorn, KEY_LAYOUT, KEYS_BASE, KIT, LIGHT_COLORS, playNote, prepareGuitar, type Instrument, type Worn } from "./instruments";
+import { announceBand, atOnce, band, localNote, musicianOf, NoteGate, parseBandEvent, play, remoteMusicians, resetBand, tapped, validNote } from "./band";
+import { CHORDS, chordOf, ELECTRIC, holdKey, isWorn, KEY_LAYOUT, KEYS_BASE, KIT, LIGHT_COLORS, PICK_BASE, playNote, prepareGuitar, type Instrument, type Worn } from "./instruments";
+import { bandBody, updateGroove, type Groove } from "./moves";
+
 /** Keys others are holding down, each with its release, by "player:note". */
 const remoteHeld = new Map<string, () => void>();
-import { bandBody, updateGroove, type Groove } from "./moves";
+/** Each player's notes, kept to what they may sound at once (atOnce). */
+const remoteGates = new Map<string, NoteGate>();
 
 /**
  * Band mode in the scene: each musician's instrument in front of them (a
@@ -304,7 +307,7 @@ function noteSpot(instrument: Instrument, note: number, octave: number): { at: T
   }
   if (isWorn(instrument)) {
     const spec = WORN_SPECS[instrument];
-    const at = GUITAR_BODY.clone().addScaledVector(NECK, zoneAlong(spec, note));
+    const at = GUITAR_BODY.clone().addScaledVector(NECK, zoneAlong(spec, chordOf(note)));
     at.z -= 0.036;
     return { at, size: [0.054, spec.length / spec.zones, 0.004], tilt: NECK_ANGLE };
   }
@@ -324,9 +327,6 @@ function buildFlash() {
   mesh.visible = false;
   return mesh;
 }
-
-/** The last note played on a worn instrument, for a strum on its body. */
-const lastNote: Record<Worn, number> = { guitar: 0, electric: 0, bass: 0 };
 
 let halo: THREE.Texture | null = null;
 function haloTexture() {
@@ -390,23 +390,63 @@ export interface Hands {
   last: "left" | "right";
   /** The kit piece each hand last struck. */
   lastPiece: { left: number; right: number };
+  /** How far back on the desk each hand last played (the pads' back row). */
+  lastZ: { left: number; right: number };
+  /** When each hand last struck, so two notes at once bring both down. */
+  hitAt: { left: number; right: number };
+  /** The newest note already handed to a hand. */
+  seen: number;
+}
+
+export const newHands = (): Hands => ({
+  right: target(),
+  left: target(),
+  lastX: { left: -0.1, right: 0.1 },
+  last: "right",
+  lastPiece: { left: KIT.snare, right: KIT.hat },
+  lastZ: { left: DESK_Z, right: DESK_Z },
+  hitAt: { left: -Infinity, right: -Infinity },
+  seen: -Infinity,
+});
+
+type Note = { n: number; at: number } | null;
+/** Notes closer together than this are played together, a hand each. */
+const TOGETHER = 0.08;
+
+/**
+ * Hands each new note of the last two to a hand: the one on its side, or
+ * the other if that one struck a moment ago (two at once: a kick and a
+ * snare, a crash and a hat). `side` picks a note's own hand, or null for
+ * none (the kick's a foot).
+ */
+function strikes(hands: Hands, note: Note, prev: Note, now: number, side: (n: number) => "left" | "right" | null, struck: (hand: "left" | "right", n: number) => void) {
+  for (const s of [prev, note]) {
+    if (!s || s.at <= hands.seen || now - s.at > 0.3) continue;
+    hands.seen = s.at;
+    let hand = side(s.n);
+    if (!hand) continue;
+    const other = hand === "left" ? "right" : "left";
+    if (s.at - hands.hitAt[hand] < TOGETHER && s.at - hands.hitAt[other] >= TOGETHER) hand = other;
+    hands.hitAt[hand] = s.at;
+    hands.last = hand;
+    struck(hand, s.n);
+  }
 }
 
 /** A wrist sits behind the key its fingers play. */
 const WRIST_BACK = 0.09;
 
-export function deskPose(hands: Hands, instrument: "drums" | "keys", note: { n: number; at: number } | null, now: number, octave: number) {
-  if (note && now - note.at < 0.3) {
-    const x = instrument === "drums" ? padAt(note.n)[0] : keyX(keyOf(note.n, octave));
-    const side = x < 0 ? "left" : "right";
-    hands.lastX[side] = x;
-    hands.last = side;
-  }
-  const z = instrument === "drums" && note && note.n < 4 && now - note.at < 0.3 ? DESK_Z - 0.045 : DESK_Z;
-  for (const side of ["left", "right"] as const) {
-    const playing = side === hands.last ? lift(note, now) : 0.05;
+export function deskPose(hands: Hands, instrument: "drums" | "keys", note: Note, now: number, octave: number, prev: Note = null) {
+  const xOf = (n: number) => (instrument === "drums" ? padAt(n)[0] : keyX(keyOf(n, octave)));
+  strikes(hands, note, prev, now, (n) => (xOf(n) < 0 ? "left" : "right"), (hand, n) => {
+    hands.lastX[hand] = xOf(n);
+    hands.lastZ[hand] = instrument === "drums" && n < 4 ? DESK_Z - 0.045 : DESK_Z;
+  });
+  for (const side of SIDES) {
+    const hit = { at: hands.hitAt[side] };
+    const z = now - hit.at < 0.3 ? hands.lastZ[side] : DESK_Z;
     const thumb: [number, number, number] = side === "right" ? [-1, 0, 0] : [1, 0, 0];
-    set(hands[side], [hands.lastX[side], PAD_TOP + 0.03 + playing, z + WRIST_BACK], thumb, [0, -0.25, -1], instrument === "drums" ? 0.75 : 0.3);
+    set(hands[side], [hands.lastX[side], PAD_TOP + 0.03 + lift(hit, now), z + WRIST_BACK], thumb, [0, -0.25, -1], instrument === "drums" ? 0.75 : 0.3);
   }
 }
 
@@ -425,15 +465,21 @@ const STICK_FLICK = 0.75;
  * the stick up from the wrist and down onto the piece, rather than
  * lifting the whole arm.
  */
-export function kitPose(hands: Hands, note: { n: number; at: number } | null, now: number) {
-  const struck = note && now - note.at < 0.3 ? KIT_PIECES_AT[note.n] : null;
-  if (struck && struck.hand !== "foot") {
-    hands.lastPiece[struck.hand] = note!.n;
-    hands.last = struck.hand;
-  }
-  for (const side of ["left", "right"] as const) {
+export function kitPose(hands: Hands, note: Note, now: number, prev: Note = null) {
+  strikes(
+    hands,
+    note,
+    prev,
+    now,
+    (n) => {
+      const piece = KIT_PIECES_AT[n];
+      return !piece || piece.hand === "foot" ? null : piece.hand;
+    },
+    (hand, n) => (hands.lastPiece[hand] = n)
+  );
+  for (const side of SIDES) {
     const piece = KIT_PIECES_AT[hands.lastPiece[side]];
-    const up = side === hands.last && struck && struck.hand === side ? lift(note, now, 1) : 1;
+    const up = lift({ at: hands.hitAt[side] }, now, 1);
     const cymbal = piece.depth === 0;
     // Where the tip lands: a drum's head, a cymbal's near edge.
     const tipX = piece.at[0];
@@ -505,11 +551,12 @@ function guitarPoints(rig: BodyRig, guitar: THREE.Object3D, kind: Worn, note: nu
  *  a bass note just a pick or a pluck. */
 const SWEEP: Record<Worn, number> = { guitar: 0.09, electric: 0.06, bass: 0.035 };
 
-export function guitarPose(hands: Hands, rig: BodyRig, guitar: THREE.Object3D, kind: Worn, note: { n: number; at: number } | null, now: number) {
-  guitarPoints(rig, guitar, kind, note?.n ?? lastNote[kind]);
+export function guitarPose(hands: Hands, rig: BodyRig, guitar: THREE.Object3D, kind: Worn, note: Note, now: number) {
+  guitarPoints(rig, guitar, kind, chordOf(note?.n ?? 0));
   const age = note ? now - note.at : 1;
-  // A strum sweeps down across the strings and comes back up.
-  const reach = SWEEP[kind];
+  // A strum sweeps down across the strings and comes back up; a picked
+  // string, just a flick.
+  const reach = note && note.n >= PICK_BASE ? 0.02 : SWEEP[kind];
   const sweep = age < 0.12 ? (age / 0.12) * reach : age < 0.35 ? reach * (1 - (age - 0.12) / 0.23) : 0;
   set(hands.right, [strumAt[0] + 0.03, strumAt[1] + 0.05 - sweep, strumAt[2] + 0.06], [0, -0.3, -1], [-0.6, -0.8, 0], kind === "bass" ? 0.45 : 0.7);
   set(hands.left, [fretAt[0] + 0.02, fretAt[1] - 0.02, fretAt[2] + 0.06], [0.2, 1, 0.1], [-0.9, 0.3, -0.3], 0.65);
@@ -527,7 +574,6 @@ export function stickPose(hands: Hands, waving: boolean, pair: boolean, clock: n
   }
   return pair;
 }
-const SIDES = ["right", "left"] as const;
 const RIGHT_ONLY = ["right"] as const;
 
 /** Eases what's drawn toward a hand's target: quickly while playing, so a
@@ -575,6 +621,7 @@ interface Holder {
 }
 
 const approach = (current: number, goal: number, rate: number, dt: number) => current + (goal - current) * (1 - Math.exp(-rate * dt));
+const SIDES = ["right", "left"] as const;
 
 interface BandLayerProps {
   selfId: string | null;
@@ -628,6 +675,10 @@ export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerPr
         return;
       }
       if (!m.instrument || !validNote(m.instrument, event.note)) return;
+      let gate = remoteGates.get(from);
+      if (!gate) remoteGates.set(from, (gate = new NoteGate()));
+      if (!gate.allow(m.instrument, performance.now() / 1000)) return;
+      m.prev = m.note;
       m.note = { n: event.note, at: performance.now() / 1000 };
       const vrm = getAddonAvatar(from);
       const at = vrm ? vrm.scene.getWorldPosition(new THREE.Vector3()) : null;
@@ -635,6 +686,13 @@ export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerPr
       // A held key rings here until its release arrives too.
       if (event.hold && m.instrument === "keys") {
         remoteHeld.get(heldKey)?.();
+        remoteHeld.delete(heldKey);
+        // No more held at once than anyone may (atOnce): the oldest goes.
+        const theirs = [...remoteHeld.keys()].filter((k) => k.startsWith(`${from}:`));
+        if (theirs.length >= atOnce("keys")) {
+          remoteHeld.get(theirs[0])?.();
+          remoteHeld.delete(theirs[0]);
+        }
         remoteHeld.set(heldKey, holdKey(event.note, distance));
       } else playNote(m.instrument, event.note, distance);
     });
@@ -660,7 +718,7 @@ export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerPr
       if (!hit) return;
       const local = holder.prop.worldToLocal(hit.point.clone());
       let note: number | null = null;
-      if (isWorn(instrument)) note = zoneOnNeck(instrument, local) ?? lastNote[instrument];
+      if (isWorn(instrument)) note = zoneOnNeck(instrument, local) ?? band.get().chord;
       else if (instrument === "kit") {
         const piece = hit.object.parent?.userData.piece;
         if (typeof piece === "number") note = piece;
@@ -676,7 +734,6 @@ export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerPr
         }
       }
       if (note === null) return;
-      if (isWorn(instrument)) lastNote[instrument] = note;
       tapped.at = performance.now();
       play(note);
     };
@@ -687,6 +744,7 @@ export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerPr
   const roster = Object.keys(players).sort().join(",");
   useEffect(() => {
     for (const id of [...remoteMusicians.keys()]) if (!playersRef.current[id]) remoteMusicians.delete(id);
+    for (const id of [...remoteGates.keys()]) if (!playersRef.current[id]) remoteGates.delete(id);
     const timer = setTimeout(() => band.get().instrument && announceBand(), 600);
     return () => clearTimeout(timer);
   }, [roster]);
@@ -709,7 +767,7 @@ export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerPr
     const me = band.get();
     const seen = new Set<string>();
 
-    const tend = (key: string, instrument: Instrument | null, color: number, waving: boolean, pair: boolean, note: { n: number; at: number } | null) => {
+    const tend = (key: string, instrument: Instrument | null, color: number, waving: boolean, pair: boolean, note: Note, prev: Note) => {
       const vrm = getAddonAvatar(key);
       if (!vrm) return;
       const rig = rigFor(vrm);
@@ -724,7 +782,7 @@ export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerPr
           vrm,
           overlay: sharedOverlay(vrm, frame),
           weight: 0,
-          hands: { right: target(), left: target(), lastX: { left: -0.1, right: 0.1 }, last: "right", lastPiece: { left: KIT.snare, right: KIT.hat } },
+          hands: newHands(),
           drawn: { right: target(), left: target(), valid: false, carried: target() },
           tracked: { right: newTrackedHand(), left: newTrackedHand() },
           propKey: "",
@@ -840,8 +898,8 @@ export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerPr
       const legs = instrument === "kit" ? holder.weight : holder.weight * (1 - moving);
       poseBody(rig, holder.overlay, holder.settled, upper, legs);
       let both = true;
-      if (instrument === "drums" || instrument === "keys") deskPose(hands, instrument, note, now, octave);
-      else if (instrument === "kit") kitPose(hands, note, now);
+      if (instrument === "drums" || instrument === "keys") deskPose(hands, instrument, note, now, octave, prev);
+      else if (instrument === "kit") kitPose(hands, note, now, prev);
       else if (isWorn(instrument) && holder.prop) guitarPose(hands, rig, holder.prop, instrument, note, now);
       else both = stickPose(hands, waving, pair, Date.now() / 1000);
       const playing = note !== null && now - note.at < 0.5;
@@ -859,8 +917,8 @@ export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerPr
       poseHands(rig, holder.overlay, draw("right"), both ? draw("left") : null, holder.weight);
     };
 
-    tend(LOCAL_AVATAR, me.instrument, me.color, me.waving, me.pair, localNote.note);
-    for (const [id, m] of remoteMusicians) if (m.instrument || holders.has(id)) tend(id, m.instrument, m.color, m.waving, m.pair, m.note);
+    tend(LOCAL_AVATAR, me.instrument, me.color, me.waving, me.pair, localNote.note, localNote.prev);
+    for (const [id, m] of remoteMusicians) if (m.instrument || holders.has(id)) tend(id, m.instrument, m.color, m.waving, m.pair, m.note, m.prev);
     for (const [key, holder] of holders) {
       if (seen.has(key)) continue;
       release(holder);
@@ -897,7 +955,6 @@ export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerPr
           const u = ((fretting.pose[0] - start[0]) * (end[0] - start[0]) + (fretting.pose[1] - start[1]) * (end[1] - start[1]) + (fretting.pose[2] - start[2]) * (end[2] - start[2])) / (length * length);
           zone = Math.max(0, Math.min(5, Math.floor((1 - u) * 6)));
         }
-        lastNote[kind] = zone;
         play(zone);
       }
       return;

@@ -8,9 +8,9 @@ import { bandBody } from "./band/moves";
 import { cancelSelfPush, pushSelf, takeSelfPush } from "../player/selfPush";
 import { elementPulse, ELEMENTS, isBladed, WEAPON_SPECS, WEAPONS } from "./fantasy/weapons";
 import { comboReached, record, tally } from "./fantasy/record";
-import { parseBandEvent, validNote } from "./band/band";
-import { INSTRUMENTS, KEY_LAYOUT, KIT } from "./band/instruments";
-import { KIT_PIECES_AT, kitPose, stickPose, type Hands } from "./band/BandLayer";
+import { NoteGate, parseBandEvent, validNote } from "./band/band";
+import { INSTRUMENTS, KEY_LAYOUT, KIT, pickedMidi, pickNote, unpick } from "./band/instruments";
+import { deskPose, KIT_PIECES_AT, kitPose, newHands, stickPose, type Hands } from "./band/BandLayer";
 import { FantasyEffects } from "./fantasy/effects";
 import { PoseOverlay, sharedOverlay } from "../xr/body/bodyIk";
 import { BLADE_CONTACT, bodyCapsule, segmentDistance, sweep } from "./fantasy/contact";
@@ -361,10 +361,61 @@ describe("body poses", () => {
 });
 
 describe("the band's instruments", () => {
-  const hands = (): Hands => {
-    const t = () => ({ pos: [0, 0, 0] as [number, number, number], blade: [0, 1, 0] as [number, number, number], fingers: [0, 0, -1] as [number, number, number], curl: 0.35 });
-    return { right: t(), left: t(), lastX: { left: -0.1, right: 0.1 }, last: "right", lastPiece: { left: KIT.snare, right: KIT.hat } };
-  };
+  const hands = (): Hands => newHands();
+
+  it("brings both hands down for two notes at once, a hand each", () => {
+    // The crash and the snare are both the left hand's: struck together,
+    // the right takes the crash.
+    const h = hands();
+    kitPose(h, { n: KIT.crash, at: 1.01 }, 1.05, { n: KIT.snare, at: 1 });
+    expect(h.lastPiece.left).toBe(KIT.snare);
+    expect(h.lastPiece.right).toBe(KIT.crash);
+    expect(h.hitAt.left).toBe(1);
+    expect(h.hitAt.right).toBe(1.01);
+    // A kick and a snare: the foot's, and the left hand's; the right stays.
+    const k = hands();
+    kitPose(k, { n: KIT.snare, at: 1.01 }, 1.05, { n: KIT.kick, at: 1 });
+    expect(k.hitAt.right).toBe(-Infinity);
+    expect(k.hitAt.left).toBe(1.01);
+    // Two pads on the same side of the drum pad, the same.
+    const d = hands();
+    deskPose(d, "drums", { n: 5, at: 1.01 }, 1.05, 0, { n: 4, at: 1 });
+    expect(d.hitAt.left).toBe(1);
+    expect(d.hitAt.right).toBe(1.01);
+    // One after another, not together: the same hand plays both.
+    const s = hands();
+    deskPose(s, "drums", { n: 4, at: 1 }, 1.05, 0);
+    deskPose(s, "drums", { n: 5, at: 1.5 }, 1.55, 0, { n: 4, at: 1 });
+    expect(s.hitAt.right).toBe(-Infinity);
+    expect(s.hitAt.left).toBe(1.5);
+  });
+
+  it("picks single strings from the chord held, and the bass its root, fifth, and octaves", () => {
+    // C, low to high, then the octave up past its top string.
+    expect([0, 1, 2, 3, 4, 5].map((s) => pickedMidi("guitar", 0, s))).toEqual([48, 52, 55, 60, 64, 60]);
+    expect([0, 1, 2, 3].map((s) => pickedMidi("bass", 0, s))).toEqual([36, 43, 48, 55]);
+    expect(pickedMidi("bass", 0, 4)).toBeNull();
+    // The lead picks from its power chords, not its lead notes.
+    expect(pickedMidi("electric", 0, 3)).toBe(52);
+    expect(pickedMidi("electric", 6, 0)).toBeNull();
+    expect(unpick(pickNote(11, 5))).toEqual({ chord: 11, string: 5 });
+    expect(validNote("guitar", pickNote(11, 5))).toBe(true);
+    expect(validNote("bass", pickNote(3, 4))).toBe(false);
+    expect(validNote("electric", pickNote(6, 0))).toBe(false);
+    expect(validNote("drums", pickNote(0, 0))).toBe(false);
+    expect(parseBandEvent({ k: "n", n: pickNote(11, 5) })).toEqual({ k: "n", note: pickNote(11, 5), hold: false });
+  });
+
+  it("sounds two notes at once, three on the kit, eight on the keys, and no more", () => {
+    const g = new NoteGate();
+    expect([0, 0.01, 0.02].map((t) => g.allow("drums", t))).toEqual([true, true, false]);
+    // A moment later, it's free again: a fast roll still plays.
+    expect(g.allow("drums", 0.1)).toBe(true);
+    const kit = new NoteGate();
+    expect([0, 0, 0, 0].map((t) => kit.allow("kit", t))).toEqual([true, true, true, false]);
+    const keys = new NoteGate();
+    expect(Array.from({ length: 9 }, () => keys.allow("keys", 0)).filter(Boolean).length).toBe(8);
+  });
 
   it("brings each stick's tip down onto the piece it strikes, the hands low", () => {
     const REACH = 0.21;

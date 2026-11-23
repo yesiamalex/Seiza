@@ -1,6 +1,6 @@
 import { createStore } from "../store";
 import { oneOf, readNumber, sendAddonEvent, type AddonEvent } from "../bus";
-import { holdKey, INSTRUMENTS, KEYS_RANGE, LIGHT_COLORS, noteCount, playNote, type Instrument } from "./instruments";
+import { holdKey, INSTRUMENTS, isWorn, KEYS_RANGE, LIGHT_COLORS, noteCount, pickable, pickedMidi, pickNote, PICK_BASE, playNote, unpick, type Instrument } from "./instruments";
 
 /**
  * Band mode's state. Notes are events, played by every client from its own
@@ -22,21 +22,26 @@ export interface LocalMusician {
   octave: number;
   /** The Band menu is open, so the instrument steps out of its way. */
   menuOpen: boolean;
+  /** Guitar, lead, bass: the chord the fret hand holds, whose strings a
+   *  pick plays (see PICK_BASE). */
+  chord: number;
 }
 
-export const band = createStore<LocalMusician>({ instrument: null, color: 0, waving: false, pair: false, playing: false, octave: 0, menuOpen: false });
+export const band = createStore<LocalMusician>({ instrument: null, color: 0, waving: false, pair: false, playing: false, octave: 0, menuOpen: false, chord: 0 });
 
 export interface RemoteMusician {
   instrument: Instrument | null;
   color: number;
   waving: boolean;
   pair: boolean;
-  /** The last note, for the hand that plays it. */
+  /** The last note, and the one before, for the hands that play them (two
+   *  at once take a hand each). */
   note: { n: number; at: number } | null;
+  prev: { n: number; at: number } | null;
 }
 export const remoteMusicians = new Map<string, RemoteMusician>();
 /** This visitor's own last note, for their hands. */
-export const localNote = { note: null as { n: number; at: number } | null };
+export const localNote = { note: null as { n: number; at: number } | null, prev: null as { n: number; at: number } | null };
 /** When a tap last landed on this visitor's instrument (performance.now()),
  *  so the same double-tap doesn't also walk them across the floor. */
 export const tapped = { at: -Infinity };
@@ -48,7 +53,7 @@ export function announceBand() {
 
 export function setInstrument(instrument: Instrument | null) {
   releaseAll();
-  band.set((s) => ({ ...s, instrument, playing: instrument !== null && instrument !== "lightstick" ? s.playing : false, waving: instrument === "lightstick" && s.waving }));
+  band.set((s) => ({ ...s, instrument, chord: 0, playing: instrument !== null && instrument !== "lightstick" ? s.playing : false, waving: instrument === "lightstick" && s.waving }));
   announceBand();
 }
 
@@ -77,6 +82,42 @@ export function resetBand() {
   band.set((s) => ({ ...s, instrument: null, waving: false, playing: false }));
   remoteMusicians.clear();
   localNote.note = null;
+  localNote.prev = null;
+}
+
+/**
+ * How many notes a player may sound at once: keys held down, or anything
+ * else struck within AT_ONCE_SECONDS of each other. Two hands' worth, and
+ * a foot more on the kit (the kick); a chord's worth on the keys. Kept to
+ * here and on every note from the room, so a stuck or flooding client
+ * can't drown a room out.
+ */
+export const atOnce = (instrument: Instrument) => (instrument === "keys" ? 8 : instrument === "kit" ? 3 : 2);
+const AT_ONCE_SECONDS = 0.06;
+
+/** One player's notes, for atOnce. */
+export class NoteGate {
+  private times: number[] = [];
+  /** Whether a note struck now may sound, counting it if so. */
+  allow(instrument: Instrument, now: number) {
+    this.times = this.times.filter((t) => now - t < AT_ONCE_SECONDS);
+    if (this.times.length >= atOnce(instrument)) return false;
+    this.times.push(now);
+    return true;
+  }
+}
+const gate = new NoteGate();
+
+/** Holds a chord on a worn instrument without strumming it (Shift and its key). */
+export function fret(chord: number) {
+  const { instrument } = band.get();
+  if (isWorn(instrument) && pickable(instrument, chord)) band.set((s) => ({ ...s, chord }));
+}
+
+/** Picks one string of the chord held (0 the lowest). */
+export function pick(string: number) {
+  const { instrument, chord } = band.get();
+  if (isWorn(instrument) && pickedMidi(instrument, chord, string) !== null) play(pickNote(chord, string));
 }
 
 /** Keys held down here, each with its release. */
@@ -90,10 +131,16 @@ const held = new Map<number, () => void>();
 export function play(note: number, hold = false) {
   const { instrument } = band.get();
   if (!instrument || instrument === "lightstick" || !validNote(instrument, note)) return;
+  if (!gate.allow(instrument, performance.now() / 1000)) return;
   if (instrument === "keys" && hold) {
     held.get(note)?.();
+    // A ninth key down lets the first go.
+    if (!held.has(note) && held.size >= atOnce("keys")) release(held.keys().next().value!);
     held.set(note, holdKey(note));
   } else playNote(instrument, note);
+  // A strum is the fret hand moving to that chord: picks play from it.
+  if (isWorn(instrument) && note < PICK_BASE && pickable(instrument, note) && band.get().chord !== note) band.set((s) => ({ ...s, chord: note }));
+  localNote.prev = localNote.note;
   localNote.note = { n: note, at: performance.now() / 1000 };
   sendAddonEvent("band", { k: "n", n: note, ...(instrument === "keys" && hold ? { h: 1 } : {}) });
 }
@@ -116,6 +163,10 @@ export function validNote(instrument: Instrument, note: number) {
   if (!Number.isInteger(note)) return false;
   if (instrument === "lightstick") return false;
   if (instrument === "keys") return note >= KEYS_RANGE[0] && note <= KEYS_RANGE[1];
+  if (isWorn(instrument) && note >= PICK_BASE) {
+    const p = unpick(note)!;
+    return pickedMidi(instrument, p.chord, p.string) !== null;
+  }
   return note >= 0 && note < noteCount(instrument);
 }
 
@@ -143,6 +194,6 @@ export function parseBandEvent(data: AddonEvent): BandEvent | null {
 
 export function musicianOf(id: string): RemoteMusician {
   let m = remoteMusicians.get(id);
-  if (!m) remoteMusicians.set(id, (m = { instrument: null, color: 0, waving: false, pair: false, note: null }));
+  if (!m) remoteMusicians.set(id, (m = { instrument: null, color: 0, waving: false, pair: false, note: null, prev: null }));
   return m;
 }

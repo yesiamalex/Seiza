@@ -7,7 +7,7 @@ import { FantasyButton, FantasyStatus } from "./fantasy/FantasyHud";
 import { fantasy, setElement, setWeapon } from "./fantasy/combat";
 import { record } from "./fantasy/record";
 import { ELEMENT_LABELS, ELEMENTS, WEAPON_SPECS, WEAPONS } from "./fantasy/weapons";
-import { INSTRUMENT_LABELS, INSTRUMENTS, LIGHT_COLORS } from "./band/instruments";
+import { INSTRUMENT_LABELS, INSTRUMENTS, isStand, LIGHT_COLORS } from "./band/instruments";
 import { useStore } from "./store";
 import type { XrHudSection } from "../xr/hud/hudPanel";
 import { band, setInstrument, setLightColor, setPair, tapped } from "./band/band";
@@ -112,6 +112,13 @@ export function RoomModes({ worldState, setWorldState, disabled }: { worldState:
       />
     </div>
   );
+}
+
+/** Whether this visitor has a stand out (a drum pad, keys, a kit): it
+ *  stands where they set it up, so they stay at it (PlayerRig's rooted). */
+export function useAddonRooted(worldState: WorldState) {
+  const { instrument } = useStore(band);
+  return on(worldState, "band") && isStand(instrument);
 }
 
 /** Whether a click belongs to a room mode (an attack, or a note on an
