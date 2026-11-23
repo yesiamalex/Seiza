@@ -1,3 +1,4 @@
+import { heldObjects } from "../edit/heldStore";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DEFAULT_LIGHTS } from "./types";
 import type {
@@ -61,6 +62,10 @@ export interface MultiplayerState {
   addObject: (object: Omit<WorldObject, "id" | "ownerId">) => void;
   moveObject: (id: string, position: [number, number, number], rotationY: number) => void;
   removeObject: (id: string) => void;
+  /** Where something you're holding is now (relayed, not kept), and where
+   *  you let it go (kept). See edit/Grab.tsx. */
+  holdObject: (id: string, position: [number, number, number], rotationY: number) => void;
+  dropObject: (id: string, position: [number, number, number], rotationY: number) => void;
   sendChat: (text: string) => void;
   /** Take up or drop a held pose, so other clients hold it too. */
   setPosture: (posture: Posture) => void;
@@ -242,6 +247,14 @@ export function useRoomSocket(
     [send]
   );
   const removeObject = useCallback((id: string) => send({ type: "objectRemove", id }), [send]);
+  const holdObject = useCallback(
+    (id: string, position: [number, number, number], rotationY: number) => send({ type: "objectHold", id, position, rotationY }),
+    [send]
+  );
+  const dropObject = useCallback(
+    (id: string, position: [number, number, number], rotationY: number) => send({ type: "objectDrop", id, position, rotationY }),
+    [send]
+  );
   const sendChat = useCallback((text: string) => send({ type: "chat", text }), [send]);
   const setPosture = useCallback((posture: Posture) => send({ type: "setPosture", posture }), [send]);
   const setCalm = useCallback((calm: boolean) => send({ type: "setCalm", calm }), [send]);
@@ -484,6 +497,9 @@ export function useRoomSocket(
           case "objectAdded":
             setObjects((prev) => ({ ...prev, [msg.object.id]: msg.object }));
             break;
+          case "objectHeld":
+            heldObjects.set(msg.id, { position: msg.position, rotationY: msg.rotationY, by: msg.by, at: performance.now() });
+            break;
           case "objectMoved":
             setObjects((prev) =>
               prev[msg.id] ? { ...prev, [msg.id]: { ...prev[msg.id], position: msg.position, rotationY: msg.rotationY } } : prev
@@ -586,6 +602,8 @@ export function useRoomSocket(
     addObject,
     moveObject,
     removeObject,
+    holdObject,
+    dropObject,
     sendChat,
     setPosture,
     setCalm,

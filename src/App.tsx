@@ -19,6 +19,7 @@ import {
 import { setPlacedObstacles, type Seat } from "./scene/layout";
 import { TABLE } from "./scene/Table";
 import { MIRROR, WorldMirrors } from "./scene/Mirror";
+import { Grab } from "./edit/Grab";
 import { roomLights } from "./scene/roomLights";
 import { setPlayerFilter, usePlayerFilter } from "./multiplayer/playerFilter";
 import {
@@ -88,11 +89,12 @@ import { TopCenterCluster } from "./ui/TopCenterCluster";
 import { hasMoved, NETWORK_TICK_MS, shouldSendState, shouldStepAway, type SentState } from "./multiplayer/presence";
 import { JoinScreen, type JoinedIdentity } from "./ui/JoinScreen";
 import { CameraViewToggle } from "./ui/CameraViewToggle";
-import { AvatarChooser } from "./ui/AvatarChooser";
+import { AvatarChooser, avatarUrlForChoice } from "./ui/AvatarChooser";
 import { useMediaQuery, useWantsTouchControls } from "./ui/useMediaQuery";
-import { saveProfile } from "./profile/profileStore";
+import { saveProfile, type StoredAvatarChoice } from "./profile/profileStore";
+import { AVATAR_DESIGN_PRESETS } from "./avatar/designer/avatarSpec";
 import { deliverWorldMessage, unwrapWorldMessage, WorldExtension, WorldOverlay, wrapWorldMessage } from "./worlds/WorldExtension";
-import { AddonBarButtons, AddonOverlay, AddonScene, addonHoldsClicks, connectAddonBus, LOCAL_AVATAR, RoomModes, setAddonAvatar, useAddonRooted, useAddonXrSections } from "./addons";
+import { AddonBarButtons, AddonOverlay, AddonScene, addonHandsBusy, addonHoldsClicks, connectAddonBus, LOCAL_AVATAR, RoomModes, setAddonAvatar, useAddonRooted, useAddonXrSections } from "./addons";
 import { PortalCard, Portals } from "./worlds/Portals";
 import { BAR_LABEL_CLASS, barButtonActiveStyle, barButtonStyle, inputStyle, panelStyle, pillButtonStyle, primaryButtonStyle } from "./ui/styles";
 import { CloseIcon, LockIcon, PersonIcon, VrHeadsetIcon } from "./ui/icons";
@@ -152,6 +154,8 @@ const DEV_SPAWN = (() => {
 })();
 
 const OBJECT_COLORS = ["#c94f4f", "#4f8fc9", "#4fc97e", "#c9a94f", "#9a4fc9"];
+/** The designer presets' names in Japanese, for the headset menu. */
+const DESIGN_PRESET_JA: Record<string, string> = { businessman: "ビジネスマン", businesswoman: "ビジネスウーマン", casual: "カジュアル", student: "学生", creative: "クリエイティブ" };
 // Boards and screens get the app's accent rather than a random colour.
 const ACCENT_OBJECT_COLOR = "#e8c37a";
 // How far a "share my screen" from the toolbar will reach for a display.
@@ -352,6 +356,8 @@ export default function App() {
     addObject,
     moveObject,
     removeObject,
+    holdObject,
+    dropObject,
     sendChat,
     setPosture: sendPosture,
     setCalm,
@@ -767,7 +773,7 @@ export default function App() {
       // Put each kind where it's actually used: a note on a desk, a board at
       // eye level, a screen or a picture a little above that, a chair on the
       // floor (its own geometry is measured up from its base).
-      const furniture = kind === "chair" || kind === "bed" || kind === "table" || kind === "mirror";
+      const furniture = kind === "chair" || kind === "bed" || kind === "table" || kind === "mirror" || kind === "ball";
       const distance = flat ? 1.1 : kind === "chair" ? 1.4 : kind === "bed" || kind === "table" ? 2.2 : 2;
       const height =
         furniture
@@ -1253,6 +1259,13 @@ export default function App() {
   // Removing someone from the headset menu takes two presses: the first
   // arms it ("Sure?") for a few seconds. There's no confirm dialog in VR.
   const [xrRemoveArmed, setXrRemoveArmed] = useState<string | null>(null);
+  // The same two presses for removing the nearest object from the headset.
+  const [xrRemoveObjectArmed, setXrRemoveObjectArmed] = useState<string | null>(null);
+  useEffect(() => {
+    if (!xrRemoveObjectArmed) return;
+    const timer = window.setTimeout(() => setXrRemoveObjectArmed(null), XR_REMOVE_CONFIRM_MS);
+    return () => window.clearTimeout(timer);
+  }, [xrRemoveObjectArmed]);
   useEffect(() => {
     if (!xrRemoveArmed) return;
     const timer = window.setTimeout(() => setXrRemoveArmed(null), XR_REMOVE_CONFIRM_MS);
@@ -1295,9 +1308,80 @@ export default function App() {
   // The headset menu (src/xr/hud): the same controls as the flat control
   // bar, handed over as data so that module knows nothing about rooms or
   // media.
+  // In a headset, the avatar menu's quick looks: the designer's presets and
+  // the world's own avatars. Designing one, uploading, and Avaturn need a
+  // keyboard and files, so they stay on the flat screen.
+  const wearFromHeadset = (choice: StoredAvatarChoice) => {
+    setJoined((identity) => (identity ? { ...identity, choice, url: avatarUrlForChoice(choice), localUrl: null } : identity));
+    if (joined.remember) void saveProfile(currentWorld.id, { displayName: joined.displayName, avatar: choice });
+  };
+  const wornUrl = avatarUrlForChoice(joined.choice);
+  const avatarSection = {
+    id: "avatar",
+    title: L("Avatar", "アバター"),
+    note: L("Everyone sees the change. Design your own on a flat screen.", "変更は全員に見えます。自分でデザインするのは画面モードで。"),
+    choices: [
+      ...AVATAR_DESIGN_PRESETS.map((p) => {
+        const choice: StoredAvatarChoice = { kind: "designer", spec: p.spec };
+        return { id: p.id, label: L(p.label, DESIGN_PRESET_JA[p.id] ?? p.label), active: avatarUrlForChoice(choice) === wornUrl, onPress: () => wearFromHeadset(choice) };
+      }),
+      ...(currentWorld.defaultAvatars ?? []).map((p, i) => ({
+        id: `preset${i}`,
+        label: p.label,
+        active: p.url === wornUrl,
+        onPress: () => wearFromHeadset({ kind: "preset", url: p.url }),
+      })),
+    ],
+  };
+  // For editors: put things in front of you, or take away the nearest.
+  // Moving one is grabbing it (in a headset, the grip).
+  const nearestObject = (() => {
+    const [px, , pz] = positionRef.current;
+    let best: { id: string; d: number } | null = null;
+    for (const o of Object.values(objects)) {
+      const d = Math.hypot(o.position[0] - px, o.position[2] - pz);
+      if (d < 3 && (!best || d < best.d)) best = { id: o.id, d };
+    }
+    return best?.id ?? null;
+  })();
+  const PLACEABLE: [WorldObjectKind, string, string][] = [
+    ["text", "Board", "ボード"],
+    ["sign", "Sign", "看板"],
+    ["screen", "Screen", "スクリーン"],
+    ["chair", "Chair", "椅子"],
+    ["table", "Table", "テーブル"],
+    ["mirror", "Mirror", "鏡"],
+    ["ball", "Ball", "ボール"],
+  ];
+  const editSection =
+    canEditWorld && connected
+      ? {
+          id: "edit",
+          title: L("Edit: place in front of you", "編集:目の前に置く"),
+          note: L("Grip an object to pick it up and move it.", "グリップで物をつかんで動かせます。"),
+          choices: [
+            ...PLACEABLE.map(([kind, en, ja]) => ({ id: kind, label: L(en, ja), active: false, onPress: () => handleSpawn(kind) })),
+            {
+              id: "remove",
+              label: xrRemoveObjectArmed && xrRemoveObjectArmed === nearestObject ? L("Sure? Remove", "本当に削除?") : L("Remove nearest", "近くの物を削除"),
+              active: xrRemoveObjectArmed !== null && xrRemoveObjectArmed === nearestObject,
+              onPress: () => {
+                if (!nearestObject) return;
+                if (xrRemoveObjectArmed === nearestObject) {
+                  removeObject(nearestObject);
+                  setXrRemoveObjectArmed(null);
+                } else setXrRemoveObjectArmed(nearestObject);
+              },
+            },
+          ],
+        }
+      : null;
+
   const xrHudModel: XrHudModel = {
     sections: [
       ...addonXrSections,
+      avatarSection,
+      ...(editSection ? [editSection] : []),
       {
         id: "controls",
         title: L("Comfort and controls", "快適さと操作"),
@@ -1468,6 +1552,8 @@ export default function App() {
             {/* Room modes an editor switched on (src/addons/). */}
             <AddonScene worldState={worldState} selfId={selfId} players={players} getSelfPosition={getSelfPosition} editMode={editMode} selfSeated={!!posture || !!seat} />
             {world.portals && <Portals config={world.portals} builtin={world.environment !== "model"} />}
+            {/* Picking things up and throwing balls (edit/Grab.tsx). */}
+            <Grab objects={objects} canEdit={canEditWorld} handsBusy={addonHandsBusy} hold={holdObject} drop={dropObject} self={() => ({ position: positionRef.current, yaw: rotationRef.current })} />
             {/* The world's own mirror, near arrival (scene/Mirror.tsx). */}
             <WorldMirrors
               spots={world.mirrors}

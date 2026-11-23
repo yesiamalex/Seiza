@@ -8,6 +8,8 @@ import { Bed } from "../scene/Bed";
 import { Chair } from "../scene/Chair";
 import { Table } from "../scene/Table";
 import { Mirror } from "../scene/Mirror";
+import { Ball } from "../scene/Ball";
+import { flatPick, heldNow } from "./heldStore";
 import { SeatPad } from "../scene/SeatPad";
 import { VideoPanel } from "../media/VideoPanel";
 import { createScreenPlaceholder, createTextTexture } from "./textTexture";
@@ -110,13 +112,31 @@ function PlacedObject({
 }: PlacedObjectProps) {
   const groupRef = useRef<THREE.Group>(null);
   const hovering = useRef(false);
+  // Held or thrown (edit/Grab.tsx, heldStore.ts): drawn where it is now,
+  // and back where the room has it once that stops.
+  const wasHeld = useRef(false);
+  useFrame(() => {
+    const group = groupRef.current;
+    if (!group) return;
+    const held = heldNow(object.id);
+    if (held) {
+      group.position.set(held.position[0], held.position[1], held.position[2]);
+      group.rotation.y = held.rotationY;
+      wasHeld.current = true;
+    } else if (wasHeld.current) {
+      wasHeld.current = false;
+      group.position.set(object.position[0], object.position[1], object.position[2]);
+      group.rotation.y = object.rotationY;
+    }
+  });
 
   // Boards and screens are used, not just arranged, so they answer clicks
   // outside edit mode too. The server still decides whether a write is
   // allowed (worker/room.ts).
   const interactive =
     !editMode &&
-    ((isTextObjectKind(object.kind) && !!onEditText) || (object.kind === "screen" && !!onPresentToggle) || (object.kind === "image" && !!onOpenImage));
+    (object.kind === "ball" ||
+      (isTextObjectKind(object.kind) && !!onEditText) || (object.kind === "screen" && !!onPresentToggle) || (object.kind === "image" && !!onOpenImage));
 
   useEffect(
     () => () => {
@@ -131,7 +151,11 @@ function PlacedObject({
       onSelect(object.id);
       return;
     }
-    if (isTextObjectKind(object.kind) && onEditText) {
+    if (object.kind === "ball") {
+      // Picked up: Grab.tsx holds it in front of you, and the next click throws it.
+      event.stopPropagation();
+      flatPick.id = object.id;
+    } else if (isTextObjectKind(object.kind) && onEditText) {
       event.stopPropagation();
       onEditText(object);
     } else if (object.kind === "screen" && onPresentToggle) {
@@ -230,6 +254,7 @@ function ObjectGeometry({ object, screenStream }: { object: WorldObject; screenS
   if (object.kind === "bed") return <Bed />;
   if (object.kind === "table") return <Table />;
   if (object.kind === "mirror") return <Mirror />;
+  if (object.kind === "ball") return <Ball color={object.color} />;
   if (object.kind === "image" && object.src) return <ImageObject object={object} />;
   if (object.kind === "video" && object.src) return <VideoObject object={object} />;
   switch (object.kind) {

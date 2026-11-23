@@ -6,6 +6,7 @@ import {
   LIGHT_ZONES,
   MAX_OBJECT_TEXT_LENGTH,
   WORLD_OBJECT_KINDS,
+  GRABBABLE_BY_ANYONE,
   type ClientMessage,
   DEFAULT_LIGHTS,
   type LightZone,
@@ -139,6 +140,8 @@ const SPARE_CONNECTIONS = 8;
 /** Object adds, moves, and removes per connection: a steady rate and a
  *  burst. A person dragging and placing things never comes close. */
 const EDIT_RATE = { perSecond: 10, burst: 40 };
+/** Holding something moves it ten times a second; a little over, for jitter. */
+const HOLD_RATE = { perSecond: 14, burst: 28 };
 /** Signalling messages per connection: ICE candidates arrive in bursts
  *  when a call starts, one burst per peer. */
 const SIGNAL_RATE = { perSecond: 60, burst: 300 };
@@ -613,6 +616,31 @@ export class SeizaRoom extends DurableObject<Env> {
         // client tracks locally regardless), so skipping the sender
         // would snap their own drag back to the stale pre-move value on
         // the next unrelated re-render. See src/edit/WorldObjects.tsx.
+        this.broadcast({ type: "objectMoved", id: message.id, position: message.position, rotationY: message.rotationY });
+        break;
+      }
+      case "objectHold":
+      case "objectDrop": {
+        // Picking something up: an editor, anything (as moving it in Edit
+        // mode); anyone, a ball. Holding is relayed and never kept; the
+        // drop is kept, like a move.
+        if (!attachment.player) return;
+        const object = this.objects.get(message.id);
+        if (!object) return;
+        const anyone = (GRABBABLE_BY_ANYONE as readonly string[]).includes(object.kind);
+        if (!anyone && this.editingRequiresAuth() && !attachment.isEditor) return;
+        if (!Array.isArray(message.position) || message.position.length !== 3) return;
+        if (!message.position.every(isFiniteInBounds)) return;
+        if (typeof message.rotationY !== "number" || !Number.isFinite(message.rotationY)) return;
+        if (message.type === "objectHold") {
+          if (!this.allow(attachment.connId, "hold", HOLD_RATE)) return;
+          this.broadcast({ type: "objectHeld", id: message.id, by: attachment.connId, position: message.position, rotationY: message.rotationY }, attachment.connId);
+          break;
+        }
+        if (!this.allow(attachment.connId, "edit", EDIT_RATE)) return;
+        object.position = message.position;
+        object.rotationY = message.rotationY;
+        this.persistObjects();
         this.broadcast({ type: "objectMoved", id: message.id, position: message.position, rotationY: message.rotationY });
         break;
       }

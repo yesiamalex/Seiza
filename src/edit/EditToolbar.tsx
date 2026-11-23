@@ -8,7 +8,7 @@ import { L, useLang } from "../i18n/lang";
 import type { RoomSky } from "../multiplayer/types";
 import type { SkyConfig } from "../sky/skyState";
 import { BAR_LABEL_CLASS, barButtonActiveStyle, barButtonStyle, inputStyle, panelStyle, pillButtonActiveStyle, pillButtonStyle, popoverStyle } from "../ui/styles";
-import { BedIcon, ChairIcon, MirrorIcon, TableIcon, CloseIcon, EditIcon, MinimizeIcon, ScreenShareIcon, SignIcon, TextBoardIcon } from "../ui/icons";
+import { BallIcon, BedIcon, ChairIcon, MirrorIcon, TableIcon, CloseIcon, EditIcon, MinimizeIcon, ScreenShareIcon, SignIcon, TextBoardIcon } from "../ui/icons";
 
 interface EditToolbarProps {
   enabled: boolean;
@@ -451,10 +451,13 @@ export function EditToolbar({
             <button style={pillButtonStyle} disabled={!connected} onClick={() => onSpawn("mirror")} title={L("A standing mirror: see your avatar, your pose, your dance", "姿見:自分のアバターやポーズ、ダンスを映します")}>
               <MirrorIcon /> {L("Mirror", "鏡")}
             </button>
+            <button style={pillButtonStyle} disabled={!connected} onClick={() => onSpawn("ball")} title={L("A ball anyone can pick up and throw", "誰でも拾って投げられるボール")}>
+              <BallIcon /> {L("Ball", "ボール")}
+            </button>
           </div>
           <small style={{ opacity: 0.7 }}>
             {L(
-              "Leave edit mode to use them: click a board or note to write on it, a screen to present on it, a chair to sit on it, a bed to lie down on it. Stand in front of a mirror to see yourself.",
+              "Leave edit mode to use them: click a board or note to write on it, a screen to present on it, a chair to sit on it, a bed to lie down on it. Stand in front of a mirror to see yourself. Anyone can click a ball to pick it up, and click again to throw it; in a headset, grip it.",
               "使うときは編集モードを終えます。ボードやメモをクリックすると書き込み、スクリーンで発表、椅子に座り、ベッドで横になれます。"
             )}
           </small>

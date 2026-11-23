@@ -121,6 +121,9 @@ export function useAddonRooted(worldState: WorldState) {
   return on(worldState, "band") && isStand(instrument);
 }
 
+/** A weapon drawn or an instrument out: the hands are full (edit/Grab.tsx). */
+export const addonHandsBusy = () => fantasy.get().weapon !== null || band.get().instrument !== null;
+
 /** Whether a click belongs to a room mode (an attack, or a note on an
  *  instrument) rather than being a walk across the floor. */
 export const addonHoldsClicks = () => fantasy.get().weapon !== null || performance.now() - tapped.at < 600;

@@ -96,6 +96,17 @@ export function TableIcon(props: IconProps) {
   );
 }
 
+/** A ball with a seam. */
+export function BallIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="12" cy="12" r="8" />
+      <path d="M4.5 9.5c5 2 10 2 15 0" />
+      <path d="M12 4c-2.5 4-2.5 12 0 16" />
+    </Svg>
+  );
+}
+
 /** A standing mirror: a tall frame, a glint across the glass, two feet. */
 export function MirrorIcon(props: IconProps) {
   return (

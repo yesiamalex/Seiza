@@ -41,7 +41,9 @@ export interface PlayerState {
 // "sign" is a text object like "text", but shaped and typeset to be read
 // from across the room rather than up close — see createTextTexture's
 // "sign" surface and SignObject in src/edit/WorldObjects.tsx.
-export const WORLD_OBJECT_KINDS = ["box", "sphere", "cylinder", "model", "text", "sign", "screen", "image", "video", "chair", "bed", "table", "mirror"] as const;
+export const WORLD_OBJECT_KINDS = ["box", "sphere", "cylinder", "model", "text", "sign", "screen", "image", "video", "chair", "bed", "table", "mirror", "ball"] as const;
+/** Objects anyone may pick up and throw, not only editors (Grab.tsx). */
+export const GRABBABLE_BY_ANYONE: readonly WorldObjectKind[] = ["ball"];
 export type WorldObjectKind = (typeof WORLD_OBJECT_KINDS)[number];
 
 /** Longest text a board or note will hold. Long enough for a notice, short
@@ -165,6 +167,11 @@ export type ClientMessage =
   | { type: "setCalm"; calm: boolean }
   | { type: "objectAdd"; object: Omit<WorldObject, "id" | "ownerId"> }
   | { type: "objectMove"; id: string; position: [number, number, number]; rotationY: number }
+  // Holding (or throwing) an object: where it is now, relayed and never
+  // kept, ten times a second at most. Letting go is an objectDrop, kept
+  // like a move. An editor may hold anything; anyone, a ball.
+  | { type: "objectHold"; id: string; position: [number, number, number]; rotationY: number }
+  | { type: "objectDrop"; id: string; position: [number, number, number]; rotationY: number }
   | { type: "objectRemove"; id: string }
   // Writes on a text board or a note.
   | { type: "objectSetText"; id: string; text: string }
@@ -321,6 +328,8 @@ export type ServerMessage =
   | { type: "playerLeft"; id: string }
   | { type: "objectAdded"; object: WorldObject }
   | { type: "objectMoved"; id: string; position: [number, number, number]; rotationY: number }
+  /** Someone else is holding (or has thrown) an object: where it is now. */
+  | { type: "objectHeld"; id: string; by: string; position: [number, number, number]; rotationY: number }
   /** A whole object changed (its text, or who is presenting on it). */
   | { type: "objectUpdated"; object: WorldObject }
   | { type: "objectRemoved"; id: string }
