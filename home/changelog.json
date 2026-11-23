@@ -1,6 +1,6 @@
 {
   "note": "What's new in Seiza, for visitors. Written by hand in plain words, each month with a one-line summary; home/build.mjs adds the commits made after `through` (see home/README.md), so a month can be rewritten here whenever it's worth it.",
-  "through": "2026-11-22T19:46:57+08:00",
+  "through": "2026-11-23T14:15:00+08:00",
   "months": [
     {
       "month": "2026-11",
@@ -8,7 +8,7 @@
       "items": [
         {
           "tag": "new",
-          "text": "Fantasy mode: a sword, katana, naginata, scythe, light saber, and bow. Blades really parry, combos chain, and arrows can be dodged."
+          "text": "Fantasy mode: a sword, katana, naginata, scythe, light saber, bow, and a necromancer's rod that raises undead. Blades really parry, combos chain, and arrows can be dodged."
         },
         {
           "tag": "new",
@@ -16,11 +16,19 @@
         },
         {
           "tag": "new",
-          "text": "Band mode: a drum kit, keys, acoustic, lead, and bass guitars, and light sticks, heard by the whole room."
+          "text": "Band mode: a drum kit, a taiko, keys, a kulintang's row of gongs, acoustic, lead, and bass guitars, a shaker, and light sticks, heard by the whole room."
         },
         {
           "tag": "new",
           "text": "Play an instrument by tapping it, and everyone sees the note light up. In VR, play with your hands."
+        },
+        {
+          "tag": "better",
+          "text": "Hold chords on the keys, pick melodies string by string on the guitars, and strike two drums at once with both hands."
+        },
+        {
+          "tag": "new",
+          "text": "Your record: knockouts, assists, falls, and best combo for every weapon, kept on your device."
         },
         {
           "tag": "world",
@@ -28,7 +36,7 @@
         },
         {
           "tag": "world",
-          "text": "ISCOLab, UP Open University's science communication lab, to walk through."
+          "text": "ISCOLab, UP Open University's science communication lab, to walk through, under repair for now, with a kubo across the meadow for sessions."
         },
         {
           "tag": "world",
@@ -49,6 +57,10 @@
         {
           "tag": "better",
           "text": "In VR, avatars lean, reach, and step like you, with a comfort vignette and admin tools on your wrist."
+        },
+        {
+          "tag": "better",
+          "text": "The VR wrist menu has every mode: weapons, instruments, light sticks, and, for editors, the switches that turn them on."
         },
         {
           "tag": "better",

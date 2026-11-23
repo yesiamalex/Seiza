@@ -203,7 +203,7 @@ const GALLERY = [
   { file: "hero.gif", wide: true, caption: "In the hall: waving, bowing, and dozing off in seiza", alt: "In Seiza's hall, avatars wave, bow on the tatami, kneel in seiza and doze, and clap and cheer." },
   { file: "campsite.jpg", caption: "The campsite at night", alt: "Night at the campsite: an avatar sits by a campfire under a starry sky, a tent to one side." },
   { file: "fantasy.gif", caption: "Fantasy mode: a katana against a necromancer", alt: "A fighter swings a katana and lets go a fire special while a necromancer casts a bolt and raises three small skeletons." },
-  { file: "band.gif", caption: "Band mode: guitar, drums, keys, and light sticks", alt: "A guitarist, a drummer at a kit, and a keyboard player perform while two fans wave light sticks." },
+  { file: "band.gif", caption: "Band mode: taiko, guitar, drums, keys, kulintang, and light sticks", alt: "A taiko player, a guitarist, a drummer at a kit, a keyboard player, and a kulintang player perform while two fans wave light sticks." },
   { file: "together-consent.gif", caption: "A hug, only after a yes", alt: "One avatar asks another for a hug; after Yes, they step close and hug." },
   { file: "classroom.jpg", caption: "The classroom", alt: "A classroom with students at desks, one raising a hand, the teacher at the board, and a screen." },
   { file: "garden.jpg", caption: "The garden and its pond", alt: "The garden at dusk: an avatar wades in the pond among koi and lily pads." },

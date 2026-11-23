@@ -62,9 +62,10 @@ For the full guide, see [DOCS.md](DOCS.md).
   katana, a naginata, a scythe, a light saber, a bow, or a necromancer's rod
   that raises undead, each with six elemental specials, combos, and a
   record of knockouts kept on your device. Band mode hands out a drum kit,
-  keys you can hold chords on, guitars, a bass, and light sticks, and the
-  whole room hears and sees what you play. In a headset, both are in the
-  wrist menu.
+  a taiko, keys you can hold chords on, a kulintang's row of gongs,
+  guitars you can strum or pick a melody on, a bass, a shaker, and light
+  sticks, and the whole room hears and sees what you play. In a headset,
+  both are in the wrist menu, where an editor can switch them on too.
 
 <img src="docs/media/campsite.jpg" width="720" alt="Night at the campsite: an avatar sits in a low folding chair by a campfire under a sky full of stars, an orange tent with a sleeping bag inside to the left, and the hall's lamps glowing across the meadow.">
 
@@ -109,11 +110,11 @@ For the full guide, see [DOCS.md](DOCS.md).
   </tr>
   <tr>
     <td width="50%"><img src="docs/media/fantasy.gif" alt="Fantasy mode at night: a fighter with a katana swings twice and then lets go a fire special, flames and a column of light rising between them, while a white-haired necromancer casts a glowing bolt with a skull-topped rod and raises three small skeletons with glowing pink eyes that walk into the fight."></td>
-    <td width="50%"><img src="docs/media/band.gif" alt="Band mode at night: a guitarist with a black lead guitar, a drummer at a full kit, and a keyboard player perform, while two fans in front wave a light stick in each hand, pink and blue, in time."></td>
+    <td width="50%"><img src="docs/media/band.gif" alt="Band mode at night: a taiko player, a guitarist with a black lead guitar, a drummer at a full kit, a keyboard player, and a kulintang player striking a row of gongs perform, while two fans in front wave a light stick in each hand, pink and blue, in time."></td>
   </tr>
   <tr>
     <td align="center"><sub>Fantasy mode: a katana's fire special against a necromancer's undead</sub></td>
-    <td align="center"><sub>Band mode: guitar, drums, and keys, and the light sticks</sub></td>
+    <td align="center"><sub>Band mode: taiko, guitar, drums, keys, and kulintang, and the light sticks</sub></td>
   </tr>
 </table>
 

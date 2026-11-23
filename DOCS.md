@@ -1120,14 +1120,20 @@ adds its own coloured button to the bar while it is on.
     can see it coming: Spectro shimmers, Havoc throbs slow and deep, Aero
     ebbs and flows, Electro crackles on and off, Fusion flickers, and
     Glacio holds a cold, slow pulse.
-- **Band** (violet): pick a drum pad, a drum kit, keys, an acoustic guitar,
-  a lead guitar, a bass, or a light stick.
+- **Band** (violet): pick a drum pad, a drum kit, a taiko, keys, a
+  kulintang, an acoustic guitar, a lead guitar, a bass, a shaker, or a
+  light stick.
   - The instruments are 3D models you carry: a guitar or bass slung low on
     your right hip with the neck forward, strings and all, one light stick
     or one in each hand, a drum pad or keys on a stand in front of you, and
     a whole kit (crash, splash, ride, china, three toms, a cowbell, kick,
     snare, rim, and an open and closed hi-hat) around a stool you sit on,
-    with a stick in each hand. Tap or click the model itself to play it: a pad, a key, a drum,
+    with a stick in each hand. A taiko stands on a slanted stand, its face
+    toward you, played with two bachi: the face (don, F and J) and the rim
+    (ka, D and K), in a wide, low stance. A kulintang is a row of eight
+    bossed gongs on a frame, struck with two padded mallets (A to K),
+    tuned pentatonic so any gongs sound right together. A shaker is held in
+    the right hand (F, and J softer); in VR, shake it. Tap or click the model itself to play it: a pad, a key, a drum,
     or a fret on the neck (tap a guitar's body to strum the last chord
     again). Others see what you play light up.
   - The acoustic guitar has twelve chords (C, G, Am, F, Em, D, A, E, Dm,
@@ -1148,10 +1154,10 @@ adds its own coloured button to the bar while it is on.
     kick and a snare, a crash and a hat. Each player sounds up to two at a
     moment (three on the kit, with the kick foot; eight held keys), so
     nobody can drown a room out.
-  - A drum pad, keys, or a kit stands where you set it up, so you stay at
+  - A drum pad, keys, a kit, a kulintang, or a taiko stands where you set it up, so you stay at
     it: walking, jumping, and the thumbstick are off until you pick
     Nothing, and in first person your body keeps facing it wherever you
-    look. A guitar, a bass, or a light stick goes where you go.
+    look. A guitar, a bass, a shaker, or a light stick goes where you go.
   - **Start playing** also opens the instrument flat on the screen. Its
     keyboard keys are shown on it, and they play the instrument instead of
     moving you until you press Esc.
