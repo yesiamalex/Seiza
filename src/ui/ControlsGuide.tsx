@@ -51,6 +51,24 @@ const JA: Record<string, string> = {
   Pinch: "ピンチ",
   "Double-tap": "ダブルタップ",
   Tap: "タップ",
+  "Pick up a ball; click again to throw it": "ボールを拾う。もう一度クリックで投げる",
+  "Pick up a ball; tap again to throw it": "ボールを拾う。もう一度タップで投げる",
+  "With the pen up (Draw): draw on anything": "ペンを持っているとき(描く):何にでも描ける",
+  "Right-drag": "右ドラッグ",
+  "Look around while drawing": "描きながら見回す",
+  "Stand at a mirror to see yourself": "鏡の前に立つと自分が映る",
+  Mirror: "鏡",
+  "Ball": "ボール",
+  "Grip": "グリップ",
+  "Pick something up (a ball, or anything if you edit); let go to throw": "物をつかむ(ボール、編集者は何でも)。離すと投げる",
+  "Right stick": "右スティック",
+  "Turn (snaps or smooth: menu, Setup)": "回転(スナップかなめらか:メニューの設定)",
+  "Trigger": "トリガー",
+  "With the pen up, draw in the air": "ペンを持っているとき、空中に描く",
+  "Hands": "ハンド",
+  "Pinch to press; pinch and hold to teleport; touch keys to play": "つまんで押す。長くつまんでテレポート。鍵盤は指でタッチ",
+  "Wrist": "手首",
+  "Fantasy: your health and meter, on the back of your left wrist": "ファンタジー:体力とゲージは左手首の甲に",
 };
 const tr = (text: string) => L(text, JA[text] ?? text);
 
@@ -97,6 +115,10 @@ const KEYBOARD: { title: string; rows: Row[] }[] = [
       [["Click"], "Sit, open doors, use screens"],
       [["1–0"], "Gestures"],
       [["3"], "Kneel in seiza. Stay a minute and see what happens"],
+      [["Ball"], "Pick up a ball; click again to throw it"],
+      [["Drag"], "With the pen up (Draw): draw on anything"],
+      [["Right-drag"], "Look around while drawing"],
+      [["Mirror"], "Stand at a mirror to see yourself"],
     ],
   },
   {
@@ -118,6 +140,11 @@ const KEYBOARD: { title: string; rows: Row[] }[] = [
       [["Left palm"], "Turn it toward you for the menu"],
       [["X"], "Pin the menu in front of you"],
       [["Stick"], "Move; push it to stand up from a seat"],
+      [["Right stick"], "Turn (snaps or smooth: menu, Setup)"],
+      [["Grip"], "Pick something up (a ball, or anything if you edit); let go to throw"],
+      [["Trigger"], "With the pen up, draw in the air"],
+      [["Hands"], "Pinch to press; pinch and hold to teleport; touch keys to play"],
+      [["Wrist"], "Fantasy: your health and meter, on the back of your left wrist"],
     ],
   },
 ];
@@ -140,6 +167,8 @@ const TOUCH: { title: string; rows: Row[] }[] = [
     rows: [
       [["Double-tap"], "Walk to a spot on the floor"],
       [["Tap"], "Sit, open doors, use screens"],
+      [["Ball"], "Pick up a ball; tap again to throw it"],
+      [["Drag"], "With the pen up (Draw): draw on anything"],
     ],
   },
   // A tablet can have a keyboard attached (Bluetooth, folio), and every

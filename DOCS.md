@@ -1023,6 +1023,34 @@ menus and notifications.
 - Opening any menu (chat, gestures, media, edit, avatar, roster, or admin)
   closes the others.
 
+### Drawing, mirrors, and balls
+
+- **Drawing** (`src/draw/`): the Draw button in the bar, or the menu's Draw
+  page in a headset. On a screen, drag across anything (a wall, the floor,
+  a board) to draw on it, or into open air. Right-drag still looks around,
+  and Esc puts the pen down. In a headset, hold the trigger to draw from
+  the controller's tip, or pinch with tracked hands. There are six colours,
+  undo, clear yours, and, for editors, clear everyone's.
+  - A line is sent once, when you finish it, and only yours shows as you
+    draw it. The room keeps the last 150, each stored under its own key, and
+    every line in the room is one mesh and one draw call.
+- **Mirrors** (`src/scene/Mirror.tsx`): every world has a standing mirror
+  near where you arrive. It's found on walkable floor ahead of and beside
+  the spawn, clear of the portals, and turned to face you. A world can list
+  its own in `world.json` (`mirrors`), or `[]` for none. Editors can
+  place more. A mirror redraws only when you're within 9 m and in front of
+  it, into a small texture, once a frame. In first person it shows your
+  own head.
+- **Balls** (`src/edit/Grab.tsx`): editors place them and anyone plays.
+  - On a screen, click or tap a ball to pick it up, and again to throw it
+    where you look.
+  - In a headset, grip it and let go mid-swing.
+  - It bounces, glances off walls, and rolls to a stop. Grabbing one
+    someone holds hands it over.
+  - Editors can pick up anything this way in a headset.
+  - While it moves, the room sees it ten times a second, never stored, and
+    its resting place is saved once.
+
 ### Room modes
 
 An editor (or an admin, from the admin panel) can switch on a room mode for
@@ -1249,6 +1277,42 @@ Entering VR keeps the same world and the same people:
 - An admin's gather places your head at the gathering spot.
 - You enter VR where you stood, facing where you looked, and leave it where
   the headset last stood.
+
+#### Moving, turning, and feeling it
+
+- **Moving:** the left stick walks, or, with Setup → Teleport in the menu,
+  aims an arc: push it forward, and let go to land on the ring. A landing
+  the walls would push you off shows red and goes nowhere (`src/xr/Teleport.tsx`).
+- **Turning:** the right stick turns in snaps of 45° or 30°, or smoothly.
+- **Vibration:** controllers buzz on a hit, a block, a note, a grab, and a
+  menu press. Setup turns it off. The settings are kept on the device
+  (`src/xr/controls.ts`).
+- **Tracked hands:** turn your left palm toward you for the menu, pinch
+  to press, pinch and hold to aim a teleport (open to jump), close your
+  hand round something to pick it up, and play keys and pads with your
+  index fingertip.
+- **Sounds:** a tick on menu buttons, a whoosh on a teleport, a pop on a
+  grab, a toss on a throw.
+- **Held things point out of your fist:** a sword, a stick, or a light
+  stick in a controller points along its handle, as a hilt would. The bow
+  stays upright.
+- **At a stand** (drum pad, kit, keys, taiko, kulintang), the stick
+  doesn't walk you off it.
+
+#### The menu's pages
+
+The headset menu shows one page at a time, with tabs across the top:
+
+- **Main:** voice, comfort, language, gestures, admin, and chat.
+- **Play:** the room modes, and their switches for an editor.
+- **Look:** the designer's avatars and the world's own.
+- **Edit** (editors): place a board, sign, screen, chair, table, mirror, or
+  ball in front of you, or remove the nearest thing (two presses).
+- **Draw:** the pen, its colours, undo, and clear.
+- **Setup:** moving, turning, and vibration.
+
+A request waiting for an answer shows on every page. In Fantasy, your own
+health, meter, and combo are on a watch on the back of your left wrist.
 
 Two modules add what a flat screen doesn't need. Both live in `src/xr/`, are
 mounted from `App.tsx`, and do nothing outside an immersive session.
