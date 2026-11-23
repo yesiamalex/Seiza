@@ -10,7 +10,6 @@ import { Table } from "../scene/Table";
 import { Mirror } from "../scene/Mirror";
 import { Ball } from "../scene/Ball";
 import { flatPick, heldNow } from "./heldStore";
-import { penState } from "../draw/pen";
 import { SeatPad } from "../scene/SeatPad";
 import { VideoPanel } from "../media/VideoPanel";
 import { createScreenPlaceholder, createTextTexture } from "./textTexture";
@@ -147,8 +146,6 @@ function PlacedObject({
   );
 
   const handleClick = (event: ThreeEvent<MouseEvent>) => {
-    // Drawing on a board isn't writing on it.
-    if (!editMode && penState().on) return;
     if (editMode) {
       event.stopPropagation();
       onSelect(object.id);

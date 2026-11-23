@@ -1023,17 +1023,8 @@ menus and notifications.
 - Opening any menu (chat, gestures, media, edit, avatar, roster, or admin)
   closes the others.
 
-### Drawing, mirrors, and balls
+### Mirrors and balls
 
-- **Drawing** (`src/draw/`): the Draw button in the bar, or the menu's Draw
-  page in a headset. On a screen, drag across anything (a wall, the floor,
-  a board) to draw on it, or into open air. Right-drag still looks around,
-  and Esc puts the pen down. In a headset, hold the trigger to draw from
-  the controller's tip, or pinch with tracked hands. There are six colours,
-  undo, clear yours, and, for editors, clear everyone's.
-  - A line is sent once, when you finish it, and only yours shows as you
-    draw it. The room keeps the last 150, each stored under its own key, and
-    every line in the room is one mesh and one draw call.
 - **Mirrors** (`src/scene/Mirror.tsx`): every world has a standing mirror
   near where you arrive. It's found on walkable floor ahead of and beside
   the spawn, clear of the portals, and turned to face you. A world can list
@@ -1308,7 +1299,6 @@ The headset menu shows one page at a time, with tabs across the top:
 - **Look:** the designer's avatars and the world's own.
 - **Edit** (editors): place a board, sign, screen, chair, table, mirror, or
   ball in front of you, or remove the nearest thing (two presses).
-- **Draw:** the pen, its colours, undo, and clear.
 - **Setup:** moving, turning, and vibration.
 
 A request waiting for an answer shows on every page. In Fantasy, your own

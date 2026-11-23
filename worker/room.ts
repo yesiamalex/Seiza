@@ -7,10 +7,6 @@ import {
   MAX_OBJECT_TEXT_LENGTH,
   WORLD_OBJECT_KINDS,
   GRABBABLE_BY_ANYONE,
-  MAX_STROKE_POINTS,
-  MAX_STROKES,
-  STROKE_COLORS,
-  type Stroke,
   type ClientMessage,
   DEFAULT_LIGHTS,
   type LightZone,
@@ -40,10 +36,6 @@ import { sanitizeTrackedPose, TRACKING_MIN_INTERVAL_MS } from "../src/xr/body/tr
 import type { Env } from "./index";
 
 const OBJECTS_STORAGE_KEY = "objects";
-/** Each stroke under its own key, "stroke:" and its id (which sorts by
- *  when it was drawn), so adding one writes a few kilobytes, not them all. */
-const STROKE_PREFIX = "stroke:";
-const STROKE_RATE = { perSecond: 2, burst: 8 };
 const ENVIRONMENT_STORAGE_KEY = "environmentUrl";
 const SKYBOX_STORAGE_KEY = "skyboxUrl";
 const ROOM_SKY_STORAGE_KEY = "roomSky";
@@ -218,8 +210,6 @@ const POSITION_PERSIST_MS = 10_000;
  */
 export class SeizaRoom extends DurableObject<Env> {
   objects = new Map<string, WorldObject>();
-  /** Oldest first (insertion order). */
-  strokes = new Map<string, Stroke>();
   environmentUrl: string | null = null;
   skyboxUrl: string | null = null;
   /** Time-of-day and weather override from the edit panel (see RoomSky). */
@@ -280,8 +270,6 @@ export class SeizaRoom extends DurableObject<Env> {
     this.ready = ctx.blockConcurrencyWhile(async () => {
       const stored = await ctx.storage.get<WorldObject[]>(OBJECTS_STORAGE_KEY);
       if (stored) for (const obj of stored) this.objects.set(obj.id, obj);
-      const strokes = await ctx.storage.list<Stroke>({ prefix: STROKE_PREFIX });
-      for (const stroke of strokes.values()) this.strokes.set(stroke.id, stroke);
       this.environmentUrl = (await ctx.storage.get<string | null>(ENVIRONMENT_STORAGE_KEY)) ?? null;
       this.skyboxUrl = (await ctx.storage.get<string | null>(SKYBOX_STORAGE_KEY)) ?? null;
       this.roomSky = (await ctx.storage.get<RoomSky | null>(ROOM_SKY_STORAGE_KEY)) ?? null;
@@ -397,7 +385,6 @@ export class SeizaRoom extends DurableObject<Env> {
           selfId: attachment.connId,
           players: this.listPlayers(),
           objects: Array.from(this.objects.values()),
-          strokes: Array.from(this.strokes.values()),
           editorPasswordRequired: !!this.env.SEIZA_EDITOR_PASSWORD,
           adminKeyRequired: !!this.env.SEIZA_ADMIN_KEY,
           roomPasswordSet: !!this.roomPassword,
@@ -657,52 +644,6 @@ export class SeizaRoom extends DurableObject<Env> {
         object.rotationY = message.rotationY;
         this.persistObjects();
         this.broadcast({ type: "objectMoved", id: message.id, position: message.position, rotationY: message.rotationY });
-        break;
-      }
-      case "strokeAdd": {
-        // Drawing is using the room, like writing on a board: anyone who
-        // has joined. Kept, a few kilobytes each, the oldest going past
-        // MAX_STROKES.
-        if (!attachment.player) return;
-        if (!this.allow(attachment.connId, "stroke", STROKE_RATE)) return;
-        const points = message.points;
-        if (!Array.isArray(points) || points.length < 6 || points.length > MAX_STROKE_POINTS * 3 || points.length % 3 !== 0) return;
-        if (!points.every(isFiniteInBounds)) return;
-        if (!Number.isInteger(message.color) || message.color < 0 || message.color >= STROKE_COLORS.length) return;
-        const id = Date.now().toString(36).padStart(9, "0") + "-" + crypto.randomUUID().slice(0, 8);
-        const stroke: Stroke = { id, ownerId: attachment.connId, color: message.color, points: points.map((n) => Math.round(n * 1000) / 1000) };
-        this.strokes.set(id, stroke);
-        void this.ctx.storage.put(STROKE_PREFIX + id, stroke);
-        while (this.strokes.size > MAX_STROKES) {
-          const oldest = this.strokes.keys().next().value!;
-          this.strokes.delete(oldest);
-          void this.ctx.storage.delete(STROKE_PREFIX + oldest);
-          this.broadcast({ type: "strokeRemoved", id: oldest });
-        }
-        this.broadcast({ type: "strokeAdded", stroke });
-        break;
-      }
-      case "strokeRemove": {
-        if (!attachment.player) return;
-        const stroke = this.strokes.get(message.id);
-        if (!stroke) return;
-        const editor = !this.editingRequiresAuth() || attachment.isEditor;
-        if (stroke.ownerId !== attachment.connId && !editor) return;
-        if (!this.allow(attachment.connId, "edit", EDIT_RATE)) return;
-        this.strokes.delete(stroke.id);
-        void this.ctx.storage.delete(STROKE_PREFIX + stroke.id);
-        this.broadcast({ type: "strokeRemoved", id: stroke.id });
-        break;
-      }
-      case "strokesClear": {
-        if (!attachment.player) return;
-        if (!this.allow(attachment.connId, "edit", EDIT_RATE)) return;
-        const all = message.all === true && (!this.editingRequiresAuth() || attachment.isEditor);
-        const gone = [...this.strokes.values()].filter((s) => all || s.ownerId === attachment.connId).map((s) => s.id);
-        if (!gone.length) return;
-        for (const id of gone) this.strokes.delete(id);
-        void this.ctx.storage.delete(gone.map((id) => STROKE_PREFIX + id));
-        this.broadcast({ type: "strokesCleared", ownerId: all ? null : attachment.connId });
         break;
       }
       case "objectRemove": {

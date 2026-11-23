@@ -12,7 +12,6 @@ import type {
   Posture,
   PresentSource,
   ServerMessage,
-  Stroke,
   WorldObject,
 } from "./types";
 import { rememberAdminKey, rememberEditorPassword } from "../edit/editAuth";
@@ -58,11 +57,6 @@ export interface MultiplayerState {
   selfId: string | null;
   players: Record<string, PlayerState>;
   objects: Record<string, WorldObject>;
-  /** What's drawn in the room, oldest first (src/draw/). */
-  strokes: Stroke[];
-  addStroke: (color: number, points: number[]) => void;
-  removeStroke: (id: string) => void;
-  clearStrokes: (all: boolean) => void;
   messages: ChatMessage[];
   send: (msg: ClientMessage) => void;
   addObject: (object: Omit<WorldObject, "id" | "ownerId">) => void;
@@ -194,7 +188,6 @@ export function useRoomSocket(
   const [selfId, setSelfId] = useState<string | null>(null);
   const [players, setPlayers] = useState<Record<string, PlayerState>>({});
   const [objects, setObjects] = useState<Record<string, WorldObject>>({});
-  const [strokes, setStrokes] = useState<Stroke[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [connectionState, setConnectionState] = useState<ConnectionState>("connecting");
   const [editorPasswordRequired, setEditorPasswordRequired] = useState(false);
@@ -254,9 +247,6 @@ export function useRoomSocket(
     [send]
   );
   const removeObject = useCallback((id: string) => send({ type: "objectRemove", id }), [send]);
-  const addStroke = useCallback((color: number, points: number[]) => send({ type: "strokeAdd", color, points }), [send]);
-  const removeStroke = useCallback((id: string) => send({ type: "strokeRemove", id }), [send]);
-  const clearStrokes = useCallback((all: boolean) => send({ type: "strokesClear", all }), [send]);
   const holdObject = useCallback(
     (id: string, position: [number, number, number], rotationY: number, velocity?: [number, number, number]) =>
       send({ type: "objectHold", id, position, rotationY, ...(velocity ? { velocity } : {}) }),
@@ -411,7 +401,6 @@ export function useRoomSocket(
             const objectMap: Record<string, WorldObject> = {};
             for (const o of msg.objects) objectMap[o.id] = o;
             setObjects(objectMap);
-            setStrokes(msg.strokes ?? []);
             setEditorPasswordRequired(msg.editorPasswordRequired);
             setIsEditor(!msg.editorPasswordRequired);
             // Older room servers predate the admin system and omit the field.
@@ -508,15 +497,6 @@ export function useRoomSocket(
             break;
           case "objectAdded":
             setObjects((prev) => ({ ...prev, [msg.object.id]: msg.object }));
-            break;
-          case "strokeAdded":
-            setStrokes((prev) => [...prev, msg.stroke]);
-            break;
-          case "strokeRemoved":
-            setStrokes((prev) => prev.filter((s) => s.id !== msg.id));
-            break;
-          case "strokesCleared":
-            setStrokes((prev) => (msg.ownerId === null ? [] : prev.filter((s) => s.ownerId !== msg.ownerId)));
             break;
           case "objectHeld":
             heldObjects.set(msg.id, { position: msg.position, rotationY: msg.rotationY, by: msg.by, at: performance.now() });
@@ -626,10 +606,6 @@ export function useRoomSocket(
     removeObject,
     holdObject,
     dropObject,
-    strokes,
-    addStroke,
-    removeStroke,
-    clearStrokes,
     sendChat,
     setPosture,
     setCalm,

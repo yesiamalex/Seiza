@@ -4,7 +4,6 @@ import * as THREE from "three";
 import { constrainWalker, floorHeightAt } from "../scene/layout";
 import { readXrHead } from "./body/xrPose";
 import { buzz, xrControls } from "./controls";
-import { penState } from "../draw/pen";
 import { playTeleport } from "./sounds";
 
 /**
@@ -98,8 +97,8 @@ export function Teleport({ originRef, blocked }: { originRef: RefObject<THREE.Ob
     let source: XRInputSource | null = null;
     for (const s of session.inputSources) {
       if (s.hand) {
-        // Tracked hands: the right hand's pinch (unless it's drawing).
-        if (s.handedness !== "right" || !frame.getJointPose || penState().on) continue;
+        // Tracked hands: the right hand's pinch.
+        if (s.handedness !== "right" || !frame.getJointPose) continue;
         const thumb = s.hand.get("thumb-tip");
         const index = s.hand.get("index-finger-tip");
         const t = thumb && frame.getJointPose(thumb, space);

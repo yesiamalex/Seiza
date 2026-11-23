@@ -43,7 +43,6 @@ export function WristStatus() {
     const m = new THREE.Mesh(new THREE.PlaneGeometry(WIDTH, (WIDTH * H) / W), new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthTest: true, toneMapped: false }));
     m.visible = false;
     m.renderOrder = 5;
-    m.userData.noDraw = true;
     m.userData.navIgnore = true;
     return m;
   }, [texture]);

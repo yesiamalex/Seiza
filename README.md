@@ -66,8 +66,7 @@ For the full guide, see [DOCS.md](DOCS.md).
   guitars you can strum or pick a melody on, a bass, a shaker, and light
   sticks, and the whole room hears and sees what you play. In a headset,
   both are in the wrist menu, where an editor can switch them on too.
-- **Draw, reflect, and throw.** Draw in the air or on any wall, floor, or
-  board, and everyone sees it. Every world has a mirror near arrival, and
+- **Reflect and throw.** Every world has a mirror near arrival, and
   editors can place more, along with balls anyone can pick up and throw.
 - **More freedom in a headset.** Teleport or walk, snap or smooth turning,
   vibration, tracked hands (pinch to press, play keys with a fingertip),

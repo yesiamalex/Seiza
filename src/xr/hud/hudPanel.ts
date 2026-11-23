@@ -69,7 +69,7 @@ export interface XrHudModel {
 
 export interface XrHudSection {
   id: string;
-  /** The page it's on: "play", "avatar", "edit", "draw", "settings"
+  /** The page it's on: "play", "avatar", "edit", "settings"
    *  (default "more"). Each page gets a tab across the top. */
   tab?: string;
   title: string;
@@ -192,7 +192,6 @@ const TAB_LABELS: Record<string, [string, string]> = {
   play: ["Play", "遊ぶ"],
   avatar: ["Look", "見た目"],
   edit: ["Edit", "編集"],
-  draw: ["Draw", "描く"],
   settings: ["Setup", "設定"],
   more: ["More", "その他"],
 };
