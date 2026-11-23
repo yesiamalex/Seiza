@@ -33,7 +33,7 @@ import { measure, pointAlong, Route, type Point, type RoutePosition, type Stop }
 import { guideSays, openGuide, stopLeading, useGuides } from "./store";
 import { L, useLang } from "../i18n/lang";
 import { viewerPosition } from "../xr/viewer";
-import { mirrorKeepClear } from "../scene/Mirror";
+import { keepMirrorClearOf } from "../scene/Mirror";
 
 /** The viewer's eyes in the world (see viewerPosition). */
 const scratchEye = new THREE.Vector3();
@@ -124,9 +124,7 @@ export function Guide({ id, name, avatarUrl, stops, speed = 1, pathsOnPatrol = f
   const [route, setRoute] = useState(() => new Route(stops, speed));
   // The world's mirror keeps out of the way of where this guide stands.
   useEffect(() => {
-    const spots = stops.map((s): [number, number] => [s.at[0], s.at[2]]);
-    for (const s of spots) mirrorKeepClear.add(s);
-    return () => spots.forEach((s) => mirrorKeepClear.delete(s));
+    return keepMirrorClearOf(stops.map((s): [number, number] => [s.at[0], s.at[2]]));
     // The stops are fixed for the guide's lifetime.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

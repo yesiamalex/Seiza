@@ -164,6 +164,17 @@ const SIGHT_CLEARANCE = 1.75;
 /** Spots to keep the mirror away from: each guide's stops, put here by the
  *  guide (src/guides/Guide.tsx) when it's placed in the world. */
 export const mirrorKeepClear = new Set<[number, number]>();
+/** Bumped whenever a guide arrives or leaves, so a mirror placed before
+ *  its guide loaded (a world's own code loads after the meadow) moves. */
+let keepClearVersion = 0;
+export function keepMirrorClearOf(spots: [number, number][]) {
+  for (const s of spots) mirrorKeepClear.add(s);
+  keepClearVersion++;
+  return () => {
+    for (const s of spots) mirrorKeepClear.delete(s);
+    keepClearVersion++;
+  };
+}
 
 /** How far a point is from the segment a to b, on the ground. */
 const offSegment = (px: number, pz: number, ax: number, az: number, bx: number, bz: number) => {
@@ -216,13 +227,17 @@ export function findMirrorSpot(spawn: { x: number; y: number; z: number }, facin
 export function WorldMirrors({ spots, spawn, facing, portals, needsGround }: { spots?: MirrorSpot[]; spawn: { x: number; y: number; z: number }; facing: number; portals?: PortalConfig; needsGround: boolean }) {
   const [found, setFound] = useState<MirrorSpot[] | null>(spots ?? null);
   const since = useRef(0);
+  const placedAt = useRef(-1);
   useFrame((_, delta) => {
+    // Found by itself (not listed by the world), and a guide has come since: look again.
+    if (found && !spots && placedAt.current !== keepClearVersion) setFound(null);
     if (found) return;
     since.current += delta;
     // A model world walks on its navmesh: wait for it. Give up after a while.
     if (needsGround && !getGround() && since.current < 20) return;
     if (since.current < 2) return;
     const spot = findMirrorSpot(spawn, facing, portals);
+    placedAt.current = keepClearVersion;
     setFound(spot ? [spot] : []);
   });
   return (
