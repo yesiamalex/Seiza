@@ -156,6 +156,21 @@ const CANDIDATES: [number, number][] = [
 ];
 /** Clear of the portals' arches by this much. */
 const PORTAL_CLEARANCE = 3;
+/** Clear of where a guide stands or walks by this much, and of the line
+ *  from the arrival point to it, so the mirror never hides the guide. */
+const GUIDE_CLEARANCE = 3.5;
+const SIGHT_CLEARANCE = 1.75;
+
+/** Spots to keep the mirror away from: each guide's stops, put here by the
+ *  guide (src/guides/Guide.tsx) when it's placed in the world. */
+export const mirrorKeepClear = new Set<[number, number]>();
+
+/** How far a point is from the segment a to b, on the ground. */
+const offSegment = (px: number, pz: number, ax: number, az: number, bx: number, bz: number) => {
+  const dx = bx - ax, dz = bz - az;
+  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / (dx * dx + dz * dz || 1)));
+  return Math.hypot(px - (ax + t * dx), pz - (az + t * dz));
+};
 
 /**
  * A spot near arrival, on floor anyone can walk to at about the arrival's
@@ -176,6 +191,8 @@ export function findMirrorSpot(spawn: { x: number; y: number; z: number }, facin
     const x = spawn.x + ahead[0] * a + right[0] * r;
     const z = spawn.z + ahead[1] * a + right[1] * r;
     if (arches.some(([px, pz]) => Math.hypot(px - x, pz - z) < PORTAL_CLEARANCE)) continue;
+    const guides = [...mirrorKeepClear];
+    if (guides.some(([gx, gz]) => Math.hypot(gx - x, gz - z) < GUIDE_CLEARANCE || offSegment(x, z, spawn.x, spawn.z, gx, gz) < SIGHT_CLEARANCE)) continue;
     // Its feet and both sides on the floor: the walls mustn't move any of them.
     const ok = [-0.6, 0, 0.6].every((side) => {
       const sx = x + right[0] * side;
@@ -204,7 +221,7 @@ export function WorldMirrors({ spots, spawn, facing, portals, needsGround }: { s
     since.current += delta;
     // A model world walks on its navmesh: wait for it. Give up after a while.
     if (needsGround && !getGround() && since.current < 20) return;
-    if (since.current < 1) return;
+    if (since.current < 2) return;
     const spot = findMirrorSpot(spawn, facing, portals);
     setFound(spot ? [spot] : []);
   });

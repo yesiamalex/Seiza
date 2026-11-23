@@ -185,9 +185,10 @@ export type ClientMessage =
   | { type: "objectAdd"; object: Omit<WorldObject, "id" | "ownerId"> }
   | { type: "objectMove"; id: string; position: [number, number, number]; rotationY: number }
   // Holding (or throwing) an object: where it is now, relayed and never
-  // kept, ten times a second at most. Letting go is an objectDrop, kept
+  // kept, sent only when it moves (five times a second at most). A throw
+  // is one hold with a velocity, which every client flies the same way. Letting go is an objectDrop, kept
   // like a move. An editor may hold anything; anyone, a ball.
-  | { type: "objectHold"; id: string; position: [number, number, number]; rotationY: number }
+  | { type: "objectHold"; id: string; position: [number, number, number]; rotationY: number; velocity?: [number, number, number] }
   | { type: "objectDrop"; id: string; position: [number, number, number]; rotationY: number }
   | { type: "objectRemove"; id: string }
   // Drawing (src/draw/): a finished stroke; taking one back (yours, or an
@@ -357,7 +358,7 @@ export type ServerMessage =
   /** Strokes cleared: one person's, or (null) everyone's. */
   | { type: "strokesCleared"; ownerId: string | null }
   /** Someone else is holding (or has thrown) an object: where it is now. */
-  | { type: "objectHeld"; id: string; by: string; position: [number, number, number]; rotationY: number }
+  | { type: "objectHeld"; id: string; by: string; position: [number, number, number]; rotationY: number; velocity?: [number, number, number] }
   /** A whole object changed (its text, or who is presenting on it). */
   | { type: "objectUpdated"; object: WorldObject }
   | { type: "objectRemoved"; id: string }

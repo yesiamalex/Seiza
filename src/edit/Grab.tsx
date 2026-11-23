@@ -6,7 +6,7 @@ import { constrainWalker, floorHeightAt } from "../scene/layout";
 import { trackingStore } from "../xr/body/trackingStore";
 import { buzz } from "../xr/controls";
 import { BALL_RADIUS } from "../scene/Ball";
-import { flatPick, heldObjects } from "./heldStore";
+import { flatPick, heldObjects, remoteThrows } from "./heldStore";
 import { playGrab, playThrow } from "../xr/sounds";
 
 /**
@@ -33,7 +33,11 @@ const FIST_OFF = 0.55;
 /** How close the hand must be: to a ball or a board, and to furniture. */
 const REACH = 0.32;
 const FURNITURE_REACH = 0.6;
-const SEND_EVERY = 0.1;
+/** Holding: a move is sent once it's gone this far, at most this often, and
+ *  once a second anyway while it sits still, so it doesn't go stale. */
+const SEND_MOVE = 0.02;
+const SEND_EVERY = 0.2;
+const SEND_IDLE = 1;
 const GRAVITY = 9.8;
 const BOUNCE = 0.45;
 const ROLL = 0.82;
@@ -61,6 +65,8 @@ interface Holding {
 
 interface Flying {
   id: string;
+  /** Who threw it: null for you (you save where it lands), or their id. */
+  by: string | null;
   position: THREE.Vector3;
   velocity: THREE.Vector3;
   rotationY: number;
@@ -84,7 +90,7 @@ export function Grab({
   canEdit: boolean;
   /** A weapon or an instrument in the hands: nothing else to grab with. */
   handsBusy: () => boolean;
-  hold: (id: string, position: [number, number, number], rotationY: number) => void;
+  hold: (id: string, position: [number, number, number], rotationY: number, velocity?: [number, number, number]) => void;
   drop: (id: string, position: [number, number, number], rotationY: number) => void;
   /** Where your feet are and which way you face, for a ball held on a flat
    *  screen: in front of your chest, which in third person the camera's
@@ -99,7 +105,6 @@ export function Grab({
   const holding = useRef<Holding[]>([]);
   const flying = useRef<Flying[]>([]);
   const gripped = useRef({ left: false, right: false });
-  const lastSent = useRef(0);
   const pickedAt = useRef(0);
   /** The frame clock, for a throw started from a pointer event. */
   const clock = useRef(0);
@@ -116,7 +121,7 @@ export function Grab({
       const dt = last && first ? last.t - first.t : 0;
       const velocity = dt > 0.02 ? last.p.clone().sub(first.p).divideScalar(dt) : new THREE.Vector3();
       if (velocity.length() > 12) velocity.setLength(12);
-      flying.current.push({ id: h.id, position: h.position.clone(), velocity, rotationY: h.rotationY, since: now });
+      throwBall(h.id, h.position, velocity, h.rotationY, now);
       if (velocity.length() > 1.5) playThrow();
       return;
     }
@@ -125,6 +130,14 @@ export function Grab({
     publish(h.id, p, h.rotationY);
     drop(h.id, [round(p.x), round(p.y), round(p.z)], round(h.rotationY));
   };
+
+  /** A throw: flown here, and sent once, with its speed, for everyone to fly. */
+  const throwBall = (id: string, position: THREE.Vector3, velocity: THREE.Vector3, rotationY: number, now: number) => {
+    flying.current.push({ id, by: null, position: position.clone(), velocity, rotationY, since: now });
+    hold(id, [round(position.x), round(position.y), round(position.z)], round(rotationY), [round(velocity.x), round(velocity.y), round(velocity.z)]);
+  };
+  /** What was last sent for each held thing, and when. */
+  const sent = useRef(new Map<string, { p: THREE.Vector3; r: number; t: number }>()).current;
 
   const pickUp = (o: WorldObject, hand: Holding["hand"], from: THREE.Vector3, handYaw: number) => {
     // Someone else's (or your other hand's) goes to this one.
@@ -148,7 +161,7 @@ export function Grab({
       const dir = camera.getWorldDirection(new THREE.Vector3());
       h.trail = [];
       holding.current = holding.current.filter((x) => x !== h);
-      flying.current.push({ id: h.id, position: h.position.clone(), velocity: dir.multiplyScalar(THROW_SPEED).add(new THREE.Vector3(0, THROW_LIFT, 0)), rotationY: h.rotationY, since: clock.current });
+      throwBall(h.id, h.position, dir.multiplyScalar(THROW_SPEED).add(new THREE.Vector3(0, THROW_LIFT, 0)), h.rotationY, clock.current);
       playThrow();
     };
     el.addEventListener("pointerdown", down);
@@ -166,7 +179,16 @@ export function Grab({
       const held = heldObjects.get(h.id);
       if (!objects[h.id] || (held && held.by !== null)) holding.current = holding.current.filter((x) => x !== h);
     }
-    flying.current = flying.current.filter((f) => objects[f.id] && !(heldObjects.get(f.id)?.by ?? null));
+    // A flight stops when someone else picks it up (their hold is the newest).
+    flying.current = flying.current.filter((f) => objects[f.id] && (heldObjects.get(f.id)?.by ?? null) === f.by);
+    // Others' throws, flown here the same way.
+    while (remoteThrows.length) {
+      const t = remoteThrows.shift()!;
+      if (!objects[t.id]) continue;
+      holding.current = holding.current.filter((h) => h.id !== t.id);
+      flying.current = flying.current.filter((f) => f.id !== t.id);
+      flying.current.push({ id: t.id, by: t.by, position: new THREE.Vector3(...t.position), velocity: new THREE.Vector3(...t.velocity), rotationY: t.rotationY, since: now });
+    }
 
     // A flat-screen pick.
     if (flatPick.id) {
@@ -267,20 +289,27 @@ export function Grab({
         f.velocity.z *= -0.5;
       }
       f.rotationY += Math.hypot(f.velocity.x, f.velocity.z) * dt * 2;
-      publish(f.id, f.position, f.rotationY);
+      heldObjects.set(f.id, { position: [f.position.x, f.position.y, f.position.z], rotationY: f.rotationY, by: f.by, at: performance.now() });
       const resting = f.position.y <= floor + 1e-3 && f.velocity.length() < 0.25;
       if (resting || now - f.since > MAX_FLIGHT) {
         flying.current = flying.current.filter((x) => x !== f);
-        drop(f.id, [round(f.position.x), round(f.position.y), round(f.position.z)], round(f.rotationY));
+        // The thrower saves where it landed; everyone else's lands there too.
+        if (f.by === null) drop(f.id, [round(f.position.x), round(f.position.y), round(f.position.z)], round(f.rotationY));
       }
     }
 
-    // The room's view, ten times a second.
-    if (now - lastSent.current >= SEND_EVERY && (holding.current.length || flying.current.length)) {
-      lastSent.current = now;
-      for (const h of holding.current) hold(h.id, [round(h.position.x), round(h.position.y), round(h.position.z)], round(h.rotationY));
-      for (const f of flying.current) hold(f.id, [round(f.position.x), round(f.position.y), round(f.position.z)], round(f.rotationY));
+    // The room's view of what you hold: only when it moves, at most five
+    // times a second, and once a second while it's still.
+    for (const h of holding.current) {
+      const last = sent.get(h.id);
+      const since = last ? now - last.t : Infinity;
+      const moved = !last || last.p.distanceTo(h.position) > SEND_MOVE || Math.abs(last.r - h.rotationY) > 0.05;
+      if ((moved && since >= SEND_EVERY) || since >= SEND_IDLE) {
+        sent.set(h.id, { p: h.position.clone(), r: h.rotationY, t: now });
+        hold(h.id, [round(h.position.x), round(h.position.y), round(h.position.z)], round(h.rotationY));
+      }
     }
+    for (const id of sent.keys()) if (!holding.current.some((h) => h.id === id)) sent.delete(id);
   });
 
   return null;

@@ -23,7 +23,10 @@ export const heldObjects = new Map<string, HeldObject>();
 
 /** After this long without a move, an object goes back to where the room
  *  has it: the holder left, or the drop's echo has long arrived. */
-export const HELD_STALE_MS = 900;
+export const HELD_STALE_MS = 2500;
+
+/** Throws from others, waiting for Grab.tsx to fly them here too. */
+export const remoteThrows: { id: string; by: string; position: [number, number, number]; velocity: [number, number, number]; rotationY: number }[] = [];
 
 export function heldNow(id: string): HeldObject | null {
   const held = heldObjects.get(id);

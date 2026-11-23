@@ -148,8 +148,8 @@ const SPARE_CONNECTIONS = 8;
 /** Object adds, moves, and removes per connection: a steady rate and a
  *  burst. A person dragging and placing things never comes close. */
 const EDIT_RATE = { perSecond: 10, burst: 40 };
-/** Holding something moves it ten times a second; a little over, for jitter. */
-const HOLD_RATE = { perSecond: 14, burst: 28 };
+/** Holding something sends at most five moves a second; a little over, for jitter. */
+const HOLD_RATE = { perSecond: 8, burst: 16 };
 /** Signalling messages per connection: ICE candidates arrive in bursts
  *  when a call starts, one burst per peer. */
 const SIGNAL_RATE = { perSecond: 60, burst: 300 };
@@ -647,7 +647,9 @@ export class SeizaRoom extends DurableObject<Env> {
         if (typeof message.rotationY !== "number" || !Number.isFinite(message.rotationY)) return;
         if (message.type === "objectHold") {
           if (!this.allow(attachment.connId, "hold", HOLD_RATE)) return;
-          this.broadcast({ type: "objectHeld", id: message.id, by: attachment.connId, position: message.position, rotationY: message.rotationY }, attachment.connId);
+          const v = message.velocity;
+          const velocity = Array.isArray(v) && v.length === 3 && v.every((n) => typeof n === "number" && Number.isFinite(n) && Math.abs(n) <= 20) ? (v as [number, number, number]) : undefined;
+          this.broadcast({ type: "objectHeld", id: message.id, by: attachment.connId, position: message.position, rotationY: message.rotationY, ...(velocity ? { velocity } : {}) }, attachment.connId);
           break;
         }
         if (!this.allow(attachment.connId, "edit", EDIT_RATE)) return;

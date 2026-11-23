@@ -28,3 +28,17 @@ describe("a world's own mirror", () => {
     expect(blocked === null || Math.hypot(blocked.x - free.x, blocked.z - free.z) > 3).toBe(true);
   });
 });
+
+describe("a world's mirror and its guide", () => {
+  it("keeps out of the guide's way, and out of the line from arrival to the guide", async () => {
+    const { mirrorKeepClear } = await import("./Mirror");
+    const spawn = { x: -13.03, y: -0.6, z: 58.35 };
+    const first = findMirrorSpot(spawn, -1.4)!;
+    // A guide standing where the mirror would have gone.
+    const guide: [number, number] = [first.x, first.z];
+    mirrorKeepClear.add(guide);
+    const moved = findMirrorSpot(spawn, -1.4);
+    mirrorKeepClear.delete(guide);
+    expect(moved === null || Math.hypot(moved.x - guide[0], moved.z - guide[1]) >= 3.5).toBe(true);
+  });
+});

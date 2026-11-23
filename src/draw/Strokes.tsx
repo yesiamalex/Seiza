@@ -39,7 +39,9 @@ function strokeGeometry(stroke: Stroke): THREE.BufferGeometry | null {
   const points: THREE.Vector3[] = [];
   for (let i = 0; i + 2 < p.length; i += 3) points.push(new THREE.Vector3(p[i], p[i + 1], p[i + 2]));
   if (points.length < 2) return null;
-  const geometry = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), Math.min(400, points.length * 2), RADIUS, 5, false);
+  // A segment per point and four sides: a thin line looks the same, at a
+  // fraction of the triangles (a full room stays near 200,000).
+  const geometry = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), Math.min(MAX_STROKE_POINTS, points.length + 4), RADIUS, 4, false);
   const color = new THREE.Color(STROKE_COLORS[stroke.color] ?? STROKE_COLORS[0]);
   const count = geometry.getAttribute("position").count;
   const colors = new Float32Array(count * 3);
@@ -133,7 +135,9 @@ export function Strokes({ strokes, addStroke, canDraw }: { strokes: Stroke[]; ad
     if (!d) return;
     let length = 0;
     for (let i = 1; i < d.points.length; i++) length += d.points[i].distanceTo(d.points[i - 1]);
-    if (d.points.length >= 2 && length >= MIN_LENGTH) addRef.current(penState().color, d.points.flatMap((p) => [round(p.x), round(p.y), round(p.z)]));
+    // Straight runs need only their ends: the points a line can lose without
+    // moving more than SIMPLIFY are dropped before it's sent and drawn.
+    if (d.points.length >= 2 && length >= MIN_LENGTH) addRef.current(penState().color, simplify(d.points, SIMPLIFY).flatMap((p) => [round(p.x), round(p.y), round(p.z)]));
     drawing.current = carryOn ? { points: [d.points[d.points.length - 1].clone()], depth: d.depth } : null;
     showLive();
   };
@@ -245,3 +249,30 @@ export function Strokes({ strokes, addStroke, canDraw }: { strokes: Stroke[]; ad
 }
 
 const round = (n: number) => Math.round(n * 1000) / 1000;
+
+/** How far (metres) simplifying may move a line: under its own thickness. */
+const SIMPLIFY = 0.003;
+
+/** Ramer-Douglas-Peucker: keeps the points a line bends at. */
+export function simplify(points: THREE.Vector3[], tolerance: number): THREE.Vector3[] {
+  if (points.length < 3) return points;
+  const keep = new Uint8Array(points.length);
+  keep[0] = keep[points.length - 1] = 1;
+  const stack: [number, number][] = [[0, points.length - 1]];
+  const line = new THREE.Line3();
+  const closest = new THREE.Vector3();
+  while (stack.length) {
+    const [a, b] = stack.pop()!;
+    line.set(points[a], points[b]);
+    let far = -1;
+    let best = tolerance;
+    for (let i = a + 1; i < b; i++) {
+      const d = line.closestPointToPoint(points[i], true, closest).distanceTo(points[i]);
+      if (d > best) [best, far] = [d, i];
+    }
+    if (far < 0) continue;
+    keep[far] = 1;
+    stack.push([a, far], [far, b]);
+  }
+  return points.filter((_, i) => keep[i]);
+}

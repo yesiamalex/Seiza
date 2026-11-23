@@ -1,4 +1,4 @@
-import { heldObjects } from "../edit/heldStore";
+import { heldObjects, remoteThrows } from "../edit/heldStore";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DEFAULT_LIGHTS } from "./types";
 import type {
@@ -70,7 +70,7 @@ export interface MultiplayerState {
   removeObject: (id: string) => void;
   /** Where something you're holding is now (relayed, not kept), and where
    *  you let it go (kept). See edit/Grab.tsx. */
-  holdObject: (id: string, position: [number, number, number], rotationY: number) => void;
+  holdObject: (id: string, position: [number, number, number], rotationY: number, velocity?: [number, number, number]) => void;
   dropObject: (id: string, position: [number, number, number], rotationY: number) => void;
   sendChat: (text: string) => void;
   /** Take up or drop a held pose, so other clients hold it too. */
@@ -258,7 +258,8 @@ export function useRoomSocket(
   const removeStroke = useCallback((id: string) => send({ type: "strokeRemove", id }), [send]);
   const clearStrokes = useCallback((all: boolean) => send({ type: "strokesClear", all }), [send]);
   const holdObject = useCallback(
-    (id: string, position: [number, number, number], rotationY: number) => send({ type: "objectHold", id, position, rotationY }),
+    (id: string, position: [number, number, number], rotationY: number, velocity?: [number, number, number]) =>
+      send({ type: "objectHold", id, position, rotationY, ...(velocity ? { velocity } : {}) }),
     [send]
   );
   const dropObject = useCallback(
@@ -519,6 +520,7 @@ export function useRoomSocket(
             break;
           case "objectHeld":
             heldObjects.set(msg.id, { position: msg.position, rotationY: msg.rotationY, by: msg.by, at: performance.now() });
+            if (msg.velocity) remoteThrows.push({ id: msg.id, by: msg.by, position: msg.position, velocity: msg.velocity, rotationY: msg.rotationY });
             break;
           case "objectMoved":
             setObjects((prev) =>
