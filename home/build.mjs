@@ -12,7 +12,7 @@
 // Nothing to install: plain Node. Where git history isn't there (a shallow
 // clone), the changelog is just the hand-written part.
 import { execFileSync } from "node:child_process";
-import { copyFileSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { item } from "./news.mjs";
 
 const here = (path) => new URL(path, import.meta.url);
@@ -197,10 +197,32 @@ try {
 }
 copyFileSync(here("news.mjs"), here("public/news.mjs"));
 
+// The gallery: pictures and clips from the README's own (docs/media),
+// copied in at build so they live in one place in the repository.
+const GALLERY = [
+  { file: "hero.gif", wide: true, caption: "In the hall: waving, bowing, and dozing off in seiza", alt: "In Seiza's hall, avatars wave, bow on the tatami, kneel in seiza and doze, and clap and cheer." },
+  { file: "campsite.jpg", caption: "The campsite at night", alt: "Night at the campsite: an avatar sits by a campfire under a starry sky, a tent to one side." },
+  { file: "fantasy.gif", caption: "Fantasy mode: a katana against a necromancer", alt: "A fighter swings a katana and lets go a fire special while a necromancer casts a bolt and raises three small skeletons." },
+  { file: "band.gif", caption: "Band mode: guitar, drums, keys, and light sticks", alt: "A guitarist, a drummer at a kit, and a keyboard player perform while two fans wave light sticks." },
+  { file: "together-consent.gif", caption: "A hug, only after a yes", alt: "One avatar asks another for a hug; after Yes, they step close and hug." },
+  { file: "classroom.jpg", caption: "The classroom", alt: "A classroom with students at desks, one raising a hand, the teacher at the board, and a screen." },
+  { file: "garden.jpg", caption: "The garden and its pond", alt: "The garden at dusk: an avatar wades in the pond among koi and lily pads." },
+  { file: "designer.jpg", caption: "The avatar designer", alt: "The avatar designer: a preview of a designed avatar beside controls for its look." },
+];
+mkdirSync(here("public/media"), { recursive: true });
+for (const g of GALLERY) copyFileSync(new URL(`../docs/media/${g.file}`, import.meta.url), here(`public/media/${g.file}`));
+const gallery = GALLERY.map(
+  (g) => `      <figure class="shot${g.wide ? " wide" : ""}">
+        <a href="media/${esc(g.file)}"><img src="media/${esc(g.file)}" alt="${esc(g.alt)}" loading="lazy" decoding="async"></a>
+        <figcaption>${esc(g.caption)}</figcaption>
+      </figure>`
+).join("\n");
+
 const template = readFileSync(here("index.html"), "utf8");
 const page = template
   .replace("<!--JSONLD-->", `<script type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g, "\\u003c")}</script>`)
   .replace("<!--WORLDS-->", worldCards)
+  .replace("<!--GALLERY-->", gallery)
   .replace("<!--CHANGES-->", changes)
   .replaceAll("<!--WORLD_COUNT-->", String(worlds.length))
   .replace("<!--LIVE_SINCE-->", esc(built))

@@ -25,3 +25,4 @@ worlds/*/media-src/
 home/public/index.html
 home/public/sitemap.xml
 home/public/news.mjs
+home/public/media/

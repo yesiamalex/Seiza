@@ -236,6 +236,18 @@
   .made-for li { font-size: 13px; color: var(--ink); border: 1px solid var(--line); background: rgba(255, 255, 255, 0.04); border-radius: 999px; padding: 6px 12px; }
   .made-for li::before { content: "✦"; color: var(--gold); margin-right: 6px; font-size: 11px; }
   .month .summary { margin: 0 0 10px; color: var(--ink); font-size: 15px; }
+  .gallery { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 28px; }
+  @media (max-width: 860px) { .gallery { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 520px) { .gallery { grid-template-columns: 1fr; } }
+  .shot { margin: 0; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); background: var(--glass); display: flex; flex-direction: column; }
+  .shot > a { display: block; flex: 1; min-height: 0; overflow: hidden; }
+  .shot.wide { grid-column: span 2; }
+  @media (max-width: 520px) { .shot.wide { grid-column: auto; } }
+  /* 16:9 by default; filling the row where a wide one beside it is taller. */
+  .shot img { display: block; width: 100%; height: 100%; aspect-ratio: 16 / 9; object-fit: cover; background: #0b1030; transition: transform 400ms cubic-bezier(.2, .7, .2, 1); }
+  .shot.wide img { max-height: 420px; }
+  .shot a:hover img { transform: scale(1.03); }
+  .shot figcaption { padding: 10px 14px 12px; font-size: 14px; color: var(--muted); }
   .live { margin: 0 0 26px; padding: 16px 18px; border-radius: var(--radius); border: 1px solid color-mix(in srgb, var(--cyan) 40%, transparent); background: radial-gradient(120% 140% at 0% 0%, rgba(95, 196, 232, 0.12), transparent 60%), var(--glass); }
   .live h3 { margin: 0 0 10px; font: 600 15px/1.4 var(--mono); color: var(--cyan); display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
   .live h3::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 0 0 rgba(95, 196, 232, 0.6); animation: beat 2s ease-out infinite; }
@@ -375,6 +387,9 @@
         <h3>Hosts stay in charge</h3>
         <p>Mute, remove, or gather people, and lock a room. Nothing is recorded.</p>
       </article>
+    </div>
+    <div class="gallery reveal" aria-label="A look inside">
+<!--GALLERY-->
     </div>
   </section>
 
