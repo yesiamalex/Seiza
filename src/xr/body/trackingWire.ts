@@ -35,6 +35,10 @@ export interface TrackedHand {
    *  0 (open) to 1 (fist). From the trigger and grip on a controller, or
    *  measured from the fingers when hands are tracked directly. */
   curl: [number, number];
+  /** Holding a controller, rather than tracked fingers: something held in
+   *  it (a sword, a stick) points along the controller's handle, out of
+   *  the fist, not out of the thumb side of the open hand drawn. */
+  held?: boolean;
 }
 
 export interface TrackedPose {
@@ -94,7 +98,7 @@ function sanitizeHand(raw: unknown): TrackedHand | null {
   if (!pose) return null;
   const curl = Array.isArray(hand.curl) && hand.curl.length === 2 ? hand.curl : [0, 0];
   const [index, others] = curl.map((value) => (typeof value === "number" && Number.isFinite(value) ? round(clamp(value, 0, 1)) : 0));
-  return { pose, curl: [index, others] };
+  return (hand as { held?: unknown }).held === true ? { pose, curl: [index, others], held: true } : { pose, curl: [index, others] };
 }
 
 /**

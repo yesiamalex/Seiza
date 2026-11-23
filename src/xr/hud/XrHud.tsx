@@ -77,7 +77,7 @@ export function XrHud({ model }: { model: XrHudModel }) {
 /** Everything that changes what the panel looks like. When this string is
  *  unchanged the canvas is not redrawn — App re-renders several times a
  *  second, and re-uploading a texture each time would be waste. */
-function signatureOf(model: XrHudModel): string {
+export function signatureOf(model: XrHudModel): string {
   return JSON.stringify([
     getLang(),
     model.title,
@@ -93,6 +93,9 @@ function signatureOf(model: XrHudModel): string {
     model.request?.text ?? null,
     model.together ? [model.together.name, model.together.gestures.map((g) => g.name), model.together.waiting] : null,
     model.admin ? model.admin.people.map((p) => [p.id, p.name, p.mic, p.removeArmed]) : null,
+    // The room modes' sections: which weapon, instrument, or switch is lit.
+    // Left out, a press did its work but the panel never redrew to show it.
+    (model.sections ?? []).map((s) => [s.id, s.title, s.note ?? null, s.columns ?? null, s.choices.map((c) => [c.id, c.label, c.active])]),
   ]);
 }
 

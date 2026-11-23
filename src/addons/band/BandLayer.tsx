@@ -11,7 +11,7 @@ import type { PlayerState } from "../../multiplayer/types";
 import { getAddonAvatar, LOCAL_AVATAR } from "../avatars";
 import { blendBody, carryHand, copyBody, Gait, newBodyPose, poseBody, type BodyPose } from "../body";
 import { onAddonEvent, sendAddonEvent } from "../bus";
-import { disposeTree, feetAndEye, holdInHand, newTrackedHand, poseHands, rigFor, toTrackedHand, wearOnChest, type HandTarget } from "../rig";
+import { disposeTree, feetAndEye, holdInHand, newTrackedHand, pointHeld, poseHands, rigFor, toTrackedHand, wearOnChest, type HandTarget } from "../rig";
 import { announceBand, atOnce, band, localNote, musicianOf, NoteGate, parseBandEvent, play, remoteMusicians, resetBand, tapped, validNote } from "./band";
 import { CHORDS, chordOf, ELECTRIC, GONGS, holdKey, isWorn, KEY_LAYOUT, KEYS_BASE, KIT, LIGHT_COLORS, PICK_BASE, playNote, prepareGuitar, TAIKO, type Instrument, type Worn } from "./instruments";
 import { bandBody, updateGroove, type Groove } from "./moves";
@@ -754,6 +754,9 @@ interface Holder {
   propKey: string;
   prop: THREE.Object3D | null;
   detach: () => void;
+  /** What's held in a hand (sticks, a light stick, a shaker), and which,
+   *  to point along a controller's handle in a headset (pointHeld). */
+  inHand: { prop: THREE.Object3D; side: "left" | "right" }[];
   flash: THREE.Mesh | null;
   /** When the note the flash shows was played. */
   flashed: number;
@@ -946,6 +949,7 @@ export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerPr
           propKey: "",
           prop: null,
           detach: () => {},
+          inHand: [],
           flash: null,
           flashed: 0,
           body: newBodyPose(),
@@ -966,6 +970,11 @@ export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerPr
         holder.prop = null;
         holder.flash = null;
         holder.detach = () => {};
+        holder.inHand = [];
+        const grip = (side: "left" | "right", prop: THREE.Object3D) => {
+          holder!.inHand.push({ prop, side });
+          return holdInHand(vrm, side, prop);
+        };
         holder.propKey = propKey;
         holder.drawn.valid = false;
         // Fresh hands for a new instrument, resting where it's played.
@@ -977,10 +986,10 @@ export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerPr
             const hex = LIGHT_COLORS[color] ?? LIGHT_COLORS[0];
             const stick = buildLightStick(hex);
             holder.prop = stick;
-            const letGo = holdInHand(vrm, "right", stick);
+            const letGo = grip("right", stick);
             if (pair) {
               const other = buildLightStick(hex);
-              const letGoOther = holdInHand(vrm, "left", other);
+              const letGoOther = grip("left", other);
               holder.detach = () => {
                 letGo();
                 letGoOther();
@@ -992,7 +1001,7 @@ export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerPr
             holder.detach = wearOnChest(vrm, rig, holder.prop);
           } else if (instrument === "shaker") {
             holder.prop = buildShaker();
-            holder.detach = holdInHand(vrm, "right", holder.prop);
+            holder.detach = grip("right", holder.prop);
           } else {
             // In front of them, in their body frame scaled to their size.
             const builders: Partial<Record<Instrument, () => THREE.Group>> = { drums: buildDrumPad, kit: buildKit, kulintang: buildKulintang, taiko: buildTaiko };
@@ -1007,7 +1016,7 @@ export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerPr
               if (sticksOf) {
                 // A stick in each hand.
                 const sticks = [buildStick(sticksOf), buildStick(sticksOf)];
-                const letGo = [holdInHand(vrm, "right", sticks[0]), holdInHand(vrm, "left", sticks[1])];
+                const letGo = [grip("right", sticks[0]), grip("left", sticks[1])];
                 holder.detach = () => {
                   detachStand();
                   letGo.forEach((f) => f());
@@ -1044,6 +1053,7 @@ export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerPr
       const source = key === LOCAL_AVATAR ? LOCAL_TRACKING_SOURCE : key;
       const sample = trackingStore.get(source);
       const inHeadset = sample !== null && performance.now() - sample.receivedAt < TRACKING_STALE_MS;
+      for (const h of holder.inHand) pointHeld(h.prop, inHeadset && sample!.pose[h.side]?.held === true);
       const seated = key === LOCAL_AVATAR ? selfSeatedRef.current : !!playersRef.current[key]?.posture;
       holder.weight = approach(holder.weight, instrument && !inHeadset && !seated ? 1 : 0, 6, dt);
       const moving = rig ? holder.gait.update(rig, dt) : 0;

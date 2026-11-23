@@ -127,12 +127,32 @@ export function holdInHand(vrm: VRM, side: "left" | "right", prop: THREE.Object3
   const holder = new THREE.Group();
   holder.name = "seiza-held";
   holder.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(toFingers, thumb.normalize(), back.normalize()));
+  holder.userData.fist = holder.quaternion.clone();
   holder.position.copy(toFingers).multiplyScalar(handLength * 0.55).addScaledVector(palm, handLength * 0.32);
   holder.add(prop);
   hand.add(holder);
   return () => {
     hand.remove(holder);
   };
+}
+
+/** A quarter turn in the holder's frame, from the thumb's side to the fingers'. */
+const ALONG_HANDLE = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -Math.PI / 2);
+
+/**
+ * Which way a prop held by holdInHand points. A drawn fist holds it out of
+ * the thumb side, as a hand round a hilt does. A headset's controller is
+ * drawn as an open hand with the fingers along its handle, so there the
+ * prop goes along the fingers, which is along the handle and out of the
+ * real fist: otherwise a sword pointed up and back at the player's face.
+ * The bow stays as it is, upright in either.
+ */
+export function pointHeld(prop: THREE.Object3D, alongHandle: boolean) {
+  const holder = prop.parent;
+  const fist = holder?.userData.fist as THREE.Quaternion | undefined;
+  if (!holder || !fist) return;
+  if (alongHandle) holder.quaternion.copy(fist).multiply(ALONG_HANDLE);
+  else holder.quaternion.copy(fist);
 }
 
 /**

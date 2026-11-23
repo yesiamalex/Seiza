@@ -11,7 +11,7 @@ import { cancelSelfPush, pushSelf } from "../../player/selfPush";
 import { getAddonAvatar, LOCAL_AVATAR } from "../avatars";
 import { blendBody, carryHand, copyBody, Gait, newBodyPose, poseBody, type BodyPose } from "../body";
 import { onAddonEvent, sendAddonEvent } from "../bus";
-import { disposeTree, facing, feetAndEye, holdInHand, newTrackedHand, poseHands, rigFor, toTrackedHand, type HandTarget } from "../rig";
+import { disposeTree, facing, feetAndEye, holdInHand, newTrackedHand, pointHeld, poseHands, rigFor, toTrackedHand, type HandTarget } from "../rig";
 import {
   acceptHit,
   announce,
@@ -871,6 +871,8 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode, selfS
       const source = key === LOCAL_AVATAR ? LOCAL_TRACKING_SOURCE : key;
       const tracked = trackingStore.get(source);
       holder.inHeadset = tracked !== null && performance.now() - tracked.receivedAt < TRACKING_STALE_MS;
+      // Holding a controller: the weapon along its handle (rig.ts, pointHeld).
+      if (holder.prop && held !== "bow") pointHeld(holder.prop, holder.inHeadset && tracked!.pose.right?.held === true);
       const seated = key === LOCAL_AVATAR ? selfSeatedRef.current : !!playersRef.current[key]?.posture;
       if (held) holder.posed = held;
       holder.weight = approach(holder.weight, held && !holder.inHeadset && !seated ? 1 : 0, 8, dt);

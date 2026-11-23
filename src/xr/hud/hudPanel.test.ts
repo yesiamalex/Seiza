@@ -117,3 +117,16 @@ describe("the headset panel's room-mode sections", () => {
     expect(onLanguage).toHaveBeenCalled();
   });
 });
+
+describe("the headset panel's redraws", () => {
+  it("redraws when a room mode's choice changes, so the new one lights up", async () => {
+    const { signatureOf } = await import("./XrHud");
+    const section = (active: string) => ({
+      id: "fantasy",
+      title: "Fantasy: weapon",
+      choices: ["sword", "katana"].map((id) => ({ id, label: id, active: id === active, onPress: () => {} })),
+    });
+    expect(signatureOf({ ...base, sections: [section("sword")] })).not.toBe(signatureOf({ ...base, sections: [section("katana")] }));
+    expect(signatureOf({ ...base, sections: [section("sword")] })).toBe(signatureOf({ ...base, sections: [section("sword")] }));
+  });
+});

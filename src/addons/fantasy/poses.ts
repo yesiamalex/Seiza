@@ -36,7 +36,10 @@ export interface Action {
 // The resting stance carries the blade low at the side, tip by the knee,
 // out of the space between two fighters: only raising it (PARRY, below)
 // puts it in the path of their swings.
-const GUARD: Key = { at: 0, pos: [0.18, 0.54, -0.14], blade: [0.3, -0.85, -0.43], fingers: [0.05, -0.45, 0.9] };
+// At rest, a low guard: the tip forward and down, ahead of the knees. Hung
+// straight down, a long blade went through the thigh and into the floor,
+// and from your own eyes it seemed to point back at you.
+const GUARD: Key = { at: 0, pos: [0.19, 0.55, -0.17], blade: [0.28, -0.58, -0.76], fingers: [0.18, -0.76, 0.63] };
 // A naginata rests upright at the right side, blade high, in one hand: held
 // like a sword's guard, its long shaft ran up past the face.
 const POLE_REST: Key = { at: 0, pos: [0.2, 0.6, -0.12], blade: [0.04, 0.98, -0.18], fingers: [-0.2, 0, -1] };
