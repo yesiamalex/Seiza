@@ -18,4 +18,9 @@ export const selfViewStore = {
    *  with it on top of where the player is looking. Identity when the head
    *  is only idling. */
   turn: new THREE.Quaternion(),
+  /** The bone SelfView shrank to hide your own head from your camera (first
+   *  person, and VR), or null when it's shown; and your avatar. A mirror
+   *  (scene/Mirror.tsx) shows the head for its own pass. */
+  hiddenHead: null as THREE.Object3D | null,
+  avatar: null as THREE.Object3D | null,
 };

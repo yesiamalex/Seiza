@@ -171,6 +171,8 @@ export function SelfView({ vrm, firstPerson, lying = false }: { vrm: VRM | null;
     if (!vrm || !rig) return;
     // After VrmAvatar's update, so it lasts through this frame's render.
     if (hideHeadRef.current) hiddenBone()?.scale.setScalar(HIDDEN_SCALE);
+    selfViewStore.hiddenHead = hideHeadRef.current ? (hiddenBone() ?? null) : null;
+    selfViewStore.avatar = vrm.scene;
 
     const standingEye = presenting ? trackingStore.getLocalStandingEye() : 0;
     const target = standingEye > 0 ? THREE.MathUtils.clamp(standingEye / rig.eyeHeight, MIN_FIT, MAX_FIT) : 1;

@@ -18,6 +18,7 @@ import {
 } from "./avatar/gestures";
 import { setPlacedObstacles, type Seat } from "./scene/layout";
 import { TABLE } from "./scene/Table";
+import { MIRROR, WorldMirrors } from "./scene/Mirror";
 import { roomLights } from "./scene/roomLights";
 import { setPlayerFilter, usePlayerFilter } from "./multiplayer/playerFilter";
 import {
@@ -419,14 +420,15 @@ export default function App() {
   // Placed tables are solid: people walk round them, on their own floor.
   // Only tables, which are the furniture meant to stand in the way; a
   // placed box or model of any size could wall someone in.
+  // A placed mirror too, thin as it is, so nobody walks through the glass.
   useEffect(() => {
-    const tables = Object.values(objects).filter((o) => o.kind === "table");
+    const solid = Object.values(objects).filter((o) => o.kind === "table" || o.kind === "mirror");
     setPlacedObstacles(
-      tables.map((o) => ({
+      solid.map((o) => ({
         x: o.position[0],
         z: o.position[2],
-        halfX: (TABLE.width / 2) * (o.scale ?? 1),
-        halfZ: (TABLE.depth / 2) * (o.scale ?? 1),
+        halfX: (o.kind === "mirror" ? MIRROR.width / 2 + 0.06 : TABLE.width / 2) * (o.scale ?? 1),
+        halfZ: (o.kind === "mirror" ? 0.12 : TABLE.depth / 2) * (o.scale ?? 1),
         rotationY: o.rotationY,
         floorY: o.position[1],
       }))
@@ -765,7 +767,7 @@ export default function App() {
       // Put each kind where it's actually used: a note on a desk, a board at
       // eye level, a screen or a picture a little above that, a chair on the
       // floor (its own geometry is measured up from its base).
-      const furniture = kind === "chair" || kind === "bed" || kind === "table";
+      const furniture = kind === "chair" || kind === "bed" || kind === "table" || kind === "mirror";
       const distance = flat ? 1.1 : kind === "chair" ? 1.4 : kind === "bed" || kind === "table" ? 2.2 : 2;
       const height =
         furniture
@@ -1466,6 +1468,14 @@ export default function App() {
             {/* Room modes an editor switched on (src/addons/). */}
             <AddonScene worldState={worldState} selfId={selfId} players={players} getSelfPosition={getSelfPosition} editMode={editMode} selfSeated={!!posture || !!seat} />
             {world.portals && <Portals config={world.portals} builtin={world.environment !== "model"} />}
+            {/* The world's own mirror, near arrival (scene/Mirror.tsx). */}
+            <WorldMirrors
+              spots={world.mirrors}
+              spawn={world.spawnPoint}
+              facing={world.spawnRotationY ?? 0}
+              portals={world.portals}
+              needsGround={world.environment === "model" || !!world.navMeshUrl}
+            />
           </group>
           <PlayerRig
             rooted={rooted}

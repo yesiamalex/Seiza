@@ -96,6 +96,19 @@ export function TableIcon(props: IconProps) {
   );
 }
 
+/** A standing mirror: a tall frame, a glint across the glass, two feet. */
+export function MirrorIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="7" y="3" width="10" height="16" rx="1.5" />
+      <path d="M10 8l3-3" />
+      <path d="M10 12l5-5" />
+      <path d="M6 21h4" />
+      <path d="M14 21h4" />
+    </Svg>
+  );
+}
+
 /** A bed seen from the side: headboard, mattress, a pillow, two legs. */
 export function BedIcon(props: IconProps) {
   return (

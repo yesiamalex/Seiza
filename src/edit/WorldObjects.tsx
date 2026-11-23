@@ -7,6 +7,7 @@ import { placedBedSeat, placedChairSeat, type Seat } from "../scene/layout";
 import { Bed } from "../scene/Bed";
 import { Chair } from "../scene/Chair";
 import { Table } from "../scene/Table";
+import { Mirror } from "../scene/Mirror";
 import { SeatPad } from "../scene/SeatPad";
 import { VideoPanel } from "../media/VideoPanel";
 import { createScreenPlaceholder, createTextTexture } from "./textTexture";
@@ -228,6 +229,7 @@ function ObjectGeometry({ object, screenStream }: { object: WorldObject; screenS
   if (object.kind === "chair") return <Chair />;
   if (object.kind === "bed") return <Bed />;
   if (object.kind === "table") return <Table />;
+  if (object.kind === "mirror") return <Mirror />;
   if (object.kind === "image" && object.src) return <ImageObject object={object} />;
   if (object.kind === "video" && object.src) return <VideoObject object={object} />;
   switch (object.kind) {

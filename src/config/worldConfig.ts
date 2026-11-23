@@ -112,6 +112,10 @@ export interface WorldConfig {
    * writable, deletable. Leave it out and the room simply starts bare.
    */
   defaultObjects?: DefaultWorldObject[];
+  /** The world's own standing mirrors, in every room of it, the glass
+   *  facing +z at rotationY 0. Left out, one is found near the arrival
+   *  point (scene/Mirror.tsx, findMirrorSpot); [] for none. */
+  mirrors?: { x: number; z: number; rotationY: number }[];
   /** Portals to other worlds: a row of rings that open another site in a
    *  new tab (src/worlds/Portals.tsx). */
   portals?: PortalConfig;
