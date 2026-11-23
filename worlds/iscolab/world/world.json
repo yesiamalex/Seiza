@@ -5,42 +5,83 @@
   "environment": "model",
   "sceneUrl": "/worlds/iscolab/models/lab.glb",
   "navMeshUrl": "/worlds/iscolab/models/lab.navmesh",
-  "sky": { "cycle": "realtime", "site": "manila", "weather": "auto", "vibrance": 1.2 },
+  "sky": {
+    "cycle": "realtime",
+    "site": "manila",
+    "weather": "auto",
+    "vibrance": 1.2
+  },
   "viewDistance": 260,
-  "spawnPoint": { "x": 6.3, "y": 0, "z": 12.5 },
-  "spawnRotationY": 0,
+  "spawnPoint": {
+    "x": 34,
+    "y": 0,
+    "z": 12
+  },
+  "spawnRotationY": -1.06,
   "defaultAvatarUrl": "",
   "maxOccupants": 16,
   "voiceEnabled": true,
   "editingEnabled": true,
   "allowAvatarUpload": true,
   "defaultAvatars": [
-    { "label": "Fumiriya", "url": "/avatars/vroid/sakurada-fumiriya.vrm", "author": "pixiv Inc. (VRoid Studio sample)", "license": "CC0 1.0", "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/" },
-    { "label": "Shino", "url": "/avatars/vroid/sendagaya-shino.vrm", "author": "pixiv Inc. (VRoid Studio sample)", "license": "CC0 1.0", "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/" },
-    { "label": "Sample A", "url": "/avatars/vroid/sample-female.vrm", "author": "pixiv Inc. (VRoid Studio sample)", "license": "CC0 1.0", "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/" },
-    { "label": "Sample B", "url": "/avatars/vroid/sample-male.vrm", "author": "pixiv Inc. (VRoid Studio sample)", "license": "CC0 1.0", "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/" }
+    {
+      "label": "Fumiriya",
+      "url": "/avatars/vroid/sakurada-fumiriya.vrm",
+      "author": "pixiv Inc. (VRoid Studio sample)",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/"
+    },
+    {
+      "label": "Shino",
+      "url": "/avatars/vroid/sendagaya-shino.vrm",
+      "author": "pixiv Inc. (VRoid Studio sample)",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/"
+    },
+    {
+      "label": "Sample A",
+      "url": "/avatars/vroid/sample-female.vrm",
+      "author": "pixiv Inc. (VRoid Studio sample)",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/"
+    },
+    {
+      "label": "Sample B",
+      "url": "/avatars/vroid/sample-male.vrm",
+      "author": "pixiv Inc. (VRoid Studio sample)",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/"
+    }
   ],
   "customGestures": [],
   "defaultObjects": [
-    {"kind": "screen", "position": [2.5, 1.95, -7.8], "rotationY": 0},
-    {"kind": "table", "position": [-2.0, 0, -4.6], "rotationY": 0},
-    {"kind": "chair", "position": [-2.45, 0, -3.82], "rotationY": 0},
-    {"kind": "chair", "position": [-1.55, 0, -3.82], "rotationY": 0},
-    {"kind": "table", "position": [2.5, 0, -4.6], "rotationY": 0},
-    {"kind": "chair", "position": [2.05, 0, -3.82], "rotationY": 0},
-    {"kind": "chair", "position": [2.95, 0, -3.82], "rotationY": 0},
-    {"kind": "table", "position": [7.0, 0, -4.6], "rotationY": 0},
-    {"kind": "chair", "position": [6.55, 0, -3.82], "rotationY": 0},
-    {"kind": "chair", "position": [7.45, 0, -3.82], "rotationY": 0},
-    {"kind": "table", "position": [-2.0, 0, -1.9], "rotationY": 0},
-    {"kind": "chair", "position": [-2.45, 0, -1.12], "rotationY": 0},
-    {"kind": "chair", "position": [-1.55, 0, -1.12], "rotationY": 0},
-    {"kind": "table", "position": [2.5, 0, -1.9], "rotationY": 0},
-    {"kind": "chair", "position": [2.05, 0, -1.12], "rotationY": 0},
-    {"kind": "chair", "position": [2.95, 0, -1.12], "rotationY": 0},
-    {"kind": "table", "position": [7.0, 0, -1.9], "rotationY": 0},
-    {"kind": "chair", "position": [6.55, 0, -1.12], "rotationY": 0},
-    {"kind": "chair", "position": [7.45, 0, -1.12], "rotationY": 0},
-    {"kind": "text", "position": [-3.2, 1.6, -7.95], "rotationY": 0, "text": "ISCOLab · Immersive Science Communication Open Laboratory\n没入型サイエンスコミュニケーション・オープンラボ\n- Click the screen to share yours · スクリーンをクリックして画面を共有\n- Sit at any table · どのテーブルにも座れます\n- UP Open University · フィリピン大学オープン大学"}
+    {
+      "kind": "screen",
+      "position": [
+        55.86,
+        1.75,
+        2.5
+      ],
+      "rotationY": -1.5708
+    },
+    {
+      "kind": "chair",
+      "position": [
+        55.3,
+        0,
+        -0.6
+      ],
+      "rotationY": 1.5708
+    },
+    {
+      "kind": "text",
+      "position": [
+        55.9,
+        1.6,
+        5.75
+      ],
+      "rotationY": -1.5708,
+      "text": "ISCOLab · Immersive Science Communication Open Laboratory\n没入型サイエンスコミュニケーション・オープンラボ\n- The lab is being fixed, so sessions are here for now · ラボは改修中のため、当面はこちらで\n- Click the screen to share yours · スクリーンをクリックして画面を共有\n- Sit on any bench · どのベンチにも座れます\n- UP Open University · フィリピン大学オープン大学"
+    }
   ]
 }

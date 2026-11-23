@@ -8,6 +8,13 @@
 //
 //   node worlds/iscolab/scripts/build-lab.mjs [path/to/ISCOLab.glb]
 //
+// Without the original model there, it rebuilds from the committed lab.glb
+// instead (taking its old lawn off first), so the grounds can change
+// without it. Where things stand comes from client/plan.ts, the file the
+// world's own code builds from: the lawn, and while the lab is being fixed
+// (UNDER_CONSTRUCTION), the barrier round it, which the navmesh treats as
+// a wall so nobody walks, or is walked, into the lab.
+//
 // The model is a floor-plan blockout: a floor and wall boxes, exported at
 // ten times scale, so its walls stand 20 m high. This script:
 //   1. Bakes every node's transform into its mesh.
@@ -22,24 +29,27 @@
 //
 // Needs @gltf-transform, meshoptimizer, and recast-navigation, all already
 // in node_modules. The deploy never runs it: its outputs are committed.
-import { mkdirSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Accessor, NodeIO, getBounds } from "@gltf-transform/core";
 import { ALL_EXTENSIONS } from "@gltf-transform/extensions";
-import { dedup, join as joinMeshes, meshopt, normals, prune, quantize, transformMesh, weld } from "@gltf-transform/functions";
-import { MeshoptEncoder } from "meshoptimizer";
+import { dedup, dequantize, join as joinMeshes, meshopt, normals, prune, quantize, transformMesh, weld } from "@gltf-transform/functions";
+import { MeshoptDecoder, MeshoptEncoder } from "meshoptimizer";
 import { exportNavMesh, init, NavMeshQuery } from "recast-navigation";
 import { generateTiledNavMesh } from "recast-navigation/generators";
+// Node runs the plan's TypeScript as it is (it has no imports of its own).
+import { BARRIER, BARRIER_HEIGHT, BARRIER_THICKNESS, KUBO, LAWN, SPAWN, UNDER_CONSTRUCTION } from "../client/plan.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const SRC = resolve(process.argv[2] ?? join(HERE, "..", "media-src", "ISCOLab.glb"));
+const ORIGINAL = resolve(process.argv[2] ?? join(HERE, "..", "media-src", "ISCOLab.glb"));
 const OUT = join(HERE, "..", "world", "models");
+/** The original model, or failing that, the lab as last built. */
+const REBUILD = !existsSync(ORIGINAL);
+const SRC = REBUILD ? join(OUT, "lab.glb") : ORIGINAL;
 
 /** Wall height after scaling, in metres: an ordinary storey. */
 const WALL_HEIGHT = 3.2;
-/** The lawn round the lab, from its edge, in metres. */
-const LAWN_MARGIN = 18;
 const LAWN_COLOR = [0.24, 0.42, 0.17, 1];
 /** The floor and the columns, which the model leaves without a material. */
 const CONCRETE_COLOR = [0.62, 0.6, 0.56, 1];
@@ -67,11 +77,21 @@ const log = (...a) => console.log("[iscolab]", ...a);
 const kb = (bytes) => `${(bytes / 1024).toFixed(0)} KB`;
 
 await MeshoptEncoder.ready;
-const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ "meshopt.encoder": MeshoptEncoder });
-log(`Reading ${SRC} (${kb(statSync(SRC).size)})`);
-const doc = await io.read(SRC);
+await MeshoptDecoder.ready;
+const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ "meshopt.encoder": MeshoptEncoder, "meshopt.decoder": MeshoptDecoder });
+log(`Reading ${SRC} (${kb(statSync(SRC).size)})${REBUILD ? ": no original model, so rebuilding from the last build" : ""}`);
+// Read from bytes: the committed lab.glb is about to be written over.
+const doc = await io.readBinary(new Uint8Array(readFileSync(SRC)));
 const root = doc.getRoot();
 const scene = root.listScenes()[0];
+if (REBUILD) {
+  // Back to plain floats, and the old lawn off: a new one goes down below.
+  await doc.transform(dequantize());
+  for (const node of root.listNodes()) {
+    if (node.getMesh()?.listPrimitives().some((p) => p.getMaterial()?.getName() === "Lawn")) node.dispose();
+  }
+  await doc.transform(prune());
+}
 
 // 1. Each node's transform into its mesh (every mesh here has one node).
 for (const node of root.listNodes()) {
@@ -112,10 +132,9 @@ for (const material of root.listMaterials()) material.setDoubleSided(true);
   for (const material of root.listMaterials()) material.setMetallicFactor(0);
 }
 
-// 3. A lawn round it, a centimetre under the lab's floor.
+// 3. The meadow (client/plan.ts's LAWN), a centimetre under the lab's floor.
 {
-  const [x0, x1] = [lab.min[0] - LAWN_MARGIN, lab.max[0] + LAWN_MARGIN];
-  const [z0, z1] = [lab.min[2] - LAWN_MARGIN, lab.max[2] + LAWN_MARGIN];
+  const { x0, x1, z0, z1 } = LAWN;
   const y = -0.01;
   const position = doc.createAccessor().setType(Accessor.Type.VEC3).setArray(new Float32Array([x0, y, z0, x1, y, z0, x1, y, z1, x0, y, z1]));
   const normal = doc.createAccessor().setType(Accessor.Type.VEC3).setArray(new Float32Array([0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0]));
@@ -142,6 +161,30 @@ for (const node of root.listNodes()) {
     if (idx) for (let i = 0; i < idx.getCount(); i++) indices.push(base + idx.getScalar(i));
     else for (let i = 0; i < pos.getCount(); i++) indices.push(base + i);
   }
+}
+// While the lab is being fixed, the barrier round it is a wall to walk
+// along, not through: in the navmesh only (the barrier itself is drawn by
+// the world's own code, client/Barrier.tsx).
+if (UNDER_CONSTRUCTION) {
+  const half = BARRIER_THICKNESS / 2;
+  const sides = [
+    [BARRIER.x0 - half, BARRIER.x1 + half, BARRIER.z0 - half, BARRIER.z0 + half],
+    [BARRIER.x0 - half, BARRIER.x1 + half, BARRIER.z1 - half, BARRIER.z1 + half],
+    [BARRIER.x0 - half, BARRIER.x0 + half, BARRIER.z0 - half, BARRIER.z1 + half],
+    [BARRIER.x1 - half, BARRIER.x1 + half, BARRIER.z0 - half, BARRIER.z1 + half],
+  ];
+  for (const [x0, x1, z0, z1] of sides) {
+    const base = positions.length / 3;
+    for (const y of [0, BARRIER_HEIGHT]) positions.push(x0, y, z0, x1, y, z0, x1, y, z1, x0, y, z1);
+    // The top, and the four sides.
+    indices.push(base + 4, base + 6, base + 5, base + 4, base + 7, base + 6);
+    for (let i = 0; i < 4; i++) {
+      const a = base + i;
+      const b = base + ((i + 1) % 4);
+      indices.push(a, b, b + 4, a, b + 4, a + 4);
+    }
+  }
+  log(`The lab is under construction: a barrier round it, x ${BARRIER.x0.toFixed(1)}..${BARRIER.x1.toFixed(1)}, z ${BARRIER.z0.toFixed(1)}..${BARRIER.z1.toFixed(1)}`);
 }
 const nav = generateTiledNavMesh(new Float32Array(positions), new Uint32Array(indices), NAV);
 if (!nav.success) throw new Error(`Navmesh failed: ${nav.error}`);
@@ -177,7 +220,9 @@ for (const x of doors) {
 const middles = doorways.map((d) => (d.at[0] + d.at[d.at.length - 1]) / 2);
 log(`Doorways in the front wall at x = ${middles.map((x) => x.toFixed(1)).join(", ") || "none"}`);
 const doorX = middles.sort((a, b) => Math.abs(a) - Math.abs(b))[0] ?? 0;
-const spawn = near(doorX, lab.max[2] + 4);
+// The rooms are checked from just outside the middle door (inside the
+// barrier, while there is one): every room should be walkable to from it.
+const front = near(doorX, lab.max[2] + 0.8);
 let inside = 0;
 let reached = 0;
 const unreached = [];
@@ -186,18 +231,34 @@ for (let x = lab.min[0] + 0.5; x < lab.max[0]; x += 0.5)
     const r = query.findClosestPoint({ x, y: 0, z }, { halfExtents: { x: 0.05, y: 0.3, z: 0.05 } });
     if (!r.success || !r.polyRef || Math.abs(r.point.x - x) > 0.06 || Math.abs(r.point.z - z) > 0.06) continue;
     inside++;
-    const path = query.computePath(spawn, r.point, { halfExtents: { x: 1, y: 1, z: 1 } });
+    const path = query.computePath(front, r.point, { halfExtents: { x: 1, y: 1, z: 1 } });
     const end = path.path?.[path.path.length - 1];
     if (end && Math.hypot(end.x - x, end.z - z) < 0.3) reached++;
     else unreached.push([x, z]);
   }
-log(`Floor inside the lab: ${inside} samples, ${reached} reachable from the spawn (${((100 * reached) / Math.max(1, inside)).toFixed(0)}%)`);
+log(`Floor inside the lab: ${inside} samples, ${reached} reachable from its front door (${((100 * reached) / Math.max(1, inside)).toFixed(0)}%)`);
 if (unreached.length) {
   const xs = unreached.map((p) => p[0]);
   const zs = unreached.map((p) => p[1]);
   log(`  Unreached floor spans x ${Math.min(...xs).toFixed(1)}..${Math.max(...xs).toFixed(1)}, z ${Math.min(...zs).toFixed(1)}..${Math.max(...zs).toFixed(1)}: rooms with no doorway?`);
 }
-log(`Spawn: ${spawn.x.toFixed(2)}, ${spawn.y.toFixed(2)}, ${spawn.z.toFixed(2)}`);
+// Arrival is on the meadow (client/plan.ts's SPAWN), and from there the
+// kubo should be a walk away, and the lab, while it's being fixed, not.
+// A point's own copy (the query hands back the same object each time, and
+// the last one again when it finds nothing), and an error if it found
+// nothing: a check against the wrong point passes or fails for nothing.
+const at = (x, z) => {
+  const r = query.findClosestPoint({ x, y: 0, z }, { halfExtents: { x: 1, y: 1, z: 1 } });
+  if (!r.success || !r.polyRef) throw new Error(`No walkable ground near ${x}, ${z}.`);
+  return { ...r.point };
+};
+const spawn = at(SPAWN.x, SPAWN.z);
+const reaches = (x, z) => walk(spawn, at(x, z)) < Infinity;
+const kubo = reaches((KUBO.x0 + KUBO.x1) / 2, (KUBO.z0 + KUBO.z1) / 2);
+const lab_ = reaches(doorX, lab.max[2] - 1.2);
+log(`Spawn: ${spawn.x.toFixed(2)}, ${spawn.y.toFixed(2)}, ${spawn.z.toFixed(2)}; the kubo ${kubo ? "reachable" : "NOT reachable"}; the lab ${lab_ ? "reachable" : "closed off"}`);
+if (!kubo) throw new Error("The kubo can't be walked to from the spawn.");
+if (UNDER_CONSTRUCTION === lab_) throw new Error(UNDER_CONSTRUCTION ? "The barrier doesn't close the lab off." : "The lab can't be walked to from the spawn.");
 
 // 5. Draw calls and compression.
 await doc.transform(dedup(), joinMeshes({ keepNamed: false }), weld(), prune(), quantize({ quantizePosition: 16, quantizeNormal: 10 }), meshopt({ encoder: MeshoptEncoder, level: "medium" }));
