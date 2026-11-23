@@ -13,12 +13,13 @@ made of its own model").
   walls and floor, two colors, no ceiling, so the sky shows overhead.
 - **A meadow,** the lab at its west edge and open ground east of it, out
   to the kubo.
-- **Under construction, for now.** The lab is being fixed, so it's closed
-  off: a barrier round it of posts, caution tape, and striped barricades
-  with amber lamps that blink (brighter after dark), cones, scaffolding
-  up part of its front, and a sign in English, Japanese, and Filipino
-  sending people to the kubo. The navmesh treats the barrier as a wall,
-  so nobody walks, or is walked, inside.
+- **Under construction, for now.** The lab is being fixed, so sessions
+  are in the kubo; the barrier is for the look: posts, caution tape, and
+  striped barricades with amber lamps that blink (brighter after dark),
+  cones, scaffolding up part of its front, and a sign in English,
+  Japanese, and Filipino pointing people to the kubo. The lab is still
+  open: the barrier leaves a way in at the main door, cones either side,
+  and the navmesh walks round the rest of it as a wall.
 - **The kubo,** across the meadow, for sessions meanwhile: Tulay's kubo
   hall (built with Tulay's own geometry and materials), open on its west
   side toward the lab, with sawali knee walls, a nipa roof, capiz lamps lit
@@ -26,12 +27,12 @@ made of its own model").
   three rows you can sit on, facing a screen on its east wall.
 - **Arrival** is on the meadow between the two, facing the kubo.
 - **Walking** follows a navmesh baked from the model and the plan: round
-  the barrier, across the meadow, into the kubo.
+  the barrier and in at its opening, across the meadow, into the kubo.
 - **The screen,** the facilitator's chair, and a welcome board in English
   and Japanese are the room's starting objects (`defaultObjects` in
   `world/world.json`), so they can be shared to, moved, or removed. A room
   only starts with them when it has no objects yet: a room that already
-  has the lab's old tables and screen keeps them, inside the closed lab,
+  has the lab's old tables and screen keeps them, inside the lab,
   until an editor deletes them (in Edit mode) and puts a screen in the
   kubo, or the room is emptied.
 - Everything else Seiza has: voice, chat, screens, boards, avatars,
@@ -51,8 +52,9 @@ navmesh opens the lab again. The kubo stays until you take it out of
 scaffolding, the kubo, its benches and screen, and the arrival point. The
 world's code builds from it, and the bake reads the same file (Node runs
 its TypeScript as it is), so the navmesh and what's drawn can't disagree.
-`client/plan.test.ts` checks the arrival point reaches the kubo and, while
-it's closed, not the lab, and that the starting objects are in the kubo.
+`client/plan.test.ts` checks the arrival point reaches the kubo and the lab
+(through the barrier's opening), and that the starting objects are in the
+kubo.
 
 ## Update the model
 
@@ -84,8 +86,9 @@ The script:
    columns, which have no material in the model, get plain concrete (glTF's
    default material is fully metallic and renders near-black).
 4. Adds the meadow (`LAWN` in `client/plan.ts`).
-5. Bakes the navmesh, with the barrier as a wall while the lab is closed,
-   finds the front wall's doorways, and checks reach.
+5. Bakes the navmesh, with the barrier as a wall (but for its opening at
+   the main door) while the lab is being fixed, finds the front wall's
+   doorways, and checks the kubo and the lab are both reachable.
 6. Joins meshes by material and meshopt-compresses the geometry.
 
 ## Run it locally
@@ -131,7 +134,7 @@ worlds/iscolab/
   scripts/build-lab.mjs  Prepares the model and bakes the navmesh
   client/                The world's own code, loaded by Seiza only here:
     plan.ts              Where everything is (the bake reads it too)
-    Barrier.tsx          The barrier, scaffolding, and sign, while closed
+    Barrier.tsx          The barrier, scaffolding, and sign, while being fixed
     Kubo.tsx             The temporary kubo
     grounds.ts           What's solid, and the benches' seats
     index.tsx            Wires it up

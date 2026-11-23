@@ -1,4 +1,4 @@
-// The temporary kubo for sessions while the lab is closed, built the way
+// The temporary kubo for sessions while the lab is being fixed, built the way
 // Tulay builds its kubo hall (worlds/tulay/client/Kubo.tsx), with Tulay's
 // own geometry and materials: bamboo posts and benches, a nipa roof,
 // sawali walls, capiz lamps lit at dusk, and a name board over its open

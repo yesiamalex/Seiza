@@ -13,8 +13,9 @@
 //        z 28  └──────────────────────────────────────────────────────┘
 //            x −24                x 18                  x 46     x 56  x 72
 
-/** The lab is being fixed: a barrier round it, and the session moved out to
- *  the kubo. Set false (and re-run the bake) when it opens again. */
+/** The lab is being fixed: a barrier round it (for the look: there's a way
+ *  in at the main door), and sessions moved out to the kubo. Set false
+ *  (and re-run the bake) when it's done. */
 export const UNDER_CONSTRUCTION = true;
 
 /** The lab's walls, for anything placed round them. */
@@ -31,6 +32,18 @@ export const BARRIER_HEIGHT = 1.1;
 export const BARRIER_THICKNESS = 0.3;
 /** Barrier posts this far apart, with tape between them. */
 export const BARRIER_SPACING = 2.4;
+/** The way in: the barrier is for the look, and leaves an opening at the
+ *  lab's main door (its front doorway at x 6.3), cones either side, so
+ *  people can still go in while it's being fixed. */
+export const BARRIER_OPENING = { x: 6.3, half: 1.3 };
+/** The barrier as straight runs round the lab, the opening left out. */
+export const BARRIER_RUNS: [[number, number], [number, number]][] = [
+  [[BARRIER.x0, BARRIER.z0], [BARRIER.x1, BARRIER.z0]],
+  [[BARRIER.x1, BARRIER.z0], [BARRIER.x1, BARRIER.z1]],
+  [[BARRIER.x1, BARRIER.z1], [BARRIER_OPENING.x + BARRIER_OPENING.half, BARRIER.z1]],
+  [[BARRIER_OPENING.x - BARRIER_OPENING.half, BARRIER.z1], [BARRIER.x0, BARRIER.z1]],
+  [[BARRIER.x0, BARRIER.z1], [BARRIER.x0, BARRIER.z0]],
+];
 
 /** The sign, just outside the barrier's east side, facing across the
  *  meadow to where people arrive (+x; a face looks +z at yaw 0). */
@@ -39,7 +52,7 @@ export const SIGN = { x: BARRIER.x1 + 1.5, z: 3, rotationY: Math.PI / 2 };
 export const SCAFFOLD = { x0: -12, x1: -2, z0: LAB.z1 + 0.15, z1: LAB.z1 + 1.05, bay: 2, levels: [1.05, 2.1, 3.15] };
 
 /**
- * The temporary kubo for sessions while the lab is closed: Tulay's kubo
+ * The temporary kubo for sessions while the lab is being fixed: Tulay's kubo
  * hall (worlds/tulay), at the far side of the meadow. Open on its west
  * side, toward the lab and the arrival point; knee walls of sawali north
  * and south; the screen on its east wall, full height behind it; bamboo

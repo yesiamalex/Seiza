@@ -1,9 +1,9 @@
 // What's solid on ISCOLab's grounds, and where to sit: from plan.ts.
-// The navmesh already keeps people out of the lab while it's closed
-// (scripts/build-lab.mjs bakes the barrier in); these boxes are what they
-// bump into, and what keeps a step from cutting a corner through a post.
+// The navmesh already walks people round the barrier and in at its opening
+// (scripts/build-lab.mjs bakes it in); these boxes are what they bump
+// into, and what keeps a step from cutting a corner through a post.
 import { makeObstacle, type Obstacle, type Seat } from "../../../src/scene/layout";
-import { BARRIER, BARRIER_THICKNESS, BENCH_LENGTH, BENCHES, FACING_SCREEN, KUBO, KUBO_CENTRE, KUBO_POSTS, SIGN, TABLE, UNDER_CONSTRUCTION } from "./plan";
+import { BARRIER_RUNS, BARRIER_THICKNESS, BENCH_LENGTH, BENCHES, FACING_SCREEN, KUBO, KUBO_CENTRE, KUBO_POSTS, SIGN, TABLE, UNDER_CONSTRUCTION } from "./plan";
 
 /** Benches' seats sit this far toward the screen from the bench's middle. */
 const SEAT_FORWARD = 0.12;
@@ -12,10 +12,8 @@ export function iscolabObstacles(): Obstacle[] {
   const t = BARRIER_THICKNESS / 2;
   const barrier = UNDER_CONSTRUCTION
     ? [
-        makeObstacle((BARRIER.x0 + BARRIER.x1) / 2, BARRIER.z0, (BARRIER.x1 - BARRIER.x0) / 2 + t, t),
-        makeObstacle((BARRIER.x0 + BARRIER.x1) / 2, BARRIER.z1, (BARRIER.x1 - BARRIER.x0) / 2 + t, t),
-        makeObstacle(BARRIER.x0, (BARRIER.z0 + BARRIER.z1) / 2, t, (BARRIER.z1 - BARRIER.z0) / 2 + t),
-        makeObstacle(BARRIER.x1, (BARRIER.z0 + BARRIER.z1) / 2, t, (BARRIER.z1 - BARRIER.z0) / 2 + t),
+        // Each straight run of it, the way in at the main door left open.
+        ...BARRIER_RUNS.map(([a, b]) => makeObstacle((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, Math.abs(b[0] - a[0]) / 2 + t, Math.abs(b[1] - a[1]) / 2 + t)),
         makeObstacle(SIGN.x, SIGN.z, 0.25, 0.9),
       ]
     : [];

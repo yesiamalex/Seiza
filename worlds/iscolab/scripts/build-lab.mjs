@@ -13,7 +13,8 @@
 // without it. Where things stand comes from client/plan.ts, the file the
 // world's own code builds from: the lawn, and while the lab is being fixed
 // (UNDER_CONSTRUCTION), the barrier round it, which the navmesh treats as
-// a wall so nobody walks, or is walked, into the lab.
+// a wall but for its opening at the main door, so people walk round it
+// and in that way.
 //
 // The model is a floor-plan blockout: a floor and wall boxes, exported at
 // ten times scale, so its walls stand 20 m high. This script:
@@ -39,7 +40,7 @@ import { MeshoptDecoder, MeshoptEncoder } from "meshoptimizer";
 import { exportNavMesh, init, NavMeshQuery } from "recast-navigation";
 import { generateTiledNavMesh } from "recast-navigation/generators";
 // Node runs the plan's TypeScript as it is (it has no imports of its own).
-import { BARRIER, BARRIER_HEIGHT, BARRIER_THICKNESS, KUBO, LAWN, SPAWN, UNDER_CONSTRUCTION } from "../client/plan.ts";
+import { BARRIER, BARRIER_HEIGHT, BARRIER_RUNS, BARRIER_THICKNESS, KUBO, LAWN, SPAWN, UNDER_CONSTRUCTION } from "../client/plan.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ORIGINAL = resolve(process.argv[2] ?? join(HERE, "..", "media-src", "ISCOLab.glb"));
@@ -163,16 +164,13 @@ for (const node of root.listNodes()) {
   }
 }
 // While the lab is being fixed, the barrier round it is a wall to walk
-// along, not through: in the navmesh only (the barrier itself is drawn by
-// the world's own code, client/Barrier.tsx).
+// along, not through, but for its opening at the main door: in the
+// navmesh only (the barrier itself is drawn by the world's own code,
+// client/Barrier.tsx).
 if (UNDER_CONSTRUCTION) {
   const half = BARRIER_THICKNESS / 2;
-  const sides = [
-    [BARRIER.x0 - half, BARRIER.x1 + half, BARRIER.z0 - half, BARRIER.z0 + half],
-    [BARRIER.x0 - half, BARRIER.x1 + half, BARRIER.z1 - half, BARRIER.z1 + half],
-    [BARRIER.x0 - half, BARRIER.x0 + half, BARRIER.z0 - half, BARRIER.z1 + half],
-    [BARRIER.x1 - half, BARRIER.x1 + half, BARRIER.z0 - half, BARRIER.z1 + half],
-  ];
+  // Run by run, the way in at the main door left open.
+  const sides = BARRIER_RUNS.map(([a, b]) => [Math.min(a[0], b[0]) - half, Math.max(a[0], b[0]) + half, Math.min(a[1], b[1]) - half, Math.max(a[1], b[1]) + half]);
   for (const [x0, x1, z0, z1] of sides) {
     const base = positions.length / 3;
     for (const y of [0, BARRIER_HEIGHT]) positions.push(x0, y, z0, x1, y, z0, x1, y, z1, x0, y, z1);
@@ -243,7 +241,7 @@ if (unreached.length) {
   log(`  Unreached floor spans x ${Math.min(...xs).toFixed(1)}..${Math.max(...xs).toFixed(1)}, z ${Math.min(...zs).toFixed(1)}..${Math.max(...zs).toFixed(1)}: rooms with no doorway?`);
 }
 // Arrival is on the meadow (client/plan.ts's SPAWN), and from there the
-// kubo should be a walk away, and the lab, while it's being fixed, not.
+// kubo should be a walk away, and the lab too, through the barrier's way in.
 // A point's own copy (the query hands back the same object each time, and
 // the last one again when it finds nothing), and an error if it found
 // nothing: a check against the wrong point passes or fails for nothing.
@@ -256,9 +254,10 @@ const spawn = at(SPAWN.x, SPAWN.z);
 const reaches = (x, z) => walk(spawn, at(x, z)) < Infinity;
 const kubo = reaches((KUBO.x0 + KUBO.x1) / 2, (KUBO.z0 + KUBO.z1) / 2);
 const lab_ = reaches(doorX, lab.max[2] - 1.2);
-log(`Spawn: ${spawn.x.toFixed(2)}, ${spawn.y.toFixed(2)}, ${spawn.z.toFixed(2)}; the kubo ${kubo ? "reachable" : "NOT reachable"}; the lab ${lab_ ? "reachable" : "closed off"}`);
+log(`Spawn: ${spawn.x.toFixed(2)}, ${spawn.y.toFixed(2)}, ${spawn.z.toFixed(2)}; the kubo ${kubo ? "reachable" : "NOT reachable"}; the lab ${lab_ ? "reachable" : "NOT reachable"}`);
 if (!kubo) throw new Error("The kubo can't be walked to from the spawn.");
-if (UNDER_CONSTRUCTION === lab_) throw new Error(UNDER_CONSTRUCTION ? "The barrier doesn't close the lab off." : "The lab can't be walked to from the spawn.");
+// The barrier is for the look: the lab stays open through its way in.
+if (!lab_) throw new Error("The lab can't be walked to from the spawn (is the barrier's opening at a door?).");
 
 // 5. Draw calls and compression.
 await doc.transform(dedup(), joinMeshes({ keepNamed: false }), weld(), prune(), quantize({ quantizePosition: 16, quantizeNormal: 10 }), meshopt({ encoder: MeshoptEncoder, level: "medium" }));

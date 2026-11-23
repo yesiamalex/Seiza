@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import type { NavMeshQuery as Query } from "recast-navigation";
-import { BARRIER, KUBO, LAB, LAWN, SCREEN, SIGN, SPAWN, UNDER_CONSTRUCTION } from "./plan";
+import { BARRIER, KUBO, LAB, LAWN, SCREEN, SIGN, SPAWN } from "./plan";
 import { iscolabObstacles, iscolabSeats } from "./grounds";
 
 // The app's types leave Node out, so the file reader is typed by hand.
@@ -48,9 +48,9 @@ describe("ISCOLab's grounds", () => {
     expect(SIGN.x).toBeGreaterThan(BARRIER.x1);
   });
 
-  it("walks from the arrival point to the kubo, and, while it's being fixed, not into the lab", () => {
+  it("walks from the arrival point to the kubo, and into the lab through the barrier's way in", () => {
     expect(walks([SPAWN.x, SPAWN.z], [(KUBO.x0 + KUBO.x1) / 2, (KUBO.z0 + KUBO.z1) / 2])).toBe(true);
-    expect(walks([SPAWN.x, SPAWN.z], [0, 0])).toBe(!UNDER_CONSTRUCTION);
+    expect(walks([SPAWN.x, SPAWN.z], [0, 0])).toBe(true);
     // Its rooms are still joined up inside, for when it opens.
     expect(walks([6.3, LAB.z1 + 0.8], [0, 0])).toBe(true);
   });

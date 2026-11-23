@@ -1,14 +1,15 @@
 // The lab under construction: a barrier round it of posts, caution tape,
 // and striped barricades with amber lamps that blink (brighter after
-// dark), traffic cones at the corners, scaffolding up part of its front,
-// and a sign that sends people to the kubo. Each material one merged mesh,
+// dark), open at the main door so people can still go in, traffic cones
+// at the corners and the way in, scaffolding up part of its front, and a
+// sign that sends people to the kubo. Each material one merged mesh,
 // and the textures drawn once on canvases: a few draw calls, no files.
 import { useEffect, useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { skyState } from "../../../src/sky/skyState";
 import { box, mergeParts } from "../../tulay/client/geometry";
-import { BARRIER, BARRIER_HEIGHT, BARRIER_SPACING, SCAFFOLD, SIGN } from "./plan";
+import { BARRIER, BARRIER_HEIGHT, BARRIER_OPENING, BARRIER_RUNS, BARRIER_SPACING, SCAFFOLD, SIGN } from "./plan";
 
 /** A canvas texture, drawn once. */
 function canvasTexture(width: number, height: number, draw: (c: CanvasRenderingContext2D) => void): THREE.Texture | null {
@@ -113,7 +114,7 @@ function build() {
   const steel: THREE.BufferGeometry[] = [];
   const planks: THREE.BufferGeometry[] = [];
 
-  // The barrier, side by side round the lab.
+  // The barrier, run by run round the lab, the way in left open.
   const corners: [number, number][] = [
     [BARRIER.x0, BARRIER.z0],
     [BARRIER.x1, BARRIER.z0],
@@ -121,10 +122,12 @@ function build() {
     [BARRIER.x0, BARRIER.z1],
   ];
   let gap = 0;
-  corners.forEach((a, side) => {
-    const b = corners[(side + 1) % 4];
+  for (const [a, b] of BARRIER_RUNS) {
     const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
-    const count = Math.ceil(length / BARRIER_SPACING);
+    const count = Math.max(1, Math.round(length / BARRIER_SPACING));
+    // The run's last post (each segment below puts up its first).
+    posts.push(new THREE.CylinderGeometry(0.045, 0.05, BARRIER_HEIGHT, 8).translate(b[0], BARRIER_HEIGHT / 2, b[1]));
+    feet.push(box(b[0], 0.03, b[1], 0.34, 0.06, 0.34));
     for (let i = 0; i < count; i++) {
       const p = (t: number): [number, number] => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
       const from = p(i / count);
@@ -140,13 +143,16 @@ function build() {
         for (const y of [0.62, 0.98]) tapes.push(run(from, to, y, 0.075, 0.006, 1.7));
       }
     }
-  });
+  }
 
   // Cones at the corners, out on the meadow side, and two by the sign.
   const conesAt: [number, number][] = [
     ...corners.map(([x, z]): [number, number] => [x + Math.sign(x) * 0.7, z + Math.sign(z) * 0.7]),
     [SIGN.x + 0.4, SIGN.z - 1.4],
     [SIGN.x + 0.4, SIGN.z + 1.4],
+    // Either side of the way in.
+    [BARRIER_OPENING.x - BARRIER_OPENING.half - 0.1, BARRIER.z1 + 0.6],
+    [BARRIER_OPENING.x + BARRIER_OPENING.half + 0.1, BARRIER.z1 + 0.6],
   ];
   for (const [x, z] of conesAt) {
     feet.push(box(x, 0.02, z, 0.42, 0.04, 0.42));
