@@ -1030,10 +1030,11 @@ everyone in the room under **Room modes** in the edit panel. Each mode
 adds its own coloured button to the bar while it is on.
 
 - **Fantasy** (red): pick a sword, katana, naginata, scythe, light saber,
-  or bow, and an element for your special (Spectro, Havoc, Aero, Electro,
-  Fusion, or Glacio). Health bars
-  show over everyone holding a weapon. Only people holding a weapon can be
-  hit, so choosing None steps out.
+  bow, or the Necromancer's rod, and an element for your special (Spectro,
+  Havoc, Aero, Electro, Fusion, or Glacio). Health bars show over everyone
+  holding a weapon. Only people holding a weapon can be hit, so choosing
+  None steps out. You hold a weapon or an instrument, not both: picking
+  one puts the other away.
   - A blow lands only where the blade really meets a body. Where two blades
     meet, both bounce off.
   - On a PC, click to swing and hold F to raise your blade into a guard.
@@ -1101,6 +1102,19 @@ adds its own coloured button to the bar while it is on.
     and the next hard swing is the special. The trigger shoots the bow.
   - The weapons trade off against each other rather than one being best.
     The weapon picker says what each is good at.
+  - The **Necromancer** fights from range with a rod: a click casts a slow
+    magic bolt (10 a hit, up to 18 m) that can be seen coming and dodged.
+    Its special raises three small undead round it, who walk to the
+    nearest fighter in sight and strike for 3 each until they crumble nine
+    seconds later, or sooner if the necromancer puts the rod down or is
+    knocked out. Its meter fills slowest of all, so the undead don't come
+    often.
+  - Your record is kept on your device, the way the seiza best time is:
+    for each weapon, knockouts (K), times knocked out (D), assists (A: a
+    hit on someone in the 10 seconds before someone else knocked them out),
+    and your longest combo. It shows under your health bar, and for every
+    weapon you've used in the Fantasy panel. Each fighter's own browser
+    says who knocked them out and who helped.
   - Every weapon glows in its special's colour as the meter fills, and
     when the special is ready it breathes in its element's way, so others
     can see it coming: Spectro shimmers, Havoc throbs slow and deep, Aero
@@ -1122,13 +1136,21 @@ adds its own coloured button to the bar while it is on.
     double-tracked power chords and a minor pentatonic run for solos. The
     bass plays the root of each chord, warm and growling, with weight a
     laptop or phone can still play. The keys span an octave and a half
-    (A to K, then O, L, P, ;, and ', with Z and X for the octave).
+    (A to K, then O, L, P, ;, and ', with Z and X for the octave), and a
+    key rings while it's held, as a piano's does: hold several for a
+    chord, on the keyboard or the screen, and let go to stop them. The
+    room hears them held and let go too.
   - **Start playing** also opens the instrument flat on the screen. Its
     keyboard keys are shown on it, and they play the instrument instead of
     moving you until you press Esc.
   - In VR, play with your hands. Tap the pads and keys, strike the kit with
     the tips of your sticks (the right trigger is the kick), or strum a
-    guitar while your other hand picks the chord along its neck.
+    guitar while your other hand picks the chord along its neck. The wrist
+    menu has both modes' choices: weapons and elements (with your record),
+    instruments, light-stick colours and how many, and the keys' octave,
+    and a switch between English and Japanese.
+  - Seated, or in a posture such as seiza, your avatar is the posture's,
+    not the mode's, on your own screen as on everyone else's.
   - Notes are sent as events and played by each visitor's own browser, so
     no audio is streamed. Everyone hears the whole room.
   - Light sticks come in seven colours, one or a pair, and sway on the

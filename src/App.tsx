@@ -68,7 +68,7 @@ import { MediaControls } from "./media/MediaControls";
 import { CameraBadge } from "./media/CameraBadge";
 import { ScreenZoomOverlay } from "./media/ScreenZoomOverlay";
 import { ImageViewer } from "./edit/ImageViewer";
-import { L, useLang } from "./i18n/lang";
+import { getLang, L, setLang, useLang } from "./i18n/lang";
 import { LangToggle } from "./i18n/LangToggle";
 import { gestureLabel } from "./i18n/gestureLabels";
 import { PresentSourceChooser } from "./media/PresentSourceChooser";
@@ -90,7 +90,7 @@ import { AvatarChooser } from "./ui/AvatarChooser";
 import { useMediaQuery, useWantsTouchControls } from "./ui/useMediaQuery";
 import { saveProfile } from "./profile/profileStore";
 import { deliverWorldMessage, unwrapWorldMessage, WorldExtension, WorldOverlay, wrapWorldMessage } from "./worlds/WorldExtension";
-import { AddonBarButtons, AddonOverlay, AddonScene, addonHoldsClicks, connectAddonBus, LOCAL_AVATAR, RoomModes, setAddonAvatar } from "./addons";
+import { AddonBarButtons, AddonOverlay, AddonScene, addonHoldsClicks, connectAddonBus, LOCAL_AVATAR, RoomModes, setAddonAvatar, useAddonXrSections } from "./addons";
 import { PortalCard, Portals } from "./worlds/Portals";
 import { BAR_LABEL_CLASS, barButtonActiveStyle, barButtonStyle, inputStyle, panelStyle, pillButtonStyle, primaryButtonStyle } from "./ui/styles";
 import { CloseIcon, LockIcon, PersonIcon, VrHeadsetIcon } from "./ui/icons";
@@ -1255,6 +1255,9 @@ export default function App() {
     const timer = window.setTimeout(() => setXrRemoveArmed(null), XR_REMOVE_CONFIRM_MS);
     return () => window.clearTimeout(timer);
   }, [xrRemoveArmed]);
+  // The room modes' choices (weapons, elements, instruments), for the
+  // headset menu: what their buttons on the flat control bar offer.
+  const addonXrSections = useAddonXrSections(worldState);
 
   if (worldError) return <CenteredMessage text={L(`Couldn't load world: ${worldError.message}`, `ワールドを読み込めませんでした:${worldError.message}`)} />;
   if (!world) return <CenteredMessage text={L("Loading world…", "ワールドを読み込み中…")} />;
@@ -1285,6 +1288,7 @@ export default function App() {
   // bar, handed over as data so that module knows nothing about rooms or
   // media.
   const xrHudModel: XrHudModel = {
+    sections: addonXrSections,
     title: L(currentWorld.displayName, currentWorld.displayNameJa ?? currentWorld.displayName),
     people: Math.max(1, Object.keys(players).length),
     voice: !(VOICE_ENABLED && voiceVisible)
@@ -1316,6 +1320,7 @@ export default function App() {
       : null,
     standUp: seat || posture ? standUp : null,
     comfort: { active: comfortVignette, toggle: () => setComfortVignette(!comfortVignette) },
+    onLanguage: () => setLang(getLang() === "ja" ? "en" : "ja"),
     // The people nearest you, listed by name so the rows don't reorder
     // under your pointer as everyone moves.
     admin: isAdmin
@@ -1435,7 +1440,7 @@ export default function App() {
               findPath={navMesh.findPath}
             />
             {/* Room modes an editor switched on (src/addons/). */}
-            <AddonScene worldState={worldState} selfId={selfId} players={players} getSelfPosition={getSelfPosition} editMode={editMode} />
+            <AddonScene worldState={worldState} selfId={selfId} players={players} getSelfPosition={getSelfPosition} editMode={editMode} selfSeated={!!posture || !!seat} />
             {world.portals && <Portals config={world.portals} builtin={world.environment !== "model"} />}
           </group>
           <PlayerRig

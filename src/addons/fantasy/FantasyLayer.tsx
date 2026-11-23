@@ -26,7 +26,8 @@ import {
   lapseChain,
   local,
   METER_PER_PARRY,
-  meterPerSecond,
+  meterPerSecondFor,
+  UNDEAD,
   parseFantasyEvent,
   pressCancel,
   pressEnd,
@@ -39,12 +40,19 @@ import {
   sinceLastHit,
   startAction,
   takeDamage,
+  knockedOut,
+  scoreKnockout,
 } from "./combat";
 import { BLADE_CONTACT, bodyCapsule, segmentDistance, sweep, type Capsule, type Closest } from "./contact";
 import { FantasyEffects, Trail } from "./effects";
+import { Pack } from "./undead";
 import { bodyPose, bowDraw, heldPose, KNOCKED_OUT, timingOf, type Action, type ActionKind, type HeldPose } from "./poses";
 import { playCharged, playClash, playHit, playKnockedOut, playSpecial, playSpecialCharge, playSwing } from "./sounds";
-import { buildWeapon, ELEMENT_COLORS, elementPulse, MAX_HP, SABER_HALO, setBowString, weaponGlow, WEAPON_SPECS, type Element, type Weapon } from "./weapons";
+import { buildWeapon, ELEMENT_COLORS, elementPulse, isBladed, MAX_HP, SABER_HALO, setBowString, weaponGlow, WEAPON_SPECS, type Element, type Weapon } from "./weapons";
+import { floorHeightAt, getGround } from "../../scene/layout";
+
+/** The ground's height under (x, z), in a built-in world or a model one. */
+const floorAt = (x: number, z: number) => getGround()?.floorAt(x, z) ?? floorHeightAt(x, z);
 
 interface FantasyLayerProps {
   selfId: string | null;
@@ -52,6 +60,11 @@ interface FantasyLayerProps {
   getSelfPosition: () => [number, number, number];
   /** No fighting while editing: a click there picks things up. */
   editMode: boolean;
+  /** This visitor is seated or in a posture (seiza, lying, a slow dance):
+   *  their own avatar is the clip's, not the mode's. Their own posture
+   *  never comes back from the room (it's sent to everyone else), so it
+   *  comes from here. */
+  selfSeated: boolean;
 }
 
 /** One avatar's share of the scene: what it holds and how it's posed. */
@@ -191,7 +204,9 @@ function buzz(gl: THREE.WebGLRenderer, hand: "left" | "right", intensity: number
  *   back over the shoulder with the meter full, and the next hard swing is
  *   the special. The trigger looses an arrow.
  */
-export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: FantasyLayerProps) {
+export function FantasyLayer({ selfId, players, getSelfPosition, editMode, selfSeated }: FantasyLayerProps) {
+  const selfSeatedRef = useRef(selfSeated);
+  selfSeatedRef.current = selfSeated;
   const { camera, gl, scene } = useThree();
   const effects = useMemo(() => new FantasyEffects(), []);
   const holders = useRef(new Map<string, Holder>()).current;
@@ -205,10 +220,17 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
   const lastContact = useRef(new Map<string, number>()).current;
   /** How far through its action this visitor's swing was last frame. */
   const lastPhase = useRef(1);
+  /** Everyone's undead, by owner (this visitor's under LOCAL_AVATAR). */
+  const packs = useRef(new Map<string, Pack>()).current;
+  const ownPack = useRef<Pack | null>(null);
+  const undeadSent = useRef(0);
 
   useEffect(() => {
     scene.add(effects.group);
     return () => {
+      for (const pack of packs.values()) pack.dispose();
+      packs.clear();
+      ownPack.current = null;
       scene.remove(effects.group);
       effects.dispose();
     };
@@ -244,7 +266,7 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
   const bladeOf = (id: string) => {
     const fighter = remoteFighters.get(id);
     const holder = holders.get(id);
-    return fighter?.weapon && fighter.weapon !== "bow" && holder?.hasBlade ? holder : null;
+    return isBladed(fighter?.weapon ?? null) && holder?.hasBlade ? holder : null;
   };
 
   const chestOf = (id: string) => (id === selfIdRef.current ? bodyOf(LOCAL_AVATAR) : bodyOf(id))?.chest ?? null;
@@ -277,7 +299,7 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
     playClash(weapon === "lightsaber");
     // Their blade is knocked aside here too, as it is on their screen.
     const other = remoteFighters.get(id);
-    if (other?.weapon && other.weapon !== "bow") other.action = { kind: other.guard ? "stagger" : "recoil", n: 0, start: seconds() };
+    if (other && isBladed(other.weapon)) other.action = { kind: other.guard ? "stagger" : "recoil", n: 0, start: seconds() };
   };
 
   const blast = (element: Element, at: THREE.Vector3, weapon: Weapon) => {
@@ -387,6 +409,107 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
     );
   };
 
+  /**
+   * The undead, every frame. This visitor's own go for the nearest armed
+   * fighter in sight and strike when they reach them, and the room is told
+   * where they are five times a second; everyone else's glide to where
+   * their owner last said. All of them sink back after their time, or when
+   * their owner puts the rod down or is knocked out.
+   */
+  const tendUndead = (now: number, dt: number) => {
+    const own = ownPack.current;
+    if (own && own.sinkingFrom === Infinity) {
+      const me = fantasy.get();
+      if (me.weapon !== "rod" || me.ko || now - own.born > UNDEAD.seconds) {
+        own.sink(now);
+        sendAddonEvent("fantasy", { k: "un", e: own.element, p: [] });
+      } else if (now - own.born > UNDEAD.rise) {
+        const foes = targets();
+        for (const r of own.risen) {
+          let foe: (typeof foes)[number] | null = null;
+          let near: number = UNDEAD.sight;
+          for (const t of foes) {
+            const d = Math.hypot(t.feet.x - r.x, t.feet.z - r.z);
+            if (d < near) {
+              near = d;
+              foe = t;
+            }
+          }
+          if (!foe) continue;
+          Pack.step(r, foe.feet.x, foe.feet.z, dt, UNDEAD.reach * 0.8);
+          if (near <= UNDEAD.reach && now - r.lastStrike >= UNDEAD.every) {
+            r.lastStrike = r.lunge = now;
+            sendAddonEvent("fantasy", { k: "hit", t: [foe.id], d: UNDEAD.damage, m: 1 });
+            effects.sparksAt(foe.chest, ELEMENT_COLORS[own.element], 8, 2);
+            playHit(null, distanceTo(foe.chest));
+          }
+        }
+        if (now - undeadSent.current > 0.2) {
+          undeadSent.current = now;
+          sendAddonEvent("fantasy", { k: "un", e: own.element, p: own.risen.flatMap((r) => [Math.round(r.x * 100) / 100, Math.round(r.z * 100) / 100]) });
+        }
+      }
+    }
+    for (const [key, pack] of packs) {
+      if (key !== LOCAL_AVATAR) {
+        // Nothing heard for a while: their owner left, or it's over.
+        if (now - pack.heard > 1.5) pack.sink(now);
+        for (const r of pack.risen) Pack.step(r, r.tx, r.tz, dt * 1.3);
+      }
+      pack.draw(now, floorAt);
+      if (pack.gone) {
+        pack.dispose();
+        packs.delete(key);
+        if (ownPack.current === pack) ownPack.current = null;
+      }
+    }
+  };
+
+  /** A rod's bolt: slower than an arrow, straight where this visitor looks,
+   *  and, like an arrow, landing on whatever armed body or guarding blade
+   *  it actually reaches. */
+  const cast = (element: Element) => {
+    const me = bodyOf(LOCAL_AVATAR);
+    if (!me) return;
+    const origin = me.chest.clone().addScaledVector(me.face, 0.6).setY(me.chest.y + 0.15);
+    const aim = camera.getWorldDirection(new THREE.Vector3());
+    if (aim.y < -0.25) aim.setY(-0.25).normalize();
+    const far = origin.clone().addScaledVector(aim, WEAPON_SPECS.rod.reach);
+    sendAddonEvent("fantasy", { k: "ar", o: round(origin), d: round(far), e: element, b: 1 });
+    let landing: ReturnType<typeof arrowMeets> = null;
+    effects.bolt(
+      origin,
+      far,
+      element,
+      seconds(),
+      (landed) => {
+        effects.sparksAt(landed, ELEMENT_COLORS[element], 12, 2.5);
+        if (landing?.block) blocked(landing.id, landed.clone(), "rod");
+        else if (landing) hit([landing.id], WEAPON_SPECS.rod.damage, false, "rod", [landed.clone()]);
+      },
+      (a, b) => (landing = arrowMeets(a, b, ""))?.at ?? null
+    );
+  };
+
+  /** A necromancer's special: three undead rise in front of them. */
+  const summon = (element: Element) => {
+    const me = bodyOf(LOCAL_AVATAR);
+    if (!me) return;
+    const side = new THREE.Vector3(me.face.z, 0, -me.face.x);
+    const at: [number, number][] = [-1, 0, 1].map((s) => {
+      const p = me.feet.clone().addScaledVector(me.face, s === 0 ? 1.8 : 1.3).addScaledVector(side, s * 1.2);
+      return [p.x, p.z];
+    });
+    ownPack.current?.sink(seconds());
+    const pack = new Pack(element, at, seconds());
+    effects.group.add(pack.group);
+    ownPack.current = pack;
+    packs.set(LOCAL_AVATAR, pack);
+    for (const [x, z] of at) effects.sparksAt(new THREE.Vector3(x, floorAt(x, z) + 0.2, z), ELEMENT_COLORS[element], 22, 1.6);
+    playSpecial(element);
+    sendAddonEvent("fantasy", { k: "un", e: element, p: at.flat().map((n) => Math.round(n * 100) / 100) });
+  };
+
   /** A special gathering at its wielder's feet, with its rising sound,
    *  timed to end as it's released `release` seconds from now. */
   const windUp = (element: Element, who: string, release: number, distance?: number) => {
@@ -410,21 +533,26 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
     if (!action) return;
     const timing = timingOf(weapon, action.kind);
     const impact = timing.duration * timing.impact * 1000;
-    if (weapon !== "bow") setTimeout(() => playSwing(weapon), impact * 0.45);
+    if (weapon !== "bow") setTimeout(() => playSwing(weapon), impact * (weapon === "rod" ? 0.9 : 0.45));
     // The body goes with the blow: a step in on a cut, a long lunge on a
     // blade's special, a step back off a bow's.
     const at = (share: number) => timing.duration * share;
     if (action.kind === "special") windUp(element, LOCAL_AVATAR, at(timing.impact));
     if (weapon === "bow") {
       if (action.kind === "special") step(-0.18, 0.15, at(timing.impact));
+    } else if (weapon === "rod") {
+      if (action.kind === "swing") step(0.06, 0.12, at(0.4));
     } else if (action.kind === "special") step(SPECIAL_STEP[element], 0.22, at(0.36));
     else step(action.n === 0 ? 0.16 : 0.1, 0.16, at(0.3));
-    if (weapon !== "bow" && action.kind !== "special") return;
+    if (isBladed(weapon) && action.kind !== "special") return;
     setTimeout(() => {
       const now = fantasy.get();
       if (now.weapon !== weapon || now.ko || local.action !== action) return;
       if (weapon === "bow") loose(element, action.kind === "special");
-      else slam(weapon, element);
+      else if (weapon === "rod") {
+        if (action.kind === "special") summon(element);
+        else cast(element);
+      } else slam(weapon, element);
     }, impact);
   };
 
@@ -483,7 +611,7 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
               if (gainMeter(METER_PER_PARRY)) playCharged();
             } else {
               const other = remoteFighters.get(event.target);
-              if (other?.weapon && other.weapon !== "bow") other.action = { kind: other.guard ? "stagger" : "recoil", n: 0, start: seconds() };
+              if (other && isBladed(other.weapon)) other.action = { kind: other.guard ? "stagger" : "recoil", n: 0, start: seconds() };
             }
             break;
           }
@@ -492,8 +620,10 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
               const chest = chestOf(id);
               if (chest) effects.sparksAt(chest, event.special ? "#ffffff" : "#ffe3a3");
               if (id !== selfIdRef.current) fighterOf(id).hurtAt = seconds();
+              // Their undead struck: the one nearest lunges.
+              if (event.undead && chest) packs.get(from)?.lungeNearest(chest.x, chest.z, seconds());
             }
-            playHit(fighter.weapon, distance);
+            playHit(event.undead ? null : fighter.weapon, distance);
             const self = selfIdRef.current;
             if (!self || !event.targets.includes(self)) break;
             const me = fantasy.get();
@@ -505,11 +635,16 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
               distance: theirs ? Math.hypot(theirs[0] - mine[0], theirs[1] - mine[1], theirs[2] - mine[2]) : Infinity,
               damage: event.damage,
               special: event.special,
-              sinceLast: sinceLastHit(from, event.special),
+              sinceLast: sinceLastHit(from, event.special, event.undead),
+              undead: event.undead,
             });
             if (amount > 0) {
-              recordHit(from, event.special);
-              takeDamage(amount, () => playKnockedOut());
+              recordHit(from, event.special, event.undead);
+              local.hitBy.set(from, seconds());
+              takeDamage(amount, () => {
+                playKnockedOut();
+                knockedOut(from);
+              });
               // Knocked back, away from whoever hit you; a special throws further.
               if (theirs) {
                 const away = Math.hypot(mine[0] - theirs[0], mine[2] - theirs[2]);
@@ -527,10 +662,41 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
             playSpecial(event.element, distanceTo(at));
             break;
           }
+          case "ko":
+            scoreKnockout(event.by, event.assists, selfIdRef.current);
+            break;
+          case "un": {
+            // Someone's undead: risen, moved, or gone.
+            let pack = packs.get(from);
+            if (event.at.length === 0) {
+              pack?.sink(seconds());
+              break;
+            }
+            if (body && Math.hypot(event.at[0][0] - body.feet.x, event.at[0][1] - body.feet.z) > 60) return;
+            if (!pack || pack.sinkingFrom !== Infinity || pack.element !== event.element) {
+              pack?.sink(seconds());
+              pack = new Pack(event.element, event.at, seconds());
+              effects.group.add(pack.group);
+              packs.set(from, pack);
+              for (const [x, z] of event.at) effects.sparksAt(new THREE.Vector3(x, floorAt(x, z) + 0.2, z), ELEMENT_COLORS[event.element], 22, 1.6);
+              playSpecial(event.element, distance);
+            }
+            pack.heard = seconds();
+            event.at.forEach(([x, z], i) => {
+              const r = pack!.risen[i];
+              if (r) Object.assign(r, { tx: x, tz: z });
+            });
+            break;
+          }
           case "ar": {
             const from3 = new THREE.Vector3(...event.from);
             const to3 = new THREE.Vector3(...event.to);
             if (from3.distanceTo(to3) > ARROW_RANGE + 2) return;
+            if (event.bolt && event.element) {
+              effects.bolt(from3, to3, event.element, seconds(), undefined, (a, b) => arrowMeets(a, b, from)?.at ?? null);
+              playSwing("rod", distanceTo(from3));
+              break;
+            }
             // Seen stopping where it does on the archer's screen: at the first
             // armed body it reaches (yours is the archer's to judge).
             effects.arrow(from3, to3, event.element, seconds(), undefined, (a, b) => arrowMeets(a, b, from)?.at ?? null);
@@ -623,7 +789,7 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
     // clock rather than the (capped) frame step, so a slow device fills it
     // as fast as a quick one.
     if (me.weapon && !me.ko && me.meter < 100) {
-      meterCarry.current += Math.min(rawDelta, 0.5) * meterPerSecond;
+      meterCarry.current += Math.min(rawDelta, 0.5) * meterPerSecondFor(me.weapon);
       if (meterCarry.current >= 1) {
         const whole = Math.floor(meterCarry.current);
         meterCarry.current -= whole;
@@ -705,7 +871,7 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
       const source = key === LOCAL_AVATAR ? LOCAL_TRACKING_SOURCE : key;
       const tracked = trackingStore.get(source);
       holder.inHeadset = tracked !== null && performance.now() - tracked.receivedAt < TRACKING_STALE_MS;
-      const seated = !!playersRef.current[key === LOCAL_AVATAR ? (selfIdRef.current ?? "") : key]?.posture;
+      const seated = key === LOCAL_AVATAR ? selfSeatedRef.current : !!playersRef.current[key]?.posture;
       if (held) holder.posed = held;
       holder.weight = approach(holder.weight, held && !holder.inHeadset && !seated ? 1 : 0, 8, dt);
       // The body first, so the hands then reach from wherever the shoulders
@@ -758,7 +924,7 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
       }
 
       // Where the blade is now, and how fast its tip is going.
-      holder.hasBlade = !!holder.prop && !!held && held !== "bow";
+      holder.hasBlade = !!holder.prop && isBladed(held);
       if (holder.hasBlade) {
         const { blade: [base, tip], bladeOut = 0 } = WEAPON_SPECS[held!];
         holder.prop!.updateWorldMatrix(true, false);
@@ -838,8 +1004,9 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
         lastPhase.current = phase;
       }
     }
-    // VR: the trigger looses an arrow (a primed one is the special).
-    if (inVr && me.weapon === "bow" && !me.ko && !editMode) {
+    // VR: the trigger looses an arrow, or casts a rod's bolt (primed, the
+    // special).
+    if (inVr && (me.weapon === "bow" || me.weapon === "rod") && !me.ko && !editMode) {
       const squeeze = sample!.pose.right?.curl[0] ?? 0;
       if (squeeze >= TRIGGER_FIRE && !trigger.current.held) {
         trigger.current.held = true;
@@ -852,6 +1019,7 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode }: Fan
       holder.hadBlade = holder.hasBlade;
     }
 
+    tendUndead(now, dt);
     effects.update(now, dt, camera);
   }, -0.4);
 

@@ -71,3 +71,36 @@ describe("the headset panel's admin section", () => {
     expect(armed.active).toBe(true);
   });
 });
+
+describe("the headset panel's room-mode sections", () => {
+  it("lays out each section's choices in its columns, the chosen one lit, and presses them", () => {
+    const pick = vi.fn();
+    const layout = layoutHud({
+      ...base,
+      sections: [
+        {
+          id: "fantasy",
+          title: "Fantasy: weapon",
+          note: "Katana · K 2",
+          columns: 4,
+          choices: ["none", "sword", "katana", "naginata", "scythe"].map((id) => ({ id, label: id, active: id === "katana", onPress: () => pick(id) })),
+        },
+      ],
+    });
+    const buttons = layout.buttons.filter((b) => b.id.startsWith("fantasy:"));
+    expect(buttons.map((b) => b.id)).toEqual(["fantasy:none", "fantasy:sword", "fantasy:katana", "fantasy:naginata", "fantasy:scythe"]);
+    expect(buttons.filter((b) => b.active).map((b) => b.id)).toEqual(["fantasy:katana"]);
+    // Four to a row, the fifth below the first.
+    expect(buttons[4].x).toBe(buttons[0].x);
+    expect(buttons[4].y).toBeGreaterThan(buttons[0].y);
+    buttons[3].onPress();
+    expect(pick).toHaveBeenCalledWith("naginata");
+  });
+
+  it("switches the language from the voice row", () => {
+    const onLanguage = vi.fn();
+    const layout = layoutHud({ ...base, onLanguage });
+    layout.buttons.find((b) => b.id === "language")!.onPress();
+    expect(onLanguage).toHaveBeenCalled();
+  });
+});

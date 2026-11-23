@@ -4,7 +4,8 @@ import { pillButtonStyle } from "../../ui/styles";
 import { useStore } from "../store";
 import { Choices, Hint, MODE_ACCENTS, ModeButton, SwordIcon } from "../ui";
 import { fantasy, KO_SECONDS, pressCancel, pressEnd, pressStart, setElement, setGuard, setWeapon } from "./combat";
-import { ELEMENT_COLORS, ELEMENT_LABELS, ELEMENTS, MAX_HP, WEAPON_SPECS, WEAPONS, type Weapon } from "./weapons";
+import { ELEMENT_COLORS, ELEMENT_LABELS, ELEMENTS, isBladed, MAX_HP, WEAPON_SPECS, WEAPONS, type Weapon } from "./weapons";
+import { record, usedWeapons } from "./record";
 
 const ACCENT = MODE_ACCENTS.fantasy;
 const NONE = "none" as const;
@@ -25,6 +26,7 @@ export function FantasyButton() {
         render={(w) => (w === NONE ? L("None", "なし") : L(...WEAPON_SPECS[w].label))}
       />
       {state.weapon && <small style={{ marginTop: -6, color: ACCENT, opacity: 0.9 }}>{L(...WEAPON_SPECS[state.weapon].note)}</small>}
+      <RecordTable />
       <Choices
         title={L("Special attack", "必殺技")}
         options={ELEMENTS}
@@ -40,11 +42,54 @@ export function FantasyButton() {
       />
       <Hint accent={ACCENT}>
         {L(
-          "**Click** to swing (on a phone, the sword button). A blow lands only where the blade really meets a body; where two blades meet, both bounce off. **Hold F** (the shield button) to raise your blade across your chest: it catches more blows, not all of them. When the bar under your health is full, **hold the click** for your special. An arrow flies, so step out of its way. In VR, **just swing**: your blade cuts and parries wherever you put it. Draw your hand back over your shoulder with the bar full, and your next hard swing is the special; **the trigger** shoots a bow. Only people holding a weapon can be hit, so choose None to step out.",
-          "**クリック**で振る(スマホは剣ボタン)。刃が実際に体に当たったときだけダメージが入り、刃同士が当たると両方はじかれます。**Fキー長押し**(盾ボタン)で刃を胸の前に構えると、受けられる攻撃が増えます(全部ではありません)。体力の下のゲージが満タンなら、**クリック長押し**で必殺技。矢は飛んでくるので、よければ当たりません。VRでは**そのまま振るだけ**で、刃の当たった所で攻撃・受け流しになります。ゲージ満タンで手を肩の後ろへ引くと、次の強い一振りが必殺技。弓は**トリガー**で射ます。武器を持っている人だけが攻撃を受けるので、抜けたいときは「なし」を選んでください。"
+          "**Click** to swing (on a phone, the sword button). A blow lands only where the blade really meets a body; where two blades meet, both bounce off. **Hold F** (the shield button) to raise your blade across your chest: it catches more blows, not all of them. When the bar under your health is full, **hold the click** for your special. An arrow flies, so step out of its way. The **Necromancer**'s rod casts slow bolts instead, and its special raises three undead who fight for you a while. In VR, **just swing**: your blade cuts and parries wherever you put it. Draw your hand back over your shoulder with the bar full, and your next hard swing is the special; **the trigger** shoots a bow. Only people holding a weapon can be hit, so choose None to step out.",
+          "**クリック**で振る(スマホは剣ボタン)。刃が実際に体に当たったときだけダメージが入り、刃同士が当たると両方はじかれます。**Fキー長押し**(盾ボタン)で刃を胸の前に構えると、受けられる攻撃が増えます(全部ではありません)。体力の下のゲージが満タンなら、**クリック長押し**で必殺技。矢は飛んでくるので、よければ当たりません。**ネクロマンサー**の杖は遅い魔法弾を放ち、必殺技ではアンデッド3体がしばらく代わりに戦います。VRでは**そのまま振るだけ**で、刃の当たった所で攻撃・受け流しになります。ゲージ満タンで手を肩の後ろへ引くと、次の強い一振りが必殺技。弓は**トリガー**で射ます。武器を持っている人だけが攻撃を受けるので、抜けたいときは「なし」を選んでください。"
         )}
       </Hint>
     </ModeButton>
+  );
+}
+
+/** The record for the weapon in hand, small, under the bars. */
+function RecordLine({ weapon }: { weapon: Weapon }) {
+  const r = useStore(record)[weapon];
+  if (!r) return null;
+  return (
+    <small style={{ textAlign: "center", fontSize: 11, opacity: 0.75, fontVariantNumeric: "tabular-nums" }}>
+      K {r.k} · D {r.d} · A {r.a} · {L(`best ×${r.combo}`, `最高 ×${r.combo}`)}
+    </small>
+  );
+}
+
+/** Your record with each weapon used so far, on this device. */
+function RecordTable() {
+  const rows = useStore(record);
+  const used = usedWeapons(rows);
+  if (used.length === 0) return null;
+  const cell: CSSProperties = { textAlign: "right", padding: "1px 6px", fontVariantNumeric: "tabular-nums" };
+  return (
+    <table style={{ fontSize: 12, borderCollapse: "collapse", opacity: 0.9 }} aria-label={L("Your record", "あなたの戦績")}>
+      <thead>
+        <tr style={{ color: ACCENT }}>
+          <th style={{ textAlign: "left", fontWeight: 600 }}>{L("Your record", "戦績")}</th>
+          <th style={cell} title={L("Knockouts", "撃破")}>K</th>
+          <th style={cell} title={L("Knocked out", "ダウン")}>D</th>
+          <th style={cell} title={L("Assists", "アシスト")}>A</th>
+          <th style={cell}>{L("Best combo", "最高コンボ")}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {used.map((w) => (
+          <tr key={w}>
+            <td>{L(...WEAPON_SPECS[w].label)}</td>
+            <td style={cell}>{rows[w]!.k}</td>
+            <td style={cell}>{rows[w]!.d}</td>
+            <td style={cell}>{rows[w]!.a}</td>
+            <td style={cell}>×{rows[w]!.combo}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 
@@ -110,6 +155,7 @@ export function FantasyStatus({ touch }: { touch: boolean }) {
                 : null}
         </small>
         {state.charge > 0 && <Bar share={state.charge} color="#ffffff" height={3} />}
+        <RecordLine weapon={state.weapon} />
         {state.chain >= 2 && !state.ko && (
           // Hits in a row fill the special faster (combat.ts), so say so.
           <small key={state.chain} style={{ textAlign: "center", fontSize: 12, fontWeight: 700, color: full ? ELEMENT_COLORS[state.element] : "#ffe3a3" }}>
@@ -117,7 +163,7 @@ export function FantasyStatus({ touch }: { touch: boolean }) {
           </small>
         )}
       </div>
-      {touch && !state.ko && state.weapon !== "bow" && (
+      {touch && !state.ko && isBladed(state.weapon) && (
         <button
           type="button"
           aria-label={L("Guard (hold)", "防御(長押し)")}

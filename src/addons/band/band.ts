@@ -1,6 +1,6 @@
 import { createStore } from "../store";
 import { oneOf, readNumber, sendAddonEvent, type AddonEvent } from "../bus";
-import { INSTRUMENTS, KEYS_RANGE, LIGHT_COLORS, noteCount, playNote, type Instrument } from "./instruments";
+import { holdKey, INSTRUMENTS, KEYS_RANGE, LIGHT_COLORS, noteCount, playNote, type Instrument } from "./instruments";
 
 /**
  * Band mode's state. Notes are events, played by every client from its own
@@ -47,6 +47,7 @@ export function announceBand() {
 }
 
 export function setInstrument(instrument: Instrument | null) {
+  releaseAll();
   band.set((s) => ({ ...s, instrument, playing: instrument !== null && instrument !== "lightstick" ? s.playing : false, waving: instrument === "lightstick" && s.waving }));
   announceBand();
 }
@@ -67,22 +68,48 @@ export function setPair(pair: boolean) {
 }
 
 export function setPlaying(playing: boolean) {
+  if (!playing) releaseAll();
   band.set((s) => ({ ...s, playing }));
 }
 
 export function resetBand() {
+  releaseAll();
   band.set((s) => ({ ...s, instrument: null, waving: false, playing: false }));
   remoteMusicians.clear();
   localNote.note = null;
 }
 
-/** Plays a note here and sends it to the room. */
-export function play(note: number) {
+/** Keys held down here, each with its release. */
+const held = new Map<number, () => void>();
+
+/**
+ * Plays a note here and sends it to the room. On the keys, `hold` keeps it
+ * ringing until release(note), so a chord's notes ring together; any
+ * number can be down at once.
+ */
+export function play(note: number, hold = false) {
   const { instrument } = band.get();
   if (!instrument || instrument === "lightstick" || !validNote(instrument, note)) return;
-  playNote(instrument, note);
+  if (instrument === "keys" && hold) {
+    held.get(note)?.();
+    held.set(note, holdKey(note));
+  } else playNote(instrument, note);
   localNote.note = { n: note, at: performance.now() / 1000 };
-  sendAddonEvent("band", { k: "n", n: note });
+  sendAddonEvent("band", { k: "n", n: note, ...(instrument === "keys" && hold ? { h: 1 } : {}) });
+}
+
+/** Lets a held key go, here and for the room. */
+export function release(note: number) {
+  const stop = held.get(note);
+  if (!stop) return;
+  held.delete(note);
+  stop();
+  sendAddonEvent("band", { k: "f", n: note });
+}
+
+/** Lets every held key go (the instrument changed, or playing stopped). */
+export function releaseAll() {
+  for (const note of [...held.keys()]) release(note);
 }
 
 export function validNote(instrument: Instrument, note: number) {
@@ -92,7 +119,11 @@ export function validNote(instrument: Instrument, note: number) {
   return note >= 0 && note < noteCount(instrument);
 }
 
-export type BandEvent = { k: "hi" } | { k: "lo"; instrument: Instrument | null; color: number; waving: boolean; pair: boolean } | { k: "n"; note: number };
+export type BandEvent =
+  | { k: "hi" }
+  | { k: "lo"; instrument: Instrument | null; color: number; waving: boolean; pair: boolean }
+  | { k: "n"; note: number; hold: boolean }
+  | { k: "f"; note: number };
 
 export function parseBandEvent(data: AddonEvent): BandEvent | null {
   if (data.k === "hi") return { k: "hi" };
@@ -102,9 +133,10 @@ export function parseBandEvent(data: AddonEvent): BandEvent | null {
     if ((instrument === null && data.i !== "") || color === null) return null;
     return { k: "lo", instrument, color: Math.round(color), waving: data.wv === 1, pair: data.p2 === 1 };
   }
-  if (data.k === "n") {
+  if (data.k === "n" || data.k === "f") {
     const note = readNumber(data.n, 0, 127);
-    return note === null ? null : { k: "n", note: Math.round(note) };
+    if (note === null) return null;
+    return data.k === "n" ? { k: "n", note: Math.round(note), hold: data.h === 1 } : { k: "f", note: Math.round(note) };
   }
   return null;
 }

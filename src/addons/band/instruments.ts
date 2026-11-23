@@ -240,14 +240,62 @@ export function playKit(piece: number, distance?: number) {
   }
 }
 
-/** An electric-piano-ish note: two sines a little apart and a soft bell. */
-export function playKey(midi: number, distance?: number) {
-  const v = voice(0.9, distance, FALLOFF);
-  if (!v) return;
+/** The longest a held key rings before it lets go by itself. */
+export const KEY_HOLD_SECONDS = 8;
+
+/**
+ * An electric-piano-ish note that rings while its key is held, as a real
+ * one does: two tones a little apart and a soft bell, struck, then fading
+ * slowly toward a quiet sustain, and damped quickly on release. Several
+ * held at once mix into a chord. Returns the release; it lets go by
+ * itself after KEY_HOLD_SECONDS.
+ */
+export function holdKey(midi: number, distance?: number): () => void {
+  const v = voice(0.9, distance, FALLOFF, KEY_HOLD_SECONDS + 1);
+  if (!v) return () => {};
+  const { ctx, t } = v;
   const f = hz(midi);
-  toneHit(v, { frequency: f, duration: 1.6, gain: 0.32, type: "triangle", attack: 0.006 });
-  toneHit(v, { frequency: f, duration: 1.2, gain: 0.18, type: "sine", detune: 7 });
+  const env = ctx.createGain();
+  env.gain.setValueAtTime(0.0001, t);
+  env.gain.exponentialRampToValueAtTime(1, t + 0.006);
+  // Toward a quiet sustain: about a third of the way down in half a second.
+  env.gain.setTargetAtTime(0.22, t + 0.01, 0.9);
+  env.connect(v.out);
+  const oscillators = (
+    [
+      [f, "triangle", 0.32, 0],
+      [f, "sine", 0.18, 7],
+    ] as const
+  ).map(([frequency, type, gain, detune]) => {
+    const osc = ctx.createOscillator();
+    osc.type = type;
+    osc.frequency.value = frequency;
+    osc.detune.value = detune;
+    const g = ctx.createGain();
+    g.gain.value = gain;
+    osc.connect(g).connect(env);
+    osc.start(t);
+    return osc;
+  });
+  // The bell on the strike only.
   toneHit(v, { frequency: f * 4, duration: 0.35, gain: 0.04, type: "sine" });
+  let released = false;
+  const release = () => {
+    if (released) return;
+    released = true;
+    const now = ctx.currentTime;
+    env.gain.cancelScheduledValues(now);
+    env.gain.setValueAtTime(Math.max(0.0001, env.gain.value), now);
+    env.gain.setTargetAtTime(0.0001, now, 0.07);
+    for (const osc of oscillators) osc.stop(now + 0.6);
+  };
+  setTimeout(release, KEY_HOLD_SECONDS * 1000);
+  return release;
+}
+
+/** A key tapped rather than held: struck, and let go after a moment. */
+export function playKey(midi: number, distance?: number) {
+  setTimeout(holdKey(midi, distance), 1100);
 }
 
 // --- strings: plucked, for the guitars and the bass ----------------------------------

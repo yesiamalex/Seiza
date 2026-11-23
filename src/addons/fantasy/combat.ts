@@ -1,7 +1,8 @@
 import { createStore } from "../store";
 import { oneOf, readNumber, readString, readVector, sendAddonEvent, type AddonEvent } from "../bus";
 import { COMBO_CYCLE, type Action, type ActionKind } from "./poses";
-import { ELEMENTS, MAX_HP, WEAPONS, WEAPON_SPECS, type Element, type Weapon } from "./weapons";
+import { ELEMENTS, isBladed, MAX_HP, WEAPONS, WEAPON_SPECS, type Element, type Weapon } from "./weapons";
+import { ASSIST_SECONDS, comboReached, tally } from "./record";
 
 /**
  * Fantasy mode's rules and this visitor's side of them.
@@ -75,6 +76,8 @@ export const local = {
   lastLanded: -Infinity,
   /** When this visitor was last hit, for the flinch. */
   hurtAt: -Infinity,
+  /** Who has hit this visitor lately, and when: the assists, if they go down. */
+  hitBy: new Map<string, number>(),
 };
 
 export const HOLD_SECONDS = 0.45;
@@ -92,7 +95,19 @@ const METER_PER_SECOND = 2.5;
  * bow, hard to land). Waiting for the meter to fill by itself takes forty
  * seconds, so it's fighting well that brings the special.
  */
-export const METER_PER_HIT: Record<Weapon, number> = { sword: 22, katana: 30, naginata: 24, scythe: 28, lightsaber: 16, bow: 32 };
+export const METER_PER_HIT: Record<Weapon, number> = { sword: 22, katana: 30, naginata: 24, scythe: 28, lightsaber: 16, bow: 32, rod: 14 };
+/** The necromancer's meter fills slowest, by itself and by hits: three
+ *  undead fighting for nine seconds is a lot to have often. */
+const METER_PER_SECOND_ROD = 1.1;
+export const meterPerSecondFor = (weapon: Weapon) => (weapon === "rod" ? METER_PER_SECOND_ROD : METER_PER_SECOND);
+
+/**
+ * The necromancer's special: three undead rise round them and go for the
+ * nearest fighter within sight, each striking for a little (not a blast's
+ * worth: about a special's in all, if they all reach someone and stay on
+ * them), until they crumble.
+ */
+export const UNDEAD = { count: 3, damage: 3, every: 1.6, seconds: 9, speed: 2.3, sight: 14, reach: 1.1, rise: 0.8 } as const;
 /** Each hit within this many seconds of the last adds a share more, up to
  *  `max` shares: a combo fills the meter faster than the same hits spread out. */
 export const METER_CHAIN = { seconds: 2.2, share: 0.25, max: 4 } as const;
@@ -108,7 +123,7 @@ const now = () => performance.now() / 1000;
 
 /** How long after one hit from the same attacker another counts, at the
  *  least; a weapon's own cooldown, a little shortened, when that's longer. */
-export const MIN_HIT_GAP = { normal: 0.2, special: 5 } as const;
+export const MIN_HIT_GAP = { normal: 0.2, special: 5, undead: (UNDEAD.every / UNDEAD.count) * 0.8 } as const;
 
 /**
  * Whether a hit someone says they landed on this visitor counts, and for
@@ -123,9 +138,17 @@ export function acceptHit(input: {
   special: boolean;
   /** Seconds since this attacker's last counted hit of the same kind. */
   sinceLast: number;
+  /** Struck by the attacker's undead, not by them. */
+  undead?: boolean;
 }): number {
-  const { defender, attackerWeapon, distance, damage, special, sinceLast } = input;
+  const { defender, attackerWeapon, distance, damage, special, sinceLast, undead } = input;
   if (!defender.weapon || defender.ko || defender.invulnerable || !attackerWeapon) return 0;
+  if (undead) {
+    // Only a necromancer's, near enough for their undead to have walked
+    // there, and no faster than three can strike.
+    if (attackerWeapon !== "rod" || !(distance <= UNDEAD.sight + UNDEAD.speed * UNDEAD.seconds) || sinceLast < MIN_HIT_GAP.undead) return 0;
+    return Math.max(0, Math.min(UNDEAD.damage, Math.round(damage)));
+  }
   const spec = WEAPON_SPECS[attackerWeapon];
   if (sinceLast < (special ? MIN_HIT_GAP.special : Math.max(MIN_HIT_GAP.normal, spec.cooldown * 0.8))) return 0;
   // A special's blast is centred ahead of the attacker (or where the arrow
@@ -151,7 +174,7 @@ export function setWeapon(weapon: Weapon | null) {
 
 export function setGuard(guard: boolean) {
   const s = fantasy.get();
-  if (s.guard === guard || (guard && (!s.weapon || s.weapon === "bow" || s.ko))) return;
+  if (s.guard === guard || (guard && (!isBladed(s.weapon) || s.ko))) return;
   fantasy.set({ ...s, guard });
   sendAddonEvent("fantasy", { k: "gd", on: guard ? 1 : 0 });
 }
@@ -253,6 +276,7 @@ export function landedHits(weapon: Weapon, targets: number) {
   const chain = t - local.lastLanded <= METER_CHAIN.seconds ? fantasy.get().chain : 0;
   local.lastLanded = t;
   fantasy.set((s) => ({ ...s, chain: chain + 1 }));
+  comboReached(weapon, chain + 1);
   return gainMeter(meterForHits(weapon, targets, chain));
 }
 
@@ -281,6 +305,29 @@ export function takeDamage(amount: number, onKnockedOut: () => void) {
   }, KO_SECONDS * 1000);
 }
 
+/**
+ * This visitor was knocked out by `by`: a time down on the record, and the
+ * room told who did it and who helped (hit them in the last few seconds),
+ * so each of those can count it. Everyone's own browser decides their own
+ * knockout, as with their health.
+ */
+export function knockedOut(by: string) {
+  const weapon = fantasy.get().weapon;
+  if (weapon) tally(weapon, "d");
+  const t = now();
+  const assists = [...local.hitBy].filter(([id, at]) => id !== by && t - at <= ASSIST_SECONDS).map(([id]) => id).slice(0, 7);
+  local.hitBy.clear();
+  sendAddonEvent("fantasy", { k: "ko", by, as: assists });
+}
+
+/** Someone else's knockout: this visitor's, or an assist, if they're named. */
+export function scoreKnockout(by: string, assists: string[], self: string | null) {
+  const weapon = fantasy.get().weapon;
+  if (!weapon || !self) return;
+  if (by === self) tally(weapon, "k");
+  else if (assists.includes(self)) tally(weapon, "a");
+}
+
 export function isInvulnerable() {
   return now() < local.invulnerableUntil;
 }
@@ -293,9 +340,11 @@ export type FantasyEvent =
   | { k: "blk"; target: string; at: [number, number, number] }
   | { k: "lo"; weapon: Weapon | null; element: Element; hp: number; ko: boolean; guard: boolean; ready: boolean }
   | { k: "act"; kind: ActionKind; n: number }
-  | { k: "hit"; targets: string[]; damage: number; special: boolean }
+  | { k: "hit"; targets: string[]; damage: number; special: boolean; undead: boolean }
+  | { k: "un"; at: [number, number][]; element: Element }
   | { k: "fx"; element: Element; at: [number, number, number] }
-  | { k: "ar"; from: [number, number, number]; to: [number, number, number]; element: Element | null };
+  | { k: "ar"; from: [number, number, number]; to: [number, number, number]; element: Element | null; bolt: boolean }
+  | { k: "ko"; by: string; assists: string[] };
 
 /** Reads an event from another browser, or null if it isn't one. */
 export function parseFantasyEvent(data: AddonEvent): FantasyEvent | null {
@@ -325,18 +374,36 @@ export function parseFantasyEvent(data: AddonEvent): FantasyEvent | null {
       if (!Array.isArray(data.t) || data.t.length > 8) return null;
       const targets = data.t.map((id) => readString(id, 64)).filter((id): id is string => id !== null);
       const damage = readNumber(data.d, 0, 100);
-      return damage === null ? null : { k: "hit", targets, damage, special: data.s === 1 };
+      return damage === null ? null : { k: "hit", targets, damage, special: data.s === 1, undead: data.m === 1 };
+    }
+    case "un": {
+      // Where someone's undead are: x, z pairs, none once they've crumbled.
+      const element = oneOf(data.e, ELEMENTS);
+      if (!element || !Array.isArray(data.p) || data.p.length > UNDEAD.count * 2 || data.p.length % 2) return null;
+      const at: [number, number][] = [];
+      for (let i = 0; i < data.p.length; i += 2) {
+        const x = readNumber(data.p[i], -1e4, 1e4);
+        const z = readNumber(data.p[i + 1], -1e4, 1e4);
+        if (x === null || z === null) return null;
+        at.push([x, z]);
+      }
+      return { k: "un", at, element };
     }
     case "fx": {
       const element = oneOf(data.e, ELEMENTS);
       const at = readVector(data.p);
       return element && at ? { k: "fx", element, at } : null;
     }
+    case "ko": {
+      const by = readString(data.by, 64);
+      if (!by || !Array.isArray(data.as) || data.as.length > 8) return null;
+      return { k: "ko", by, assists: data.as.map((id) => readString(id, 64)).filter((id): id is string => id !== null) };
+    }
     case "ar": {
       const from = readVector(data.o);
       const to = readVector(data.d);
       const element = data.e === undefined ? null : oneOf(data.e, ELEMENTS);
-      return from && to ? { k: "ar", from, to, element } : null;
+      return from && to ? { k: "ar", from, to, element, bolt: data.b === 1 } : null;
     }
   }
   return null;
@@ -350,9 +417,10 @@ export function fighterOf(id: string): RemoteFighter {
 
 /** When each attacker last landed a counted hit of each kind. */
 const lastHitFrom = new Map<string, number>();
-export function sinceLastHit(from: string, special: boolean) {
-  return now() - (lastHitFrom.get(`${from}:${special ? 1 : 0}`) ?? -Infinity);
+const hitKind = (special: boolean, undead = false) => (undead ? "u" : special ? 1 : 0);
+export function sinceLastHit(from: string, special: boolean, undead = false) {
+  return now() - (lastHitFrom.get(`${from}:${hitKind(special, undead)}`) ?? -Infinity);
 }
-export function recordHit(from: string, special: boolean) {
-  lastHitFrom.set(`${from}:${special ? 1 : 0}`, now());
+export function recordHit(from: string, special: boolean, undead = false) {
+  lastHitFrom.set(`${from}:${hitKind(special, undead)}`, now());
 }

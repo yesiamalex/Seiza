@@ -12,7 +12,7 @@ export interface Voice {
   t: number;
 }
 
-export function voice(gain = 1, distance?: number, falloff = 18): Voice | null {
+export function voice(gain = 1, distance?: number, falloff = 18, life = 4): Voice | null {
   const output = sfxOutput();
   if (!output || output.ctx.state !== "running") return null;
   const level = gain * (distance === undefined ? 1 : Math.max(0, 1 - distance / falloff));
@@ -20,8 +20,8 @@ export function voice(gain = 1, distance?: number, falloff = 18): Voice | null {
   const node = output.ctx.createGain();
   node.gain.value = level;
   node.connect(output.out);
-  // Let the chain go once everything on it has finished.
-  setTimeout(() => node.disconnect(), 4000);
+  // Let the chain go once everything on it has finished (`life` seconds).
+  setTimeout(() => node.disconnect(), life * 1000);
   return { ctx: output.ctx, out: node, t: output.ctx.currentTime };
 }
 

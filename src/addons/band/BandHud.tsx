@@ -3,7 +3,7 @@ import { L, useLang } from "../../i18n/lang";
 import { panelStyle, pillButtonStyle } from "../../ui/styles";
 import { useStore } from "../store";
 import { Choices, Hint, MODE_ACCENTS, ModeButton, MusicIcon } from "../ui";
-import { band, play, setInstrument, setLightColor, setPair, setPlaying, setWaving } from "./band";
+import { band, play, release, setInstrument, setLightColor, setPair, setPlaying, setWaving } from "./band";
 import { INSTRUMENT_LABELS, INSTRUMENTS, KEY_LAYOUT, KEYS_BASE, LIGHT_COLORS, PAD_COLUMNS, PADS, type Instrument } from "./instruments";
 
 const ACCENT = MODE_ACCENTS.band;
@@ -111,6 +111,8 @@ export function BandStage() {
   useLang();
   const state = useStore(band);
   const [lit, setLit] = useState<number | null>(null);
+  // Keys held down, for the keyboard: each lit, and ringing, until let go.
+  const [down, setDown] = useState<ReadonlySet<number>>(() => new Set());
   const active = state.playing && state.instrument !== null && state.instrument !== "lightstick";
   // Out of the way while the Band menu is open over the same spot.
   const shown = active && !state.menuOpen;
@@ -118,6 +120,19 @@ export function BandStage() {
   const hit = (note: number) => {
     play(note);
     setLit(note);
+  };
+  /** A key pressed and held, on the keys: any number at once, for chords. */
+  const press = (note: number) => {
+    play(note, true);
+    setDown((s) => new Set(s).add(note));
+  };
+  const lift = (note: number) => {
+    release(note);
+    setDown((s) => {
+      const next = new Set(s);
+      next.delete(note);
+      return next;
+    });
   };
   useEffect(() => {
     if (lit === null) return;
@@ -127,6 +142,9 @@ export function BandStage() {
 
   useEffect(() => {
     if (!active) return;
+    // Which note each held keyboard key is playing, so its keyup lets go of
+    // that note even if the octave changed in between.
+    const pressed = new Map<string, number>();
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target)) return;
       const key = e.key.length === 1 ? e.key.toUpperCase() : e.key;
@@ -151,7 +169,11 @@ export function BandStage() {
       if (note === null) return;
       e.preventDefault();
       e.stopImmediatePropagation();
-      if (!e.repeat) hit(note);
+      if (e.repeat) return;
+      if (instrument === "keys") {
+        pressed.set(key, note);
+        press(note);
+      } else hit(note);
     };
     // Keyups too, so movement never sees half a key press.
     const swallow = (e: KeyboardEvent) => {
@@ -161,13 +183,28 @@ export function BandStage() {
       const pads = instrument ? PADS[instrument] : undefined;
       const keys = pads ? pads.map((p) => p.key) : [...KEY_LAYOUT.map((l) => l.key), "Z", "X"];
       if (keys.includes(key)) e.stopImmediatePropagation();
+      const note = pressed.get(key);
+      if (note !== undefined) {
+        pressed.delete(key);
+        lift(note);
+      }
+    };
+    // Leaving the window with keys down never leaves them ringing.
+    const letGo = () => {
+      for (const note of pressed.values()) lift(note);
+      pressed.clear();
     };
     window.addEventListener("keydown", onKey, true);
     window.addEventListener("keyup", swallow, true);
+    window.addEventListener("blur", letGo);
     return () => {
       window.removeEventListener("keydown", onKey, true);
       window.removeEventListener("keyup", swallow, true);
+      window.removeEventListener("blur", letGo);
+      letGo();
     };
+    // press and lift only touch state setters and the band store.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
   if (!shown) return null;
@@ -202,12 +239,12 @@ export function BandStage() {
         <div style={{ position: "relative", height: 110, display: "flex", gap: 2 }}>
           {KEY_LAYOUT.filter((k) => !k.black).map((k) => {
             const note = KEYS_BASE + octave * 12 + k.semitone;
-            return <Key key={k.semitone} hint={k.key} lit={lit === note} onHit={() => hit(note)} />;
+            return <Key key={k.semitone} hint={k.key} lit={down.has(note)} onHit={() => press(note)} onRelease={() => lift(note)} />;
           })}
           {KEY_LAYOUT.filter((k) => k.black).map((k) => {
             const note = KEYS_BASE + octave * 12 + k.semitone;
             const whitesBefore = KEY_LAYOUT.filter((w) => !w.black && w.semitone < k.semitone).length;
-            return <Key key={k.semitone} hint={k.key} lit={lit === note} onHit={() => hit(note)} black left={`calc(${(whitesBefore / WHITES) * 100}% - ${BLACK_WIDTH / 2}%)`} />;
+            return <Key key={k.semitone} hint={k.key} lit={down.has(note)} onHit={() => press(note)} onRelease={() => lift(note)} black left={`calc(${(whitesBefore / WHITES) * 100}% - ${BLACK_WIDTH / 2}%)`} />;
           })}
         </div>
       )}
@@ -252,14 +289,20 @@ const WHITES = KEY_LAYOUT.filter((k) => !k.black).length;
 /** A black key's width, in percent of the keyboard. */
 const BLACK_WIDTH = (100 / WHITES) * 0.58;
 
-function Key({ hint, lit, onHit, black, left }: { hint: string; lit: boolean; onHit: () => void; black?: boolean; left?: string }) {
+/** A key on screen: held while pressed, so several make a chord (with
+ *  several fingers, or a finger held while the keyboard plays). */
+function Key({ hint, lit, onHit, onRelease, black, left }: { hint: string; lit: boolean; onHit: () => void; onRelease: () => void; black?: boolean; left?: string }) {
   return (
     <button
       type="button"
       onPointerDown={(e) => {
         e.preventDefault();
+        e.currentTarget.releasePointerCapture?.(e.pointerId);
         onHit();
       }}
+      onPointerUp={onRelease}
+      onPointerLeave={onRelease}
+      onPointerCancel={onRelease}
       style={{
         flex: black ? undefined : 1,
         position: black ? "absolute" : "relative",

@@ -10,6 +10,13 @@ export function playSwing(weapon: Weapon, distance?: number) {
     toneHit(v, { frequency: 184, sweepTo: 120, duration: 0.3, gain: 0.12, type: "square", attack: 0.03 });
     return;
   }
+  if (weapon === "rod") {
+    // A bolt cast: a rising, hollow whoosh with a shimmer on top.
+    toneHit(v, { frequency: 260, sweepTo: 820, duration: 0.38, gain: 0.18, type: "sine", attack: 0.04 });
+    noiseHit(v, { frequency: 900, sweepTo: 3200, duration: 0.34, gain: 0.3, q: 2.5, attack: 0.05 });
+    toneHit(v, { frequency: 1480, duration: 0.3, gain: 0.05, type: "triangle", delay: 0.06 });
+    return;
+  }
   if (weapon === "bow") {
     // The string's release: a low twang and a quick hiss.
     toneHit(v, { frequency: 110, sweepTo: 70, duration: 0.22, gain: 0.35, type: "triangle" });

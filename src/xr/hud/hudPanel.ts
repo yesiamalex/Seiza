@@ -33,6 +33,9 @@ export interface XrHudModel {
   standUp: (() => void) | null;
   /** The comfort vignette (src/xr/ComfortVignette.tsx), on or off. */
   comfort?: { active: boolean; toggle: () => void } | null;
+  /** Switches the language (English and Japanese), as the flat screen's
+   *  日本語 / English button does. */
+  onLanguage?: () => void;
   chat: { id: string; name: string; text: string }[];
   onExit: () => void;
   /** Someone's request for a together gesture ("Bea would like a hug"),
@@ -52,6 +55,20 @@ export interface XrHudModel {
     onGoTo: (id: string) => void;
     onRemove: (id: string) => void;
   } | null;
+  /** More controls, each a titled grid of buttons with an optional line
+   *  under the title: the room modes (src/addons) put their weapons,
+   *  elements, and instruments here, so a headset has what the flat
+   *  screen's mode buttons have. */
+  sections?: XrHudSection[];
+}
+
+export interface XrHudSection {
+  id: string;
+  title: string;
+  note?: string;
+  /** Buttons to a row (default 3). */
+  columns?: number;
+  choices: { id: string; label: string; active: boolean; onPress: () => void }[];
 }
 
 export interface HudButton {
@@ -257,6 +274,10 @@ export function layoutHud(model: XrHudModel): HudLayout {
   if (model.comfort) {
     rowItems.push({ id: "comfort", label: L("Comfort", "酔い防止"), hold: false, active: model.comfort.active, disabled: false, onPress: model.comfort.toggle });
   }
+  if (model.onLanguage) {
+    // Named in the language it switches to, as on the flat screen.
+    rowItems.push({ id: "language", label: L("日本語", "English"), hold: false, active: false, disabled: false, onPress: model.onLanguage });
+  }
   if (rowItems.length) {
     const w = (inner - GAP * (rowItems.length - 1)) / rowItems.length;
     rowItems.forEach((item, i) => buttons.push({ ...item, x: PAD + i * (w + GAP), y, w, h: ROW }));
@@ -293,6 +314,33 @@ export function layoutHud(model: XrHudModel): HudLayout {
       buttons.push({ ...item, x: PAD + column * (w + GAP), y: y + row * (ROW + GAP), w, h: ROW });
     });
     y += Math.ceil(gestureItems.length / GESTURE_COLUMNS) * (ROW + GAP) + GAP;
+  }
+
+  // ---- more: the room modes' choices ----
+  for (const section of model.sections ?? []) {
+    texts.push({ text: section.title, x: PAD, y: y + LABEL * 0.7, size: 12 * SCALE, color: MUTED_TEXT, maxWidth: inner });
+    y += LABEL;
+    if (section.note) {
+      texts.push({ text: section.note, x: PAD, y: y + LABEL * 0.6, size: 12 * SCALE, color: TEXT, maxWidth: inner });
+      y += LABEL;
+    }
+    const columns = section.columns ?? GESTURE_COLUMNS;
+    const w = (inner - GAP * (columns - 1)) / columns;
+    section.choices.forEach((choice, i) => {
+      buttons.push({
+        id: `${section.id}:${choice.id}`,
+        label: choice.label,
+        x: PAD + (i % columns) * (w + GAP),
+        y: y + Math.floor(i / columns) * (ROW + GAP),
+        w,
+        h: ROW,
+        hold: false,
+        active: choice.active,
+        disabled: false,
+        onPress: choice.onPress,
+      });
+    });
+    y += Math.ceil(section.choices.length / columns) * (ROW + GAP) + GAP;
   }
 
   // ---- admin ----

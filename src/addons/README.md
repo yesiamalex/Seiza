@@ -25,8 +25,9 @@ fantasy/     Weapons, health, swings and specials; blade contact
              a pole's (naginata, scythe) own rest and guard, each
              element's special move, and the bow's shots, hands and body
              (poses.ts); each element's burst and wind-up, pooled lights,
-             and arrows that land on what they reach (effects.ts); each
-             element's sounds (sounds.ts).
+             arrows and rod bolts that land on what they reach
+             (effects.ts); each element's sounds (sounds.ts); the
+             necromancer's undead (undead.ts); your record (record.ts).
 band/        Instruments (synthesized: pad, kit, keys, acoustic, lead
              through an amp and cabinet, and bass), one or two light
              sticks, touch play in VR; how each instrument's player
@@ -34,7 +35,9 @@ band/        Instruments (synthesized: pad, kit, keys, acoustic, lead
 
 Both modes pose an avatar through the overlay VR tracking uses, shared
 (`sharedOverlay` in ../xr/body/bodyIk.ts), so nothing one leaves on the
-bones outlives it.
+bones outlives it. Only one is in your hands at a time (index.tsx), and in
+a headset both offer their choices in the wrist menu
+(`useAddonXrSections`).
 ```
 
 ## How it hooks in

@@ -1,12 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import { handQuaternion } from "./rig";
-import { acceptHit, fantasy, landedHits, meterForHits, METER_CHAIN, METER_PER_HIT, MIN_HIT_GAP, parseFantasyEvent, resetFantasy } from "./fantasy/combat";
+import { acceptHit, fantasy, landedHits, meterForHits, meterPerSecondFor, METER_CHAIN, METER_PER_HIT, MIN_HIT_GAP, parseFantasyEvent, resetFantasy, UNDEAD } from "./fantasy/combat";
 import { bodyPose, bowDraw, COMBO_CYCLE, cutOf, heldPose, timingOf } from "./fantasy/poses";
 import { carryHand, key as bodyKey, newBodyPose, sampleBody } from "./body";
 import { bandBody } from "./band/moves";
 import { cancelSelfPush, pushSelf, takeSelfPush } from "../player/selfPush";
-import { elementPulse, ELEMENTS, WEAPON_SPECS, WEAPONS } from "./fantasy/weapons";
+import { elementPulse, ELEMENTS, isBladed, WEAPON_SPECS, WEAPONS } from "./fantasy/weapons";
+import { comboReached, record, tally } from "./fantasy/record";
 import { parseBandEvent, validNote } from "./band/band";
 import { INSTRUMENTS, KEY_LAYOUT, KIT } from "./band/instruments";
 import { KIT_PIECES_AT, kitPose, stickPose, type Hands } from "./band/BandLayer";
@@ -99,7 +100,7 @@ describe("fantasy rules", () => {
   });
 
   it("balances the blades: about the same damage a second, each buying something else", () => {
-    const blades = WEAPONS.filter((w) => w !== "bow" && w !== "naginata");
+    const blades = WEAPONS.filter((w) => isBladed(w) && w !== "naginata");
     const dps = blades.map((w) => WEAPON_SPECS[w].damage / WEAPON_SPECS[w].cooldown);
     for (const value of dps) expect(Math.abs(value - 25)).toBeLessThan(2.5);
     // ...except the naginata, which trades it for reach and three at once.
@@ -115,7 +116,7 @@ describe("fantasy rules", () => {
     // The old elements are gone.
     expect(parseFantasyEvent({ k: "lo", w: "katana", e: "lightning", hp: 100 })).toBeNull();
     expect(parseFantasyEvent({ k: "hit", t: "everyone", d: 10 })).toBeNull();
-    expect(parseFantasyEvent({ k: "hit", t: ["a", 4], d: 500 })).toEqual({ k: "hit", targets: ["a"], damage: 100, special: false });
+    expect(parseFantasyEvent({ k: "hit", t: ["a", 4], d: 500 })).toEqual({ k: "hit", targets: ["a"], damage: 100, special: false, undead: false });
     expect(parseFantasyEvent({ k: "ar", o: [0, 1, 0], d: [0, 1, "far"] })).toBeNull();
     expect(parseFantasyEvent({ k: "nope" })).toBeNull();
     expect(parseFantasyEvent({ k: "gd", on: 1 })).toEqual({ k: "gd", on: true });
@@ -231,7 +232,11 @@ describe("band events", () => {
     expect(parseBandEvent({ k: "lo", i: "lightstick", c: 1, wv: 1, p2: 1 })).toEqual({ k: "lo", instrument: "lightstick", color: 1, waving: true, pair: true });
     expect(parseBandEvent({ k: "lo", i: "theremin", c: 2 })).toBeNull();
     expect(parseBandEvent({ k: "n", n: "C" })).toBeNull();
-    expect(parseBandEvent({ k: "n", n: 61.4 })).toEqual({ k: "n", note: 61 });
+    expect(parseBandEvent({ k: "n", n: 61.4 })).toEqual({ k: "n", note: 61, hold: false });
+    // A key held down, and let go.
+    expect(parseBandEvent({ k: "n", n: 64, h: 1 })).toEqual({ k: "n", note: 64, hold: true });
+    expect(parseBandEvent({ k: "f", n: 64 })).toEqual({ k: "f", note: 64 });
+    expect(parseBandEvent({ k: "f", n: "E" })).toBeNull();
   });
 });
 
@@ -523,5 +528,56 @@ describe("the elements' specials", () => {
       expect(Math.max(...effects.lights.map((l) => l.level)), element).toBe(0);
     }
     effects.dispose();
+  });
+});
+
+describe("the necromancer", () => {
+  const defender = { weapon: "sword" as const, ko: false, invulnerable: false };
+  const undeadHit = { defender, attackerWeapon: "rod" as const, damage: 50, special: false, sinceLast: 10, undead: true };
+
+  it("lets its undead strike for a little, from a necromancer only, no faster than three can", () => {
+    expect(acceptHit({ ...undeadHit, distance: 12 })).toBe(UNDEAD.damage);
+    expect(acceptHit({ ...undeadHit, attackerWeapon: "sword", distance: 2 })).toBe(0);
+    expect(acceptHit({ ...undeadHit, distance: 12, sinceLast: MIN_HIT_GAP.undead / 2 })).toBe(0);
+    expect(acceptHit({ ...undeadHit, distance: 200 })).toBe(0);
+  });
+
+  it("isn't too strong: slow bolts, and a special that charges slowest and adds up to about a blade's", () => {
+    const rod = WEAPON_SPECS.rod;
+    expect(rod.damage / rod.cooldown).toBeLessThan(WEAPON_SPECS.bow.damage / WEAPON_SPECS.bow.cooldown);
+    expect(isBladed("rod")).toBe(false);
+    expect(METER_PER_HIT.rod).toBe(Math.min(...Object.values(METER_PER_HIT)));
+    expect(meterPerSecondFor("rod")).toBeLessThan(meterPerSecondFor("sword"));
+    // Every undead striking all its time, the most it could do: still in
+    // a special's range, not several of them.
+    const most = UNDEAD.count * UNDEAD.damage * Math.floor((UNDEAD.seconds - UNDEAD.rise) / UNDEAD.every);
+    expect(most).toBeLessThanOrEqual(Math.max(...WEAPONS.map((w) => WEAPON_SPECS[w].special)) * 1.5);
+  });
+
+  it("reads where someone's undead are, and when they're gone", () => {
+    expect(parseFantasyEvent({ k: "un", e: "havoc", p: [1, 2, 3, 4, 5, 6] })).toEqual({ k: "un", element: "havoc", at: [[1, 2], [3, 4], [5, 6]] });
+    expect(parseFantasyEvent({ k: "un", e: "havoc", p: [] })).toEqual({ k: "un", element: "havoc", at: [] });
+    expect(parseFantasyEvent({ k: "un", e: "havoc", p: [1, 2, 3] })).toBeNull();
+    expect(parseFantasyEvent({ k: "un", e: "havoc", p: [1, 2, 3, 4, 5, 6, 7, 8] })).toBeNull();
+    expect(parseFantasyEvent({ k: "hit", t: ["a"], d: 3, m: 1 })).toMatchObject({ undead: true });
+    expect(parseFantasyEvent({ k: "ar", o: [0, 1, 0], d: [0, 1, -10], e: "aero", b: 1 })).toMatchObject({ bolt: true });
+  });
+});
+
+describe("the record", () => {
+  it("reads who knocked someone out, and who helped", () => {
+    expect(parseFantasyEvent({ k: "ko", by: "a", as: ["b", "c"] })).toEqual({ k: "ko", by: "a", assists: ["b", "c"] });
+    expect(parseFantasyEvent({ k: "ko", by: "a" })).toBeNull();
+  });
+
+  it("counts knockouts, times down, and assists for each weapon, and keeps the longest combo", () => {
+    tally("katana", "k");
+    tally("katana", "k");
+    tally("katana", "d");
+    tally("rod", "a");
+    comboReached("katana", 5);
+    comboReached("katana", 3);
+    expect(record.get().katana).toEqual({ k: 2, d: 1, a: 0, combo: 5 });
+    expect(record.get().rod).toEqual({ k: 0, d: 0, a: 1, combo: 0 });
   });
 });

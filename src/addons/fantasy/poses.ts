@@ -43,7 +43,7 @@ const POLE_REST: Key = { at: 0, pos: [0.2, 0.6, -0.12], blade: [0.04, 0.98, -0.1
 
 /** The cuts a blade can make. Each weapon strings some of them into its
  *  own combo (SWING_SETS), so no two weapons fight alike. */
-export type Cut = "diagonal" | "backhand" | "thrust" | "rising" | "overhead";
+export type Cut = "diagonal" | "backhand" | "thrust" | "rising" | "overhead" | "cast";
 
 const CUTS: Record<Cut, Key[]> = {
   // High right to low left.
@@ -78,6 +78,15 @@ const CUTS: Record<Cut, Key[]> = {
     { at: 0.75, pos: [0.24, 1.0, -0.16], blade: [0.6, 0.78, 0.15], fingers: [0.2, 0.2, -1] },
     { ...GUARD, at: 1 },
   ],
+  // A cast, with a rod: raised, then pointed out at the target, the orb
+  // leading, and held while the bolt goes.
+  cast: [
+    GUARD,
+    { at: 0.28, pos: [0.2, 0.92, -0.08], blade: [0.1, 0.95, 0.25], fingers: [-0.2, 0, -1] },
+    { at: 0.5, pos: [0.12, 0.88, -0.4], blade: [0, 0.35, -0.94], fingers: [0, -0.94, -0.35] },
+    { at: 0.72, pos: [0.12, 0.88, -0.38], blade: [0, 0.35, -0.94], fingers: [0, -0.94, -0.35] },
+    { ...GUARD, at: 1 },
+  ],
   // Straight down from overhead.
   overhead: [
     GUARD,
@@ -99,6 +108,7 @@ export const SWING_SETS: Record<Exclude<Weapon, "bow">, Cut[]> = {
   katana: ["overhead", "diagonal", "rising"],
   naginata: ["backhand", "diagonal", "overhead"],
   scythe: ["diagonal", "backhand", "overhead"],
+  rod: ["cast"],
   lightsaber: ["diagonal", "backhand", "rising", "thrust"],
 };
 
@@ -120,8 +130,10 @@ export function cutOf(weapon: Exclude<Weapon, "bow">, n: number): Cut {
 const PARRY: Key = { at: 0, pos: [0.14, 0.82, -0.3], blade: [-0.96, 0.25, -0.1], fingers: [0.1, 0, -1] };
 // A naginata's: the shaft across the chest, blade out to the right.
 const POLE_PARRY: Key = { at: 0, pos: [0.16, 0.84, -0.3], blade: [0.96, 0.25, -0.12], fingers: [0, 0, -1] };
-const restOf = (weapon: Weapon) => (isPole(weapon) ? POLE_REST : GUARD);
-const parryOf = (weapon: Weapon) => (isPole(weapon) ? POLE_PARRY : PARRY);
+/** Weapons that rest upright at the side: the long hafts, and the rod. */
+const upright = (weapon: Weapon) => isPole(weapon) || weapon === "rod";
+const restOf = (weapon: Weapon) => (upright(weapon) ? POLE_REST : GUARD);
+const parryOf = (weapon: Weapon) => (upright(weapon) ? POLE_PARRY : PARRY);
 
 // Knocked back by a block: the blade thrown up and away, then on guard.
 const RECOIL: Key[] = [{ at: 0, pos: [0.16, 0.9, -0.14], blade: [0.35, 0.85, 0.4], fingers: [0, 0.4, -0.9] }, { ...GUARD, at: 1 }];
@@ -170,8 +182,12 @@ export const TIMING: Record<ActionKind, { duration: number; impact: number; trai
 export const BOW_SPECIAL = { duration: 1.0, impact: 0.7 };
 
 const BOW_SPECIAL_TIMING = { ...TIMING.shoot, ...BOW_SPECIAL };
+/** A rod's cast is slower than a swing: the bolt is magic, not muscle. */
+const CAST_TIMING = { duration: 0.6, impact: 0.5, trail: [0, 0] as [number, number] };
+
 export function timingOf(weapon: Weapon, kind: ActionKind) {
   if (weapon === "bow") return kind === "special" ? BOW_SPECIAL_TIMING : TIMING.shoot;
+  if (weapon === "rod" && kind === "swing") return CAST_TIMING;
   return TIMING[kind];
 }
 
@@ -258,7 +274,7 @@ export function heldPose(weapon: Weapon, action: Action | null, now: number, out
     return out;
   }
 
-  const set = isPole(weapon) ? POLE_KEYS : BLADE_KEYS;
+  const set = upright(weapon) ? POLE_KEYS : BLADE_KEYS;
   const move = active && action!.kind === "special" ? movesFor(weapon)[element] : null;
   const keys = !active ? null : move ? move.right : action!.kind === "recoil" || action!.kind === "stagger" ? set.recoil : set.cuts[cutOf(weapon, action!.n)];
   if (keys) sample(keys, time, right);
@@ -369,6 +385,14 @@ const CUT_BODY: Record<Cut, BodyKey[]> = {
     bodyKey(0.24, { twist: -0.35, lean: 0.14, drop: 0.09, shiftX: -0.01, left: [-0.02, -0.09, 0], right: [0.03, 0.08, 0] }),
     bodyKey(0.5, { twist: 0.2, lean: 0.06, drop: 0.04, shiftZ: -0.04, left: [-0.02, -0.14, 0], right: [0.03, 0.06, 0] }),
     bodyKey(0.75, { twist: 0.45, lean: -0.05, drop: 0.01, tilt: -0.05, shiftZ: -0.03, left: [-0.02, -0.14, 0], right: [0.03, 0.06, 0] }),
+    stance(1),
+  ],
+  // A cast: drawn up and back a little, then a step into it, leaning in.
+  cast: [
+    stance(0),
+    bodyKey(0.28, { twist: 0.15, lean: -0.06, drop: 0.02, left: [-0.015, -0.07, 0], right: [0.02, 0.08, 0] }),
+    bodyKey(0.5, { twist: -0.05, lean: 0.14, drop: 0.04, shiftZ: -0.04, left: [-0.02, -0.13, 0], right: [0.02, 0.07, 0] }),
+    bodyKey(0.72, { twist: -0.05, lean: 0.12, drop: 0.04, shiftZ: -0.04, left: [-0.02, -0.13, 0], right: [0.02, 0.07, 0] }),
     stance(1),
   ],
   // Up tall with the blade overhead, then a short step and drop into it.
@@ -544,7 +568,7 @@ const POLE_MOVES = Object.fromEntries(
     },
   ])
 ) as Record<Element, Move>;
-const movesFor = (weapon: Weapon) => (isPole(weapon) ? POLE_MOVES : MOVES);
+const movesFor = (weapon: Weapon) => (upright(weapon) ? POLE_MOVES : MOVES);
 
 /** Down and done: knelt, slumped, the head hanging. */
 export const KNOCKED_OUT: BodyPose = bodyKey(0, { twist: 0.1, lean: 0.5, tilt: 0.06, drop: 0.3, shiftZ: 0.06, left: [-0.03, -0.1, 0], right: [0.04, 0.14, 0], carry: 0, head: 0 });

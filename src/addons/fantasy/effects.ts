@@ -597,6 +597,24 @@ const ahead = new THREE.Vector3();
 
 const ARROW_SPEED = 30;
 export const arrowSeconds = (distance: number) => distance / ARROW_SPEED;
+/** A rod's bolt, slower than an arrow: it can be seen coming, and dodged. */
+export const BOLT_SPEED = 11;
+
+/** A rod's bolt: a bright core in a glow and a halo (tinted at each cast). */
+function buildBolt(): THREE.Group {
+  const group = new THREE.Group();
+  const layer = (radius: number, tint: number, opacity: number) => {
+    const m = additive("#ffffff", { opacity });
+    m.userData.tint = tint;
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 12, 8), m);
+    mesh.userData.navIgnore = true;
+    group.add(mesh);
+  };
+  layer(0.06, 0.7, 1);
+  layer(0.13, 0.2, 0.55);
+  layer(0.24, 0, 0.22);
+  return group;
+}
 
 interface Flight {
   mesh: THREE.Group;
@@ -610,6 +628,8 @@ interface Flight {
    *  there. A real projectile, so a target can step out of its way. */
   meets: ArrowTest | null;
   last: THREE.Vector3;
+  /** A rod's bolt: straight, slow, wavering, not an arrow's arc. */
+  bolt: boolean;
 }
 
 export type ArrowTest = (from: THREE.Vector3, to: THREE.Vector3) => THREE.Vector3 | null;
@@ -624,19 +644,36 @@ class Arrows {
     const flight = (mesh: THREE.Group): Flight => {
       mesh.visible = false;
       this.group.add(mesh);
-      return { mesh, from: new THREE.Vector3(), to: new THREE.Vector3(), start: 0, seconds: 1, live: false, onLanded: () => {}, meets: null, last: new THREE.Vector3() };
+      return { mesh, from: new THREE.Vector3(), to: new THREE.Vector3(), start: 0, seconds: 1, live: false, onLanded: () => {}, meets: null, last: new THREE.Vector3(), bolt: false };
     };
     for (let i = 0; i < 8; i++) this.plain.push(flight(buildArrow()));
     for (const element of ELEMENTS) this.special[element] = flight(buildArrow(ELEMENT_COLORS[element]));
-    this.all = [...this.plain, ...Object.values(this.special)];
+    for (let i = 0; i < 6; i++) this.bolts.push({ ...flight(buildBolt()), bolt: true });
+    this.all = [...this.plain, ...Object.values(this.special), ...this.bolts];
+  }
+  private bolts: Flight[] = [];
+
+  /** A rod's bolt, in its element's colour. */
+  fireBolt(from: THREE.Vector3, to: THREE.Vector3, element: Element, time: number, onLanded: (at: THREE.Vector3) => void, meets: ArrowTest | null) {
+    const f = this.bolts.find((b) => !b.live) ?? this.bolts[0];
+    const color = new THREE.Color(ELEMENT_COLORS[element]);
+    f.mesh.traverse((o) => {
+      const m = (o as THREE.Mesh).material as THREE.MeshBasicMaterial | undefined;
+      if (m?.userData.tint) m.color.copy(color).lerp(new THREE.Color("#ffffff"), m.userData.tint as number);
+    });
+    this.launch(f, from, to, time, onLanded, meets, from.distanceTo(to) / BOLT_SPEED);
   }
 
   fire(from: THREE.Vector3, to: THREE.Vector3, element: Element | null, time: number, onLanded: (at: THREE.Vector3) => void, meets: ArrowTest | null) {
     const f = element ? this.special[element] : (this.plain.find((a) => !a.live) ?? this.plain[0]);
+    this.launch(f, from, to, time, onLanded, meets, arrowSeconds(from.distanceTo(to)));
+  }
+
+  private launch(f: Flight, from: THREE.Vector3, to: THREE.Vector3, time: number, onLanded: (at: THREE.Vector3) => void, meets: ArrowTest | null, seconds: number) {
     f.from.copy(from);
     f.to.copy(to);
     f.start = time;
-    f.seconds = Math.max(0.05, arrowSeconds(from.distanceTo(to)));
+    f.seconds = Math.max(0.05, seconds);
     f.onLanded = onLanded;
     f.meets = meets;
     f.last.copy(from);
@@ -660,7 +697,12 @@ class Arrows {
       // turned along it.
       const arc = (from: THREE.Vector3, to: THREE.Vector3, t: number, out: THREE.Vector3) =>
         out.lerpVectors(from, to, t).setY(out.y + Math.sin(Math.PI * t) * Math.min(1.6, from.distanceTo(to) * 0.04));
-      arc(f.from, f.to, s, f.mesh.position);
+      if (f.bolt) {
+        // Straight on, wavering a little, spinning.
+        f.mesh.position.lerpVectors(f.from, f.to, s);
+        f.mesh.position.y += 0.06 * Math.sin(time * 14);
+        f.mesh.rotation.z = time * 9;
+      } else arc(f.from, f.to, s, f.mesh.position);
       const met = f.meets?.(f.last, f.mesh.position);
       if (met) {
         f.live = false;
@@ -669,7 +711,7 @@ class Arrows {
         continue;
       }
       f.last.copy(f.mesh.position);
-      f.mesh.lookAt(arc(f.from, f.to, Math.min(1, s + 0.02), ahead));
+      if (!f.bolt) f.mesh.lookAt(arc(f.from, f.to, Math.min(1, s + 0.02), ahead));
     }
   }
 
@@ -738,6 +780,11 @@ export class FantasyEffects {
 
   arrow(from: THREE.Vector3, to: THREE.Vector3, element: Element | null, time: number, onLanded: (at: THREE.Vector3) => void = () => {}, meets: ArrowTest | null = null) {
     this.arrows.fire(from, to, element, time, onLanded, meets);
+  }
+
+  /** A rod's magic bolt, slower than an arrow, straight at its mark. */
+  bolt(from: THREE.Vector3, to: THREE.Vector3, element: Element, time: number, onLanded: (at: THREE.Vector3) => void = () => {}, meets: ArrowTest | null = null) {
+    this.arrows.fireBolt(from, to, element, time, onLanded, meets);
   }
 
   update(time: number, dt: number, camera: THREE.Camera) {

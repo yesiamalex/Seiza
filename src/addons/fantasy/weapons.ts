@@ -1,8 +1,11 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
-export const WEAPONS = ["sword", "katana", "naginata", "scythe", "lightsaber", "bow"] as const;
+export const WEAPONS = ["sword", "katana", "naginata", "scythe", "lightsaber", "bow", "rod"] as const;
 export type Weapon = (typeof WEAPONS)[number];
+/** Weapons with a blade that cuts and parries where it touches; the bow and
+ *  the necromancer's rod fight from range instead. */
+export const isBladed = (weapon: Weapon | null) => weapon !== null && weapon !== "bow" && weapon !== "rod";
 /** The long-hafted weapons, held and swung on a pole's own poses. */
 export const isPole = (weapon: Weapon) => weapon === "naginata" || weapon === "scythe";
 /**
@@ -73,6 +76,14 @@ export const WEAPON_SPECS: Record<Weapon, WeaponSpec> = {
     label: ["Light saber", "ライトセーバー"],
     note: ["Fastest: 7 a hit, nearly four a second. Takes your element's colour.", "最速:1撃7、毎秒約4回。属性の色に光ります。"],
     reach: 2.3, damage: 7, cooldown: 0.28, targets: 2, special: 28, specialRadius: 3.5, otherHand: 0.09, blade: [0.14, 1.06],
+  },
+  rod: {
+    label: ["Necromancer", "ネクロマンサー"],
+    note: [
+      "A rod of slow magic bolts, 10 a hit up to 18 m. Special: three undead rise to fight for you, 3 a hit each. Charges slowly.",
+      "遅い魔法弾の杖、18m先まで1撃10。必殺技:アンデッド3体が起き上がって戦う(各1撃3)。ゲージはゆっくり溜まる。",
+    ],
+    reach: 18, damage: 10, cooldown: 1.1, targets: 1, special: 0, specialRadius: 0, otherHand: null, blade: [0, 0],
   },
   bow: {
     label: ["Bow", "弓"],
@@ -342,6 +353,28 @@ export function buildWeapon(weapon: Weapon, element: Element): THREE.Group {
       out.userData.glow = glow;
       out.userData.saber = true;
       return out;
+    }
+    case "rod": {
+      // A dark staff bound in bone, its head a small skull (looking +x, the
+      // way the rod points a cast) under three prongs that cradle an orb of
+      // its element, which glows as the meter fills.
+      const bone = new THREE.MeshStandardMaterial({ color: "#d9d2bf", roughness: 0.8 });
+      const orb = new THREE.MeshBasicMaterial({ color: new THREE.Color("#ffffff").lerp(new THREE.Color(ELEMENT_COLORS[element]), 0.6), toneMapped: false });
+      const prongs = [0, 1, 2].map((i) => {
+        const a = (i / 3) * Math.PI * 2;
+        return new THREE.ConeGeometry(0.009, 0.16, 5).translate(0, 0.08, 0).rotateZ(0.35).rotateY(a).translate(0, 0.95, 0);
+      });
+      const sockets = [-1, 1].map((s) => new THREE.SphereGeometry(0.014, 6, 4).translate(0.046, 0.905, s * 0.021));
+      return withGlow(
+        group([
+          [[rod(0.018, -0.4, 0.86, 8), rod(0.026, -0.44, -0.38, 8)], new THREE.MeshStandardMaterial({ color: "#2e2018", roughness: 0.8 })],
+          [[...wrapBands(-0.08, 0.12, 0.021, 3), new THREE.SphereGeometry(0.056, 12, 10).scale(1.05, 1.1, 1).translate(0, 0.9, 0), box(0.06, 0.03, 0.07, 0.85, 0.012), ...prongs], bone],
+          [sockets, dark()],
+          [[new THREE.SphereGeometry(0.045, 14, 10).translate(0, 1.06, 0)], orb],
+        ]),
+        [new THREE.SphereGeometry(0.11, 16, 12).translate(0, 1.06, 0)],
+        element
+      );
     }
     case "bow": {
       // Limbs bend away from the archer (+x is where the fingers point,

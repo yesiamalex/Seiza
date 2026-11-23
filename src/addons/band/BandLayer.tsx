@@ -13,7 +13,9 @@ import { blendBody, carryHand, copyBody, Gait, newBodyPose, poseBody, type BodyP
 import { onAddonEvent, sendAddonEvent } from "../bus";
 import { disposeTree, feetAndEye, holdInHand, newTrackedHand, poseHands, rigFor, toTrackedHand, wearOnChest, type HandTarget } from "../rig";
 import { announceBand, band, localNote, musicianOf, parseBandEvent, play, remoteMusicians, resetBand, tapped, validNote } from "./band";
-import { CHORDS, ELECTRIC, isWorn, KEY_LAYOUT, KEYS_BASE, KIT, LIGHT_COLORS, playNote, prepareGuitar, type Instrument, type Worn } from "./instruments";
+import { CHORDS, ELECTRIC, holdKey, isWorn, KEY_LAYOUT, KEYS_BASE, KIT, LIGHT_COLORS, playNote, prepareGuitar, type Instrument, type Worn } from "./instruments";
+/** Keys others are holding down, each with its release, by "player:note". */
+const remoteHeld = new Map<string, () => void>();
 import { bandBody, updateGroove, type Groove } from "./moves";
 
 /**
@@ -73,7 +75,7 @@ function buildDrumPad() {
   return group;
 }
 
-function buildKeyboard() {
+export function buildKeyboard() {
   const group = new THREE.Group();
   const half = KEYBOARD_WIDTH / 2;
   group.add(merged([boxAt(KEYBOARD_WIDTH + 0.03, 0.035, 0.15, 0, DESK_Y, DESK_Z), legAt(-half + 0.05, DESK_Z, DESK_Y), legAt(half - 0.05, DESK_Z, DESK_Y)], material("#16171b", { metalness: 0.3 })));
@@ -393,7 +395,7 @@ export interface Hands {
 /** A wrist sits behind the key its fingers play. */
 const WRIST_BACK = 0.09;
 
-function deskPose(hands: Hands, instrument: "drums" | "keys", note: { n: number; at: number } | null, now: number, octave: number) {
+export function deskPose(hands: Hands, instrument: "drums" | "keys", note: { n: number; at: number } | null, now: number, octave: number) {
   if (note && now - note.at < 0.3) {
     const x = instrument === "drums" ? padAt(note.n)[0] : keyX(keyOf(note.n, octave));
     const side = x < 0 ? "left" : "right";
@@ -579,9 +581,16 @@ interface BandLayerProps {
   players: Record<string, PlayerState>;
   /** No playing by tap while editing: a click there picks things up. */
   editMode: boolean;
+  /** This visitor is seated or in a posture (seiza, lying, a slow dance):
+   *  their own avatar is the clip's, not the mode's. Their own posture
+   *  never comes back from the room (it's sent to everyone else), so it
+   *  comes from here. */
+  selfSeated: boolean;
 }
 
-export function BandLayer({ selfId, players, editMode }: BandLayerProps) {
+export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerProps) {
+  const selfSeatedRef = useRef(selfSeated);
+  selfSeatedRef.current = selfSeated;
   const { camera, gl } = useThree();
   const holders = useRef(new Map<string, Holder>()).current;
   const playersRef = useRef(players);
@@ -612,11 +621,22 @@ export function BandLayer({ selfId, players, editMode }: BandLayerProps) {
         m.pair = event.pair;
         return;
       }
+      const heldKey = `${from}:${event.note}`;
+      if (event.k === "f") {
+        remoteHeld.get(heldKey)?.();
+        remoteHeld.delete(heldKey);
+        return;
+      }
       if (!m.instrument || !validNote(m.instrument, event.note)) return;
       m.note = { n: event.note, at: performance.now() / 1000 };
       const vrm = getAddonAvatar(from);
       const at = vrm ? vrm.scene.getWorldPosition(new THREE.Vector3()) : null;
-      playNote(m.instrument, event.note, at ? camera.getWorldPosition(new THREE.Vector3()).distanceTo(at) : undefined);
+      const distance = at ? camera.getWorldPosition(new THREE.Vector3()).distanceTo(at) : undefined;
+      // A held key rings here until its release arrives too.
+      if (event.hold && m.instrument === "keys") {
+        remoteHeld.get(heldKey)?.();
+        remoteHeld.set(heldKey, holdKey(event.note, distance));
+      } else playNote(m.instrument, event.note, distance);
     });
   }, [camera]);
 
@@ -676,6 +696,8 @@ export function BandLayer({ selfId, players, editMode }: BandLayerProps) {
       for (const holder of holders.values()) release(holder);
       holders.clear();
       resetBand();
+      for (const stop of remoteHeld.values()) stop();
+      remoteHeld.clear();
     },
     [holders]
   );
@@ -797,7 +819,7 @@ export function BandLayer({ selfId, players, editMode }: BandLayerProps) {
       const source = key === LOCAL_AVATAR ? LOCAL_TRACKING_SOURCE : key;
       const sample = trackingStore.get(source);
       const inHeadset = sample !== null && performance.now() - sample.receivedAt < TRACKING_STALE_MS;
-      const seated = !!playersRef.current[key === LOCAL_AVATAR ? (selfIdRef.current ?? "") : key]?.posture;
+      const seated = key === LOCAL_AVATAR ? selfSeatedRef.current : !!playersRef.current[key]?.posture;
       holder.weight = approach(holder.weight, instrument && !inHeadset && !seated ? 1 : 0, 6, dt);
       const moving = rig ? holder.gait.update(rig, dt) : 0;
       if (!rig || holder.weight <= 0.001 || !instrument) {
