@@ -58,7 +58,6 @@ const NODES = {
   collage: [19, 47.4], // in front of the collage wall
   path: [0, 54],
   low: [0, 47.1],
-  portals: [1.9, 47.1],
   steps: [0, 41.5],
 } satisfies Record<string, [number, number]>;
 type Node = keyof typeof NODES;
@@ -74,7 +73,6 @@ const EDGES: [Node, Node][] = [
   ["courtEast", "collage"],
   ["corner", "path"],
   ["path", "low"],
-  ["low", "portals"],
   ["low", "steps"],
 ];
 
@@ -85,7 +83,6 @@ export const PLACES = {
   lane: place("lane", "the lane and the walking tour's photos", "路地とまち歩きの写真", "arch"),
   court: place("court", "the covered court", "屋根つきコート", "court"),
   collage: place("collage", "the collage wall", "コラージュの壁", "collage"),
-  portals: place("portals", "the portals to FrameVR", "FrameVRへのポータル", "portals"),
   // Seiza's hall and classroom, up the garden steps: taken there at once.
   hall: { id: "hall", label: "the arts-based research board in the hall", labelJa: "ホールのアートベース・リサーチの案内板", at: [5.1, 0, 13.0], walk: false } as Place,
   classroom: { id: "classroom", label: "the classroom's Let's talk board", labelJa: "教室の「話そう」ボード", at: [-5.9, 0, -16.2], walk: false } as Place,
@@ -97,8 +94,6 @@ export const TALA_ROUTE: Stop[] = (
   [
     ["home", 300],
     ["court", 25],
-    ["home", 300],
-    ["portals", 20],
   ] as [Node, number][]
 ).map(([node, wait]) => ({ at: [NODES[node][0], Y, NODES[node][1]], wait }));
 

@@ -25,11 +25,10 @@ import { findPath, TALA, TALA_AVATAR, TALA_FACES, TALA_ROUTE } from "./guide";
 import { SeisugboHud } from "./Hud";
 import { cardTitle, seisugboKnowledge, TOUR_IDS } from "./knowledge";
 import { Lane, laneObstacles } from "./Lane";
-import { Portals, portalObstacles } from "./Portals";
 import { openPiece } from "./viewer";
 import { XrViewer } from "./Xr";
 
-/** A card the guide offers: a board, a portal, a piece, or the walking
+/** A card the guide offers: a board, a piece, or the walking
  *  tour's photos from the first. */
 function openCard(card: string) {
   if (card === "tour") openPiece(TOUR_IDS[0], TOUR_IDS);
@@ -49,7 +48,7 @@ export function Scene({ warp, getSelfPosition }: WorldSceneProps) {
   useEffect(() => {
     registerGuides([{ id: "tala", name: TALA.name, brain: createBrain(seisugboKnowledge(), TALA) }]);
     showWorldOverlay(<Hud />);
-    setWorldObstacles([...laneObstacles(), ...courtObstacles(), ...boardObstacles(), ...portalObstacles()]);
+    setWorldObstacles([...laneObstacles(), ...courtObstacles(), ...boardObstacles()]);
     return () => {
       openPiece(null);
       openGuide(null);
@@ -68,7 +67,6 @@ export function Scene({ warp, getSelfPosition }: WorldSceneProps) {
       <Lane />
       <Court />
       <Boards />
-      <Portals />
       <XrViewer />
       <Guide id="tala" name={TALA.name} avatarUrl={TALA_AVATAR} stops={TALA_ROUTE} faceAt={TALA_FACES} speed={0.9} pathsOnPatrol getSelfPosition={getSelfPosition} findPath={findPath} />
     </>

@@ -20,7 +20,6 @@ describe("Seisugbo's guide", () => {
     ["what is sdg 11", "climate"],
     ["what happened on day one", "day1"],
     ["show me the collage", "collage"],
-    ["take me to the portals", "portals"],
     ["where is the art", "court"],
     ["アーバニティ・ウォークって何?", "walk"],
     ["デザイン・サイエンス・リサーチって何", "dsr"],

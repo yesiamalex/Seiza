@@ -33,28 +33,21 @@ Visitors wake at the tent on the meadow and look east down the lane.
   the lane, *Arts-based research* (how the work was made) in the hall, and
   *Let's talk*, three rounds of conversation prompts in English and
   Filipino, in the classroom. The dance is framed on the classroom's back wall.
-- **Portals to FrameVR.** Four portals stand in a row between the path
-  from the garden and the covered court, one per group in its colour, each
-  a ring around a slowly turning swirl. Click one and a card shows where it
-  goes and opens that group's FrameVR space in a new tab, so this room
-  stays open: Group A to `framevr.io/meijixup-a`, and B, C, and D the same
-  way (`client/Portals.tsx`). In a headset, the card says to exit VR first,
-  since a headset can't open another site from inside VR.
 - **A close-up view.** Click any piece or board. On a screen it opens large,
   with its group, its words, and a caption, and Previous and Next walk along
   its line or the lane. In a headset it opens as a panel in front of you
   (`?seisugboXrPreview` shows that panel on a flat screen, for checking).
 - **Tala, the guide.** A guide in a cap and a sunset-orange shirt waits by
-  the tent, greeting arrivals, and now and then strolls to the court or the
-  portals. Click her to ask about the forum (3–5 November 2026, its
+  the tent, greeting arrivals, and now and then strolls to the court.
+  Click her to ask about the forum (3–5 November 2026, its
   organizers and participants, each day), the Urbanity Walk and the places
   it passed (Parián, Magellan's Cross, the Basilica Minore del Santo Niño,
   Puso Village and tuslob buwa, the Provincial Capitol), the metaverse
   workshop, the art and the groups, a climate-resilient Cebu and SDG 11,
   and how this world reads as design science research: the problem it
   answers, its objectives, the artifact, and how it's evaluated. She
-  answers in English or Japanese, opens the matching board, photo, or
-  portal, and walks you there, round the houses (a small graph of open
+  answers in English or Japanese, opens the matching board or photo,
+  and walks you there, round the houses (a small graph of open
   ground in `client/guide.ts`, since the meadow has no navmesh). She's a
   designed avatar, built in code, so there's no model file. Like Seiza's
   other guides (`src/guides/`), she only gives answers written in
@@ -132,7 +125,6 @@ worlds/seisugbo/
     collection.ts           Every picture: group, words, caption
     info.ts                 The boards' text
     Lane.tsx                The lane, its houses, wires, store, and tour
-    Portals.tsx             The four portals to each group's FrameVR space
     Court.tsx               The covered court and the sampayan
     Boards.tsx              The text boards and the dance photos
     art.tsx                 A picture, its labels, and pins

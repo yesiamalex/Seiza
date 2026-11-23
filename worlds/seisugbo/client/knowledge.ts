@@ -19,7 +19,7 @@ const TOPICS: Topic[] = [
     id: "world",
     title: "About Seisugbo",
     answer:
-      "Seisugbo keeps the 2nd Meiji × UP Arts-Based Research Forum, held in Cebu in November 2026, open to everyone. Students from Meiji University and the University of the Philippines walked downtown Cebu together, then made art about what stayed with them, naming each piece in Japanese, English, and Filipino or Cebuano. Here you can walk a lane built from their photos, see their art hung on sampayan in a covered court, and step through portals to their FrameVR spaces. Sugbo is Cebu's old name.",
+      "Seisugbo keeps the 2nd Meiji × UP Arts-Based Research Forum, held in Cebu in November 2026, open to everyone. Students from Meiji University and the University of the Philippines walked downtown Cebu together, then made art about what stayed with them, naming each piece in Japanese, English, and Filipino or Cebuano. Here you can walk a lane built from their photos and see their art hung on sampayan in a covered court. Sugbo is Cebu's old name.",
     asks: ["what is seisugbo", "seisugbo", "tell me about seisugbo", "what is this place", "where am i", "what is this world about", "what is this", "sugbo", "why is it called seisugbo"],
     card: "board:welcome",
     place: PLACES.welcome,
@@ -28,7 +28,7 @@ const TOPICS: Topic[] = [
     ja: {
       title: "Seisugboについて",
       answer:
-        "Seisugboは、2026年11月にセブで開かれた第2回明治×UPアートベース・リサーチ・フォーラムを、だれでも訪れられるように残す場所です。明治大学とフィリピン大学の学生がセブの下町をいっしょに歩き、心に残ったものを作品にして、日本語、英語、フィリピン語かセブアノ語で名前をつけました。ここでは、学生たちの写真から作った路地を歩き、屋根つきコートのサンパヤンに掛かった作品を見て、ポータルからFrameVRの空間へ行けます。「スグボ」はセブの古い名前です。",
+        "Seisugboは、2026年11月にセブで開かれた第2回明治×UPアートベース・リサーチ・フォーラムを、だれでも訪れられるように残す場所です。明治大学とフィリピン大学の学生がセブの下町をいっしょに歩き、心に残ったものを作品にして、日本語、英語、フィリピン語かセブアノ語で名前をつけました。ここでは、学生たちの写真から作った路地を歩き、屋根つきコートのサンパヤンに掛かった作品を見られます。「スグボ」はセブの古い名前です。",
       asks: ["Seisugboって何", "ここはどこ", "このワールドは何", "スグボって何", "名前の由来"],
     },
   },
@@ -36,7 +36,7 @@ const TOPICS: Topic[] = [
     id: "tour",
     title: "A tour",
     answer:
-      "Start at the welcome board by the tent. Then walk through the arch and down the lane: the walking tour's photos stand along it, in the order they were taken. At the end, turn into the covered court, where each group's art hangs on its own line, and the collage wall at the far end. On the way back, the four portals by the path go to each group's FrameVR space. Up the garden steps are the hall, with how the work was made, and the classroom, with questions to talk about. Ask me to walk you to any of them.",
+      "Start at the welcome board by the tent. Then walk through the arch and down the lane: the walking tour's photos stand along it, in the order they were taken. At the end, turn into the covered court, where each group's art hangs on its own line, and the collage wall at the far end. Up the garden steps are the hall, with how the work was made, and the classroom, with questions to talk about. Ask me to walk you to any of them.",
     asks: ["give me a tour", "where should i go", "what should i see first", "show me around", "where to start", "pasyal", "annai shite"],
     place: PLACES.welcome,
     gesture: "raisehand",
@@ -44,7 +44,7 @@ const TOPICS: Topic[] = [
     ja: {
       title: "ワールドめぐり",
       answer:
-        "まずテントのそばの案内板から。アーチをくぐって路地へ進むと、まち歩きの写真が撮った順に並んでいます。突き当たりで屋根つきコートに入ると、グループごとの作品がそれぞれのロープに掛かり、奥にはコラージュの壁があります。帰りに、小道のそばの4つのポータルから各グループのFrameVR空間へ行けます。庭の階段を上がると、作品の作り方を紹介するホールと、話し合いの問いがある教室があります。どこへでも歩いてご案内しますよ。",
+        "まずテントのそばの案内板から。アーチをくぐって路地へ進むと、まち歩きの写真が撮った順に並んでいます。突き当たりで屋根つきコートに入ると、グループごとの作品がそれぞれのロープに掛かり、奥にはコラージュの壁があります。庭の階段を上がると、作品の作り方を紹介するホールと、話し合いの問いがある教室があります。どこへでも歩いてご案内しますよ。",
       asks: ["案内して", "どこに行けばいい", "最初に何を見ればいい", "見せて回って", "どこから始める"],
     },
   },
@@ -117,21 +117,6 @@ const TOPICS: Topic[] = [
       answer:
         "どの作品にも、日本語、英語、フィリピン語かセブアノ語の3つの名前があり、作り手がいっしょに選びました。名づけることも研究の一部です。どの言葉でも通じる一語を探すには、その作品が本当は何なのかを話し合うことになるからです。何度も出てくるのは「つながり」:koneksyon、pakiglabot、sumpay-sumpay。",
       asks: ["なぜ3つの言葉", "何語", "作品の下の言葉", "セブアノ語", "日本語の言葉"],
-    },
-  },
-  {
-    id: "portals",
-    title: "The FrameVR portals",
-    answer:
-      "Four portals stand by the path, one for each group in its colour. On the forum's last day, the groups began virtual exhibitions in FrameVR, a browser-based 3D space, of their visions for downtown Cebu. Click a portal and its group's space opens in a new tab, so this world stays open behind it. In a headset, exit VR first.",
-    asks: ["portals", "framevr", "frame vr", "the swirls", "group spaces", "virtual exhibition", "where are the portals"],
-    card: "portal:A",
-    place: PLACES.portals,
-    ja: {
-      title: "FrameVRへのポータル",
-      answer:
-        "小道のそばに、グループごとの色のポータルが4つあります。フォーラムの最終日、各グループはブラウザで動く3D空間FrameVRで、下町セブの未来像を見せるバーチャル展覧会を作りはじめました。ポータルをクリックすると、そのグループの空間が新しいタブで開き、このワールドは後ろに残ります。ヘッドセットでは、先にVRを終了してください。",
-      asks: ["ポータル", "FrameVR", "グループの空間", "バーチャル展覧会", "ポータルはどこ"],
     },
   },
   {
@@ -293,14 +278,12 @@ const TOPICS: Topic[] = [
     id: "metaverse",
     title: "The metaverse workshop",
     answer:
-      "On the third and last day, FICS Dean Roberto B. Figueroa Jr. led a metaverse workshop at UP Cebu. Participants explored existing FrameVR environments for inspiration, then began building a virtual exhibition of their visions for the future of downtown Cebu. It was run by ISCOLab, from UP Open University. The four portals here lead to those spaces.",
-    asks: ["metaverse workshop", "day three", "day 3", "last day", "who led the workshop", "dean figueroa", "dean rob", "metaverse"],
-    card: "portal:A",
-    place: PLACES.portals,
+      "On the third and last day, FICS Dean Roberto B. Figueroa Jr. led a metaverse workshop at UP Cebu. Participants explored existing FrameVR environments for inspiration, then began building a virtual exhibition of their visions for the future of downtown Cebu. It was run by ISCOLab, from UP Open University.",
+    asks: ["metaverse workshop", "day three", "day 3", "last day", "who led the workshop", "dean figueroa", "dean rob", "metaverse", "framevr", "frame vr"],
     ja: {
       title: "メタバースのワークショップ",
       answer:
-        "3日目、最終日には、FICSのロベルト・B・フィゲロア・ジュニア学部長がUPセブでメタバースのワークショップを行いました。参加者はFrameVRの既存の空間を見て回って着想を得てから、下町セブの未来像を見せるバーチャル展覧会を作りはじめました。運営はUPオープン大学のISCOLabです。ここの4つのポータルは、その空間へつながっています。",
+        "3日目、最終日には、FICSのロベルト・B・フィゲロア・ジュニア学部長がUPセブでメタバースのワークショップを行いました。参加者はFrameVRの既存の空間を見て回って着想を得てから、下町セブの未来像を見せるバーチャル展覧会を作りはじめました。運営はUPオープン大学のISCOLabです。",
       asks: ["メタバースのワークショップ", "3日目", "最終日", "だれが指導した", "フィゲロア学部長", "メタバース"],
     },
   },
@@ -380,12 +363,12 @@ const TOPICS: Topic[] = [
     id: "artifact",
     title: "Seisugbo as a design artifact",
     answer:
-      "Read as design science research, Seisugbo is the artifact. The problem: the walk and the art happened once, in one city, for the people there, and the forum's FrameVR spaces lagged, so the experience could fade, and couldn't reach anyone else. The objectives: keep every piece with its makers' own words in three languages, rebuild the feeling of the place it came from, run light on a phone or a headset, open to anyone with a link, and keep the conversation going. The design: the lane, the court, the boards, the portals, and me. Visitors walking it is the demonstration; how well it meets those objectives is the evaluation, and the paper is the communication.",
+      "Read as design science research, Seisugbo is the artifact. The problem: the walk and the art happened once, in one city, for the people there, and the forum's FrameVR spaces lagged, so the experience could fade, and couldn't reach anyone else. The objectives: keep every piece with its makers' own words in three languages, rebuild the feeling of the place it came from, run light on a phone or a headset, open to anyone with a link, and keep the conversation going. The design: the lane, the court, the boards, and me. Visitors walking it is the demonstration; how well it meets those objectives is the evaluation, and the paper is the communication.",
     asks: ["as a design artifact", "why was seisugbo made", "why build this", "what problem does it solve", "the artifact", "how is this design science", "immortalize", "the paper", "objectives"],
     ja: {
       title: "デザインの人工物としてのSeisugbo",
       answer:
-        "デザイン・サイエンス・リサーチとして見ると、Seisugboが人工物です。問題は、まち歩きと作品が一度きり、ひとつの街で、そこにいた人のためだけにあり、フォーラムのFrameVR空間は動きが重かったこと。経験は薄れ、ほかの人には届きません。目標は、どの作品も作り手の3つの言葉といっしょに残すこと、生まれた場所の空気を再現すること、スマホやヘッドセットで軽く動くこと、リンクひとつでだれでも入れること、そして対話を続けること。設計は、路地、コート、案内板、ポータル、そしてわたし。訪れる人が歩くことが実演で、目標をどれだけ満たすかが評価、論文が伝達です。",
+        "デザイン・サイエンス・リサーチとして見ると、Seisugboが人工物です。問題は、まち歩きと作品が一度きり、ひとつの街で、そこにいた人のためだけにあり、フォーラムのFrameVR空間は動きが重かったこと。経験は薄れ、ほかの人には届きません。目標は、どの作品も作り手の3つの言葉といっしょに残すこと、生まれた場所の空気を再現すること、スマホやヘッドセットで軽く動くこと、リンクひとつでだれでも入れること、そして対話を続けること。設計は、路地、コート、案内板、そしてわたし。訪れる人が歩くことが実演で、目標をどれだけ満たすかが評価、論文が伝達です。",
       asks: ["人工物としてのSeisugbo", "なぜSeisugboを作った", "何の問題を解く", "論文", "目標"],
     },
   },
@@ -434,11 +417,11 @@ const TOPICS: Topic[] = [
     id: "controls",
     title: "Getting around",
     answer:
-      "Walk with W A S D or the arrow keys, run with Shift, and jump with Space. Drag to look around, and double-click the ground to walk there. On a phone, use the pad at the bottom. Click any photo, piece, board, or portal for a closer look.",
+      "Walk with W A S D or the arrow keys, run with Shift, and jump with Space. Drag to look around, and double-click the ground to walk there. On a phone, use the pad at the bottom. Click any photo, piece, or board for a closer look.",
     asks: ["how do i move", "how to walk", "controls", "how do i run", "keyboard", "how do i jump", "paano maglakad"],
     ja: {
       title: "歩き方",
-      answer: "W A S Dか矢印キーで歩き、Shiftで走り、スペースでジャンプします。ドラッグで見回し、地面をダブルクリックするとそこまで歩きます。スマホでは下のパッドを使います。写真、作品、案内板、ポータルをクリックすると大きく見られます。",
+      answer: "W A S Dか矢印キーで歩き、Shiftで走り、スペースでジャンプします。ドラッグで見回し、地面をダブルクリックするとそこまで歩きます。スマホでは下のパッドを使います。写真、作品、案内板をクリックすると大きく見られます。",
       asks: ["どうやって動く", "歩き方", "操作", "走り方", "ジャンプ"],
     },
   },
@@ -448,7 +431,6 @@ const TOPICS: Topic[] = [
 export function cardTitle(card: string): string {
   if (card === "tour") return boardText("lane").title;
   if (card.startsWith("board:")) return boardText(card.slice(6) as BoardKey).title;
-  if (card.startsWith("portal:")) return `FrameVR · ${card.slice(7)}`;
   return PIECE_BY_ID[card]?.title ?? card;
 }
 

@@ -13,7 +13,6 @@ import * as THREE from "three";
 import { readXrHead } from "../../../src/xr/body/xrPose";
 import { registerGazeTarget } from "../../../src/xr/hud/gaze";
 import { GROUP_COLORS, PIECE_BY_ID, viewUrl, type Group } from "./collection";
-import { PORTAL_BY_GROUP } from "./Portals";
 import { boardText, type BoardKey } from "./info";
 import { kindLabel } from "./Hud";
 import { FONT, loadPicture, wrapText } from "./kit";
@@ -50,7 +49,6 @@ function Panel() {
   const textMesh = useRef<THREE.Mesh>(null);
   const [picture, setPicture] = useState<THREE.Texture | null>(null);
   const board = open?.startsWith("board:") ? (open.slice(6) as BoardKey) : null;
-  const portal = open?.startsWith("portal:") ? PORTAL_BY_GROUP[open.slice(7) as Group] : null;
   const piece = open && !board ? PIECE_BY_ID[open] : null;
 
   useEffect(() => {
@@ -99,16 +97,6 @@ function Panel() {
         text(L(`Group ${piece.group} · ${kindLabel(piece.kind)}`, `${piece.group}グループ · ${kindLabel(piece.kind)}`), 28, GROUP_COLORS[piece.group], 700);
         for (const line of piece.words ?? []) text(line.replace(/ \/ /g, " "), 30, "rgba(255,255,255,0.92)");
         if (piece.caption) text(piece.caption, 28, "rgba(255,255,255,0.75)");
-      } else if (portal) {
-        text(L(`Group ${portal.group} in FrameVR`, `FrameVRの${portal.group}グループ`), 44, GROUP_COLORS[portal.group], 700);
-        text(
-          L(
-            `This portal goes to ${portal.url.replace("https://", "")}. A headset can't open another site from inside VR: exit VR, and click the portal again to open it in a new tab.`,
-            `このポータルは ${portal.url.replace("https://", "")} へつながります。VRの中からはほかのサイトを開けないので、VRを終えてからもう一度ポータルをクリックすると、新しいタブで開きます。`
-          ),
-          28,
-          "rgba(255,255,255,0.88)"
-        );
       } else if (board) {
         const b = boardText(board);
         text(b.title, 44, "#fff", 700);
@@ -158,7 +146,7 @@ function Panel() {
     layout.current = paint(false);
     texture.needsUpdate = true;
     setTextHeight((W * measured.height) / TEXT_PX);
-  }, [piece, board, portal, sequence, canvas, texture, lang]);
+  }, [piece, board, sequence, canvas, texture, lang]);
   useEffect(() => () => texture.dispose(), [texture]);
 
   // Where the panel goes: in front of you when it opens, and back in front
