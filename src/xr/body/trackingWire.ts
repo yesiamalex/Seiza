@@ -39,6 +39,10 @@ export interface TrackedHand {
    *  it (a sword, a stick) points along the controller's handle, out of
    *  the fist, not out of the thumb side of the open hand drawn. */
   held?: boolean;
+  /** Tracked fingers only, and only on this device (the room never needs
+   *  it): the index fingertip, [x, y, z] in the body frame, for playing
+   *  keys and pads with a finger. */
+  tip?: [number, number, number];
 }
 
 export interface TrackedPose {

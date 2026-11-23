@@ -51,6 +51,7 @@ import { reachScale, setAvatarReach } from "./avatar/avatarReach";
 import { SelfView } from "./xr/body/SelfView";
 import { LOCAL_TRACKING_SOURCE } from "./xr/body/trackingStore";
 import { XrHud, type XrHudModel } from "./xr/hud/XrHud";
+import { setXrControls, useXrControls } from "./xr/controls";
 import { ComfortVignette, setComfortVignette, useComfortVignette } from "./xr/ComfortVignette";
 import {
   enduranceExpression,
@@ -1261,6 +1262,8 @@ export default function App() {
   const addonXrSections = useAddonXrSections(worldState, { allowed: (canEditWorld || isAdmin) && connected, setWorldState });
   // At a drum pad, keys, or a kit, which stand on the floor: no walking off.
   const rooted = useAddonRooted(worldState);
+  // How a headset player moves, turns, and feels things (src/xr/controls.ts).
+  const xrControls = useXrControls();
 
   if (worldError) return <CenteredMessage text={L(`Couldn't load world: ${worldError.message}`, `ワールドを読み込めませんでした:${worldError.message}`)} />;
   if (!world) return <CenteredMessage text={L("Loading world…", "ワールドを読み込み中…")} />;
@@ -1291,7 +1294,25 @@ export default function App() {
   // bar, handed over as data so that module knows nothing about rooms or
   // media.
   const xrHudModel: XrHudModel = {
-    sections: addonXrSections,
+    sections: [
+      ...addonXrSections,
+      {
+        id: "controls",
+        title: L("Comfort and controls", "快適さと操作"),
+        note:
+          xrControls.moving === "teleport"
+            ? L("Teleport: push the left stick forward to aim, let go to jump. With hands, pinch and hold.", "テレポート:左スティックを前に倒して狙い、離すと移動。ハンドではつまんで長押し。")
+            : L("The left stick walks, the right turns. With hands, pinch and hold to teleport.", "左スティックで歩き、右で回転。ハンドではつまんで長押しでテレポート。"),
+        choices: [
+          { id: "walk", label: L("Stick walks", "スティック移動"), active: xrControls.moving === "walk", onPress: () => setXrControls({ moving: "walk" }) },
+          { id: "teleport", label: L("Teleport", "テレポート"), active: xrControls.moving === "teleport", onPress: () => setXrControls({ moving: "teleport" }) },
+          { id: "vibration", label: L("Vibration", "振動"), active: xrControls.vibration, onPress: () => setXrControls({ vibration: !xrControls.vibration }) },
+          { id: "smooth", label: L("Smooth turn", "なめらか回転"), active: xrControls.turning === "smooth", onPress: () => setXrControls({ turning: "smooth" }) },
+          { id: "snap30", label: L("Snap 30°", "30°ずつ回転"), active: xrControls.turning === "snap30", onPress: () => setXrControls({ turning: "snap30" }) },
+          { id: "snap45", label: L("Snap 45°", "45°ずつ回転"), active: xrControls.turning === "snap45", onPress: () => setXrControls({ turning: "snap45" }) },
+        ],
+      },
+    ],
     title: L(currentWorld.displayName, currentWorld.displayNameJa ?? currentWorld.displayName),
     people: Math.max(1, Object.keys(players).length),
     voice: !(VOICE_ENABLED && voiceVisible)

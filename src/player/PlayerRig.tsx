@@ -5,6 +5,8 @@ import * as THREE from "three";
 import type { TouchMoveInput } from "./touchInput";
 import { isGizmoDragging } from "../edit/gizmoState";
 import { readXrHead } from "../xr/body/xrPose";
+import { turningOptions, useXrControls } from "../xr/controls";
+import { Teleport } from "../xr/Teleport";
 import { selfViewStore } from "../xr/body/selfViewStore";
 import { takeSelfPush } from "./selfPush";
 import {
@@ -603,9 +605,12 @@ export function PlayerRig({
     };
   }, [isPresenting, editMode, camera, gl]);
 
-  // The stick walks you, unless you're at an instrument (rooted). Turning
-  // stays: you can always turn to face it.
-  useXRControllerLocomotion(xrOriginRef, rooted ? false : { speed: MOVE_SPEED * 0.6 });
+  // The left stick walks you, unless you're at an instrument (rooted) or
+  // teleport is how you move (src/xr/Teleport.tsx); the right stick turns,
+  // smoothly or in snaps, as the player chose in the headset menu. Turning
+  // stays at an instrument: you can always turn to face it.
+  const controls = useXrControls();
+  useXRControllerLocomotion(xrOriginRef, rooted || controls.moving === "teleport" ? false : { speed: MOVE_SPEED * 0.6 }, turningOptions(controls.turning));
 
   // Scratch vectors for the XR branch, reused rather than allocated 72
   // times a second (90Hz headsets are the ones that can least afford it).
@@ -1179,6 +1184,7 @@ export function PlayerRig({
   return (
     <>
       <XROrigin ref={xrOriginRef} position={spawnPoint} rotation-y={spawnRotationY} />
+      {isPresenting && <Teleport originRef={xrOriginRef} blocked={rooted || sitAnchor !== null} />}
       {/* Own avatar body, in every view. In first person, flat screen or
           VR, the head is hidden from the camera instead (SelfView), so you
           can look down at your own body and, in VR, your hands. */}

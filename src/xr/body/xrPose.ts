@@ -36,6 +36,8 @@ export interface XrHandSample {
   curl: [number, number];
   /** Tracked hands rather than held controllers. */
   articulated: boolean;
+  /** Tracked hands: the index fingertip, in the world, to play keys with. */
+  tip: THREE.Vector3;
 }
 
 export interface XrBodySample {
@@ -51,6 +53,7 @@ export function createXrBodySample(): XrBodySample {
     quaternion: new THREE.Quaternion(),
     curl: [0, 0],
     articulated: false,
+    tip: new THREE.Vector3(),
   });
   return {
     head: { position: new THREE.Vector3(), quaternion: new THREE.Quaternion(), heightAboveFloor: 0 },
@@ -89,6 +92,7 @@ const scratchLocal = new THREE.Matrix4();
 const scratchScale = new THREE.Vector3();
 const scratchVector = new THREE.Vector3();
 const scratchA = new THREE.Vector3();
+const scratchQuaternion = new THREE.Quaternion();
 const scratchB = new THREE.Vector3();
 
 function composeWorld(origin: THREE.Object3D, local: THREE.Matrix4, position: THREE.Vector3, quaternion: THREE.Quaternion) {
@@ -146,6 +150,12 @@ function readHand(
         fingerCurl(frame, source.hand, space, "ring-finger-tip", size) +
         fingerCurl(frame, source.hand, space, "pinky-finger-tip", size)) /
       3;
+    const tipJoint = source.hand.get("index-finger-tip");
+    const tipPose = tipJoint ? frame.getJointPose(tipJoint, space) : undefined;
+    if (tipPose) {
+      scratchLocal.fromArray(tipPose.transform.matrix);
+      composeWorld(origin, scratchLocal, out.tip, scratchQuaternion);
+    } else out.tip.copy(out.position);
     out.articulated = true;
     out.active = true;
     return;

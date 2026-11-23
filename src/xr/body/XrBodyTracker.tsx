@@ -116,7 +116,9 @@ function toBodyPoint(
 function toBodyHand(hand: XrHandSample, feet: [number, number, number], scale: number): TrackedHand | null {
   if (!hand.active) return null;
   const pose = toBodyPoint(hand.position, hand.quaternion, feet, scale);
-  return hand.articulated ? { pose, curl: [hand.curl[0], hand.curl[1]] } : { pose, curl: [hand.curl[0], hand.curl[1]], held: true };
+  if (!hand.articulated) return { pose, curl: [hand.curl[0], hand.curl[1]], held: true };
+  const [x, y, z] = toBodyPoint(hand.tip, hand.quaternion, feet, scale);
+  return { pose, curl: [hand.curl[0], hand.curl[1]], tip: [x, y, z] };
 }
 
 const eyeFromNeck = new THREE.Vector3();

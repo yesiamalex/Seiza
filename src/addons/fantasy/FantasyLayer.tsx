@@ -48,6 +48,7 @@ import { FantasyEffects, Trail } from "./effects";
 import { Pack } from "./undead";
 import { bodyPose, bowDraw, heldPose, KNOCKED_OUT, timingOf, type Action, type ActionKind, type HeldPose } from "./poses";
 import { playCharged, playClash, playHit, playKnockedOut, playSpecial, playSpecialCharge, playSwing } from "./sounds";
+import { buzz } from "../../xr/controls";
 import { buildWeapon, ELEMENT_COLORS, elementPulse, isBladed, MAX_HP, SABER_HALO, setBowString, weaponGlow, WEAPON_SPECS, type Element, type Weapon } from "./weapons";
 import { floorHeightAt, getGround } from "../../scene/layout";
 
@@ -172,16 +173,6 @@ const closest: Closest = { distance: 0, s: 0, point: new THREE.Vector3() };
 const capsule: Capsule = { a: new THREE.Vector3(), b: new THREE.Vector3(), radius: 0 };
 const round = (v: THREE.Vector3) => v.toArray().map((n) => Math.round(n * 100) / 100);
 
-/** A short buzz in a VR controller, where the headset supports it. */
-function buzz(gl: THREE.WebGLRenderer, hand: "left" | "right", intensity: number, ms: number) {
-  const session = gl.xr.getSession();
-  if (!session) return;
-  for (const source of session.inputSources) {
-    if (source.handedness !== hand) continue;
-    const actuator = (source.gamepad as (Gamepad & { hapticActuators?: { pulse?: (v: number, ms: number) => Promise<boolean> }[] }) | undefined)?.hapticActuators?.[0];
-    void actuator?.pulse?.(intensity, ms)?.catch(() => {});
-  }
-}
 
 /**
  * Fantasy mode in the scene: weapons in hands, fighting stances and swings

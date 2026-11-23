@@ -15,6 +15,7 @@ import { disposeTree, feetAndEye, holdInHand, newTrackedHand, pointHeld, poseHan
 import { announceBand, atOnce, band, localNote, musicianOf, NoteGate, parseBandEvent, play, remoteMusicians, resetBand, tapped, validNote } from "./band";
 import { CHORDS, chordOf, ELECTRIC, GONGS, holdKey, isWorn, KEY_LAYOUT, KEYS_BASE, KIT, LIGHT_COLORS, PICK_BASE, playNote, prepareGuitar, TAIKO, type Instrument, type Worn } from "./instruments";
 import { bandBody, updateGroove, type Groove } from "./moves";
+import { buzz } from "../../xr/controls";
 
 /** Keys others are holding down, each with its release, by "player:note". */
 const remoteHeld = new Map<string, () => void>();
@@ -1137,6 +1138,7 @@ export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerPr
           zone = Math.max(0, Math.min(5, Math.floor((1 - u) * 6)));
         }
         play(zone);
+        buzz(gl, "right", 0.3, 25);
       }
       return;
     }
@@ -1151,6 +1153,7 @@ export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerPr
       if (speed > SHAKE_SPEED && v[0] * s.v[0] + v[1] * s.v[1] + v[2] * s.v[2] < 0 && now - s.last > 0.08) {
         s.last = now;
         play(speed > SHAKE_SPEED * 2 ? 0 : 1);
+        buzz(gl, "right", speed > SHAKE_SPEED * 2 ? 0.25 : 0.12, 15);
       }
       s.at = [hand.pose[0], hand.pose[1], hand.pose[2]];
       s.v = v;
@@ -1162,6 +1165,7 @@ export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerPr
       if (squeeze >= 0.85 && armed.current.kick) {
         armed.current.kick = false;
         play(KIT.kick);
+        buzz(gl, "right", 0.45, 30);
       } else if (squeeze <= 0.55) armed.current.kick = true;
     }
     for (const side of ["left", "right"] as const) {
@@ -1186,31 +1190,36 @@ export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerPr
         if (hitPiece !== null && armed.current[side]) {
           armed.current[side] = false;
           play(hitPiece);
+          buzz(gl, side, 0.4, 25);
         }
         continue;
       }
-      // The fingertips, a little ahead of the wrist.
-      const tipZ = z - 0.07;
-      if (y > PAD_TOP + 0.05) {
+      // The fingertips, a little ahead of the wrist; with tracked fingers,
+      // the index fingertip itself.
+      const tipZ = hand.tip ? hand.tip[2] : z - 0.07;
+      const tipX = hand.tip ? hand.tip[0] : x;
+      const tipY = hand.tip ? hand.tip[1] : y;
+      if (tipY > PAD_TOP + 0.05) {
         armed.current[side] = true;
         continue;
       }
-      if (!armed.current[side] || y > PAD_TOP + 0.01) continue;
+      if (!armed.current[side] || tipY > PAD_TOP + 0.01) continue;
       let note: number | null = null;
       if (me.instrument === "drums") {
         for (let pad = 0; pad < 8 && note === null; pad++) {
           const [px, pz] = padAt(pad);
-          if (Math.abs(x - px) < 0.045 && Math.abs(tipZ - pz) < 0.045) note = pad;
+          if (Math.abs(tipX - px) < 0.045 && Math.abs(tipZ - pz) < 0.045) note = pad;
         }
-      } else if (Math.abs(tipZ - DESK_Z) < 0.08 && Math.abs(x) < KEYBOARD_WIDTH / 2 + 0.02) {
+      } else if (Math.abs(tipZ - DESK_Z) < 0.08 && Math.abs(tipX) < KEYBOARD_WIDTH / 2 + 0.02) {
         // Toward the back is where the black keys are; a touch there that
         // isn't on one plays the white key under it.
-        const semitone = (tipZ < DESK_Z - 0.01 ? nearestKey(x, true) : null) ?? nearestKey(x, false);
+        const semitone = (tipZ < DESK_Z - 0.01 ? nearestKey(tipX, true) : null) ?? nearestKey(tipX, false);
         if (semitone !== null) note = 60 + me.octave * 12 + semitone;
       }
       if (note !== null) {
         armed.current[side] = false;
         play(note);
+        buzz(gl, side, 0.3, 20);
       }
     }
   }, -0.4);

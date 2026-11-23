@@ -54,8 +54,8 @@ export function BandButton() {
           </button>
           <Hint accent={ACCENT}>
             {L(
-              "While you play, **the keys shown on the instrument** play it instead of moving you (**Esc** stops). On a phone, **tap the instrument**. In VR, play it with your hands: tap the pads and keys, or strum the guitar while your other hand picks the chord along the neck.",
-              "演奏中は、**楽器に表示されたキー**で演奏します(移動はしません。**Esc**で終了)。スマホは**楽器をタップ**。VRでは手で演奏します:パッドや鍵盤をたたき、ギターはもう一方の手でネックの位置でコードを選んでかき鳴らします。"
+              "While you play, **the keys shown on the instrument** play it instead of moving you (**Esc** stops). On a phone, **tap the instrument**. In VR, play it with your hands: tap the pads and keys (with tracked hands, your fingertip), or strum the guitar while your other hand picks the chord along the neck.",
+              "演奏中は、**楽器に表示されたキー**で演奏します(移動はしません。**Esc**で終了)。スマホは**楽器をタップ**。VRでは手で演奏します:パッドや鍵盤をたたき(ハンドトラッキングでは指先で)、ギターはもう一方の手でネックの位置でコードを選んでかき鳴らします。"
             )}
           </Hint>
           {isWorn(state.instrument) && (

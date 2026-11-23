@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useFrame, type ThreeEvent } from "@react-three/fiber";
+import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
+import { buzz } from "../controls";
 import { useXR } from "@react-three/xr";
 import * as THREE from "three";
 import { trackingStore } from "../body/trackingStore";
@@ -100,6 +101,7 @@ export function signatureOf(model: XrHudModel): string {
 }
 
 function XrHudPanel({ model, session }: { model: XrHudModel; session: XRSession }) {
+  const gl = useThree((state) => state.gl);
   const panelRef = useRef<THREE.Mesh>(null);
   const hintRef = useRef<THREE.Mesh>(null);
   const [open, setOpen] = useState(false);
@@ -176,7 +178,10 @@ function XrHudPanel({ model, session }: { model: XrHudModel; session: XRSession 
   useEffect(() => redraw(), [layout]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const lang = useLang();
-  const hint = useMemo(() => makeHintTexture(gaze), [gaze, lang]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** Tracked hands, not controllers: the hint says how hands work. */
+  const [hands, setHands] = useState(false);
+  const handsRef = useRef(false);
+  const hint = useMemo(() => makeHintTexture(gaze ? "gaze" : hands ? "hands" : "controllers"), [gaze, hands, lang]); // eslint-disable-line react-hooks/exhaustive-deps
   const gazeLabel = useMemo(() => makeGazeButtonTexture(open), [open, lang]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => texture.dispose(), [texture]);
   useEffect(() => () => hint.dispose(), [hint]);
@@ -300,8 +305,16 @@ function XrHudPanel({ model, session }: { model: XrHudModel; session: XRSession 
 
     // Gaze mode: nothing tracked at all, only the head (and screen taps).
     let tracked = false;
+    let anyHand = false;
     for (const source of session.inputSources) {
       if (source.targetRayMode === "tracked-pointer" || source.hand) tracked = true;
+      if (source.hand) anyHand = true;
+    }
+    if (anyHand !== handsRef.current) {
+      handsRef.current = anyHand;
+      setHands(anyHand);
+      // Hands put down the controllers mid-session: tell them again.
+      if (anyHand) elapsedRef.current = 0;
     }
     if (!tracked !== gazeRef.current) {
       gazeRef.current = !tracked;
@@ -432,6 +445,8 @@ function XrHudPanel({ model, session }: { model: XrHudModel; session: XRSession 
     if (!hit || hit.disabled) return;
     pressedRef.current = hit;
     if (hit.hold) hit.onPress();
+    // A tick in the pointing hand, so a press is felt as well as seen.
+    buzz(gl, "right", 0.15, 15);
     redrawRef.current();
   };
 
@@ -593,7 +608,7 @@ function makeNoticeTexture(name: string, gaze: boolean): THREE.CanvasTexture {
 }
 
 /** "Here's how to open the menu", shown once, at the start of a session. */
-function makeHintTexture(gaze: boolean): THREE.CanvasTexture {
+function makeHintTexture(input: "gaze" | "hands" | "controllers"): THREE.CanvasTexture {
   const canvas = document.createElement("canvas");
   canvas.width = HINT_WIDTH;
   canvas.height = HINT_HEIGHT;
@@ -610,10 +625,14 @@ function makeHintTexture(gaze: boolean): THREE.CanvasTexture {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     const room = HINT_WIDTH - 90;
-    if (gaze) {
+    if (input === "gaze") {
       fitText(ctx, L("Look at Menu, below right, and tap the screen", "右下の「メニュー」を見て画面をタップ"), HINT_WIDTH / 2, 72, room, "600", 44);
       ctx.fillStyle = "rgba(255,255,255,0.6)";
       fitText(ctx, L("Look at any button and tap to press it", "ボタンを見てタップすると押せます"), HINT_WIDTH / 2, 130, room, "400", 36);
+    } else if (input === "hands") {
+      fitText(ctx, L("Turn your left palm toward you for the menu", "左の手のひらを自分に向けるとメニュー"), HINT_WIDTH / 2, 72, room, "600", 44);
+      ctx.fillStyle = "rgba(255,255,255,0.6)";
+      fitText(ctx, L("Pinch to press · pinch and hold to teleport · touch keys to play", "つまんで押す・長くつまんでテレポート・鍵盤は指でタッチ"), HINT_WIDTH / 2, 130, room, "400", 36);
     } else {
       fitText(ctx, L("Turn your left palm toward you for the menu", "左の手のひらを自分に向けるとメニュー"), HINT_WIDTH / 2, 72, room, "600", 44);
       ctx.fillStyle = "rgba(255,255,255,0.6)";
