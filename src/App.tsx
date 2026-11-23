@@ -1257,7 +1257,8 @@ export default function App() {
   }, [xrRemoveArmed]);
   // The room modes' choices (weapons, elements, instruments), for the
   // headset menu: what their buttons on the flat control bar offer.
-  const addonXrSections = useAddonXrSections(worldState);
+  // Editors and admins also get the switches that turn the modes on.
+  const addonXrSections = useAddonXrSections(worldState, { allowed: (canEditWorld || isAdmin) && connected, setWorldState });
 
   if (worldError) return <CenteredMessage text={L(`Couldn't load world: ${worldError.message}`, `ワールドを読み込めませんでした:${worldError.message}`)} />;
   if (!world) return <CenteredMessage text={L("Loading world…", "ワールドを読み込み中…")} />;

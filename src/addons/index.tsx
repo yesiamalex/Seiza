@@ -128,17 +128,48 @@ const LIGHT_NAMES: [string, string][] = [
   ["White", "白"],
 ];
 
+/** Who may switch the room modes from a headset, and how: the same people
+ *  as the edit and admin panels' switches (RoomModes). */
+export interface XrModeSwitches {
+  allowed: boolean;
+  setWorldState: (key: string, value: WorldStateValue) => void;
+}
+
 /**
  * The room modes in a headset's menu (src/xr/hud): what the flat screen's
- * Fantasy and Band buttons offer, as the menu's own sections. Re-renders
- * with either mode's state, so the chosen one stays lit.
+ * Fantasy and Band buttons offer, as the menu's own sections, and for an
+ * editor or admin the switches that turn the modes on, so nobody has to
+ * take the headset off to start a fight or a band. Re-renders with either
+ * mode's state, so the chosen one stays lit.
  */
-export function useAddonXrSections(worldState: WorldState): XrHudSection[] {
+export function useAddonXrSections(worldState: WorldState, switches?: XrModeSwitches): XrHudSection[] {
   useLang();
   const fighter = useStore(fantasy);
   const musician = useStore(band);
   const rows = useStore(record);
   const sections: XrHudSection[] = [];
+  const fantasyOn = on(worldState, "fantasy");
+  const bandOn = on(worldState, "band");
+  if (switches?.allowed) {
+    const toggle = (mode: AddonMode, now: boolean) => () => switches.setWorldState(addonModeKey(mode), !now);
+    sections.push({
+      id: "modes",
+      title: L("Room modes", "ルームモード"),
+      note: L("For everyone in the room.", "部屋の全員に。"),
+      columns: 2,
+      choices: [
+        { id: "fantasy", label: L("Fantasy", "ファンタジー"), active: fantasyOn, onPress: toggle("fantasy", fantasyOn) },
+        { id: "band", label: L("Band", "バンド"), active: bandOn, onPress: toggle("band", bandOn) },
+      ],
+    });
+  } else if (!fantasyOn && !bandOn) {
+    sections.push({
+      id: "modes",
+      title: L("Room modes", "ルームモード"),
+      note: L("An editor can turn on Fantasy or Band for the room.", "編集者がファンタジーかバンドをオンにできます。"),
+      choices: [],
+    });
+  }
   if (on(worldState, "fantasy")) {
     const r = fighter.weapon ? rows[fighter.weapon] : undefined;
     sections.push({

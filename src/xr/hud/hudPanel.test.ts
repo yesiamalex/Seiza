@@ -97,6 +97,19 @@ describe("the headset panel's room-mode sections", () => {
     expect(pick).toHaveBeenCalledWith("naginata");
   });
 
+  it("shows a section with only a note (no buttons) and keeps the next one below it", () => {
+    const layout = layoutHud({
+      ...base,
+      sections: [
+        { id: "modes", title: "Room modes", note: "An editor can turn them on.", choices: [] },
+        { id: "band", title: "Band", choices: [{ id: "keys", label: "Keys", active: false, onPress: () => {} }] },
+      ],
+    });
+    expect(layout.buttons.some((b) => b.id.startsWith("modes:"))).toBe(false);
+    expect(layout.buttons.find((b) => b.id === "band:keys")).toBeTruthy();
+    expect(layout.height).toBeGreaterThan(layoutHud(base).height);
+  });
+
   it("switches the language from the voice row", () => {
     const onLanguage = vi.fn();
     const layout = layoutHud({ ...base, onLanguage });
