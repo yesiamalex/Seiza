@@ -7,6 +7,7 @@ import { isGizmoDragging } from "../edit/gizmoState";
 import { readXrHead } from "../xr/body/xrPose";
 import { turningOptions, useXrControls } from "../xr/controls";
 import { Teleport } from "../xr/Teleport";
+import { penState } from "../draw/pen";
 import { selfViewStore } from "../xr/body/selfViewStore";
 import { takeSelfPush } from "./selfPush";
 import {
@@ -488,6 +489,9 @@ export function PlayerRig({
           return;
         }
         if (e.button !== 0) return;
+        // With the pen on, a left-drag draws (src/draw/); the right or
+        // middle button still looks.
+        if (penState().on) return;
         if (!editMode) {
           lookPointer = e.pointerId;
           el.setPointerCapture(e.pointerId);
@@ -511,7 +515,7 @@ export function PlayerRig({
         // look at all in Edit Mode, so on a phone you could place an
         // object and then have no way to turn and see it.
         if (editMode) pendingLook = e.pointerId;
-        else lookPointer = e.pointerId;
+        else if (!penState().on) lookPointer = e.pointerId;
       }
     };
 

@@ -42,6 +42,23 @@ export interface PlayerState {
 // from across the room rather than up close — see createTextTexture's
 // "sign" surface and SignObject in src/edit/WorldObjects.tsx.
 export const WORLD_OBJECT_KINDS = ["box", "sphere", "cylinder", "model", "text", "sign", "screen", "image", "video", "chair", "bed", "table", "mirror", "ball"] as const;
+/**
+ * A line drawn in the room, in the air or on something (src/draw/): its
+ * points, [x, y, z, x, y, z, ...] in metres, a colour from STROKE_COLORS,
+ * and who drew it. Sent once, when it's finished, and kept with the room.
+ */
+export interface Stroke {
+  id: string;
+  ownerId: string;
+  color: number;
+  points: number[];
+}
+export const STROKE_COLORS = ["#ffffff", "#ff5a5a", "#ffc94a", "#5ad67a", "#4ab3ff", "#b07aff"] as const;
+/** A stroke's most points (a longer one carries on as the next), and the
+ *  most a room keeps: past that the oldest go. */
+export const MAX_STROKE_POINTS = 240;
+export const MAX_STROKES = 150;
+
 /** Objects anyone may pick up and throw, not only editors (Grab.tsx). */
 export const GRABBABLE_BY_ANYONE: readonly WorldObjectKind[] = ["ball"];
 export type WorldObjectKind = (typeof WORLD_OBJECT_KINDS)[number];
@@ -173,6 +190,11 @@ export type ClientMessage =
   | { type: "objectHold"; id: string; position: [number, number, number]; rotationY: number }
   | { type: "objectDrop"; id: string; position: [number, number, number]; rotationY: number }
   | { type: "objectRemove"; id: string }
+  // Drawing (src/draw/): a finished stroke; taking one back (yours, or an
+  // editor's any); clearing yours, or (an editor) everyone's.
+  | { type: "strokeAdd"; color: number; points: number[] }
+  | { type: "strokeRemove"; id: string }
+  | { type: "strokesClear"; all: boolean }
   // Writes on a text board or a note.
   | { type: "objectSetText"; id: string; text: string }
   /** Sets (or, with "", removes) an image object's link. Editors only. */
@@ -271,6 +293,8 @@ export type ServerMessage =
       selfId: string;
       players: PlayerState[];
       objects: WorldObject[];
+      /** What's drawn in the room, oldest first. */
+      strokes?: Stroke[];
       /** True if this deployment has SEIZA_EDITOR_PASSWORD set — the
        *  client should prompt for it before allowing Edit Mode. Ignored
        *  by the client when adminKeyRequired is true (see App.tsx). */
@@ -328,6 +352,10 @@ export type ServerMessage =
   | { type: "playerLeft"; id: string }
   | { type: "objectAdded"; object: WorldObject }
   | { type: "objectMoved"; id: string; position: [number, number, number]; rotationY: number }
+  | { type: "strokeAdded"; stroke: Stroke }
+  | { type: "strokeRemoved"; id: string }
+  /** Strokes cleared: one person's, or (null) everyone's. */
+  | { type: "strokesCleared"; ownerId: string | null }
   /** Someone else is holding (or has thrown) an object: where it is now. */
   | { type: "objectHeld"; id: string; by: string; position: [number, number, number]; rotationY: number }
   /** A whole object changed (its text, or who is presenting on it). */

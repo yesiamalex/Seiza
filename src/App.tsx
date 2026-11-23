@@ -20,6 +20,10 @@ import { setPlacedObstacles, type Seat } from "./scene/layout";
 import { TABLE } from "./scene/Table";
 import { MIRROR, WorldMirrors } from "./scene/Mirror";
 import { Grab } from "./edit/Grab";
+import { Strokes } from "./draw/Strokes";
+import { DrawButton } from "./draw/DrawButton";
+import { penState, setPen, usePen } from "./draw/pen";
+import { STROKE_COLORS } from "./multiplayer/types";
 import { roomLights } from "./scene/roomLights";
 import { setPlayerFilter, usePlayerFilter } from "./multiplayer/playerFilter";
 import {
@@ -358,6 +362,10 @@ export default function App() {
     removeObject,
     holdObject,
     dropObject,
+    strokes,
+    addStroke,
+    removeStroke,
+    clearStrokes,
     sendChat,
     setPosture: sendPosture,
     setCalm,
@@ -1135,7 +1143,7 @@ export default function App() {
     (point: THREE.Vector3) => {
       // With a weapon drawn or an instrument out (src/addons/), a click is
       // an attack or a note.
-      if (editMode || addonHoldsClicks()) return;
+      if (editMode || addonHoldsClicks() || penState().on) return;
       // Walking somewhere is also a way of getting up.
       standUp();
       const destination = point.clone();
@@ -1279,6 +1287,8 @@ export default function App() {
   const rooted = useAddonRooted(worldState);
   // How a headset player moves, turns, and feels things (src/xr/controls.ts).
   const xrControls = useXrControls();
+  const pen = usePen();
+  const myStrokes = strokes.filter((s) => s.ownerId === selfId);
 
   if (worldError) return <CenteredMessage text={L(`Couldn't load world: ${worldError.message}`, `ワールドを読み込めませんでした:${worldError.message}`)} />;
   if (!world) return <CenteredMessage text={L("Loading world…", "ワールドを読み込み中…")} />;
@@ -1382,6 +1392,24 @@ export default function App() {
       ...addonXrSections,
       avatarSection,
       ...(editSection ? [editSection] : []),
+      ...(currentWorld.editingEnabled !== false
+        ? [
+            {
+              id: "draw",
+              title: L("Draw", "描く"),
+              note: pen.on
+                ? L("Hold the trigger to draw (with hands, pinch). Everyone sees a line once it's done.", "トリガーを押したまま描きます(ハンドはつまむ)。描き終えた線は全員に見えます。")
+                : L("Pick up the pen to draw in the air.", "ペンを持つと空中に描けます。"),
+              columns: 3,
+              choices: [
+                { id: "pen", label: pen.on ? L("Pen down", "ペンを置く") : L("Pick up pen", "ペンを持つ"), active: pen.on, onPress: () => setPen({ on: !penState().on }) },
+                { id: "undo", label: L("Undo", "元に戻す"), active: false, onPress: () => myStrokes.length && removeStroke(myStrokes[myStrokes.length - 1].id) },
+                { id: "clear", label: canEditWorld ? L("Clear all", "全部消す") : L("Clear mine", "自分のを消す"), active: false, onPress: () => clearStrokes(canEditWorld) },
+                ...STROKE_COLORS.map((_, i) => ({ id: "c" + i, label: [L("White", "白"), L("Red", "赤"), L("Yellow", "黄"), L("Green", "緑"), L("Blue", "青"), L("Purple", "紫")][i], active: pen.color === i, onPress: () => setPen({ color: i, on: true }) })),
+              ],
+            },
+          ]
+        : []),
       {
         id: "controls",
         title: L("Comfort and controls", "快適さと操作"),
@@ -1552,6 +1580,8 @@ export default function App() {
             {/* Room modes an editor switched on (src/addons/). */}
             <AddonScene worldState={worldState} selfId={selfId} players={players} getSelfPosition={getSelfPosition} editMode={editMode} selfSeated={!!posture || !!seat} />
             {world.portals && <Portals config={world.portals} builtin={world.environment !== "model"} />}
+            {/* What's drawn in the room, and drawing it (src/draw/). */}
+            <Strokes strokes={strokes} addStroke={addStroke} canDraw={world.editingEnabled !== false && connected} />
             {/* Picking things up and throwing balls (edit/Grab.tsx). */}
             <Grab objects={objects} canEdit={canEditWorld} handsBusy={addonHandsBusy} hold={holdObject} drop={dropObject} self={() => ({ position: positionRef.current, yaw: rotationRef.current })} />
             {/* The world's own mirror, near arrival (scene/Mirror.tsx). */}
@@ -1844,6 +1874,14 @@ export default function App() {
           }
         />
         <AddonBarButtons worldState={worldState} />
+        {world.editingEnabled !== false && (
+          <DrawButton
+            mine={myStrokes.length}
+            canClearAll={canEditWorld}
+            onUndo={() => myStrokes.length && removeStroke(myStrokes[myStrokes.length - 1].id)}
+            onClear={clearStrokes}
+          />
+        )}
         <div className="seiza-bar-divider" aria-hidden />
         <ChatPanel
           open={chatOpen}

@@ -36,8 +36,10 @@ export interface XrHandSample {
   curl: [number, number];
   /** Tracked hands rather than held controllers. */
   articulated: boolean;
-  /** Tracked hands: the index fingertip, in the world, to play keys with. */
+  /** Tracked hands: the index fingertip, in the world, to play keys with,
+   *  and the thumb's, for a pinch (drawing). */
   tip: THREE.Vector3;
+  thumb: THREE.Vector3;
 }
 
 export interface XrBodySample {
@@ -54,6 +56,7 @@ export function createXrBodySample(): XrBodySample {
     curl: [0, 0],
     articulated: false,
     tip: new THREE.Vector3(),
+    thumb: new THREE.Vector3(),
   });
   return {
     head: { position: new THREE.Vector3(), quaternion: new THREE.Quaternion(), heightAboveFloor: 0 },
@@ -156,6 +159,12 @@ function readHand(
       scratchLocal.fromArray(tipPose.transform.matrix);
       composeWorld(origin, scratchLocal, out.tip, scratchQuaternion);
     } else out.tip.copy(out.position);
+    const thumbJoint = source.hand.get("thumb-tip");
+    const thumbPose = thumbJoint ? frame.getJointPose(thumbJoint, space) : undefined;
+    if (thumbPose) {
+      scratchLocal.fromArray(thumbPose.transform.matrix);
+      composeWorld(origin, scratchLocal, out.thumb, scratchQuaternion);
+    } else out.thumb.copy(out.position);
     out.articulated = true;
     out.active = true;
     return;
