@@ -5,6 +5,7 @@ import { constrainWalker, floorHeightAt } from "../scene/layout";
 import { readXrHead } from "./body/xrPose";
 import { buzz, xrControls } from "./controls";
 import { penState } from "../draw/pen";
+import { playTeleport } from "./sounds";
 
 /**
  * Teleporting in a headset: an arc from your hand to the floor, a ring
@@ -149,6 +150,7 @@ export function Teleport({ originRef, blocked }: { originRef: RefObject<THREE.Ob
         xrOrigin.position.z += target.z - head.z;
         xrOrigin.position.y = target.y;
         buzz(gl, "left", 0.3, 30);
+        playTeleport();
       }
       return;
     }

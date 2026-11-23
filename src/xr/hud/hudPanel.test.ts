@@ -130,3 +130,24 @@ describe("the headset panel's redraws", () => {
     expect(signatureOf({ ...base, sections: [section("sword")] })).toBe(signatureOf({ ...base, sections: [section("sword")] }));
   });
 });
+
+describe("the headset panel's pages", () => {
+  const sections = [
+    { id: "fantasy", tab: "play", title: "Fantasy", choices: [{ id: "sword", label: "Sword", active: false, onPress: () => {} }] },
+    { id: "avatar", tab: "avatar", title: "Avatar", choices: [{ id: "casual", label: "Casual", active: true, onPress: () => {} }] },
+  ];
+  it("shows one page at a time, with a tab for each, and switches", () => {
+    const onTab = vi.fn();
+    const main = layoutHud({ ...base, voice: "off", sections, tab: "main", onTab });
+    expect(main.buttons.filter((b) => b.id.startsWith("tab:")).map((b) => b.id)).toEqual(["tab:main", "tab:play", "tab:avatar"]);
+    expect(main.buttons.some((b) => b.id === "voice")).toBe(true);
+    expect(main.buttons.some((b) => b.id.startsWith("fantasy:"))).toBe(false);
+    const play = layoutHud({ ...base, voice: "off", sections, tab: "play", onTab });
+    expect(play.buttons.some((b) => b.id === "fantasy:sword")).toBe(true);
+    expect(play.buttons.some((b) => b.id.startsWith("avatar:") || b.id === "voice")).toBe(false);
+    play.buttons.find((b) => b.id === "tab:avatar")!.onPress();
+    expect(onTab).toHaveBeenCalledWith("avatar");
+    // A page that isn't there any more falls back to the main one.
+    expect(layoutHud({ ...base, voice: "off", sections, tab: "edit", onTab }).buttons.some((b) => b.id === "voice")).toBe(true);
+  });
+});

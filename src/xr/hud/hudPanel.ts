@@ -60,10 +60,18 @@ export interface XrHudModel {
    *  elements, and instruments here, so a headset has what the flat
    *  screen's mode buttons have. */
   sections?: XrHudSection[];
+  /** Which page is showing (see XrHudSection.tab): "main" for the
+   *  everyday controls, or a section's tab. One page at a time keeps the
+   *  panel a hand's height instead of a scroll. */
+  tab?: string;
+  onTab?: (tab: string) => void;
 }
 
 export interface XrHudSection {
   id: string;
+  /** The page it's on: "play", "avatar", "edit", "draw", "settings"
+   *  (default "more"). Each page gets a tab across the top. */
+  tab?: string;
   title: string;
   note?: string;
   /** Buttons to a row (default 3). */
@@ -179,6 +187,16 @@ const VOICE_LABEL: Record<XrHudModel["voice"], [string, string]> = {
   live: ["Mute", "ミュート"],
 };
 
+const TAB_LABELS: Record<string, [string, string]> = {
+  main: ["Main", "メイン"],
+  play: ["Play", "遊ぶ"],
+  avatar: ["Look", "見た目"],
+  edit: ["Edit", "編集"],
+  draw: ["Draw", "描く"],
+  settings: ["Setup", "設定"],
+  more: ["More", "その他"],
+};
+
 /** Lays the panel out for this model. Height follows the content. */
 export function layoutHud(model: XrHudModel): HudLayout {
   const width = HUD_CANVAS_WIDTH;
@@ -213,6 +231,19 @@ export function layoutHud(model: XrHudModel): HudLayout {
   });
   y += ROW + GAP * 2;
 
+  // ---- the pages, as tabs ----
+  const pages = ["main", ...new Set((model.sections ?? []).map((s) => s.tab ?? "more"))];
+  const page = model.tab && pages.includes(model.tab) ? model.tab : "main";
+  if (pages.length > 1 && model.onTab) {
+    const onTab = model.onTab;
+    const w = (inner - GAP * (pages.length - 1)) / pages.length;
+    pages.forEach((id, i) =>
+      buttons.push({ id: `tab:${id}`, label: L(...(TAB_LABELS[id] ?? TAB_LABELS.more)), x: PAD + i * (w + GAP), y, w, h: ROW * 0.85, hold: false, active: id === page, disabled: false, onPress: () => onTab(id) })
+    );
+    y += ROW * 0.85 + GAP * 2;
+  }
+  const main = page === "main" || !model.onTab;
+
   // ---- a request waiting for an answer: first, so it's seen ----
   if (model.request) {
     const request = model.request;
@@ -225,7 +256,7 @@ export function layoutHud(model: XrHudModel): HudLayout {
   }
 
   // ---- someone close enough to ask ----
-  if (model.together && !model.request) {
+  if (main && model.together && !model.request) {
     const together = model.together;
     if (together.waiting) {
       texts.push({ text: together.waiting, x: PAD, y: y + LABEL * 0.7, size: 13 * SCALE, color: MUTED_TEXT, maxWidth: inner });
@@ -278,7 +309,7 @@ export function layoutHud(model: XrHudModel): HudLayout {
     // Named in the language it switches to, as on the flat screen.
     rowItems.push({ id: "language", label: L("日本語", "English"), hold: false, active: false, disabled: false, onPress: model.onLanguage });
   }
-  if (rowItems.length) {
+  if (main && rowItems.length) {
     const w = (inner - GAP * (rowItems.length - 1)) / rowItems.length;
     rowItems.forEach((item, i) => buttons.push({ ...item, x: PAD + i * (w + GAP), y, w, h: ROW }));
     y += ROW + GAP * 2;
@@ -304,7 +335,7 @@ export function layoutHud(model: XrHudModel): HudLayout {
     const crouch = model.crouch;
     gestureItems.push({ id: "crouch", label: L("Crouch", "しゃがむ"), hold: true, active: crouch.active, disabled: false, onPress: crouch.start, onRelease: crouch.end });
   }
-  if (gestureItems.length) {
+  if (main && gestureItems.length) {
     texts.push({ text: L("Gestures", "ジェスチャー"), x: PAD, y: y + LABEL * 0.7, size: 12 * SCALE, color: MUTED_TEXT, maxWidth: inner });
     y += LABEL;
     const w = (inner - GAP * (GESTURE_COLUMNS - 1)) / GESTURE_COLUMNS;
@@ -318,6 +349,7 @@ export function layoutHud(model: XrHudModel): HudLayout {
 
   // ---- more: the room modes' choices ----
   for (const section of model.sections ?? []) {
+    if (model.onTab && (section.tab ?? "more") !== page) continue;
     texts.push({ text: section.title, x: PAD, y: y + LABEL * 0.7, size: 12 * SCALE, color: MUTED_TEXT, maxWidth: inner });
     y += LABEL;
     if (section.note) {
@@ -344,7 +376,7 @@ export function layoutHud(model: XrHudModel): HudLayout {
   }
 
   // ---- admin ----
-  if (model.admin) {
+  if (main && model.admin) {
     const admin = model.admin;
     texts.push({ text: L("Admin", "管理者"), x: PAD, y: y + LABEL * 0.7, size: 12 * SCALE, color: MUTED_TEXT, maxWidth: inner });
     y += LABEL;
@@ -393,7 +425,7 @@ export function layoutHud(model: XrHudModel): HudLayout {
   // ---- chat, read-only ----
   // There is no comfortable way to type in a headset yet, so the panel
   // shows what people are saying and leaves replying to voice.
-  if (model.chat.length) {
+  if (main && model.chat.length) {
     texts.push({ text: L("Chat", "チャット"), x: PAD, y: y + LABEL * 0.7, size: 12 * SCALE, color: MUTED_TEXT, maxWidth: inner });
     y += LABEL;
     for (const message of model.chat) {

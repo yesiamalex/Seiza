@@ -49,6 +49,7 @@ import { Pack } from "./undead";
 import { bodyPose, bowDraw, heldPose, KNOCKED_OUT, timingOf, type Action, type ActionKind, type HeldPose } from "./poses";
 import { playCharged, playClash, playHit, playKnockedOut, playSpecial, playSpecialCharge, playSwing } from "./sounds";
 import { buzz } from "../../xr/controls";
+import { WristStatus } from "./WristStatus";
 import { buildWeapon, ELEMENT_COLORS, elementPulse, isBladed, MAX_HP, SABER_HALO, setBowString, weaponGlow, WEAPON_SPECS, type Element, type Weapon } from "./weapons";
 import { floorHeightAt, getGround } from "../../scene/layout";
 
@@ -1016,7 +1017,13 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode, selfS
     effects.update(now, dt, camera);
   }, -0.4);
 
-  return <SpecialLights effects={effects} />;
+  return (
+    <>
+      <SpecialLights effects={effects} />
+      {/* Your own health and meter, on your wrist in a headset. */}
+      <WristStatus />
+    </>
+  );
 }
 
 /** How bright a special's light is at its peak, and how far it reaches. */

@@ -164,6 +164,7 @@ export function useAddonXrSections(worldState: WorldState, switches?: XrModeSwit
     const toggle = (mode: AddonMode, now: boolean) => () => switches.setWorldState(addonModeKey(mode), !now);
     sections.push({
       id: "modes",
+      tab: "play",
       title: L("Room modes", "ルームモード"),
       note: L("For everyone in the room.", "部屋の全員に。"),
       columns: 2,
@@ -175,6 +176,7 @@ export function useAddonXrSections(worldState: WorldState, switches?: XrModeSwit
   } else if (!fantasyOn && !bandOn) {
     sections.push({
       id: "modes",
+      tab: "play",
       title: L("Room modes", "ルームモード"),
       note: L("An editor can turn on Fantasy or Band for the room.", "編集者がファンタジーかバンドをオンにできます。"),
       choices: [],
@@ -240,5 +242,6 @@ export function useAddonXrSections(worldState: WorldState, switches?: XrModeSwit
       });
     }
   }
-  return sections;
+  // All on the Play page of the headset menu.
+  return sections.map((s) => ({ tab: "play", ...s }));
 }

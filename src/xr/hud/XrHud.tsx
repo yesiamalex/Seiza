@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { buzz } from "../controls";
+import { playTick } from "../sounds";
 import { useXR } from "@react-three/xr";
 import * as THREE from "three";
 import { trackingStore } from "../body/trackingStore";
@@ -129,11 +130,18 @@ function XrHudPanel({ model, session }: { model: XrHudModel; session: XRSession 
   const modelRef = useRef(model);
   modelRef.current = model;
   const signature = signatureOf(model);
+  /** The page showing (hudPanel's tabs), kept while the menu closes and opens. */
+  const [tab, setTab] = useState("main");
   const layout = useMemo(() => {
     const m = modelRef.current;
     const live = (): XrHudModel => modelRef.current;
     return layoutHud({
       ...m,
+      tab,
+      onTab: (next) => {
+        setTab(next);
+        playTick();
+      },
       onVoice: () => live().onVoice(),
       onGestureStart: (name) => live().onGestureStart(name),
       onGestureEnd: (name) => live().onGestureEnd(name),
@@ -151,9 +159,9 @@ function XrHudPanel({ model, session }: { model: XrHudModel; session: XRSession 
         onRemove: (id) => live().admin?.onRemove(id),
       },
     });
-    // The signature is the whole dependency on purpose: see signatureOf.
+    // The signature (and the page) is the whole dependency on purpose: see signatureOf.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [signature]);
+  }, [signature, tab]);
 
   const canvas = useMemo(() => document.createElement("canvas"), []);
   const texture = useMemo(() => {
@@ -445,8 +453,10 @@ function XrHudPanel({ model, session }: { model: XrHudModel; session: XRSession 
     if (!hit || hit.disabled) return;
     pressedRef.current = hit;
     if (hit.hold) hit.onPress();
-    // A tick in the pointing hand, so a press is felt as well as seen.
+    // A tick in the pointing hand, and in the ear, so a press is felt and
+    // heard as well as seen.
     buzz(gl, "right", 0.15, 15);
+    playTick();
     redrawRef.current();
   };
 

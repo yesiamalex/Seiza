@@ -1328,6 +1328,7 @@ export default function App() {
   const wornUrl = avatarUrlForChoice(joined.choice);
   const avatarSection = {
     id: "avatar",
+    tab: "avatar",
     title: L("Avatar", "アバター"),
     note: L("Everyone sees the change. Design your own on a flat screen.", "変更は全員に見えます。自分でデザインするのは画面モードで。"),
     choices: [
@@ -1367,6 +1368,7 @@ export default function App() {
     canEditWorld && connected
       ? {
           id: "edit",
+          tab: "edit",
           title: L("Edit: place in front of you", "編集:目の前に置く"),
           note: L("Grip an object to pick it up and move it.", "グリップで物をつかんで動かせます。"),
           choices: [
@@ -1396,6 +1398,7 @@ export default function App() {
         ? [
             {
               id: "draw",
+              tab: "draw",
               title: L("Draw", "描く"),
               note: pen.on
                 ? L("Hold the trigger to draw (with hands, pinch). Everyone sees a line once it's done.", "トリガーを押したまま描きます(ハンドはつまむ)。描き終えた線は全員に見えます。")
@@ -1412,6 +1415,7 @@ export default function App() {
         : []),
       {
         id: "controls",
+        tab: "settings",
         title: L("Comfort and controls", "快適さと操作"),
         note:
           xrControls.moving === "teleport"

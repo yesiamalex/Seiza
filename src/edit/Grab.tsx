@@ -7,6 +7,7 @@ import { trackingStore } from "../xr/body/trackingStore";
 import { buzz } from "../xr/controls";
 import { BALL_RADIUS } from "../scene/Ball";
 import { flatPick, heldObjects } from "./heldStore";
+import { playGrab, playThrow } from "../xr/sounds";
 
 /**
  * Picking things up, handing them over, and throwing them.
@@ -100,6 +101,8 @@ export function Grab({
   const gripped = useRef({ left: false, right: false });
   const lastSent = useRef(0);
   const pickedAt = useRef(0);
+  /** The frame clock, for a throw started from a pointer event. */
+  const clock = useRef(0);
 
   const grabbable = (o: WorldObject) => canEditRef.current || GRABBABLE_BY_ANYONE.includes(o.kind);
   const publish = (id: string, p: THREE.Vector3, rotationY: number) => heldObjects.set(id, { position: [p.x, p.y, p.z], rotationY, by: null, at: performance.now() });
@@ -114,6 +117,7 @@ export function Grab({
       const velocity = dt > 0.02 ? last.p.clone().sub(first.p).divideScalar(dt) : new THREE.Vector3();
       if (velocity.length() > 12) velocity.setLength(12);
       flying.current.push({ id: h.id, position: h.position.clone(), velocity, rotationY: h.rotationY, since: now });
+      if (velocity.length() > 1.5) playThrow();
       return;
     }
     const p = h.position.clone();
@@ -144,7 +148,8 @@ export function Grab({
       const dir = camera.getWorldDirection(new THREE.Vector3());
       h.trail = [];
       holding.current = holding.current.filter((x) => x !== h);
-      flying.current.push({ id: h.id, position: h.position.clone(), velocity: dir.multiplyScalar(THROW_SPEED).add(new THREE.Vector3(0, THROW_LIFT, 0)), rotationY: h.rotationY, since: performance.now() / 1000 });
+      flying.current.push({ id: h.id, position: h.position.clone(), velocity: dir.multiplyScalar(THROW_SPEED).add(new THREE.Vector3(0, THROW_LIFT, 0)), rotationY: h.rotationY, since: clock.current });
+      playThrow();
     };
     el.addEventListener("pointerdown", down);
     return () => el.removeEventListener("pointerdown", down);
@@ -153,6 +158,7 @@ export function Grab({
   useFrame((state, rawDelta) => {
     const dt = Math.min(rawDelta, 0.05);
     const now = state.clock.elapsedTime;
+    clock.current = now;
     const objects = objectsRef.current;
 
     // Taken off you: someone else's hold arrived for something you have.
@@ -169,6 +175,7 @@ export function Grab({
       if (o && grabbable(o) && !holding.current.some((h) => h.hand === "flat")) {
         pickUp(o, "flat", camera.getWorldPosition(new THREE.Vector3()), 0);
         pickedAt.current = performance.now();
+        playGrab();
       }
     }
 
@@ -212,6 +219,7 @@ export function Grab({
           if (best) {
             pickUp(best.o, side, hand.position, yawOf(hand.quaternion));
             buzz(gl, side, 0.35, 30);
+            playGrab();
           }
         } else if (gripped.current[side] && closed <= off) {
           gripped.current[side] = false;
