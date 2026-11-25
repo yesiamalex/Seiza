@@ -290,7 +290,7 @@ export function useAddonXrSections(worldState: WorldState, switches?: XrModeSwit
       id: "exer",
       title: L("ExerSeiza: ride", "ExerSeiza:乗る"),
       note: rider.vehicle
-        ? L(`Right trigger: ride. Left trigger: brake. A: ${bell === "horn" ? "horn" : "bell"}. ${(rider.speed * 3.6).toFixed(0)} km/h, ${Math.round(rider.distance)} m.`, `右トリガー:進む。左トリガー:ブレーキ。A:${bell === "horn" ? "クラクション" : "ベル"}。${(rider.speed * 3.6).toFixed(0)} km/h、${Math.round(rider.distance)} m。`)
+        ? L(`Right trigger: ride. Left trigger: brake. A: ${bell === "horn" ? "horn" : "bell"}. B: get off. ${(rider.speed * 3.6).toFixed(0)} km/h, ${Math.round(rider.distance)} m.`, `右トリガー:進む。左トリガー:ブレーキ。A:${bell === "horn" ? "クラクション" : "ベル"}。B:降りる。${(rider.speed * 3.6).toFixed(0)} km/h、${Math.round(rider.distance)} m。`)
         : L("Get on a ride.", "乗りものを選んでください。"),
       columns: 4,
       choices: [

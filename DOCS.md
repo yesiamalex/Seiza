@@ -1163,7 +1163,9 @@ adds its own coloured button to the bar while it is on.
   board, or sits on the moped, with the wheels turning. B rings the bell
   (or the moped's horn); on a phone, a Bell button shows while you ride. In
   VR, hold the right trigger to ride on where you face (let go to coast to
-  a stop), squeeze the left trigger to brake, and press A for the bell. The panel shows speed, distance, climb, and the
+  a stop), squeeze the left trigger to brake, press A for the bell, and B to get
+  off. On a keyboard Esc gets off; everyone has a Get off button on the
+  ride's bar at the top. The panel shows speed, distance, climb, and the
   slope. Rides are kept on your device. Real equipment plugs in through
   SportSeiza (`src/addons/sport/`): a connected smart trainer moves you at
   its speed and is told the slope every second.

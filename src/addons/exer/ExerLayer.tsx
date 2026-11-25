@@ -21,8 +21,9 @@ import { buildVehicle, gripTarget, RIDE_EYE, riderPose, slopeFactor, VEHICLE_SPE
 const WALK = 3.2;
 /** How far ahead the slope is read, metres. */
 const SLOPE_AHEAD = 1.5;
-/** The right controller's A button (xr-standard mapping). */
+/** The right controller's A and B buttons (xr-standard mapping). */
 const A_BUTTON = 4;
+const B_BUTTON = 5;
 
 interface Holder {
   vrm: VRM;
@@ -56,7 +57,7 @@ export function ExerLayer({ selfId, players, getSelfPosition, selfSeated }: { se
   selfRef.current = getSelfPosition;
   const seatedRef = useRef(selfSeated);
   seatedRef.current = selfSeated;
-  const local = useRef({ last: null as [number, number, number] | null, heading: new THREE.Vector3(0, 0, -1), aWas: false, sentGradientAt: 0, storeAt: 0, speed: 0, gradient: 0, distance: 0, climb: 0, vehicle: null as Vehicle | null, braking: false });
+  const local = useRef({ last: null as [number, number, number] | null, heading: new THREE.Vector3(0, 0, -1), aWas: false, sentGradientAt: 0, storeAt: 0, speed: 0, gradient: 0, distance: 0, climb: 0, vehicle: null as Vehicle | null, braking: false, bWas: false });
 
   useEffect(() => sendAddonEvent("exer", { k: "hi" }), []);
   useEffect(
@@ -144,13 +145,23 @@ export function ExerLayer({ selfId, players, getSelfPosition, selfSeated }: { se
       let trigger = 0;
       let brake = 0;
       let a = false;
+      let b = false;
       for (const s of session.inputSources) {
         if (!s.gamepad) continue;
         if (s.handedness === "left") brake = s.gamepad.buttons[0]?.value ?? 0;
         if (s.handedness !== "right") continue;
         trigger = s.gamepad.buttons[0]?.value ?? 0;
         a = !!s.gamepad.buttons[A_BUTTON]?.pressed;
+        b = !!s.gamepad.buttons[B_BUTTON]?.pressed;
       }
+      // B gets off.
+      if (b && !l.bWas) {
+        l.bWas = true;
+        setVehicle(null);
+        buzz(gl, "right", 0.3, 40);
+        return;
+      }
+      l.bWas = b;
       if (a && !l.aWas) {
         ringBell();
         buzz(gl, "right", 0.2, 30);

@@ -13,12 +13,13 @@ const NONE = "none" as const;
 const isTyping = (target: EventTarget | null) =>
   target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
 
-/** B rings the bell (or the horn) while riding, on a keyboard. */
+/** While riding, on a keyboard: B rings the bell (or the horn), Esc gets off. */
 function useBellKey() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target)) return;
-      if (e.key.toLowerCase() === "b" && ride.get().vehicle) ringBell();
+      if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target) || !ride.get().vehicle) return;
+      if (e.key.toLowerCase() === "b") ringBell();
+      else if (e.key === "Escape") setVehicle(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -65,8 +66,8 @@ export function ExerButton() {
       )}
       <Hint accent={ACCENT}>
         {L(
-          "**W** (or the pad) rides where you look, faster than walking, slower uphill. **B** rings the bike's bell or sounds the moped's horn. In VR, **hold the right trigger** to ride on (let go to coast to a stop), **squeeze the left trigger** to brake, and press **A** for the bell. Pick On foot to get off.",
-          "**W**(またはパッド)で見ている方へ進みます。歩くより速く、上り坂では遅くなります。**B**で自転車のベルや原付のクラクション。VRでは**右トリガーを押している間**進み(離すと止まります)、**左トリガー**でブレーキ、**A**でベル。降りるときは「徒歩」を選びます。"
+          "**W** (or the pad) rides where you look, faster than walking, slower uphill. **B** rings the bike's bell or sounds the moped's horn, and **Esc** (or **Get off** at the top) gets off. In VR, **hold the right trigger** to ride on (let go to coast to a stop), **squeeze the left trigger** to brake, press **A** for the bell, and **B** to get off.",
+          "**W**(またはパッド)で見ている方へ進みます。歩くより速く、上り坂では遅くなります。**B**で自転車のベルや原付のクラクション、**Esc**(または上の「降りる」)で降ります。VRでは**右トリガーを押している間**進み(離すと止まります)、**左トリガー**でブレーキ、**A**でベル、**B**で降ります。"
         )}
       </Hint>
     </ModeButton>
@@ -98,6 +99,9 @@ export function ExerStatus({ touch }: { touch: boolean }) {
           {bell === "bell" ? L("Bell", "ベル") : L("Horn", "クラクション")}
         </button>
       )}
+      <button type="button" style={{ ...pillButtonStyle, padding: "6px 12px" }} onClick={() => setVehicle(null)} title={L("Get off (Esc)", "降りる(Esc)")}>
+        {L("Get off", "降りる")}
+      </button>
     </div>
   );
 }
