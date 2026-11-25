@@ -366,7 +366,9 @@ export function ExerLayer({ selfId, players, getSelfPosition, selfSeated }: { se
       if (step < 2 && h.vehicle) {
         h.speed += (step / Math.max(dt, 1e-3) - h.speed) * (1 - Math.exp(-6 * dt));
         for (const w of h.wheels) w.rotation.x -= step / (w.userData.wheel as number);
-        h.phase += step / 0.35;
+        // A crank turn every 4.4 m, as a real bike is geared (about 80 rpm at a
+        // ride's speed): faster read as backward, the wagon-wheel effect.
+        h.phase += step / 0.7;
       }
       const source = key === LOCAL_AVATAR ? LOCAL_TRACKING_SOURCE : key;
       const sample = trackingStore.get(source);
