@@ -673,3 +673,17 @@ describe("the record", () => {
     expect(record.get().rod).toEqual({ k: 0, d: 0, a: 1, combo: 0 });
   });
 });
+
+describe("the violin", () => {
+  it("plays G major from G3, its notes held like the keys', two at once", async () => {
+    const { VIOLIN, holds, PADS } = await import("./band/instruments");
+    const { atOnce } = await import("./band/band");
+    expect(VIOLIN[0]).toBe(55);
+    expect(PADS.violin).toHaveLength(VIOLIN.length);
+    expect(holds("violin")).toBe(true);
+    expect(holds("guitar")).toBe(false);
+    expect(validNote("violin", VIOLIN.length - 1)).toBe(true);
+    expect(validNote("violin", VIOLIN.length)).toBe(false);
+    expect(atOnce("violin")).toBe(2);
+  });
+});

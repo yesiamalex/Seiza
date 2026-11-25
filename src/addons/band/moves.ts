@@ -156,6 +156,18 @@ export function bandBody(instrument: Instrument, note: { at: number; n?: number 
       out.carry = 0;
       out.head = 0.35;
       break;
+    case "violin":
+      // Head down on the chinrest, a sway from the hips with the phrase.
+      out.lean = 0.04 + 0.02 * accent;
+      out.drop = 0.015 + 0.012 * bob * e;
+      out.twist = -0.18 + 0.05 * sway * e;
+      out.tilt = -0.06 + 0.03 * sway * e;
+      out.nod = 0.03 * bob * e;
+      out.left = [-0.03, -0.05, 0];
+      out.right = [0.04, 0.05, 0];
+      out.carry = 0;
+      out.head = 0.2;
+      break;
     case "shaker":
       // A bounce on the beat and a sway, the shaker going with the body.
       out.drop = 0.02 + 0.025 * bob * e;

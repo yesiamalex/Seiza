@@ -1,7 +1,7 @@
 import { sfxOutput } from "../../audio/sfx";
 import { noiseHit, toneHit, voice, type Voice } from "../sound";
 
-export const INSTRUMENTS = ["drums", "kit", "taiko", "keys", "kulintang", "guitar", "electric", "bass", "shaker", "lightstick"] as const;
+export const INSTRUMENTS = ["drums", "kit", "taiko", "keys", "kulintang", "guitar", "electric", "bass", "violin", "shaker", "lightstick"] as const;
 export type Instrument = (typeof INSTRUMENTS)[number];
 
 export const INSTRUMENT_LABELS: Record<Instrument, [string, string]> = {
@@ -13,6 +13,7 @@ export const INSTRUMENT_LABELS: Record<Instrument, [string, string]> = {
   guitar: ["Guitar", "ギター"],
   electric: ["Lead guitar", "エレキギター"],
   bass: ["Bass", "ベース"],
+  violin: ["Violin", "バイオリン"],
   shaker: ["Shaker", "シェイカー"],
   lightstick: ["Light stick", "ペンライト"],
 };
@@ -84,6 +85,10 @@ export const TAIKO_PADS: Pad[] = [
   { label: "Don", key: "J" },
   { label: "Ka", key: "K" },
 ];
+
+/** The violin: G major from its lowest string, G3, up to D5. A note rings
+ *  while it's bowed (held), like a key; two can ring at once, a double stop. */
+export const VIOLIN = [55, 57, 59, 60, 62, 64, 66, 67, 69, 71, 72, 74];
 
 /** The shaker: a shake on the beat, and a softer one between. */
 export const SHAKER_PADS: Pad[] = [
@@ -184,9 +189,11 @@ export const PADS: Partial<Record<Instrument, Pad[]>> = {
   kulintang: GONGS.map((midi, i) => ({ label: noteName(midi), key: "ASDFGHJK"[i] })),
   taiko: TAIKO_PADS,
   shaker: SHAKER_PADS,
+  // The low six on the home row, the high six above, as the guitar's chords.
+  violin: VIOLIN.map((midi, i) => ({ label: noteName(midi), key: "ASDFGHQWERTY"[i] })),
 };
 /** How many pads a row, on screen. */
-export const PAD_COLUMNS: Partial<Record<Instrument, number>> = { drums: 4, kit: 5, guitar: 6, electric: 6, bass: 6, kulintang: 8, taiko: 4, shaker: 2 };
+export const PAD_COLUMNS: Partial<Record<Instrument, number>> = { drums: 4, kit: 5, guitar: 6, electric: 6, bass: 6, kulintang: 8, taiko: 4, shaker: 2, violin: 6 };
 
 const hz = (midi: number) => 440 * Math.pow(2, (midi - 69) / 12);
 /** Bands carry further than footsteps. */
@@ -360,6 +367,66 @@ export function holdKey(midi: number, distance?: number): () => void {
   setTimeout(release, KEY_HOLD_SECONDS * 1000);
   return release;
 }
+
+/**
+ * A bowed violin note that sounds while the bow keeps moving (held):
+ * two sawtooth voices a few cents apart, through a violin body's
+ * resonances (the air, the wood, the bridge's bright one), a little bow
+ * scratch as it starts, and vibrato that comes in once the note settles.
+ * Returns the release.
+ */
+export function holdViolin(midi: number, distance?: number): () => void {
+  const v = voice(0.75, distance, FALLOFF, KEY_HOLD_SECONDS + 1);
+  if (!v) return () => {};
+  const { ctx, t } = v;
+  const f = hz(midi);
+  const env = ctx.createGain();
+  env.gain.setValueAtTime(0.0001, t);
+  env.gain.exponentialRampToValueAtTime(0.5, t + 0.09);
+  env.gain.setTargetAtTime(0.38, t + 0.1, 0.4);
+  const body = chain(filter(ctx, "peaking", 290, 1.2, 6), filter(ctx, "peaking", 1000, 1.1, 3), filter(ctx, "peaking", 2800, 1.4, 4), filter(ctx, "lowpass", 5200, 0.7), env, v.out);
+  const lfo = ctx.createOscillator();
+  lfo.frequency.value = 5.6;
+  const depth = ctx.createGain();
+  depth.gain.setValueAtTime(0, t);
+  depth.gain.linearRampToValueAtTime(0, t + 0.25);
+  depth.gain.linearRampToValueAtTime(f * 0.006, t + 0.65);
+  lfo.connect(depth);
+  lfo.start(t);
+  const oscillators = [0, 6].map((cents) => {
+    const osc = ctx.createOscillator();
+    osc.type = "sawtooth";
+    osc.frequency.value = f;
+    osc.detune.value = cents;
+    depth.connect(osc.frequency);
+    const g = ctx.createGain();
+    g.gain.value = 0.16;
+    osc.connect(g).connect(body);
+    osc.start(t);
+    return osc;
+  });
+  noiseHit(v, { frequency: 3200, duration: 0.07, gain: 0.035, q: 1 });
+  let released = false;
+  const release = () => {
+    if (released) return;
+    released = true;
+    const now = ctx.currentTime;
+    env.gain.cancelScheduledValues(now);
+    env.gain.setValueAtTime(Math.max(0.0001, env.gain.value), now);
+    env.gain.setTargetAtTime(0.0001, now, 0.08);
+    for (const osc of [...oscillators, lfo]) osc.stop(now + 0.6);
+  };
+  setTimeout(release, KEY_HOLD_SECONDS * 1000);
+  return release;
+}
+
+/** A held note for an instrument that holds them (keys, violin). */
+export function holdNote(instrument: Instrument, note: number, distance?: number): () => void {
+  if (instrument === "violin") return holdViolin(VIOLIN[note] ?? 55, distance);
+  return holdKey(note, distance);
+}
+/** Whether an instrument's notes are held down, not struck. */
+export const holds = (instrument: Instrument | null) => instrument === "keys" || instrument === "violin";
 
 /** A key tapped rather than held: struck, and let go after a moment. */
 export function playKey(midi: number, distance?: number) {
@@ -628,6 +695,7 @@ export function playNote(instrument: Instrument, note: number, distance?: number
   else if (instrument === "kulintang") playGong(note, distance);
   else if (instrument === "taiko") playTaiko(note, distance);
   else if (instrument === "shaker") playShaker(note, distance);
+  else if (instrument === "violin") setTimeout(holdViolin(VIOLIN[note] ?? 55, distance), 700);
 }
 
 /** How many notes an instrument has (keys excepted, which go by MIDI). */

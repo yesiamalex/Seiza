@@ -1,6 +1,6 @@
 import { createStore } from "../store";
 import { oneOf, readNumber, sendAddonEvent, type AddonEvent } from "../bus";
-import { holdKey, INSTRUMENTS, isWorn, KEYS_RANGE, LIGHT_COLORS, noteCount, pickable, pickedMidi, pickNote, PICK_BASE, playNote, unpick, type Instrument } from "./instruments";
+import { holdNote, holds, INSTRUMENTS, isWorn, KEYS_RANGE, LIGHT_COLORS, noteCount, pickable, pickedMidi, pickNote, PICK_BASE, playNote, unpick, type Instrument } from "./instruments";
 
 /**
  * Band mode's state. Notes are events, played by every client from its own
@@ -132,17 +132,17 @@ export function play(note: number, hold = false) {
   const { instrument } = band.get();
   if (!instrument || instrument === "lightstick" || !validNote(instrument, note)) return;
   if (!gate.allow(instrument, performance.now() / 1000)) return;
-  if (instrument === "keys" && hold) {
+  if (holds(instrument) && hold) {
     held.get(note)?.();
-    // A ninth key down lets the first go.
-    if (!held.has(note) && held.size >= atOnce("keys")) release(held.keys().next().value!);
-    held.set(note, holdKey(note));
+    // One more than may ring at once lets the first go.
+    if (!held.has(note) && held.size >= atOnce(instrument)) release(held.keys().next().value!);
+    held.set(note, holdNote(instrument, note));
   } else playNote(instrument, note);
   // A strum is the fret hand moving to that chord: picks play from it.
   if (isWorn(instrument) && note < PICK_BASE && pickable(instrument, note) && band.get().chord !== note) band.set((s) => ({ ...s, chord: note }));
   localNote.prev = localNote.note;
   localNote.note = { n: note, at: performance.now() / 1000 };
-  sendAddonEvent("band", { k: "n", n: note, ...(instrument === "keys" && hold ? { h: 1 } : {}) });
+  sendAddonEvent("band", { k: "n", n: note, ...(holds(instrument) && hold ? { h: 1 } : {}) });
 }
 
 /** Lets a held key go, here and for the room. */

@@ -4,7 +4,7 @@ import { panelStyle, pillButtonStyle } from "../../ui/styles";
 import { useStore } from "../store";
 import { Choices, Hint, MODE_ACCENTS, ModeButton, MusicIcon } from "../ui";
 import { band, fret, pick, play, release, setInstrument, setLightColor, setPair, setPlaying, setWaving } from "./band";
-import { INSTRUMENT_LABELS, INSTRUMENTS, isStand, isWorn, KEY_LAYOUT, KEYS_BASE, LIGHT_COLORS, noteName, PAD_COLUMNS, PADS, PICK_KEYS, pickedMidi, STRINGS, type Instrument } from "./instruments";
+import { holds, INSTRUMENT_LABELS, INSTRUMENTS, isStand, isWorn, KEY_LAYOUT, KEYS_BASE, LIGHT_COLORS, noteName, PAD_COLUMNS, PADS, PICK_KEYS, pickedMidi, STRINGS, type Instrument } from "./instruments";
 
 const ACCENT = MODE_ACCENTS.band;
 const NONE = "none" as const;
@@ -54,8 +54,8 @@ export function BandButton() {
           </button>
           <Hint accent={ACCENT}>
             {L(
-              "While you play, **the keys shown on the instrument** play it instead of moving you (**Esc** stops). On a phone, **tap the instrument**. In VR, play it with your hands: tap the pads and keys (with tracked hands, your fingertip), or strum the guitar while your other hand picks the chord along the neck.",
-              "演奏中は、**楽器に表示されたキー**で演奏します(移動はしません。**Esc**で終了)。スマホは**楽器をタップ**。VRでは手で演奏します:パッドや鍵盤をたたき(ハンドトラッキングでは指先で)、ギターはもう一方の手でネックの位置でコードを選んでかき鳴らします。"
+              "While you play, **the keys shown on the instrument** play it instead of moving you (**Esc** stops). On a phone, **tap the instrument**. In VR, play it with your hands: tap the pads and keys (with tracked hands, your fingertip), strum the guitar down and up while your other hand picks the chord along the neck, or draw the violin's bow across its strings (it sounds while the bow moves) with your left hand along its neck for the note.",
+              "演奏中は、**楽器に表示されたキー**で演奏します(移動はしません。**Esc**で終了)。スマホは**楽器をタップ**。VRでは手で演奏します:パッドや鍵盤をたたき(ハンドトラッキングでは指先で)、ギターはもう一方の手でネックの位置でコードを選び、上下にかき鳴らします。バイオリンは弓を弦の上で動かしている間だけ鳴り、左手のネックの位置で音が決まります。"
             )}
           </Hint>
           {isWorn(state.instrument) && (
@@ -194,7 +194,7 @@ export function BandStage() {
       e.preventDefault();
       e.stopImmediatePropagation();
       if (e.repeat) return;
-      if (instrument === "keys") {
+      if (holds(instrument)) {
         pressed.set(key, note);
         press(note);
       } else if (isWorn(instrument) && e.shiftKey) fret(note);
@@ -256,7 +256,12 @@ export function BandStage() {
       {instrument && PADS[instrument] && (
         <div style={{ display: "grid", gridTemplateColumns: `repeat(${PAD_COLUMNS[instrument] ?? 4}, 1fr)`, gap: 6 }}>
           {PADS[instrument]!.map((pad, i) => (
-            <Pad key={`${pad.label}${i}`} label={pad.label} hint={pad.key} lit={lit === String(i)} held={isWorn(instrument) && chord === i} onHit={() => hit(i)} height={instrument === "drums" ? 58 : 48} />
+            holds(instrument) ? (
+              // The violin's notes ring while held, like the keys.
+              <Pad key={`${pad.label}${i}`} label={pad.label} hint={pad.key} lit={down.has(i)} onHit={() => press(i)} onRelease={() => lift(i)} height={48} />
+            ) : (
+              <Pad key={`${pad.label}${i}`} label={pad.label} hint={pad.key} lit={lit === String(i)} held={isWorn(instrument) && chord === i} onHit={() => hit(i)} height={instrument === "drums" ? 58 : 48} />
+            )
           ))}
         </div>
       )}
@@ -290,14 +295,18 @@ const indexOf = (keys: string[], key: string) => {
   return i < 0 ? null : i;
 };
 
-function Pad({ label, hint, lit, held, onHit, height }: { label: string; hint: string; lit: boolean; held?: boolean; onHit: () => void; height: number }) {
+function Pad({ label, hint, lit, held, onHit, onRelease, height }: { label: string; hint: string; lit: boolean; held?: boolean; onHit: () => void; onRelease?: () => void; height: number }) {
   return (
     <button
       type="button"
       onPointerDown={(e) => {
         e.preventDefault();
+        if (onRelease) e.currentTarget.releasePointerCapture?.(e.pointerId);
         onHit();
       }}
+      onPointerUp={onRelease}
+      onPointerLeave={onRelease}
+      onPointerCancel={onRelease}
       style={{
         ...pillButtonStyle,
         borderRadius: 10,

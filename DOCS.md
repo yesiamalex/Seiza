@@ -1132,7 +1132,11 @@ adds its own coloured button to the bar while it is on.
     and none of this moves you in VR.
   - In VR, swing for real, and the blade cuts and parries wherever you
     hold it. Draw your hand back over your shoulder with the meter full,
-    and the next hard swing is the special. The trigger shoots the bow.
+    and the next hard swing is the special. The bow is drawn for real: with
+    the right hand at the bow, hold the trigger to nock, pull back (the
+    string follows, the controller buzzes harder the further it goes), and
+    let go to shoot, the arrow flying from the string hand through the bow
+    hand, farther the further it was drawn.
   - The weapons trade off against each other rather than one being best.
     The weapon picker says what each is good at.
   - The **Necromancer** fights from range with a rod: a click casts a slow
@@ -1164,8 +1168,11 @@ adds its own coloured button to the bar while it is on.
   SportSeiza (`src/addons/sport/`): a connected smart trainer moves you at
   its speed and is told the slope every second.
 - **Band** (violet): pick a drum pad, a drum kit, a taiko, keys, a
-  kulintang, an acoustic guitar, a lead guitar, a bass, a shaker, or a
-  light stick.
+  kulintang, an acoustic guitar, a lead guitar, a bass, a violin, a shaker,
+  or a light stick. The violin rests on your left shoulder with a bow in
+  your right hand, and plays G major from G3 to D5 on the chord keys (A to
+  H, then Q to Y): a note rings while it's held, two at once for a double
+  stop.
   - The instruments are 3D models you carry: a guitar or bass slung low on
     your right hip with the neck forward, strings and all, one light stick
     or one in each hand, a drum pad or keys on a stand in front of you, and
@@ -1205,8 +1212,11 @@ adds its own coloured button to the bar while it is on.
     keyboard keys are shown on it, and they play the instrument instead of
     moving you until you press Esc.
   - In VR, play with your hands. Tap the pads and keys, strike the kit with
-    the tips of your sticks (the right trigger is the kick), or strum a
-    guitar while your other hand picks the chord along its neck. The wrist
+    the tips of your sticks (the right trigger is the kick), strum a guitar
+    down and up across its strings while your other hand picks the chord
+    along its neck, or draw a violin's bow across its strings by the bridge:
+    it sounds while the bow moves and stops when it does, the left hand's
+    place along the neck picking the note. The wrist
     menu has both modes' choices: weapons and elements (with your record),
     instruments, light-stick colours and how many, and the keys' octave,
     and a switch between English and Japanese. Editors and admins also

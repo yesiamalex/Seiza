@@ -12,8 +12,8 @@ import { getAddonAvatar, LOCAL_AVATAR } from "../avatars";
 import { blendBody, carryHand, copyBody, Gait, newBodyPose, poseBody, type BodyPose } from "../body";
 import { onAddonEvent, sendAddonEvent } from "../bus";
 import { disposeTree, feetAndEye, holdInHand, newTrackedHand, pointHeld, poseHands, rigFor, toTrackedHand, wearOnChest, type HandTarget } from "../rig";
-import { announceBand, atOnce, band, localNote, musicianOf, NoteGate, parseBandEvent, play, remoteMusicians, resetBand, tapped, validNote } from "./band";
-import { CHORDS, chordOf, ELECTRIC, GONGS, holdKey, isWorn, KEY_LAYOUT, KEYS_BASE, KIT, LIGHT_COLORS, PICK_BASE, playNote, prepareGuitar, TAIKO, type Instrument, type Worn } from "./instruments";
+import { announceBand, atOnce, band, localNote, musicianOf, NoteGate, parseBandEvent, play, release as releaseNote, remoteMusicians, resetBand, tapped, validNote } from "./band";
+import { CHORDS, chordOf, ELECTRIC, GONGS, holdNote, holds, isWorn, KEY_LAYOUT, KEYS_BASE, KIT, LIGHT_COLORS, PICK_BASE, playNote, prepareGuitar, TAIKO, type Instrument, type Worn } from "./instruments";
 import { bandBody, updateGroove, type Groove } from "./moves";
 import { buzz } from "../../xr/controls";
 
@@ -700,6 +700,89 @@ export function guitarPose(hands: Hands, rig: BodyRig, guitar: THREE.Object3D, k
 
 /** A shaker in the right hand, at the chest: each shake snaps it forward
  *  and back. Returns false: one hand. */
+// --- the violin ------------------------------------------------------------------------------
+// Built in the chest frame wearOnChest uses (x right, y up, z behind), from
+// the chinrest at its origin: the body toward -z, the neck and scroll past
+// it, the top facing +y; then turned to lie on the left shoulder, the neck
+// out to the front left, tipped toward the bow.
+
+/** Along the violin (its -z), metres: the strings' run from the bridge to
+ *  the nut, where the left hand's place picks the note. */
+const VIOLIN_BRIDGE = -0.13;
+const VIOLIN_NUT = -0.47;
+/** Notes the left hand reaches along the fingerboard in a headset: the
+ *  first eight, G3 to G4, a scale in first position. */
+const VIOLIN_ZONES = 8;
+
+export function buildViolin() {
+  const group = new THREE.Group();
+  const wood = material("#8a3d17", { roughness: 0.3, metalness: 0.05 });
+  const ebony = material("#141210", { roughness: 0.5 });
+  const lower = new THREE.CylinderGeometry(0.105, 0.105, 0.04, 24).scale(1, 1, 1.05).translate(0, 0, -0.1);
+  const upper = new THREE.CylinderGeometry(0.085, 0.085, 0.04, 24).scale(1, 1, 1.1).translate(0, 0, -0.28);
+  const waist = new THREE.BoxGeometry(0.13, 0.04, 0.1).translate(0, 0, -0.19);
+  group.add(merged([lower, upper, waist, new THREE.SphereGeometry(0.022, 10, 8).scale(0.7, 1, 1).translate(0, 0.03, -0.53)], wood));
+  group.add(
+    merged(
+      [
+        new THREE.BoxGeometry(0.042, 0.012, 0.29).translate(0, 0.032, -0.33), // fingerboard
+        new THREE.BoxGeometry(0.03, 0.02, 0.1).translate(0, 0.012, -0.48), // pegbox
+        new THREE.BoxGeometry(0.09, 0.015, 0.07).translate(-0.04, 0.026, -0.02), // chinrest
+        new THREE.BoxGeometry(0.05, 0.01, 0.07).translate(0, 0.026, -0.06), // tailpiece
+      ],
+      ebony
+    )
+  );
+  group.add(merged([new THREE.BoxGeometry(0.06, 0.03, 0.006).translate(0, 0.04, VIOLIN_BRIDGE)], material("#e3c79a")));
+  const strings = [-1.5, -0.5, 0.5, 1.5].map((k) => new THREE.BoxGeometry(0.0012, 0.0012, VIOLIN_BRIDGE - VIOLIN_NUT + 0.08).translate(k * 0.007, 0.042, (VIOLIN_BRIDGE + VIOLIN_NUT) / 2 + 0.04));
+  group.add(merged(strings, material("#e9e4da", { metalness: 0.6, roughness: 0.35 })));
+  // Under the chin on the left collarbone, the neck out to the front left
+  // and a little up, the strings tipped toward the bow on the right.
+  group.position.set(-0.1, 0.1, -0.06);
+  group.rotation.set(0.12, 0.6, -0.5, "YXZ");
+  return group;
+}
+
+/** The bow, along +y from the frog in the hand: the stick and its hair. */
+export function buildViolinBow() {
+  const group = new THREE.Group();
+  group.add(merged([new THREE.CylinderGeometry(0.0045, 0.006, 0.72, 6).translate(0, 0.3, 0), new THREE.BoxGeometry(0.014, 0.03, 0.02).translate(0, -0.04, 0.004)], material("#4a2a14", { roughness: 0.5 })));
+  group.add(merged([new THREE.BoxGeometry(0.008, 0.66, 0.002).translate(0, 0.3, 0.012)], material("#f3efe4", { roughness: 0.9 })));
+  return group;
+}
+
+/** A point on the violin, along its strings and nudged across them, in metres in its own frame, as body-frame coordinates. */
+function onViolin(rig: BodyRig, violin: THREE.Object3D, along: number, across: number, out: [number, number, number]) {
+  violin.updateWorldMatrix(true, false);
+  return toBody(rig, violin.localToWorld(guitarPoint.set(across, 0.045, along)), out);
+}
+const violinA: [number, number, number] = [0, 0, 0];
+const violinB: [number, number, number] = [0, 0, 0];
+
+/** Where a note is stopped along the fingerboard, from the nut. */
+const zoneAlongViolin = (note: number) => VIOLIN_NUT + 0.03 + (Math.min(VIOLIN_ZONES - 1, note) / VIOLIN_ZONES) * (VIOLIN_NUT - VIOLIN_BRIDGE) * -0.75;
+
+/** The left hand on the neck where the note is stopped; the right drawing
+ *  the bow across the strings by the bridge, back and forth while a note
+ *  sounds. */
+export function violinPose(hands: Hands, rig: BodyRig, violin: THREE.Object3D, note: Note, now: number) {
+  const age = note ? now - note.at : 9;
+  const playing = age < 1.2;
+  onViolin(rig, violin, zoneAlongViolin(note?.n ?? 0), -0.02, violinA);
+  set(hands.left, [violinA[0], violinA[1] - 0.02, violinA[2] + 0.04], [0, 1, 0.2], [0.9, 0.1, -0.2], 0.6);
+  // The bow on the strings by the bridge: the hand out to the right along
+  // it, the stick pointing from the hand through the contact, so it lies
+  // across the strings wherever the stroke has the hand.
+  const stroke = playing ? Math.sin(age * Math.PI * 1.6) : 0;
+  onViolin(rig, violin, VIOLIN_BRIDGE - 0.04, 0, violinA);
+  onViolin(rig, violin, VIOLIN_BRIDGE - 0.04, 0.2 + 0.1 * stroke, violinB);
+  const bx = violinA[0] - violinB[0];
+  const by = violinA[1] - violinB[1];
+  const bz = violinA[2] - violinB[2];
+  const bl = Math.hypot(bx, by, bz) || 1;
+  set(hands.right, [violinB[0], violinB[1], violinB[2]], [bx / bl, by / bl, bz / bl], [0, -0.6, -0.8], 0.55);
+}
+
 export function shakerPose(hands: Hands, note: Note, now: number) {
   const age = note ? now - note.at : 1;
   const snap = age < 0.06 ? age / 0.06 : age < 0.18 ? 1 - (age - 0.06) / 0.12 : 0;
@@ -796,9 +879,11 @@ export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerPr
   const selfIdRef = useRef(selfId);
   selfIdRef.current = selfId;
   // VR: whether each hand is above the instrument and may strike it.
-  const armed = useRef({ left: true, right: true, strum: true, kick: true });
+  const armed = useRef({ left: true, right: true, strum: true, kick: true, strumSide: 0 });
   // VR: the shaking hand's last place and speed, and its last shake.
   const shaken = useRef({ at: [0, 0, 0] as [number, number, number], v: [0, 0, 0], last: 0 });
+  // VR: the bowing hand's last place, the note it's sounding, and how long it's been still.
+  const bowing = useRef({ at: null as [number, number, number] | null, note: null as number | null, still: 0 });
 
   // Ask once on starting, for anything announced before this client listened.
   useEffect(() => sendAddonEvent("band", { k: "hi" }), []);
@@ -837,16 +922,16 @@ export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerPr
       const at = vrm ? vrm.scene.getWorldPosition(new THREE.Vector3()) : null;
       const distance = at ? camera.getWorldPosition(new THREE.Vector3()).distanceTo(at) : undefined;
       // A held key rings here until its release arrives too.
-      if (event.hold && m.instrument === "keys") {
+      if (event.hold && holds(m.instrument)) {
         remoteHeld.get(heldKey)?.();
         remoteHeld.delete(heldKey);
         // No more held at once than anyone may (atOnce): the oldest goes.
         const theirs = [...remoteHeld.keys()].filter((k) => k.startsWith(`${from}:`));
-        if (theirs.length >= atOnce("keys")) {
+        if (theirs.length >= atOnce(m.instrument)) {
           remoteHeld.get(theirs[0])?.();
           remoteHeld.delete(theirs[0]);
         }
-        remoteHeld.set(heldKey, holdKey(event.note, distance));
+        remoteHeld.set(heldKey, holdNote(m.instrument, event.note, distance));
       } else playNote(m.instrument, event.note, distance);
     });
   }, [camera]);
@@ -1000,6 +1085,17 @@ export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerPr
           } else if (isWorn(instrument)) {
             holder.prop = buildWorn(instrument);
             holder.detach = wearOnChest(vrm, rig, holder.prop);
+          } else if (instrument === "violin") {
+            // On the left shoulder, under the chin; the bow in the right hand.
+            holder.prop = buildViolin();
+            const off = wearOnChest(vrm, rig, holder.prop);
+            const bow = buildViolinBow();
+            const letGo = grip("right", bow);
+            holder.detach = () => {
+              off();
+              letGo();
+              disposeTree(bow);
+            };
           } else if (instrument === "shaker") {
             holder.prop = buildShaker();
             holder.detach = grip("right", holder.prop);
@@ -1082,6 +1178,7 @@ export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerPr
       if (instrument === "drums" || instrument === "keys") deskPose(hands, instrument, note, now, octave, prev);
       else if (sticks) malletPose(hands, sticks.pieces, note, now, prev);
       else if (isWorn(instrument) && holder.prop) guitarPose(hands, rig, holder.prop, instrument, note, now);
+      else if (instrument === "violin" && holder.prop) violinPose(hands, rig, holder.prop, note, now);
       else if (instrument === "shaker") both = shakerPose(hands, note, now);
       else both = stickPose(hands, waving, pair, Date.now() / 1000);
       const playing = note !== null && now - note.at < 0.5;
@@ -1122,9 +1219,13 @@ export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerPr
       guitarPoints(rig, holder.prop, kind, 0);
       const [x, y, z] = strumming.pose;
       const over = Math.abs(x - strumAt[0]) < 0.14 && Math.abs(z - strumAt[2]) < 0.16;
-      if (y > strumAt[1] + 0.04) armed.current.strum = true;
-      else if (over && armed.current.strum && y < strumAt[1]) {
-        armed.current.strum = false;
+      // A strum is the hand crossing the strings, down or back up, as a real
+      // strumming hand goes: each crossing plays, so down-up-down-up is a
+      // rhythm. Above or below them by a little counts as a side.
+      const side = y > strumAt[1] + 0.03 ? 1 : y < strumAt[1] - 0.03 ? -1 : 0;
+      const crossed = side !== 0 && armed.current.strumSide !== 0 && side !== armed.current.strumSide;
+      if (side !== 0) armed.current.strumSide = side;
+      if (over && crossed) {
         // The note: how far along the neck the other hand is, in the six
         // zones nearest the nut
         // zones (the home row), which an arm can reach without looking.
@@ -1139,6 +1240,54 @@ export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerPr
         }
         play(zone);
         buzz(gl, "right", 0.3, 25);
+      }
+      return;
+    }
+    if (me.instrument === "violin") {
+      // Bowing, for real: the right hand drawing the bow across the strings
+      // near the bridge sounds a note, held as long as the bow moves; the
+      // left hand's place along the neck picks it, nut to body, a scale in
+      // first position. Stop the bow and the note stops.
+      const holder = holders.get(LOCAL_AVATAR);
+      const rig = holder && rigFor(holder.vrm);
+      const hand = sample.pose.right;
+      const stop = sample.pose.left;
+      const b = bowing.current;
+      if (!holder?.prop || !rig || !hand) return;
+      const at: [number, number, number] = [hand.pose[0], hand.pose[1], hand.pose[2]];
+      // The bow runs across the strings: the violin's own x, in body coordinates.
+      onViolin(rig, holder.prop, VIOLIN_BRIDGE - 0.04, 0, violinA);
+      onViolin(rig, holder.prop, VIOLIN_BRIDGE - 0.04, 0.1, violinB);
+      const ax = [violinB[0] - violinA[0], violinB[1] - violinA[1], violinB[2] - violinA[2]];
+      const axLen = Math.hypot(ax[0], ax[1], ax[2]) || 1;
+      const dt = Math.max(1e-3, rawDelta);
+      const speed = b.at ? Math.abs(((at[0] - b.at[0]) * ax[0] + (at[1] - b.at[1]) * ax[1] + (at[2] - b.at[2]) * ax[2]) / axLen) / dt : 0;
+      b.at = at;
+      // Near the strings: the bow is long, so the hand may be well out from them.
+      const near = Math.hypot(at[0] - violinA[0], at[1] - violinA[1], at[2] - violinA[2]) < 0.32;
+      if (near && speed > 0.05) {
+        b.still = 0;
+        let zone = 0;
+        if (stop) {
+          onViolin(rig, holder.prop, VIOLIN_NUT, 0, violinA);
+          onViolin(rig, holder.prop, VIOLIN_BRIDGE, 0, violinB);
+          const d = [violinB[0] - violinA[0], violinB[1] - violinA[1], violinB[2] - violinA[2]];
+          const len2 = d[0] * d[0] + d[1] * d[1] + d[2] * d[2] || 1;
+          const u = ((stop.pose[0] - violinA[0]) * d[0] + (stop.pose[1] - violinA[1]) * d[1] + (stop.pose[2] - violinA[2]) * d[2]) / len2;
+          zone = Math.max(0, Math.min(VIOLIN_ZONES - 1, Math.floor(u * 1.35 * VIOLIN_ZONES)));
+        }
+        if (b.note !== zone) {
+          if (b.note !== null) releaseNote(b.note);
+          play(zone, true);
+          b.note = zone;
+          buzz(gl, "right", 0.12, 20);
+        }
+      } else {
+        b.still += rawDelta;
+        if (b.note !== null && b.still > 0.15) {
+          releaseNote(b.note);
+          b.note = null;
+        }
       }
       return;
     }

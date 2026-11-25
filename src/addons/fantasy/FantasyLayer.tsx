@@ -162,6 +162,12 @@ const WIND_UP_SECONDS = 0.42;
 /** Trigger (index curl, see xrPose.ts) past this fires; under the second re-arms. */
 const TRIGGER_FIRE = 0.85;
 const TRIGGER_RELEASE = 0.55;
+/** VR archery: the drawing hand must be this close to the bow hand to nock,
+ *  and the draw is full this far past nocking (metres). A shot needs at
+ *  least MIN_DRAW of it. */
+const NOCK_REACH = 0.22;
+const FULL_DRAW = 0.5;
+const MIN_DRAW = 0.2;
 /** A blade moving faster than this, at the tip, is a swing: in VR, the
  *  only way to attack; anywhere, what draws a trail. */
 const SWING_SPEED = 2.4;
@@ -208,6 +214,8 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode, selfS
   selfIdRef.current = selfId;
   const meterCarry = useRef(0);
   const trigger = useRef({ held: false });
+  /** VR archery: an arrow nocked and being drawn, how far, and the last buzz. */
+  const vrBow = useRef({ drawing: false, draw: 0, buzzAt: 0 });
   /** VR: when this visitor's blade last landed on each person. */
   const lastContact = useRef(new Map<string, number>()).current;
   /** How far through its action this visitor's swing was last frame. */
@@ -376,14 +384,16 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode, selfS
   /** An arrow: it flies where this visitor looks, a real projectile, and
    *  lands on the first body or guarding blade it actually reaches, so
    *  stepping out of its way works. A few segment tests a frame. */
-  const loose = (element: Element, special: boolean) => {
+  /** `drawn`: a real draw in a headset, from the string hand through the
+   *  bow hand, as far as it was pulled (0 to 1); otherwise where you look. */
+  const loose = (element: Element, special: boolean, drawn?: { origin: THREE.Vector3; dir: THREE.Vector3; power: number }) => {
     const me = bodyOf(LOCAL_AVATAR);
     if (!me) return;
-    const origin = me.chest.clone().addScaledVector(me.face, 0.35);
-    const aim = camera.getWorldDirection(new THREE.Vector3());
+    const origin = drawn ? drawn.origin.clone() : me.chest.clone().addScaledVector(me.face, 0.35);
+    const aim = drawn ? drawn.dir.clone() : camera.getWorldDirection(new THREE.Vector3());
     // Third person looks down at the avatar; aim no lower than level-ish.
-    if (aim.y < -0.25) aim.setY(-0.25).normalize();
-    const far = origin.clone().addScaledVector(aim, ARROW_RANGE);
+    if (!drawn && aim.y < -0.25) aim.setY(-0.25).normalize();
+    const far = origin.clone().addScaledVector(aim, ARROW_RANGE * (drawn ? 0.35 + 0.65 * drawn.power : 1));
     sendAddonEvent("fantasy", { k: "ar", o: round(origin), d: round(far), ...(special ? { e: element } : {}) });
     playSwing("bow");
     let landing: ReturnType<typeof arrowMeets> = null;
@@ -909,7 +919,9 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode, selfS
       // The bow's string follows the drawing hand back, with an arrow on it,
       // and snaps forward when the arrow goes.
       if (held === "bow" && holder.prop) {
-        const draw = bowDraw(action, now);
+        // In your own headset, how far you're really drawing it.
+        const real = key === LOCAL_AVATAR && vrBow.current.drawing;
+        const draw = real ? vrBow.current.draw : bowDraw(action, now);
         const hand = draw > 0 ? vrm.humanoid.getNormalizedBoneNode("rightHand") : null;
         if (hand) {
           hand.updateWorldMatrix(true, false);
@@ -998,9 +1010,50 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode, selfS
         lastPhase.current = phase;
       }
     }
-    // VR: the trigger looses an arrow, or casts a rod's bolt (primed, the
-    // special).
-    if (inVr && (me.weapon === "bow" || me.weapon === "rod") && !me.ko && !editMode) {
+    // VR archery, for real: with the right hand at the bow, hold the trigger
+    // to nock; pull back to draw (the string follows, the hand buzzes harder
+    // the further it goes); let go to loose, the arrow flying from the
+    // string hand through the bow hand, faster the further it was drawn. A
+    // full meter makes it the special, as ever.
+    if (inVr && me.weapon === "bow" && !me.ko && !editMode) {
+      const world = trackingStore.getLocalWorld();
+      const squeeze = sample!.pose.right?.curl[0] ?? 0;
+      const v = vrBow.current;
+      if (world?.left.active && world.right.active) {
+        const bowHand = world.left.position;
+        const stringHand = world.right.position;
+        const apart = bowHand.distanceTo(stringHand);
+        if (!v.drawing && squeeze >= TRIGGER_FIRE && !trigger.current.held) {
+          trigger.current.held = true;
+          if (apart <= NOCK_REACH) {
+            v.drawing = true;
+            buzz(gl, "right", 0.2, 20);
+          }
+        }
+        if (v.drawing) {
+          v.draw = Math.max(0, Math.min(1, (apart - 0.1) / FULL_DRAW));
+          if (now - v.buzzAt > 0.12) {
+            v.buzzAt = now;
+            buzz(gl, "right", 0.05 + 0.35 * v.draw, 18);
+          }
+          if (squeeze <= TRIGGER_RELEASE) {
+            v.drawing = false;
+            trigger.current.held = false;
+            if (v.draw >= MIN_DRAW) {
+              const action = startAction(fantasy.get().primed ? "special" : "swing");
+              if (action) {
+                const dir = v1.subVectors(bowHand, stringHand).normalize().clone();
+                loose(me.element, action.kind === "special", { origin: bowHand.clone().addScaledVector(dir, 0.12), dir, power: v.draw });
+                buzz(gl, "left", 0.6, 50);
+              }
+            }
+            v.draw = 0;
+          }
+        } else if (squeeze <= TRIGGER_RELEASE) trigger.current.held = false;
+      }
+    }
+    // VR: the trigger casts a rod's bolt (primed, the special).
+    if (inVr && me.weapon === "rod" && !me.ko && !editMode) {
       const squeeze = sample!.pose.right?.curl[0] ?? 0;
       if (squeeze >= TRIGGER_FIRE && !trigger.current.held) {
         trigger.current.held = true;
