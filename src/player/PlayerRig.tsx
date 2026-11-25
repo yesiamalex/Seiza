@@ -193,7 +193,7 @@ interface PlayerRigProps {
   touchInputRef?: MutableRefObject<TouchMoveInput>;
   /** Seat the player is sitting on, or null when standing. While seated,
    *  movement input stands them up instead of walking. */
-  sitAnchor?: Pick<Seat, "position" | "rotationY" | "pose" | "exit"> | null;
+  sitAnchor?: Pick<Seat, "position" | "rotationY" | "pose" | "exit" | "moving"> | null;
   /** True while the player holds any pose that moving should cancel, such
    *  as kneeling in seiza (which has no seat to sit on). */
   postureHeld?: boolean;
@@ -635,6 +635,7 @@ export function PlayerRig({
   const xrEuler = useRef(new THREE.Euler(0, 0, 0, "YXZ")).current;
   const xrQuaternion = useRef(new THREE.Quaternion()).current;
   const xrSeatOrigin = useRef(new THREE.Vector3()).current;
+  const xrSeatLast = useRef(new THREE.Vector3()).current;
   const xrWasSeatedRef = useRef(false);
   const velocityRef = useRef(new THREE.Vector3());
   const xrBodyYawRef = useRef(0);
@@ -790,6 +791,16 @@ export function PlayerRig({
 
       const xrSeat = sitAnchorRef.current;
       if (xrSeat) {
+        // A seat that moves (behind someone on a ride) carries the playspace along.
+        if (xrSeat.moving && xrWasSeatedRef.current) {
+          const dx = xrSeat.position[0] - xrSeatLast.x;
+          const dz = xrSeat.position[2] - xrSeatLast.z;
+          origin.position.x += dx;
+          origin.position.z += dz;
+          xrSeatOrigin.x += dx;
+          xrSeatOrigin.z += dz;
+        }
+        xrSeatLast.set(xrSeat.position[0], 0, xrSeat.position[2]);
         // Pushing the stick is how you stand up, exactly as moving is on
         // desktop — there is no HUD in a headset to find a button on.
         const moved = Math.hypot(origin.position.x - xrSeatOrigin.x, origin.position.z - xrSeatOrigin.z);
@@ -1085,7 +1096,9 @@ export function PlayerRig({
       } else {
         const lying = sit.pose === "lie";
         const seatEye = new THREE.Vector3(sit.position[0], sit.position[1] + (lying ? LYING_EYE_HEIGHT : SEATED_EYE_HEIGHT), sit.position[2]);
-        vcam.position.lerp(seatEye, 1 - Math.exp(-POSTURE_CAMERA_EASE_RATE * delta));
+        // A moving seat (a ride's back seat) is kept to exactly, or the view would trail it.
+        if (sit.moving) vcam.position.copy(seatEye);
+        else vcam.position.lerp(seatEye, 1 - Math.exp(-POSTURE_CAMERA_EASE_RATE * delta));
         verticalVelocityRef.current = 0;
         moveTargetRef.current = null;
         if (movePathRef) movePathRef.current = null;

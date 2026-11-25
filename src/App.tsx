@@ -99,6 +99,7 @@ import { FaintOverlay, HeatChip, WakeChoice, wakeSpot } from "./avatar/HeatChip"
 import { StatusDock } from "./ui/StatusDock";
 import { AVATAR_DESIGN_PRESETS } from "./avatar/designer/avatarSpec";
 import { deliverWorldMessage, unwrapWorldMessage, WorldExtension, WorldOverlay, wrapWorldMessage } from "./worlds/WorldExtension";
+import { addonSeats } from "./addons/avatars";
 import { AddonBarButtons, AddonOverlay, AddonScene, addonHandsBusy, addonHoldsClicks, connectAddonBus, ridingNow, useAddonRideScale, LOCAL_AVATAR, RoomFilters, RoomModes, setAddonAvatar, useAddonRooted, useAddonXrSections } from "./addons";
 import { PortalCard, Portals } from "./worlds/Portals";
 import { BAR_LABEL_CLASS, barButtonActiveStyle, barButtonStyle, inputStyle, panelStyle, pillButtonStyle, primaryButtonStyle } from "./ui/styles";
@@ -625,6 +626,14 @@ export default function App() {
     },
     [applyPosture, lieGesture, sitGesture]
   );
+
+  // A room mode's seat (a ride's back seat) sits and stands through these.
+  useEffect(() => {
+    addonSeats.sit = sitDown;
+    return () => {
+      addonSeats.sit = () => {};
+    };
+  }, [sitDown]);
 
   /** Leaves a seat, or drops a held pose like seiza. */
   const standUp = useCallback(() => {
@@ -1179,6 +1188,9 @@ export default function App() {
   requestGestureRef.current = requestGesture;
   const standUpRef = useRef(standUp);
   standUpRef.current = standUp;
+  useEffect(() => {
+    addonSeats.stand = () => standUpRef.current();
+  }, []);
   useEffect(() => {
     const offStart = onTogetherStart(({ gesture, partner, role }) => {
       // Every together gesture: each steps (only themselves) to arm's

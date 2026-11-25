@@ -5,6 +5,8 @@ import { sfxOutput } from "../../audio/sfx";
 import { drive } from "../../player/drive";
 import { logRide } from "../sport/strava";
 import { VEHICLE_SPECS, VEHICLES, type Vehicle } from "./vehicles";
+import { addonSeats, getAddonAvatar } from "../avatars";
+import type { Seat } from "../../scene/layout";
 
 /**
  * ExerSeiza's state: what this visitor rides, and how the ride is going.
@@ -214,7 +216,44 @@ export function ridingNow(id: string | null): boolean {
   return !!remoteRiders.get(id)?.vehicle;
 }
 
-export type ExerEvent = { k: "hi" } | { k: "lo"; vehicle: Vehicle | null } | { k: "bell" } | { k: "hu" };
+// --- riding behind someone -------------------------------------------------------
+
+/** Who this visitor rides behind (their id), on what, and the seat that
+ *  goes with them (ExerLayer moves it with the ride every frame). */
+export const passenger = createStore<{ driver: string | null; kind: Vehicle | null; seat: Seat | null }>({ driver: null, kind: null, seat: null });
+/** Who rides behind whom in the room: passenger id to driver id. */
+export const passengers = new Map<string, string>();
+/** A ride near enough to get on behind, with nobody behind already. */
+export const nearRide = createStore<{ driver: string | null; name: string; kind: Vehicle | null }>({ driver: null, name: "", kind: null });
+/** Whoever is behind this visitor now, if anyone. */
+export const myPassenger = createStore<{ id: string | null; name: string }>({ id: null, name: "" });
+
+/** Gets on behind a rider: a moving seat (side-saddle on a bike's carrier,
+ *  astride behind on a moped), App's own sit, and the room told. */
+export function rideBehind(driver: string, kind: Vehicle) {
+  if (ride.get().vehicle) setVehicle(null);
+  // Where they are now; ExerLayer puts it on the ride from the next frame.
+  const m = getAddonAvatar(driver)?.scene.matrixWorld.elements;
+  const seat: Seat = { id: `ride-${driver}`, position: m ? [m[12], m[13], m[14]] : [0, 0, 0], rotationY: 0, label: "Ride", pose: "sit", moving: true };
+  passenger.set({ driver, kind, seat });
+  addonSeats.sit(seat);
+  sendAddonEvent("exer", { k: "pa", v: driver });
+}
+
+/** Gets off a ride you're behind (or are let off it). */
+export function getOffBehind() {
+  if (!passenger.get().driver) return;
+  passenger.set({ driver: null, kind: null, seat: null });
+  addonSeats.stand();
+  sendAddonEvent("exer", { k: "pa", v: "" });
+}
+
+/** A rider letting their passenger off. */
+export function letOff(id: string) {
+  sendAddonEvent("exer", { k: "off", v: id });
+}
+
+export type ExerEvent = { k: "hi" } | { k: "lo"; vehicle: Vehicle | null } | { k: "bell" } | { k: "hu" } | { k: "pa"; driver: string | null } | { k: "off"; id: string };
 
 export function parseExerEvent(data: AddonEvent): ExerEvent | null {
   if (data.k === "hi" || data.k === "bell" || data.k === "hu") return { k: data.k };
@@ -223,5 +262,6 @@ export function parseExerEvent(data: AddonEvent): ExerEvent | null {
     const vehicle = oneOf(data.v, VEHICLES);
     return vehicle ? { k: "lo", vehicle } : null;
   }
+  if ((data.k === "pa" || data.k === "off") && typeof data.v === "string" && data.v.length <= 64) return data.k === "pa" ? { k: "pa", driver: data.v || null } : { k: "off", id: data.v };
   return null;
 }

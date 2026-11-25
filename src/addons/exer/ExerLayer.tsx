@@ -14,9 +14,10 @@ import { newBodyPose, poseBody, type BodyPose } from "../body";
 import { onAddonEvent, sendAddonEvent } from "../bus";
 import { disposeTree, feetAndEye, newTrackedHand, poseHands, rigFor, toTrackedHand, type HandTarget } from "../rig";
 import { latestReading, sendGradient } from "../sport";
-import { announceRide, parseExerEvent, playBell, releaseBell, remoteRiders, resetRide, ride, ringBell, setVehicle, startEngine, startHorn, type Engine } from "./ride";
+import { announceRide, getOffBehind, myPassenger, nearRide, parseExerEvent, passenger, passengers, playBell, releaseBell, remoteRiders, resetRide, ride, ringBell, setVehicle, startEngine, startHorn, type Engine } from "./ride";
+import { SEAT_HEIGHT } from "../../scene/layout";
 import { skyState } from "../../sky/skyState";
-import { buildVehicle, gripTarget, RIDE_EYE, riderPose, slopeFactor, VEHICLE_SPECS, type Vehicle } from "./vehicles";
+import { buildVehicle, gripTarget, RIDE_EYE, riderPose, slopeFactor, TRICKS, VEHICLE_SPECS, type RideMotion, type Vehicle } from "./vehicles";
 
 /** Walking speed (PlayerRig's MOVE_SPEED), m/s: rides go a multiple of it. */
 const WALK = 3.2;
@@ -44,6 +45,11 @@ interface Holder {
   lamp: THREE.SpotLight | null;
   engine: Engine | null;
   engineAt: number;
+  /** How the ride is going (vehicles.ts's RideMotion), for the body. */
+  motion: RideMotion;
+  yaw: number | null;
+  /** Which trick the next jump does (a skateboard's), by turn. */
+  trick: number;
   prop: THREE.Group | null;
   wheels: THREE.Object3D[];
   detach: () => void;
@@ -60,6 +66,7 @@ const target = (): HandTarget => ({ pos: [0, 0, 0], blade: [0, 1, 0], fingers: [
 const v1 = new THREE.Vector3();
 const v2 = new THREE.Vector3();
 const scaleV = new THREE.Vector3();
+const turnQ = new THREE.Quaternion();
 
 export function ExerLayer({ selfId, players, getSelfPosition, selfSeated }: { selfId: string | null; players: Record<string, PlayerState>; getSelfPosition: () => [number, number, number]; selfSeated: boolean }) {
   const { gl, camera, scene } = useThree();
@@ -113,6 +120,15 @@ export function ExerLayer({ selfId, players, getSelfPosition, selfSeated }: { se
           remoteRiders.set(from, { vehicle: event.vehicle });
           return;
         }
+        if (event.k === "pa") {
+          if (event.driver) passengers.set(from, event.driver);
+          else passengers.delete(from);
+          return;
+        }
+        if (event.k === "off") {
+          if (event.id === selfIdRef.current && passenger.get().driver === from) getOffBehind();
+          return;
+        }
         const stopHorn = horns.get(from);
         horns.delete(from);
         stopHorn?.();
@@ -127,9 +143,10 @@ export function ExerLayer({ selfId, players, getSelfPosition, selfSeated }: { se
       }),
     [camera]
   );
-  // Sitting down gets off the ride.
+  // Sitting down gets off the ride; standing up gets off a ride you're behind.
   useEffect(() => {
     if (selfSeated && ride.get().vehicle) setVehicle(null);
+    if (!selfSeated && passenger.get().driver) getOffBehind();
   }, [selfSeated]);
   useEffect(
     () => () => {
@@ -141,6 +158,46 @@ export function ExerLayer({ selfId, players, getSelfPosition, selfSeated }: { se
     },
     [holders]
   );
+
+  /** The back seat, moved with the ride you're behind; and the ride you
+   *  could get on behind, and who's behind you, for the HUD. */
+  const tendPassengers = () => {
+    const mine = passenger.get();
+    if (mine.driver && mine.seat && mine.kind) {
+      const h = holders.get(mine.driver);
+      const spot = BEHIND[mine.kind];
+      if (!h?.prop || h.vehicle !== mine.kind || !spot) {
+        getOffBehind();
+      } else {
+        h.prop.localToWorld(seatAt.set(spot.x, spot.y, spot.z));
+        const yaw = new THREE.Euler().setFromQuaternion(h.prop.getWorldQuaternion(seatQ), "YXZ").y;
+        mine.seat.position[0] = seatAt.x;
+        mine.seat.position[1] = seatAt.y - SEAT_HEIGHT;
+        mine.seat.position[2] = seatAt.z;
+        mine.seat.rotationY = yaw + spot.turn;
+      }
+    }
+    // A ride near enough, with room behind (and you on foot).
+    const self = getAddonAvatar(LOCAL_AVATAR);
+    let near: { driver: string; kind: Vehicle } | null = null;
+    if (self && !ride.get().vehicle && !mine.driver && !seatedRef.current) {
+      self.scene.getWorldPosition(v1);
+      let best = 2.2;
+      for (const [id, r] of remoteRiders) {
+        if (!r.vehicle || !BEHIND[r.vehicle] || [...passengers.values()].includes(id)) continue;
+        const vrm = getAddonAvatar(id);
+        if (!vrm) continue;
+        const d = vrm.scene.getWorldPosition(v2).distanceTo(v1);
+        if (d < best) {
+          best = d;
+          near = { driver: id, kind: r.vehicle };
+        }
+      }
+    }
+    if (nearRide.get().driver !== (near?.driver ?? null)) nearRide.set(near ? { driver: near.driver, name: playersRef.current[near.driver]?.displayName ?? "", kind: near.kind } : { driver: null, name: "", kind: null });
+    const behindMe = [...passengers].find(([, d]) => d === selfIdRef.current)?.[0] ?? null;
+    if (myPassenger.get().id !== behindMe) myPassenger.set({ id: behindMe, name: behindMe ? playersRef.current[behindMe]?.displayName ?? "" : "" });
+  };
 
   useFrame((state, rawDelta) => {
     const dt = Math.min(rawDelta, 0.05);
@@ -253,7 +310,7 @@ export function ExerLayer({ selfId, players, getSelfPosition, selfSeated }: { se
         h = undefined;
       }
       if (!h) {
-        h = { vrm, overlay: sharedOverlay(vrm, frame), vehicle: null, grow: 0, base: 1, beam: null, lamp: null, engine: null, engineAt: 0, prop: null, wheels: [], detach: () => {}, weight: 0, phase: 0, last: null, speed: 0, body: newBodyPose(), hands: { right: target(), left: target() }, tracked: { right: newTrackedHand(), left: newTrackedHand() } };
+        h = { vrm, overlay: sharedOverlay(vrm, frame), vehicle: null, grow: 0, base: 1, beam: null, lamp: null, engine: null, engineAt: 0, motion: { t: 0, speed: 0, turn: 0, air: 0 }, yaw: null, trick: 0, prop: null, wheels: [], detach: () => {}, weight: 0, phase: 0, last: null, speed: 0, body: newBodyPose(), hands: { right: target(), left: target() }, tracked: { right: newTrackedHand(), left: newTrackedHand() } };
         holders.set(key, h);
       }
       h.overlay = sharedOverlay(vrm, frame);
@@ -316,15 +373,44 @@ export function ExerLayer({ selfId, players, getSelfPosition, selfSeated }: { se
       const inHeadset = sample !== null && performance.now() - sample.receivedAt < TRACKING_STALE_MS;
       const seated = key === LOCAL_AVATAR ? seatedRef.current : !!playersRef.current[key]?.posture;
       h.weight += ((h.vehicle && !inHeadset && !seated ? shown : 0) - h.weight) * (1 - Math.exp(-12 * dt));
+      // How it's going: how fast it turns (from the rider's heading), and
+      // whether it's off the ground (a jump), for the body and the ride.
+      const m = h.motion;
+      m.t = frame;
+      m.speed = h.speed;
+      const anchorYaw = new THREE.Euler().setFromQuaternion((vrm.scene.parent ?? vrm.scene).getWorldQuaternion(turnQ), "YXZ").y;
+      if (h.yaw !== null) m.turn += (Math.atan2(Math.sin(anchorYaw - h.yaw), Math.cos(anchorYaw - h.yaw)) / Math.max(dt, 1e-3) - m.turn) * (1 - Math.exp(-5 * dt));
+      h.yaw = anchorYaw;
+      const airborne = p.y - floorHeightAt(p.x, p.z) > 0.15;
+      if (airborne) m.air += dt;
+      else if (m.air > 0) {
+        m.air = 0;
+        h.trick = (h.trick + 1) % TRICKS.length;
+      }
+      if (h.prop) {
+        // The ride banks into a turn, a bike most; a board does its trick.
+        const bank = Math.max(-0.35, Math.min(0.35, m.turn * (h.vehicle === "bike" ? 0.12 : h.vehicle === "moped" ? 0.08 : 0.1))) * Math.min(1, h.speed / 3);
+        h.prop.rotation.set(0, 0, bank);
+        h.prop.position.y = 0;
+        if (h.vehicle === "skateboard" && m.air > 0) {
+          const k = Math.min(1, m.air / 0.55);
+          const spin = Math.PI * 2 * k * k * (3 - 2 * k);
+          const trick = TRICKS[h.trick];
+          if (trick === "kickflip") h.prop.rotation.z = spin;
+          else if (trick === "shove-it") h.prop.rotation.y = spin;
+          h.prop.position.y = 0.06 * Math.sin(Math.PI * k);
+        }
+      }
       if (!rig || !h.vehicle || h.weight < 0.01) return;
       // Pedals turn only while moving; standing still, feet rest level.
-      riderPose(h.vehicle, h.speed > 0.2 ? h.phase : Math.PI / 2, h.body);
+      riderPose(h.vehicle, h.speed > 0.2 ? h.phase : Math.PI / 2, h.body, m, TRICKS[h.trick]);
       poseBody(rig, h.overlay, h.body, h.weight, h.weight);
       const right = gripTarget(h.vehicle, "right", h.hands.right);
       const left = gripTarget(h.vehicle, "left", h.hands.left);
       if (right && left) poseHands(rig, h.overlay, toTrackedHand("right", right, h.tracked.right), toTrackedHand("left", left, h.tracked.left), h.weight);
     };
     tend(LOCAL_AVATAR, me.vehicle);
+    tendPassengers();
     for (const [id, r] of remoteRiders) if (r.vehicle || holders.has(id)) tend(id, r.vehicle);
     for (const [key, h] of holders)
       if (!seen.has(key)) {
@@ -346,6 +432,16 @@ function dropProp(h: Holder) {
   h.lamp = null;
   h.detach = () => {};
 }
+
+/** Where a passenger sits, in a ride's own frame (metres, for its 1.55 m
+ *  rider; -z ahead): side-saddle on a bike's carrier facing right, as in
+ *  so many anime ride-homes, or astride behind on a moped. */
+const BEHIND: Partial<Record<Vehicle, { x: number; y: number; z: number; turn: number }>> = {
+  bike: { x: 0.12, y: 0.8, z: 0.44, turn: -Math.PI / 2 },
+  moped: { x: 0, y: 0.76, z: 0.52, turn: 0 },
+};
+const seatAt = new THREE.Vector3();
+const seatQ = new THREE.Quaternion();
 
 function release(h: Holder) {
   h.overlay.restore();

@@ -3,6 +3,11 @@ import { L, useLang } from "../../i18n/lang";
 import { pillButtonStyle } from "../../ui/styles";
 import { Docked } from "../../ui/StatusDock";
 import { uploadAvatarFile } from "../../profile/profileStore";
+import { optimizeVrmAvatar } from "../../avatar/optimizeVrm";
+
+/** A pet is small on screen: after the avatars' optimizing (textures made
+ *  smaller), a model bigger than this is too much for everyone to load. */
+const MAX_PET_MB = 8;
 import { useStore } from "../store";
 import { Choices, Hint, MODE_ACCENTS, ModeButton } from "../ui";
 import { COATS, nearPet, PET_LABELS, PET_SIZE, PETS, pet, patPet, setPet, setPetLook, type Pet } from "./pets";
@@ -24,7 +29,10 @@ export function PetButton({ selfId }: { selfId: string | null }) {
     setError("");
     setUploading(true);
     try {
-      setPetLook({ model: await uploadAvatarFile(file) });
+      // Made lighter first, as an avatar is (its textures), then checked.
+      const { blob } = await optimizeVrmAvatar(file);
+      if (blob.size > MAX_PET_MB * 1024 * 1024) throw new Error(L(`That model is ${(blob.size / 1048576).toFixed(1)} MB even made smaller; a pet's limit is ${MAX_PET_MB} MB.`, `小さくしても${(blob.size / 1048576).toFixed(1)} MBあります。ペットは${MAX_PET_MB} MBまでです。`));
+      setPetLook({ model: await uploadAvatarFile(blob) });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

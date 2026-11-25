@@ -214,12 +214,34 @@ const GRIPS: Partial<Record<Vehicle, { x: number; y: number; z: number }>> = {
 /** The metre height these rides are drawn for: an eye height of 1.55. */
 export const RIDE_EYE = 1.55;
 
+/** How a ride is going, for the rider's body to answer: seconds, metres a
+ *  second, how fast it's turning (radians a second, left positive), and
+ *  how long it's been in the air (a jump), seconds. */
+export interface RideMotion {
+  t: number;
+  speed: number;
+  turn: number;
+  air: number;
+}
+const STILL: RideMotion = { t: 0, speed: 0, turn: 0, air: 0 };
+
+/** The trick a skateboarder does in the air, by jump: a kickflip, a 360
+ *  shove-it, a grab, in turn. */
+export const TRICKS = ["kickflip", "shove-it", "grab"] as const;
+export type Trick = (typeof TRICKS)[number];
+
 /**
  * How the rider sits or stands, for a pedal stroke at `phase` (radians,
  * from the distance ridden), in the body frame the hand and foot targets
- * use: eye heights, x right, y up, z back.
+ * use: eye heights, x right, y up, z back. With `motion`, the body
+ * answers the ride as a real one does: leaning into a turn, the shoulders
+ * rocking with the pedals, a moped's bump of the road, a board's carving
+ * sway and pumping knees, and tucked up in the air over a jump.
  */
-export function riderPose(kind: Vehicle, phase: number, out: BodyPose): BodyPose {
+export function riderPose(kind: Vehicle, phase: number, out: BodyPose, motion: RideMotion = STILL, trick: Trick = "kickflip"): BodyPose {
+  const moving = Math.min(1, motion.speed / 3);
+  // Into the turn: a left turn leans left (tilt is toward the right).
+  const into = Math.max(-0.3, Math.min(0.3, -motion.turn * 0.22)) * moving;
   out.twist = 0;
   out.tilt = 0;
   out.shiftX = 0;
@@ -236,6 +258,11 @@ export function riderPose(kind: Vehicle, phase: number, out: BodyPose): BodyPose
     const pedal = (p: number): [number, number, number] => [0, -0.06 - 0.07 * Math.sin(p), 0.12 + 0.07 * Math.cos(p)];
     out.left = [-0.05, ...pedal(phase).slice(1)] as [number, number, number];
     out.right = [0.05, ...pedal(phase + Math.PI).slice(1)] as [number, number, number];
+    // The shoulders and hips rock with each stroke; lower to the bars when fast.
+    out.twist = 0.07 * Math.sin(phase) * moving;
+    out.tilt = into + 0.025 * Math.sin(phase) * moving;
+    out.nod = 0.03 * Math.sin(phase * 2) * moving;
+    out.lean += 0.05 * moving;
   } else if (kind === "moped") {
     // Sat upright on the long seat, feet flat on the floorboard.
     out.lean = 0.12;
@@ -243,6 +270,10 @@ export function riderPose(kind: Vehicle, phase: number, out: BodyPose): BodyPose
     out.shiftZ = 0.06;
     out.left = [-0.05, -0.12, 0.13];
     out.right = [0.05, -0.12, 0.13];
+    // The road comes up through the seat; into the turns, less than a bike.
+    out.tilt = into * 0.8;
+    out.drop += 0.006 * Math.sin(motion.t * 11) * moving;
+    out.nod = 0.015 * Math.sin(motion.t * 7) * moving;
   } else {
     // Standing on the board, one foot ahead of the other, knees soft.
     out.lean = 0.08;
@@ -251,6 +282,17 @@ export function riderPose(kind: Vehicle, phase: number, out: BodyPose): BodyPose
     out.twist = 0.25;
     out.left = [0.02, -0.17, 0.04];
     out.right = [-0.02, 0.13, 0.04];
+    // Carving: a slow sway from edge to edge, the knees pumping, more into a turn.
+    out.tilt = into * 1.3 + 0.05 * Math.sin(motion.t * 1.4) * moving;
+    out.twist = 0.25 + 0.05 * Math.sin(motion.t * 1.4) * moving;
+    out.drop = 0.05 + 0.025 * (0.5 + 0.5 * Math.sin(motion.t * 2.1)) * moving;
+    if (motion.air > 0) {
+      // Tucked up over the board, the feet with it; a grab reaches down.
+      out.drop = trick === "grab" ? 0.24 : 0.17;
+      out.lean = trick === "grab" ? 0.35 : 0.18;
+      out.left = [0.02, -0.17, 0.1];
+      out.right = [-0.02, 0.13, 0.1];
+    }
   }
   return out;
 }

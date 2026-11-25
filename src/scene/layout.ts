@@ -157,6 +157,10 @@ export interface Seat {
    *  `position` is where the hips go, on the bed's surface, and the head
    *  lies behind it. */
   pose?: "sit" | "lie";
+  /** A seat that goes somewhere (behind someone on a ride: ExerSeiza),
+   *  its position and yaw changed in place every frame: the view and the
+   *  playspace keep exactly to it instead of easing over. */
+  moving?: boolean;
   /** How far above `position` the surface is, for the click target.
    *  Default SEAT_HEIGHT. */
   surfaceHeight?: number;

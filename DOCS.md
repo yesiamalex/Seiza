@@ -1173,7 +1173,15 @@ adds its own coloured button to the bar while it is on.
   board, or sits on the moped, with the wheels turning. Getting on, off,
   or onto another ride eases: the old ride shrinks away as the rider steps
   off it, and the new one grows in under them. **T** goes through the rides on a keyboard
-  (Shift+T back, on foot after the last). Speed builds and fades too, a bike
+  (Shift+T back, on foot after the last). Riders lean into turns and the ride banks
+  with them; a bike's rider rocks with the pedals, a moped's feels the road,
+  and a skateboarder carves from edge to edge, knees pumping, and does a
+  trick over each jump (a kickflip, a 360 shove-it, a grab, in turn). Near
+  someone on a bike or a moped, **E** (or the prompt) gets on behind them:
+  side-saddle on a bike's carrier, as in so many anime rides home, or
+  astride behind on a moped. The seat moves with the ride, the view and a
+  headset's playspace keep to it, and E or standing up gets off. One rides
+  behind at a time, and the rider can let them off. Speed builds and fades too, a bike
   answering the pedals quickly, a moped's motor winding up, a board rolling
   on, and the brake stops it much sooner. B rings the bell, or sounds
   the moped's horn for as long as it's held; on a phone, a Bell (or Horn)

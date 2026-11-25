@@ -34,6 +34,11 @@ describe("ExerSeiza's rides", () => {
     expect(parseExerEvent({ k: "lo", v: "tank" })).toBeNull();
     expect(parseExerEvent({ k: "bell" })).toEqual({ k: "bell" });
     expect(parseExerEvent({ k: "hu" })).toEqual({ k: "hu" });
+    // Riding behind someone: whose ride (or none), and being let off.
+    expect(parseExerEvent({ k: "pa", v: "abc" })).toEqual({ k: "pa", driver: "abc" });
+    expect(parseExerEvent({ k: "pa", v: "" })).toEqual({ k: "pa", driver: null });
+    expect(parseExerEvent({ k: "off", v: "abc" })).toEqual({ k: "off", id: "abc" });
+    expect(parseExerEvent({ k: "off", v: 5 })).toBeNull();
   });
 });
 

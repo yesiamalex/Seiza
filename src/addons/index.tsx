@@ -14,7 +14,7 @@ import { band, setInstrument, setLightColor, setPair, tapped } from "./band/band
 import { MODE_ACCENTS, ModeSwitch } from "./ui";
 import { FILTER_KEYS } from "../moderation/profanity";
 import { ExerLayer } from "./exer/ExerLayer";
-import { ExerButton, ExerStatus } from "./exer/ExerHud";
+import { ExerButton, ExerStatus, RideAlong } from "./exer/ExerHud";
 import { ride, ridingNow, ringBell, setVehicle } from "./exer/ride";
 import { VEHICLE_LABELS, VEHICLE_SPECS, VEHICLES } from "./exer/vehicles";
 import { PetLayer } from "./pet/PetLayer";
@@ -116,6 +116,7 @@ export function AddonOverlay({ worldState, touch }: { worldState: WorldState; to
       {on(worldState, "fantasy") && <FantasyStatus touch={touch} />}
       {on(worldState, "band") && <BandStage />}
       {on(worldState, "exer") && <ExerStatus touch={touch} />}
+      {on(worldState, "exer") && <RideAlong />}
       {on(worldState, "pet") && <PetPrompt />}
     </>
   );

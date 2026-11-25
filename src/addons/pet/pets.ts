@@ -131,7 +131,12 @@ function build(kind: Pet) {
   const noseY = s.snout ? headAt.y - s.head[1] * 0.12 : headAt.y - s.head[1] * 0.05;
   parts.push(part(new THREE.SphereGeometry(s.head[0] * (s.snout ? 0.16 : 0.22), 8, 6).scale(1, 0.7, 0.8).translate(0, noseY, noseZ), HEAD, solid(dark)));
   for (const side of [-1, 1]) {
-    parts.push(part(new THREE.SphereGeometry(s.head[0] * 0.08, 6, 5).translate(side * s.head[0] * 0.27, headAt.y + s.head[1] * 0.12, headAt.z - s.head[2] * 0.4), HEAD, solid(dark)));
+    // Eyes: on a round head, near the front; on a capybara's blunt one,
+    // high on its sides, where they'd be hidden inside a round head's spot.
+    const eye = s.boxHead
+      ? new THREE.SphereGeometry(s.head[0] * 0.1, 6, 5).translate(side * s.head[0] * 0.44, headAt.y + s.head[1] * 0.2, headAt.z - s.head[2] * 0.12)
+      : new THREE.SphereGeometry(s.head[0] * 0.08, 6, 5).translate(side * s.head[0] * 0.27, headAt.y + s.head[1] * 0.12, headAt.z - s.head[2] * 0.4);
+    parts.push(part(eye, HEAD, solid(dark)));
     const ear =
       s.ears === "flop"
         ? new THREE.BoxGeometry(0.022, s.head[1] * 0.6, s.head[2] * 0.3).translate(0, -s.head[1] * 0.2, 0).rotateZ(side * 0.15).translate(side * s.head[0] * 0.5, headAt.y + s.head[1] * 0.3, headAt.z + 0.03)

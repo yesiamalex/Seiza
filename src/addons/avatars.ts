@@ -11,6 +11,10 @@ export const LOCAL_AVATAR = "local";
 const avatars = new Map<string, VRM>();
 let version = 0;
 
+/** App's own sit and stand, for a room mode that seats someone (a ride's
+ *  back seat: ExerSeiza). App fills these in. */
+export const addonSeats: { sit: (seat: import("../scene/layout").Seat) => void; stand: () => void } = { sit: () => {}, stand: () => {} };
+
 export function setAddonAvatar(id: string, vrm: VRM | null) {
   if (vrm) avatars.set(id, vrm);
   else avatars.delete(id);

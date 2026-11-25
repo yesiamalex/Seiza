@@ -5,7 +5,7 @@ import { Docked } from "../../ui/StatusDock";
 import { useStore } from "../store";
 import { Choices, Hint, MODE_ACCENTS, ModeButton } from "../ui";
 import { activeRideSource, connectRideSource, disconnectRideSource, latestReading, onRideSourcesChange, rideSources } from "../sport";
-import { releaseBell, ride, ringBell, setVehicle } from "./ride";
+import { getOffBehind, letOff, myPassenger, nearRide, passenger, releaseBell, rideBehind, ride, ringBell, setVehicle } from "./ride";
 import { VEHICLE_LABELS, VEHICLE_SPECS, VEHICLES, type Vehicle } from "./vehicles";
 
 const ACCENT = MODE_ACCENTS.exer;
@@ -125,6 +125,41 @@ export function ExerStatus({ touch }: { touch: boolean }) {
     </div>
     </Docked>
   );
+}
+
+/** Near a bike or moped someone's riding: get on behind them (E); behind
+ *  someone: get off (E); riding with someone behind: let them off. */
+export function RideAlong() {
+  useLang();
+  const near = useStore(nearRide);
+  const behind = useStore(passenger);
+  const mine = useStore(myPassenger);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target) || e.key.toLowerCase() !== "e") return;
+      if (passenger.get().driver) getOffBehind();
+      else {
+        const { driver, kind } = nearRide.get();
+        if (driver && kind) rideBehind(driver, kind);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  const chip = (text: string, action: string, onClick: () => void, key?: string) => (
+    <Docked order={4}>
+      <div style={{ ...statusStyle, fontSize: 13 }}>
+        <span>{text}</span>
+        <button type="button" style={{ ...pillButtonStyle, padding: "5px 12px" }} onClick={onClick}>
+          {action} {key && <kbd style={{ opacity: 0.6, fontSize: 10 }}>{key}</kbd>}
+        </button>
+      </div>
+    </Docked>
+  );
+  if (behind.driver) return chip(L("Riding behind", "うしろに乗っています"), L("Get off", "降りる"), getOffBehind, "E");
+  if (mine.id) return chip(L(`${mine.name || "Someone"} is riding behind you`, `${mine.name || "誰か"}がうしろに乗っています`), L("Let off", "降ろす"), () => letOff(mine.id!));
+  if (near.driver && near.kind) return chip(near.kind === "bike" ? L(`Ride on ${near.name}'s carrier`, `${near.name}の荷台に乗る`) : L(`Ride behind ${near.name}`, `${near.name}のうしろに乗る`), L("Get on", "乗る"), () => rideBehind(near.driver!, near.kind!), "E");
+  return null;
 }
 
 const statusStyle: CSSProperties = {
