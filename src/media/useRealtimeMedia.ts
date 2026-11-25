@@ -330,14 +330,42 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
     };
   }, []);
 
+  /**
+   * A phone pauses the mic and camera when the page goes to the background
+   * (minimized, another app, battery saver): their tracks go silent or end,
+   * and nothing told us, so this end still showed them live while nobody
+   * heard or saw anything. Now a paused mic is published as muted and a
+   * paused camera as off, and both come back on their own when the page
+   * does (resumeAfterBackground, below).
+   */
+  const pausedRef = useRef({ mic: false, camera: false });
+  /** The camera was on when the phone stopped it: start it again on return. */
+  const resumeCameraRef = useRef(false);
+
   const publishLocalMedia = useCallback(() => {
+    const paused = pausedRef.current;
     setLocalMedia({
       mic: micStreamRef.current?.id ?? null,
-      camera: cameraStreamRef.current?.id ?? null,
+      camera: paused.camera ? null : (cameraStreamRef.current?.id ?? null),
       screen: screenStreamRef.current?.id ?? null,
-      ...(micStreamRef.current && mutedRef.current ? { micMuted: true } : {}),
+      ...(micStreamRef.current && (mutedRef.current || paused.mic) ? { micMuted: true } : {}),
     });
   }, []);
+
+  /** Follows a local track the phone may pause or end. */
+  const watchTrack = useCallback(
+    (track: MediaStreamTrack, kind: "mic" | "camera") => {
+      const mark = (paused: boolean) => {
+        if (pausedRef.current[kind] === paused) return;
+        pausedRef.current = { ...pausedRef.current, [kind]: paused };
+        publishLocalMedia();
+      };
+      track.addEventListener("mute", () => mark(true));
+      track.addEventListener("unmute", () => mark(false));
+      track.addEventListener("ended", () => mark(true));
+    },
+    [publishLocalMedia]
+  );
 
   /** Adds our tracks to a connection, holding the mic back while muted. */
   const addLocalTracks = useCallback((peer: Peer, stream: MediaStream) => {
@@ -687,7 +715,10 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
       analyser.fftSize = 256;
       context.createMediaStreamSource(stream).connect(analyser);
       localAnalyserRef.current = analyser;
-      for (const track of stream.getAudioTracks()) track.enabled = !mutedRef.current;
+      for (const track of stream.getAudioTracks()) {
+        track.enabled = !mutedRef.current;
+        watchTrack(track, "mic");
+      }
 
       const deviceList = await navigator.mediaDevices.enumerateDevices();
       setDevices(deviceList.filter((device) => device.kind === "audioinput"));
@@ -701,7 +732,7 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
     } finally {
       setConnecting(false);
     }
-  }, [ensureAudioContext, publishLocalMedia, publishStream]);
+  }, [ensureAudioContext, publishLocalMedia, publishStream, watchTrack]);
 
   const disableMic = useCallback(() => {
     const stream = micStreamRef.current;
@@ -746,6 +777,7 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
       const track = stream.getAudioTracks()[0];
       if (!track) return;
       track.enabled = !mutedRef.current;
+      watchTrack(track, "mic");
       // replaceTrack swaps the microphone without renegotiating.
       const previous = micStreamRef.current;
       // The mic's own sender, not whichever audio sender comes first: a
@@ -762,9 +794,10 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
       context.createMediaStreamSource(stream).connect(analyser);
       localAnalyserRef.current = analyser;
       setSelectedDeviceId(deviceId);
+      pausedRef.current = { ...pausedRef.current, mic: false };
       publishLocalMedia();
     },
-    [ensureAudioContext, publishLocalMedia]
+    [ensureAudioContext, publishLocalMedia, watchTrack]
   );
 
   const stopCamera = useCallback(() => {
@@ -787,8 +820,15 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
       cameraStreamRef.current = stream;
       for (const track of stream.getVideoTracks()) {
         track.contentHint = "motion";
-        track.addEventListener("ended", () => stopCamera());
+        watchTrack(track, "camera");
+        // Ended by the phone in the background: back on when the page is.
+        // Ended any other way (unplugged, permission withdrawn): off.
+        track.addEventListener("ended", () => {
+          if (document.hidden) resumeCameraRef.current = true;
+          stopCamera();
+        });
       }
+      pausedRef.current = { ...pausedRef.current, camera: false };
       publishStream(stream);
       setLocalCameraStream(stream);
       setCameraOn(true);
@@ -799,7 +839,44 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
       setError("Could not use the camera. Check the browser's permission for this site.");
       return false;
     }
-  }, [publishLocalMedia, publishStream, stopCamera]);
+  }, [publishLocalMedia, publishStream, stopCamera, watchTrack]);
+
+  // Back from the background: a moment for the phone to give the tracks
+  // back by itself, then anything still stopped is started again (the mic
+  // swapped in place, as choosing another microphone does; the camera
+  // started afresh). If the browser won't, it's turned off and says so,
+  // rather than showing a mic nobody can hear.
+  const resumeRef = useRef<() => Promise<void>>(async () => {});
+  resumeRef.current = async () => {
+    if (document.hidden) return;
+    const mic = micStreamRef.current?.getAudioTracks()[0];
+    if (mic && (mic.readyState === "ended" || mic.muted)) {
+      try {
+        await selectDevice(mic.getSettings().deviceId ?? "default");
+      } catch {
+        disableMic();
+        setError("Your phone stopped the microphone while Seiza was in the background. Turn it on again to keep talking.");
+      }
+    }
+    const camera = cameraStreamRef.current?.getVideoTracks()[0];
+    if (camera && camera.muted) stopCamera();
+    if (resumeCameraRef.current || (camera && camera.muted)) {
+      resumeCameraRef.current = false;
+      await startCamera();
+    }
+  };
+  useEffect(() => {
+    let timer = 0;
+    const onVisibility = () => {
+      window.clearTimeout(timer);
+      if (!document.hidden) timer = window.setTimeout(() => void resumeRef.current(), 500);
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, []);
 
   const stopScreen = useCallback(() => {
     const stream = screenStreamRef.current;

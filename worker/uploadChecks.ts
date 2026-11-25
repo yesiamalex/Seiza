@@ -64,7 +64,14 @@ interface GltfJson {
   buffers?: { uri?: unknown }[];
   bufferViews?: { buffer?: unknown; byteOffset?: unknown; byteLength?: unknown }[];
   images?: { uri?: unknown; bufferView?: unknown; mimeType?: unknown }[];
+  extensionsRequired?: unknown;
 }
+
+/** Required extensions Seiza can't load. A model that needs one used to be
+ *  stored, then fail in every visitor's browser and show as a red box. */
+const UNSUPPORTED_EXTENSIONS: Record<string, string> = {
+  KHR_texture_basisu: "Its textures are KTX2 (Basis) compressed, which Seiza doesn't load. Export it again with PNG, JPEG, or WebP textures.",
+};
 
 const GLB_MAGIC = 0x46546c67;
 const CHUNK_JSON = 0x4e4f534a;
@@ -99,6 +106,10 @@ export function checkGlb(buffer: ArrayBuffer, limits: ModelLimits): Result {
 
 /** Checks a glTF's JSON, with the GLB's binary chunk when there is one. */
 export function checkGltfJson(json: GltfJson, bin: Uint8Array | null, limits: ModelLimits): Result {
+  // 0. Nothing it needs that no visitor's browser here could load.
+  if (Array.isArray(json.extensionsRequired)) {
+    for (const name of json.extensionsRequired) if (typeof name === "string" && UNSUPPORTED_EXTENSIONS[name]) return fail(UNSUPPORTED_EXTENSIONS[name]);
+  }
   // 1. Nothing may be fetched from anywhere else.
   for (const entry of [...(json.buffers ?? []), ...(json.images ?? [])]) {
     if (entry && typeof entry.uri === "string" && !entry.uri.startsWith("data:")) {

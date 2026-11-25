@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { useVrmLoader } from "./useVrmLoader";
 import { stirPond } from "../scene/pondActivity";
 import { extendHairCollision } from "./springColliders";
+import { markForMirrors } from "../scene/Mirror";
 import type { VRM } from "@pixiv/three-vrm";
 
 export interface VrmAvatarProps {
@@ -79,6 +80,8 @@ export function VrmAvatar({ url, position = [0, 0, 0], rotationY = 0, onLoaded, 
     // just the torso, so crouching and kneeling don't pass it through the
     // legs (see springColliders.ts).
     if (vrm) extendHairCollision(vrm);
+    // People are what mirrors reflect (scene/Mirror.tsx).
+    if (vrm) markForMirrors(vrm.scene);
     onLoadedRef.current?.(vrm);
     lastWorld.current = null;
   }, [vrm]);

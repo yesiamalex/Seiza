@@ -98,3 +98,12 @@ describe("what's inside an uploaded model", () => {
     expect(checkGlb(new TextEncoder().encode("<html>hello</html>").buffer as ArrayBuffer, AVATAR_LIMITS).ok).toBe(false);
   });
 });
+
+describe("models a browser here can't load", () => {
+  it("refuses a model that needs KTX2 textures, and says what to do", () => {
+    const result = checkGltfJson({ extensionsRequired: ["KHR_texture_basisu"] } as never, null, MODEL_LIMITS);
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.reason).toMatch(/KTX2/);
+    expect(checkGltfJson({ extensionsRequired: ["KHR_draco_mesh_compression"] } as never, null, MODEL_LIMITS).ok).toBe(true);
+  });
+});

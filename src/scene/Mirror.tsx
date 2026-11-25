@@ -10,20 +10,46 @@ import type { PortalConfig } from "../config/worldConfig";
  * A free-standing mirror, full length, on two feet: to see your avatar,
  * check a pose, dance in front of, or watch yourself in seiza.
  *
- * A mirror draws the room a second time from behind its glass, which is
- * the most a frame can cost, so it only does that when it earns it: when
- * you're within MIRROR_RANGE of it, in front of it, and it's in view (three
- * skips it otherwise), into a small texture, once a frame even in a
- * headset (both eyes share it), and never itself. Out of range it keeps
- * the last thing it saw, which from that far reads as glass.
+ * A true mirror draws the whole room a second time, which halved the frame
+ * rate. This one reflects only people: avatars, guides, and what they
+ * hold (marked with markForMirrors, on MIRROR_LAYER), standing on a floor
+ * of their own before a soft backdrop. That is a handful of draw calls
+ * instead of the world's hundreds, and it's what a mirror is for here:
+ * seeing yourself. It draws only when you're within MIRROR_RANGE, in front
+ * of it, and it's in view, into a small texture, once a frame even in a
+ * headset (both eyes share it). Out of range it keeps its last picture.
  *
  * In first person your own head is hidden from your camera (SelfView, so
  * you don't see the inside of it). The mirror shows it for its own pass.
  */
 export const MIRROR = { width: 0.9, height: 1.7, foot: 0.12 };
-const MIRROR_RANGE = 9;
-const FLAT_SIZE = 512;
-const XR_SIZE = 384;
+const MIRROR_RANGE = 7;
+const FLAT_SIZE = 384;
+const XR_SIZE = 256;
+
+/** The layer a mirror sees: people, what they hold, and the lights. */
+export const MIRROR_LAYER = 3;
+const BACKDROP = new THREE.Color("#c3ccd4");
+
+/** Marks an avatar (or anything) to show in mirrors, with all it holds. */
+export function markForMirrors(root: THREE.Object3D) {
+  root.userData.inMirrors = true;
+  root.traverse((o) => o.layers.enable(MIRROR_LAYER));
+}
+
+/** Every couple of seconds: what's been marked, and what it has picked up
+ *  since (a weapon, an instrument), and every light, onto the mirror's
+ *  layer. A light filtered out of the pass would leave the people black. */
+let lastScan = -Infinity;
+function scanForMirrors(scene: THREE.Object3D) {
+  const now = performance.now();
+  if (now - lastScan < 2000) return;
+  lastScan = now;
+  scene.traverse((o) => {
+    if ((o as THREE.Light).isLight) o.layers.enable(MIRROR_LAYER);
+    else if (o.userData.inMirrors) o.traverse((c) => c.layers.enable(MIRROR_LAYER));
+  });
+}
 
 const frameMaterial = () => new THREE.MeshStandardMaterial({ color: "#6b4a2f", roughness: 0.55, metalness: 0.05 });
 
@@ -44,6 +70,7 @@ export function Mirror() {
       clipBias: 0.003,
     });
     reflector.position.y = MIRROR.foot + MIRROR.height / 2;
+    reflector.camera.layers.set(MIRROR_LAYER);
     reflector.userData.navIgnore = true;
     const render = reflector.onBeforeRender;
     let renderedAt = -1;
@@ -60,7 +87,11 @@ export function Mirror() {
       const head = selfViewStore.hiddenHead;
       const hidden = head ? head.scale.x : 1;
       if (head) head.scale.setScalar(1);
+      scanForMirrors(scene);
+      const background = scene.background;
+      scene.background = BACKDROP;
       render.call(reflector, renderer, scene, camera, geometry, material, group);
+      scene.background = background;
       if (head) {
         // Hidden again before anything after this mirror is drawn: its
         // matrices, and the skeleton the skin reads them from.
@@ -91,7 +122,11 @@ export function Mirror() {
       new THREE.BoxGeometry(0.05, foot + 0.04, 0.05).translate(-w / 2, (foot + 0.04) / 2, -t * 0.6),
       new THREE.BoxGeometry(0.05, foot + 0.04, 0.05).translate(w / 2, (foot + 0.04) / 2, -t * 0.6),
     ];
+    // The floor the people in it stand on, seen only in the glass.
+    const floor = new THREE.Mesh(new THREE.CircleGeometry(3, 24).rotateX(-Math.PI / 2).translate(0, 0.004, 1.6), new THREE.MeshStandardMaterial({ color: "#a79f93", roughness: 1 }));
+    floor.layers.set(MIRROR_LAYER);
     const frame = new THREE.Group();
+    frame.add(floor);
     for (const g of parts) {
       const mesh = new THREE.Mesh(g, frameMaterial());
       mesh.castShadow = true;
