@@ -83,11 +83,14 @@ const CUTS: Record<Cut, Key[]> = {
   ],
   // A cast, with a rod: raised, then pointed out at the target, the orb
   // leading, and held while the bolt goes.
+  // Raised out to the right and a little forward, then pointed from chest
+  // height, tipped up: upright beside the face or level at it, the long
+  // staff went through the head.
   cast: [
     GUARD,
-    { at: 0.28, pos: [0.2, 0.92, -0.08], blade: [0.1, 0.95, 0.25], fingers: [-0.2, 0, -1] },
-    { at: 0.5, pos: [0.12, 0.88, -0.4], blade: [0, 0.35, -0.94], fingers: [0, -0.94, -0.35] },
-    { at: 0.72, pos: [0.12, 0.88, -0.38], blade: [0, 0.35, -0.94], fingers: [0, -0.94, -0.35] },
+    { at: 0.28, pos: [0.3, 0.9, -0.22], blade: [0.2, 0.93, -0.3], fingers: [0, -0.307, -0.952] },
+    { at: 0.5, pos: [0.16, 0.78, -0.42], blade: [0.12, 0.3, -0.946], fingers: [0, -0.946, -0.3] },
+    { at: 0.72, pos: [0.16, 0.78, -0.4], blade: [0.12, 0.3, -0.946], fingers: [0, -0.946, -0.3] },
     { ...GUARD, at: 1 },
   ],
   // Straight down from overhead.
