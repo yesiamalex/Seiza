@@ -25,7 +25,9 @@ export function useCanvasTexture(width: number, height: number, draw: (ctx: Canv
     const canvas = texture.image as HTMLCanvasElement;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+    ctx.save(); // each redraw from the canvas defaults (a centred line must not carry over)
     draw(ctx, canvas.width, canvas.height);
+    ctx.restore();
     texture.needsUpdate = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [texture, ...deps]);

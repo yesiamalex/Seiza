@@ -44,7 +44,11 @@ export function useCanvasTexture(
     const canvas = texture.image as HTMLCanvasElement;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+    // Each redraw starts from the canvas defaults: a centred line last time
+    // must not centre the next draw's first, left-set title off the edge.
+    ctx.save();
     drawRef.current(ctx, canvas.width, canvas.height);
+    ctx.restore();
     texture.needsUpdate = true;
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
