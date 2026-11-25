@@ -197,8 +197,12 @@
   a.world .go { font-size: 14px; color: var(--c); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: color-mix(in srgb, var(--c) 45%, transparent); }
   a.world:hover h3 { color: var(--c); }
 
-  /* --- what's new --- */
-  .changes { display: grid; gap: 28px; }
+  /* --- what's new: a timeline, each month a star on one thread --- */
+  .changes { display: grid; gap: 32px; position: relative; padding-left: 26px; }
+  .changes::before { content: ""; position: absolute; left: 5px; top: 8px; bottom: 8px; width: 1px; background: linear-gradient(180deg, var(--lantern), rgba(242, 184, 75, 0.15) 70%, transparent); }
+  .month { position: relative; }
+  .month::before { content: ""; position: absolute; left: -26px; top: 7px; width: 11px; height: 11px; border-radius: 50%; background: var(--lantern); box-shadow: 0 0 0 4px rgba(242, 184, 75, 0.18), 0 0 14px var(--lantern); }
+  .month:not(:first-child)::before { background: var(--night); border: 2px solid rgba(242, 184, 75, 0.7); box-shadow: none; width: 9px; height: 9px; }
   .month { display: grid; grid-template-columns: 170px 1fr; gap: 24px; }
   @media (max-width: 720px) { .month { grid-template-columns: 1fr; gap: 10px; } }
   .month h3 { margin: 0; font: 800 19px/1.3 var(--display); position: sticky; top: 76px; align-self: start; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
@@ -239,6 +243,31 @@
   @media (max-width: 820px) { .steps { grid-template-columns: 1fr; } .steps li + li { padding-left: 0; border-left: 0; border-top: 1px solid var(--line); } }
   code { font: 14px ui-monospace, "Cascadia Code", Menlo, Consolas, monospace; background: rgba(243, 239, 230, 0.08); padding: 2px 6px; border-radius: 3px; }
 
+  /* --- motion: what made the old page feel alive, kept, and never hiding
+     anything for long (everything shows after a moment regardless) --- */
+  a.world { position: relative; padding-left: 8px; padding-right: 8px; border-radius: 4px; background: radial-gradient(240px circle at var(--mx, -300px) var(--my, -300px), color-mix(in srgb, var(--c) 18%, transparent), transparent 70%); transition: transform 200ms; }
+  a.world:hover { transform: translateY(-2px); }
+  /* Each world's mark is a portal, as in the rooms: a ring that spins up. */
+  a.world .ring { width: 16px; height: 16px; margin: 5px 0 0 0; background: transparent; border: 2px solid var(--c); border-top-color: transparent; box-shadow: 0 0 14px color-mix(in srgb, var(--c) 55%, transparent), inset 0 0 8px color-mix(in srgb, var(--c) 45%, transparent); }
+  a.world:hover .ring, a.world:focus-visible .ring { animation: spin 1.4s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .constellation a .halo { animation: breathe 3.2s ease-in-out infinite; animation-delay: var(--d, 0s); }
+  @keyframes breathe { 50% { opacity: 0.7; } }
+  .reveal-ready .rise { opacity: 0; transform: translateY(18px); transition: opacity 650ms ease, transform 650ms cubic-bezier(.2, .7, .2, 1); transition-delay: var(--delay, 0ms); }
+  .reveal-ready .rise.shown { opacity: 1; transform: none; }
+  nav.top { transition: background 200ms, box-shadow 200ms; }
+  nav.top.scrolled { background: rgba(11, 16, 41, 0.95); box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35); }
+  .progress { position: absolute; left: 0; bottom: -1px; height: 2px; width: 100%; transform-origin: 0 50%; transform: scaleX(var(--down, 0)); background: linear-gradient(90deg, var(--lantern), var(--dawn)); }
+  .button.primary { animation: glow 3.2s ease-out infinite; }
+  @keyframes glow { 0% { box-shadow: 0 0 0 0 rgba(242, 184, 75, 0.45); } 70%, 100% { box-shadow: 0 0 0 12px rgba(242, 184, 75, 0); } }
+  .shot a { overflow: hidden; border-radius: 4px; }
+  .shot img { transition: transform 450ms cubic-bezier(.2, .7, .2, 1); }
+  .shot a:hover img { transform: scale(1.035); }
+  @media (prefers-reduced-motion: reduce) {
+    .reveal-ready .rise { opacity: 1; transform: none; transition: none; }
+    a.world:hover .ring, .button.primary, .constellation a .halo { animation: none; }
+  }
+
   /* --- dawn, at the foot of the page --- */
   footer { position: relative; isolation: isolate; overflow: hidden; margin-top: 104px; padding: 88px 0 48px; color: var(--muted); font-size: 15px; }
   footer::before { content: ""; position: absolute; inset: 0; z-index: -1; background: radial-gradient(60% 90% at 50% 120%, rgba(255, 196, 120, 0.6), transparent 70%), linear-gradient(180deg, transparent 0%, rgba(75, 42, 102, 0.55) 35%, rgba(168, 85, 112, 0.7) 72%, rgba(232, 130, 63, 0.88) 100%); }
@@ -249,7 +278,8 @@
 </style>
 </head>
 <body>
-<nav aria-label="Seiza">
+<nav class="top" aria-label="Seiza">
+  <span class="progress" aria-hidden="true"></span>
   <div class="wrap">
     <a class="brand" href="#top"><img src="favicon.svg" alt="">Seiza <span lang="ja">正座 星座</span></a>
     <p class="sky-now" id="sky-now" hidden></p>
@@ -426,7 +456,7 @@
         const link = el("a", { href: card.getAttribute("href") });
         link.append(el("title", {}));
         link.lastChild.textContent = card.getAttribute("aria-label") ?? name;
-        link.append(el("circle", { class: "halo", cx: x, cy: y, r: 16, fill: c }), el("circle", { cx: x, cy: y, r: 5, fill: "#fff" }), el("circle", { cx: x, cy: y, r: 3, fill: c }));
+        link.append(el("circle", { class: "halo", cx: x, cy: y, r: 16, fill: c, style: `--d: ${(x % 7) * 0.4}s` }), el("circle", { cx: x, cy: y, r: 5, fill: "#fff" }), el("circle", { cx: x, cy: y, r: 3, fill: c }));
         const label = el("text", x > 760 ? { x: x - 14, y: y - 12, "text-anchor": "end" } : { x: x + 14, y: y - 12 });
         label.textContent = name;
         link.append(label);
@@ -435,6 +465,45 @@
       figure.hidden = false;
     }
     if (still) svg.querySelectorAll(".link").forEach((l) => (l.style.animation = "none"));
+  }
+
+  // Sections rise in as they're reached. Only once the script is sure it
+  // can show them (IntersectionObserver), and everything shows after 2.5 s
+  // regardless, so nothing waits on a scroll that never comes.
+  if ("IntersectionObserver" in window && !still) {
+    const items = [...document.querySelectorAll("main h2, main .intro, .reasons li, .features > div, .strip, .constellation, a.world, .month, .steps li")];
+    const rise = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (!e.isIntersecting) continue;
+          e.target.classList.add("shown");
+          rise.unobserve(e.target);
+        }
+      },
+      { rootMargin: "0px 0px -6% 0px" }
+    );
+    items.forEach((el, i) => {
+      el.classList.add("rise");
+      el.style.setProperty("--delay", `${(i % 6) * 55}ms`);
+      rise.observe(el);
+    });
+    document.documentElement.classList.add("reveal-ready");
+    setTimeout(() => items.forEach((el) => el.classList.add("shown")), 2500);
+  }
+
+  // The bar firms up once the page scrolls.
+  const bar = document.querySelector("nav.top");
+  const firm = () => bar.classList.toggle("scrolled", scrollY > 24);
+  addEventListener("scroll", firm, { passive: true });
+  firm();
+
+  // A soft light under the pointer on each world.
+  for (const card of document.querySelectorAll("a.world")) {
+    card.addEventListener("pointermove", (e) => {
+      const r = card.getBoundingClientRect();
+      card.style.setProperty("--mx", `${e.clientX - r.left}px`);
+      card.style.setProperty("--my", `${e.clientY - r.top}px`);
+    });
   }
 
   // The bar marks the section in view.
@@ -543,13 +612,14 @@
   let lines = [];
   const lean = { x: 0, y: 0, tx: 0, ty: 0 };
   let visible = true;
+  let meteor = null;
   function size() {
     const ratio = Math.min(2, devicePixelRatio || 1);
     const w = canvas.clientWidth, h = canvas.clientHeight;
     canvas.width = w * ratio;
     canvas.height = h * ratio;
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-    stars = Array.from({ length: Math.round((w * h) / 11000) }, () => ({ x: Math.random() * w, y: Math.random() * h * 0.85, r: Math.random() * 1.2 + 0.3, depth: Math.random() * 0.8 + 0.2, twinkle: Math.random() * Math.PI * 2 }));
+    stars = Array.from({ length: Math.round((w * h) / 11000) }, () => ({ x: Math.random() * w, y: Math.random() * h * 0.85, r: Math.random() * 1.2 + 0.3, depth: Math.random() * 0.8 + 0.2, twinkle: Math.random() * Math.PI * 2, drift: (Math.random() - 0.5) * 0.05 }));
     lines = [];
     for (let i = 0; i < stars.length; i++)
       for (let j = i + 1; j < stars.length; j++) {
@@ -572,8 +642,11 @@
     ctx.clearRect(0, 0, w, h);
     const px = (s) => s.x + lean.x * s.depth;
     const py = (s) => s.y + lean.y * s.depth;
+    if (!still) for (const s of stars) s.x = (s.x + s.drift + w) % w;
     ctx.lineWidth = 0.6;
     for (const [a, b, alpha] of lines) {
+      // A pair the drift has carried apart (or round the edge) lets go.
+      if (Math.abs(a.x - b.x) > 140) continue;
       ctx.strokeStyle = `rgba(242,184,75,${alpha})`;
       ctx.beginPath();
       ctx.moveTo(px(a), py(a));
@@ -586,6 +659,22 @@
       ctx.beginPath();
       ctx.arc(px(s), py(s), s.r, 0, Math.PI * 2);
       ctx.fill();
+    }
+    if (still) return;
+    if (!meteor && Math.random() < 0.004) meteor = { x: Math.random() * w * 0.8 + w * 0.2, y: Math.random() * h * 0.3, life: 0 };
+    if (meteor) {
+      const k = ++meteor.life / 50;
+      const x = meteor.x - k * 260, y = meteor.y + k * 120;
+      const tail = ctx.createLinearGradient(x, y, x + 90, y - 42);
+      tail.addColorStop(0, `rgba(255,255,255,${0.9 * (1 - k)})`);
+      tail.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.strokeStyle = tail;
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + 90, y - 42);
+      ctx.stroke();
+      if (k >= 1) meteor = null;
     }
   }
   addEventListener("resize", size);
