@@ -4,7 +4,7 @@ import { createStore } from "../store";
 import { oneOf, sendAddonEvent, type AddonEvent } from "../bus";
 import { hasProfanity } from "../../moderation/profanity";
 import { noiseHit, voice, type Voice } from "../sound";
-import { sfxOutput } from "../../audio/sfx";
+import { loadSamples, readySamples, warmSamples } from "../samples";
 
 /**
  * Pets: a dog (aso), a cat (pusa), or a capybara that follows you. Each is
@@ -260,62 +260,41 @@ function call(v: Voice, o: { delay: number; length: number; gain: number; pitch:
 }
 
 /** A real dog's barks (OpenGameArt "dog barking mono", CC0; see
- *  THIRD_PARTY_ASSETS.md): four, about 15 KB each, fetched once there's a
- *  dog about. Until they've come, the made one below barks instead. */
-let barks: { ctx: AudioContext; buffers: AudioBuffer[] } | null = null;
-let barksLoading = false;
-export function preloadBarks() {
-  const output = sfxOutput();
-  if (!output || barks?.ctx === output.ctx || barksLoading) return;
-  barksLoading = true;
-  Promise.all([1, 2, 3, 4].map(async (n) => output.ctx.decodeAudioData(await (await fetch(`/audio/pets/bark${n}.wav`)).arrayBuffer())))
-    .then((buffers) => (barks = { ctx: output.ctx, buffers }))
-    .catch(() => undefined)
-    .finally(() => (barksLoading = false));
+ *  THIRD_PARTY_ASSETS.md): four, about 15 KB each, fetched as soon as Pets
+ *  is on (PetLayer warms them), so even the first bark is a real one. */
+const BARKS = [1, 2, 3, 4].map((n) => `/audio/pets/bark${n}.wav`);
+export const preloadBarks = () => warmSamples(BARKS);
+
+/** Two different barks, each a touch higher or lower, never the same twice. */
+function bark(v: Voice, buffers: AudioBuffer[], at: number) {
+  const first = Math.floor(Math.random() * buffers.length);
+  const second = (first + 1 + Math.floor(Math.random() * (buffers.length - 1))) % buffers.length;
+  for (const [n, delay] of [
+    [first, 0],
+    [second, 0.3],
+  ]) {
+    const source = v.ctx.createBufferSource();
+    source.buffer = buffers[n];
+    source.playbackRate.value = 0.94 + Math.random() * 0.12;
+    const level = v.ctx.createGain();
+    level.gain.value = 0.55;
+    source.connect(level).connect(v.out);
+    source.start(at + delay);
+  }
 }
 
 /** A happy sound, by kind: two barks, a meow, a capybara's soft chirps. */
 export function petSound(kind: Pet, distance?: number) {
   const v = voice(0.8, distance, 25, 2.5);
   if (!v) return;
-  if (kind === "dog" && barks?.ctx === v.ctx) {
-    // Two different barks, each a touch higher or lower, never the same twice.
-    const first = Math.floor(Math.random() * barks.buffers.length);
-    const second = (first + 1 + Math.floor(Math.random() * (barks.buffers.length - 1))) % barks.buffers.length;
-    for (const [n, delay] of [
-      [first, 0],
-      [second, 0.3],
-    ]) {
-      const source = v.ctx.createBufferSource();
-      source.buffer = barks.buffers[n];
-      source.playbackRate.value = 0.94 + Math.random() * 0.12;
-      const level = v.ctx.createGain();
-      level.gain.value = 0.55;
-      source.connect(level).connect(v.out);
-      source.start(v.t + delay);
-    }
+  if (kind === "dog") {
+    // The recorded barks only: if they're still on their way, the moment they come.
+    const ready = readySamples(v.ctx, BARKS);
+    if (ready) bark(v, ready, v.t);
+    else void loadSamples(v.ctx, BARKS).then((buffers) => buffers && bark(v, buffers, v.ctx.currentTime));
     return;
   }
-  if (kind === "dog") {
-    preloadBarks();
-    // Ruff, ruff: a jump up in pitch and down, a growl in it, the second lower.
-    for (const [delay, lift] of [
-      [0, 1],
-      [0.24, 0.9],
-    ])
-      call(v, {
-        delay,
-        length: 0.17,
-        gain: 0.5,
-        pitch: [[0, 260 * lift], [0.04, 430 * lift], [0.17, 230 * lift]],
-        formants: [
-          { f: [[0, 650], [0.05, 900], [0.17, 600]], q: 4, gain: 1 },
-          { f: [[0, 1500], [0.05, 1900], [0.17, 1400]], q: 5, gain: 0.6 },
-        ],
-        breath: 0.08,
-        grit: 0.5,
-      });
-  } else if (kind === "cat") {
+  if (kind === "cat") {
     // Mi-a-ow: closed and nasal, opening up as the pitch rises, closing as it falls.
     call(v, {
       delay: 0,

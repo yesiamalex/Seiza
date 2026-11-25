@@ -13,7 +13,7 @@ import { blendBody, carryHand, copyBody, Gait, newBodyPose, poseBody, type BodyP
 import { onAddonEvent, sendAddonEvent } from "../bus";
 import { disposeTree, feetAndEye, holdInHand, newTrackedHand, pointHeld, poseHands, rigFor, toTrackedHand, wearOnChest, type HandTarget } from "../rig";
 import { announceBand, atOnce, band, localNote, musicianOf, NoteGate, parseBandEvent, play, release as releaseNote, remoteMusicians, resetBand, tapped, validNote } from "./band";
-import { CHORDS, chordOf, ELECTRIC, GONGS, holdNote, holds, isWorn, KEY_LAYOUT, KEYS_BASE, KIT, LIGHT_COLORS, PICK_BASE, playNote, prepareGuitar, TAIKO, type Instrument, type Worn } from "./instruments";
+import { CHORDS, chordOf, ELECTRIC, GONGS, holdNote, holds, isWorn, KEY_LAYOUT, KEYS_BASE, KIT, LIGHT_COLORS, PICK_BASE, playNote, preloadViolin, prepareGuitar, TAIKO, type Instrument, type Worn } from "./instruments";
 import { bandBody, updateGroove, type Groove } from "./moves";
 import { buzz } from "../../xr/controls";
 
@@ -888,6 +888,12 @@ export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerPr
 
   // Ask once on starting, for anything announced before this client listened.
   useEffect(() => sendAddonEvent("band", { k: "hi" }), []);
+  // The violin's recordings, fetched a moment after Band is on (not while
+  // the world is still loading), so the first bow sounds real.
+  useEffect(() => {
+    const timer = window.setTimeout(preloadViolin, 3000);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     prepareGuitar();

@@ -175,6 +175,8 @@ export function PetLayer({ selfId, players, selfSeated }: { selfId: string | nul
   const overlayFrame = useRef(0);
 
   useEffect(() => sendAddonEvent("pet", { k: "hi" }), []);
+  // The dog's recorded barks, fetched now, so its very first bark is real.
+  useEffect(() => preloadBarks(), []);
   useEffect(() => {
     if (mine.kind) petSound(mine.kind);
   }, [mine.kind]);

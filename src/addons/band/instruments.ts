@@ -1,5 +1,6 @@
 import { sfxOutput } from "../../audio/sfx";
-import { noiseBuffer, noiseHit, toneHit, voice, type Voice } from "../sound";
+import { noiseHit, toneHit, voice, type Voice } from "../sound";
+import { loadSamples, readySamples, warmSamples } from "../samples";
 
 export const INSTRUMENTS = ["drums", "kit", "taiko", "keys", "kulintang", "guitar", "electric", "bass", "violin", "shaker", "lightstick"] as const;
 export type Instrument = (typeof INSTRUMENTS)[number];
@@ -376,8 +377,9 @@ export function holdKey(midi: number, distance?: number): () => void {
 // A real solo violin, bowed with vibrato (VSCO 2 Community Edition, CC0;
 // see THIRD_PARTY_ASSETS.md): five notes, each about 2.4 s, mono 22 kHz,
 // 100 KB, made with a seamless loop from 0.7 to 2.2 s so a held bow
-// sustains. Fetched only once someone picks the violin (preloadViolin);
-// until they've come, the synthesized one below plays.
+// sustains, each tuned to the notes around it. Fetched as soon as Band is
+// on (BandLayer warms them), so the first bow sounds real; a note bowed
+// before they've come starts the moment they do, if it's still held.
 const VIOLIN_SAMPLES: [string, number][] = [
   ["G3", 55],
   ["C4", 60],
@@ -385,44 +387,44 @@ const VIOLIN_SAMPLES: [string, number][] = [
   ["A4", 69],
   ["C5", 72],
 ];
+const VIOLIN_URLS = VIOLIN_SAMPLES.map(([name]) => `/audio/violin/${name}.wav`);
 const VIOLIN_LOOP = { start: 0.7, end: 2.2 };
-let violinSet: { ctx: AudioContext; buffers: { midi: number; buffer: AudioBuffer }[] } | null = null;
-let violinLoading = false;
-function loadViolin(ctx: AudioContext) {
-  if (violinSet?.ctx === ctx || violinLoading) return;
-  violinLoading = true;
-  Promise.all(
-    VIOLIN_SAMPLES.map(async ([name, midi]) => {
-      const response = await fetch(`/audio/violin/${name}.wav`);
-      return { midi, buffer: await ctx.decodeAudioData(await response.arrayBuffer()) };
-    })
-  )
-    .then((buffers) => (violinSet = { ctx, buffers }))
-    .catch(() => undefined)
-    .finally(() => (violinLoading = false));
-}
-export function preloadViolin() {
-  const output = sfxOutput();
-  if (output) loadViolin(output.ctx);
-}
-const nearestViolin = (ctx: AudioContext, midi: number) =>
-  violinSet?.ctx === ctx ? violinSet.buffers.reduce((best, b) => (Math.abs(b.midi - midi) < Math.abs(best.midi - midi) ? b : best)) : null;
+export const preloadViolin = () => warmSamples(VIOLIN_URLS);
 
-/** A held note from the recordings: the nearest one, tuned to the note, its
- *  loop held while the bow moves, a soft start and a short release. */
-function holdRecordedViolin(v: Voice, midi: number, recorded: { midi: number; buffer: AudioBuffer }): () => void {
-  const { ctx, t } = v;
+/** A bowed violin note that sounds while the bow keeps moving (held). Returns the release. */
+export function holdViolin(midi: number, distance?: number): () => void {
+  const v = voice(0.8, distance, FALLOFF, KEY_HOLD_SECONDS + 2, 0.3);
+  if (!v) return () => {};
+  const ready = readySamples(v.ctx, VIOLIN_URLS);
+  if (ready) return bow(v, midi, ready, v.t);
+  let released = false;
+  let stop: (() => void) | null = null;
+  void loadSamples(v.ctx, VIOLIN_URLS).then((buffers) => {
+    if (buffers && !released) stop = bow(v, midi, buffers, v.ctx.currentTime);
+  });
+  return () => {
+    released = true;
+    stop?.();
+  };
+}
+
+/** The nearest recording, tuned to the note, its loop held while the bow
+ *  moves, a soft start and a short release. */
+function bow(v: Voice, midi: number, buffers: AudioBuffer[], at: number): () => void {
+  const { ctx } = v;
+  let nearest = 0;
+  for (let i = 1; i < VIOLIN_SAMPLES.length; i++) if (Math.abs(VIOLIN_SAMPLES[i][1] - midi) < Math.abs(VIOLIN_SAMPLES[nearest][1] - midi)) nearest = i;
   const source = ctx.createBufferSource();
-  source.buffer = recorded.buffer;
+  source.buffer = buffers[nearest];
   source.loop = true;
   source.loopStart = VIOLIN_LOOP.start;
   source.loopEnd = VIOLIN_LOOP.end;
-  source.playbackRate.value = Math.pow(2, (midi - recorded.midi) / 12);
+  source.playbackRate.value = Math.pow(2, (midi - VIOLIN_SAMPLES[nearest][1]) / 12);
   const env = ctx.createGain();
-  env.gain.setValueAtTime(0.0001, t);
-  env.gain.exponentialRampToValueAtTime(1.6, t + 0.05);
+  env.gain.setValueAtTime(0.0001, at);
+  env.gain.exponentialRampToValueAtTime(1.6, at + 0.05);
   chain(source, filter(ctx, "highpass", 150, 0.7), env, v.out);
-  source.start(t);
+  source.start(at);
   let released = false;
   const release = () => {
     if (released) return;
@@ -432,110 +434,6 @@ function holdRecordedViolin(v: Voice, midi: number, recorded: { midi: number; bu
     env.gain.setValueAtTime(Math.max(0.0001, env.gain.value), now);
     env.gain.setTargetAtTime(0.0001, now, 0.1);
     source.stop(now + 0.8);
-  };
-  setTimeout(release, KEY_HOLD_SECONDS * 1000);
-  return release;
-}
-
-/** A bowed string's tone: every harmonic, falling off a little faster than
- *  a sawtooth's, unevenly (as a real string's do), so it isn't a synth's. */
-let violinTone: { ctx: AudioContext; wave: PeriodicWave } | null = null;
-function bowedWave(ctx: AudioContext): PeriodicWave {
-  if (violinTone?.ctx === ctx) return violinTone.wave;
-  const n = 48;
-  const real = new Float32Array(n);
-  const imag = new Float32Array(n);
-  for (let k = 1; k < n; k++) imag[k] = (1 / Math.pow(k, 1.12)) * (0.82 + 0.18 * Math.sin(k * 2.3));
-  const wave = ctx.createPeriodicWave(real, imag);
-  violinTone = { ctx, wave };
-  return wave;
-}
-
-/**
- * A bowed violin note that sounds while the bow keeps moving (held). One
- * string, not a chorus: a bowed tone through a violin body's resonances
- * (its air at 280 Hz, the wood's around 450 and 1,100, the bridge's bright
- * hill near 3 kHz, little above 6), the rosin's hiss under it all along, a
- * bow pressure that wavers, and vibrato that comes in once the note settles
- * and never quite repeats, as a hand's doesn't. A little of the room's
- * reverb, as in a real one. Returns the release.
- */
-export function holdViolin(midi: number, distance?: number): () => void {
-  const v = voice(0.8, distance, FALLOFF, KEY_HOLD_SECONDS + 2, 0.3);
-  if (!v) return () => {};
-  const { ctx, t } = v;
-  loadViolin(ctx);
-  const recorded = nearestViolin(ctx, midi);
-  if (recorded) return holdRecordedViolin(v, midi, recorded);
-  const f = hz(midi);
-  const env = ctx.createGain();
-  env.gain.setValueAtTime(0.0001, t);
-  env.gain.exponentialRampToValueAtTime(0.42, t + 0.12);
-  env.gain.setTargetAtTime(0.34, t + 0.14, 0.5);
-  const body = chain(
-    filter(ctx, "highpass", 180, 0.7),
-    filter(ctx, "peaking", 280, 1.4, 6),
-    filter(ctx, "peaking", 460, 2, 4),
-    filter(ctx, "peaking", 1100, 1.2, 2),
-    filter(ctx, "peaking", 1600, 2, -3),
-    filter(ctx, "peaking", 2900, 1.1, 5),
-    filter(ctx, "lowpass", 6200, 0.6),
-    env,
-    v.out
-  );
-  // The bow's pressure, never quite even.
-  const bow = ctx.createGain();
-  bow.gain.value = 1;
-  const pressure = ctx.createOscillator();
-  pressure.frequency.value = 7.3;
-  const pressureDepth = ctx.createGain();
-  pressureDepth.gain.value = 0.035;
-  pressure.connect(pressureDepth).connect(bow.gain);
-  bow.connect(body);
-  // Vibrato: in after the note settles, a little uneven (two rates).
-  const vib = ctx.createOscillator();
-  vib.frequency.value = 5.7;
-  const drift = ctx.createOscillator();
-  drift.frequency.value = 1.3;
-  const depth = ctx.createGain();
-  depth.gain.setValueAtTime(0, t);
-  depth.gain.linearRampToValueAtTime(0, t + 0.3);
-  depth.gain.linearRampToValueAtTime(f * 0.0045, t + 0.8);
-  const driftDepth = ctx.createGain();
-  driftDepth.gain.value = f * 0.0012;
-  vib.connect(depth);
-  drift.connect(driftDepth);
-  const string = ctx.createOscillator();
-  string.setPeriodicWave(bowedWave(ctx));
-  string.frequency.setValueAtTime(f * 0.992, t);
-  // A bow catches the string a hair flat and pulls it up to pitch.
-  string.frequency.exponentialRampToValueAtTime(f, t + 0.08);
-  depth.connect(string.frequency);
-  driftDepth.connect(string.frequency);
-  const level = ctx.createGain();
-  level.gain.value = 0.2;
-  string.connect(level).connect(bow);
-  // The rosin: a quiet hiss the whole time the bow moves, louder at first.
-  const hiss = ctx.createBufferSource();
-  hiss.buffer = noiseBuffer(ctx);
-  hiss.loop = true;
-  const rosin = ctx.createGain();
-  rosin.gain.setValueAtTime(0.06, t);
-  rosin.gain.setTargetAtTime(0.018, t + 0.05, 0.12);
-  chain(hiss, filter(ctx, "bandpass", Math.min(6000, f * 5), 0.9), rosin, bow);
-  for (const o of [pressure, vib, drift, string]) o.start(t);
-  hiss.start(t, Math.random());
-  const oscillators = [pressure, vib, drift, string];
-  let released = false;
-  const release = () => {
-    if (released) return;
-    released = true;
-    const now = ctx.currentTime;
-    env.gain.cancelScheduledValues(now);
-    env.gain.setValueAtTime(Math.max(0.0001, env.gain.value), now);
-    env.gain.setTargetAtTime(0.0001, now, 0.09);
-    for (const osc of oscillators) osc.stop(now + 0.7);
-    hiss.stop(now + 0.7);
   };
   setTimeout(release, KEY_HOLD_SECONDS * 1000);
   return release;
