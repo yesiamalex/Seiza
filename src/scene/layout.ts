@@ -226,7 +226,14 @@ export const SHORE = {
   seaY: -0.22,
   /** How far down the sand, from its top, the water starts. */
   toWater: 12,
+  /** The shallows past it, metres wide, before the bottom drops away. */
+  shelf: 8,
 };
+
+/** Deeper than this (metres of water), you swim. */
+export const SWIM_DEPTH = 1.25;
+/** A swimmer's floor below the sea's surface: eyes just above the water. */
+const SWIM_FLOOR = 1.45;
 
 /** Where the sand starts at `z`: a gently wandering line a little past the
  *  meadow's east edge. */
@@ -235,14 +242,22 @@ export function coastX(z: number): number {
 }
 
 /** The sand's height `d` metres seaward from its top: a gentle slope to the
- *  water, then on down under it. */
+ *  water, the shallows' shelf, then a drop to swimming depth. Beach.tsx's
+ *  shader has a copy (sandY): keep them in step. */
 export function shoreY(d: number): number {
-  return d <= SHORE.toWater ? OUTER_GROUND_Y - ((OUTER_GROUND_Y - SHORE.seaY) * d) / SHORE.toWater : SHORE.seaY - 0.025 * (d - SHORE.toWater);
+  if (d <= SHORE.toWater) return OUTER_GROUND_Y - ((OUTER_GROUND_Y - SHORE.seaY) * d) / SHORE.toWater;
+  const out = d - SHORE.toWater;
+  return out <= SHORE.shelf ? SHORE.seaY - 0.025 * out : SHORE.seaY - 0.025 * SHORE.shelf - 0.1 * (out - SHORE.shelf);
+}
+
+/** Out of your depth at the beach: swimming (src/avatar/SwimLayer.tsx). */
+export function swimmingAt(x: number, z: number): boolean {
+  return onShore(x, z) && SHORE.seaY - shoreY(x - coastX(z)) > SWIM_DEPTH;
 }
 
 /** Where you can walk out of the meadow and down the beach: beside the
- *  meadow, as far as wading in the shallows. */
-const SHORE_WALK: Rect = { minX: FIELD.maxX - PLAYER_RADIUS - 0.1, maxX: 52, minZ: FIELD.minZ + 2, maxZ: FIELD.maxZ - 2 };
+ *  meadow, into the shallows, and out to swim. */
+const SHORE_WALK: Rect = { minX: FIELD.maxX - PLAYER_RADIUS - 0.1, maxX: 95, minZ: FIELD.minZ + 2, maxZ: FIELD.maxZ - 2 };
 const WALKABLE_WITH_SHORE: Rect[] = [...WALKABLE, SHORE_WALK];
 let shore = false;
 
@@ -394,7 +409,7 @@ export function facingVector(rotationY: number): [number, number] {
   return [-Math.sin(rotationY), -Math.cos(rotationY)];
 }
 
-const seatAt = (x: number, z: number, rotationY: number): [number, number, number] => {
+export const seatAt = (x: number, z: number, rotationY: number): [number, number, number] => {
   const [fx, fz] = facingVector(rotationY);
   return [x + fx * SEAT_FORWARD_OFFSET, 0, z + fz * SEAT_FORWARD_OFFSET];
 };
@@ -826,9 +841,19 @@ export interface Ground {
 }
 
 let ground: Ground | null = null;
+let rawGround: Ground | null = null;
+let groundWrap: ((inner: Ground) => Ground) | null = null;
 
 export function setGround(next: Ground | null): void {
-  ground = next;
+  rawGround = next;
+  ground = next && groundWrap ? groundWrap(next) : next;
+}
+
+/** Adds to a model world's ground (Mt. Makiling's, mountainGround.ts),
+ *  now and whenever it's set again; null takes it off. */
+export function setGroundWrap(wrap: ((inner: Ground) => Ground) | null): void {
+  groundWrap = wrap;
+  setGround(rawGround);
 }
 
 export function getGround(): Ground | null {
@@ -961,9 +986,10 @@ export function floorHeightAt(x: number, z: number): number {
   if (onSteps(x, z)) return (FIELD_Y * (z - GARDEN_STEPS.z)) / (STEPS_RUN + GARDEN_STEPS.tread);
   if (inField(x, z)) return meadowHeight(x, z);
   if (onMountainWalk(x, z)) return OUTER_GROUND_Y + mountainHeight(x, z);
-  // Grass up to the sand, then down the beach, and a little way into the
-  // shallows: wading, not swimming.
-  if (onShore(x, z)) return Math.max(shoreY(Math.max(0, x - coastX(z))), SHORE.seaY - 0.15);
+  // Grass up to the sand, then down the beach, wading into the sea, and
+  // out of your depth, swimming: the floor stays where your head is above
+  // the water.
+  if (onShore(x, z)) return Math.max(shoreY(Math.max(0, x - coastX(z))), SHORE.seaY - SWIM_FLOOR);
   return pondDepthAt(x, z);
 }
 

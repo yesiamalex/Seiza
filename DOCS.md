@@ -1043,9 +1043,14 @@ menus and notifications.
   near where you arrive. It's found on walkable floor ahead of and beside
   the spawn, clear of the portals, and turned to face you. A world can list
   its own in `world.json` (`mirrors`), or `[]` for none. Editors can
-  place more. A mirror redraws only when you're within 9 m and in front of
-  it, into a small texture, once a frame. In first person it shows your
-  own head.
+  place more. It reflects people live (avatars, guides, and what they
+  hold: a handful of draw calls, at 768 px tall on a screen and 512 in a
+  headset) over a still of the room behind them: a 256 px cube snapshot
+  from the mirror, without people or mirrors in it, taken one face a frame
+  over six frames as you come within 10 m, and again each minute you're
+  near. The world itself is never drawn for the mirror frame by frame. It
+  redraws only when you're within 7 m and in front of it, once a frame
+  (both eyes share it). In first person it shows your own head.
 - **Balls** (`src/edit/Grab.tsx`): editors place them and anyone plays.
   - On a screen, click or tap a ball to pick it up, and again to throw it
     where you look.
@@ -1487,9 +1492,33 @@ are the same in both.
 
 Past the meadow's east side are a beach and the sea (`Beach.tsx`), part of
 the grounds in every world built on them. Visitors can walk from the meadow
-down the sand to the water's edge; `layout.ts` shapes the coast (`coastX`)
-and the slope of the sand (`shoreY`), which walking, the grass's edge, and
-the drawing all follow.
+down the sand, wade the shallows, and swim: `layout.ts` shapes the coast
+(`coastX`) and the seabed (`shoreY`: the sand's slope, a shelf 8 m wide
+about 20 cm deep, then a drop of 10 cm a metre), which walking, the
+grass's edge, and the drawing all follow. Out of your depth (`swimmingAt`,
+over 1.25 m of water) you float with your eyes just above the surface, go
+at under half walking speed, get off any ride, and cool off as in shade,
+and your avatar leans into a breaststroke (`src/avatar/SwimLayer.tsx`; in
+a headset your own arms lead). Everyone's swimmers are worked out from
+where they are, so nothing is sent and nothing new is drawn.
+
+Beyond the meadow's far end stands Mt. Makiling (`Mountain.tsx`), its
+real shape from AWS Terrain Tiles (`makiling.json`, a 65 × 65 grid,
+summit 1,094 m) at about 1:73, so its slopes are true for ExerSeiza's and
+SportSeiza's gradients. It costs about three draw calls: the ground is one
+vertex-coloured mesh with the trail up worn into it, the forest one
+instanced mesh. At the summit are a flag streaming with the sky's wind, a
+marker, two benches facing back the way you came, and a tree of the
+meadow's kind that turns with the seasons and gives shade. The heights are
+in `mountainShape.ts` (`mountainHeight`, `realAltitude`), and the heat
+index falls 6.5 °C a kilometre up, so the top is milder. A built-in world
+turns it off with `"mountain": false`. A model world has it where its
+world.json says (`"mountain": { "x", "z", "y" }`: the centre and the
+height of its foot, its north edge overlapping the world's walkable ground
+a few metres): `mountainGround.ts` joins its floor to the world's navmesh,
+so a walker held at the navmesh's edge carries on up the mountain and comes
+back onto the navmesh at its foot, with no rebake. SeiOU and Seinag have it
+south-west of the campus, about where the real one stands from UPOU.
 The sky is a custom shader (`SunsetSky.tsx`), not an image-based environment
 map. drei's `<Environment preset>` downloads an HDR file from another CDN,
 which a self-hosted deployment shouldn't depend on, and which would leave the

@@ -1,4 +1,4 @@
-import { useEffect, useRef, type MutableRefObject, type ReactNode } from "react";
+import { useEffect, useRef, type MutableRefObject, type ReactNode, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useXR, useXRControllerLocomotion, XROrigin } from "@react-three/xr";
 import * as THREE from "three";
@@ -614,7 +614,12 @@ export function PlayerRig({
   // smoothly or in snaps, as the player chose in the headset menu. Turning
   // stays at an instrument: you can always turn to face it.
   const controls = useXrControls();
-  useXRControllerLocomotion(xrOriginRef, rooted || controls.moving === "teleport" ? false : { speed: MOVE_SPEED * 0.6 * rideScale }, turningOptions(controls.turning));
+  // Swimming (drive.swim) slows the stick too: read as it changes, not every frame.
+  const [swimScale, setSwimScale] = useState(1);
+  useFrame(() => {
+    if (drive.swim !== swimScale) setSwimScale(drive.swim);
+  });
+  useXRControllerLocomotion(xrOriginRef, rooted || controls.moving === "teleport" ? false : { speed: MOVE_SPEED * 0.6 * rideScale * swimScale }, turningOptions(controls.turning));
 
   // Scratch vectors for the XR branch, reused rather than allocated 72
   // times a second (90Hz headsets are the ones that can least afford it).
@@ -1101,7 +1106,7 @@ export function PlayerRig({
       // Crouching wins over running: holding both should not sprint.
       const speedScale = crouchingRef.current ? CROUCH_MULTIPLIER : running ? RUN_MULTIPLIER : 1;
       // On a ride (src/addons/exer), drive.scale is its speed and the slope's.
-      vcam.position.addScaledVector(heading, MOVE_SPEED * speedScale * drive.scale * drive.heat * delta);
+      vcam.position.addScaledVector(heading, MOVE_SPEED * speedScale * drive.scale * drive.heat * drive.swim * delta);
     } else if (drive.cruise > 0 && !rootedRef.current) {
       // A smart trainer's speed rolls the rider on where they look.
       heading.copy(forward);
@@ -1115,7 +1120,7 @@ export function PlayerRig({
         moveTargetRef.current = movePathRef?.current?.shift() ?? null;
       } else {
         heading.copy(toTarget).normalize();
-        vcam.position.addScaledVector(heading, MOVE_SPEED * drive.scale * drive.heat * delta);
+        vcam.position.addScaledVector(heading, MOVE_SPEED * drive.scale * drive.heat * drive.swim * delta);
       }
     }
     // Gravity/jump — applied every frame so landing is a clean clamp back to

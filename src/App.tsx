@@ -94,6 +94,7 @@ import { useMediaQuery, useWantsTouchControls } from "./ui/useMediaQuery";
 import { saveProfile, type StoredAvatarChoice } from "./profile/profileStore";
 import { currentHeatIndex, HEAT_LEVEL_LABELS, heatExpression, heatLevel, LOCAL_HEAT, setHeatReactions, useHeatReactions, useHeatStage } from "./avatar/heat";
 import { HeatLayer } from "./avatar/HeatLayer";
+import { SwimLayer } from "./avatar/SwimLayer";
 import { HeatChip } from "./avatar/HeatChip";
 import { AVATAR_DESIGN_PRESETS } from "./avatar/designer/avatarSpec";
 import { deliverWorldMessage, unwrapWorldMessage, WorldExtension, WorldOverlay, wrapWorldMessage } from "./worlds/WorldExtension";
@@ -1528,7 +1529,7 @@ export default function App() {
               environmentIsCustom={!!environmentUrl}
               environmentCollision={currentWorld.environmentCollision !== false}
               meadowTree={currentWorld.meadowTree ?? true}
-              mountain={currentWorld.mountain !== false}
+              mountain={currentWorld.mountain ?? true}
               skyboxUrl={skyboxUrl}
               onFloorDoubleClick={handleFloorClick}
               // In Edit Mode a click belongs to the object gizmos, so the
@@ -1570,6 +1571,7 @@ export default function App() {
             {/* Room modes an editor switched on (src/addons/). */}
             {/* Heat reactions: sweat, panting, and a slower walk after a hot one. */}
             <HeatLayer selfId={selfId} players={players} getSelfPosition={getSelfPosition} />
+            <SwimLayer selfId={selfId} players={players} />
             <AddonScene worldState={worldState} selfId={selfId} players={players} getSelfPosition={getSelfPosition} editMode={editMode} selfSeated={!!posture || !!seat} />
             {world.portals && <Portals config={world.portals} builtin={world.environment !== "model"} />}
             {/* Picking things up and throwing balls (edit/Grab.tsx). */}

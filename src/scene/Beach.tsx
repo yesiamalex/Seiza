@@ -37,7 +37,8 @@ const scratchEye = new THREE.Vector3();
 
 function buildSand(): THREE.BufferGeometry {
   const ACROSS = 16;
-  const DEPTH = 30;
+  // Down to the swimmers' depth and past it, so legs never show through.
+  const DEPTH = 45;
   const rows = Math.ceil((Z_TO - Z_FROM) / 4);
   const positions: number[] = [];
   const colors: number[] = [];
@@ -98,7 +99,11 @@ function buildSea(): THREE.BufferGeometry {
 // coastX and shoreY again, for the shader: keep them in step with layout.ts.
 const COAST_GLSL = /* glsl */ `
   float coastX(float z) { return 34.0 + 4.0 * sin(z * 0.021) + 2.0 * sin(z * 0.057 + 1.3); }
-  float sandY(float d) { return d <= ${BEACH_TO_WATER.toFixed(1)} ? ${shoreY(0).toFixed(3)} - ${(shoreY(0) - SEA_Y).toFixed(3)} * d / ${BEACH_TO_WATER.toFixed(1)} : ${SEA_Y.toFixed(3)} - 0.025 * (d - ${BEACH_TO_WATER.toFixed(1)}); }
+  float sandY(float d) {
+    if (d <= ${BEACH_TO_WATER.toFixed(1)}) return ${shoreY(0).toFixed(3)} - ${(shoreY(0) - SEA_Y).toFixed(3)} * d / ${BEACH_TO_WATER.toFixed(1)};
+    float o = d - ${BEACH_TO_WATER.toFixed(1)};
+    return o <= ${SHORE.shelf.toFixed(1)} ? ${SEA_Y.toFixed(3)} - 0.025 * o : ${(SEA_Y - 0.025 * SHORE.shelf).toFixed(3)} - 0.1 * (o - ${SHORE.shelf.toFixed(1)});
+  }
 `;
 
 const vertexShader = /* glsl */ `

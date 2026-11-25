@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { PlayerState } from "../multiplayer/types";
-import { ceilingHeightAt } from "../scene/layout";
+import { ceilingHeightAt, swimmingAt } from "../scene/layout";
 import { realAltitude } from "../scene/mountainShape";
 import { drive } from "../player/drive";
 import { getAddonAvatar, LOCAL_AVATAR } from "../addons/avatars";
@@ -52,7 +52,8 @@ function dropMap() {
 
 /** Effort: walking 1, pedalling or pushing a board harder, a moped none. */
 const effortOf = (vehicle: string | null | undefined) => (vehicle === "moped" ? 0 : vehicle ? 1.2 : 1);
-const shaded = (x: number, z: number) => ceilingHeightAt(x, z) < Infinity || inDeclaredShade(x, z);
+// In the sea, swimming, cools you as shade does.
+const shaded = (x: number, z: number) => ceilingHeightAt(x, z) < Infinity || inDeclaredShade(x, z) || swimmingAt(x, z);
 
 export function HeatLayer({ selfId, players, getSelfPosition }: { selfId: string | null; players: Record<string, PlayerState>; getSelfPosition: () => [number, number, number] }) {
   const tracks = useRef(new Map<string, Track>()).current;
