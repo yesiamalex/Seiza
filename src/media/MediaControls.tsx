@@ -24,7 +24,7 @@ interface MediaControlsProps {
 /**
  * Microphone, camera and screen sharing in one control.
  *
- * The details panel (voice, camera, screens, the megaphone) is opened by
+ * The details panel (voice, camera, screens) is opened by
  * the Video button rather than sitting on screen
  * permanently, and each capture stays off until asked for, so a visitor who
  * only wants to look around never gives up a device or an upload.
@@ -67,6 +67,21 @@ export function MediaControls({ media, voiceEnabled, onShareScreen, onStopScreen
         >
           {media.muted ? <MicOffIcon /> : <MicIcon />}
           <span className={BAR_LABEL_CLASS}>{media.muted ? L("Unmute", "ミュート解除") : L("Mute", "ミュート")}</span>
+        </button>
+      )}
+      {/* The megaphone, beside the mic it carries: a host's, with the mic on. */}
+      {voiceAvailable && media.micEnabled && canMegaphone && (
+        <button
+          type="button"
+          className="seiza-bar-btn"
+          style={media.megaphone ? barButtonActiveStyle : barButtonStyle}
+          onClick={() => media.setMegaphone(!media.megaphone)}
+          aria-pressed={media.megaphone}
+          aria-label={media.megaphone ? L("Turn the megaphone off", "メガホンをオフ") : L("Megaphone: everyone in the room hears you, wherever they are", "メガホン:部屋の全員に、どこにいても聞こえます")}
+          title={media.megaphone ? L("Megaphone on: everyone hears you", "メガホン中:全員に聞こえます") : L("Megaphone: everyone in the room hears you", "メガホン:部屋の全員に聞こえます")}
+        >
+          <MegaphoneIcon />
+          <span className={BAR_LABEL_CLASS}>{L("Megaphone", "メガホン")}</span>
         </button>
       )}
       <button
@@ -170,15 +185,6 @@ export function MediaControls({ media, voiceEnabled, onShareScreen, onStopScreen
                   </select>
                 </label>
               )}
-              {canMegaphone && (
-                <label style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, cursor: "pointer" }}>
-                  <input type="checkbox" checked={media.megaphone} onChange={(e) => media.setMegaphone(e.target.checked)} style={{ marginTop: 2, accentColor: "#f2b84b" }} />
-                  <span style={{ display: "grid", gap: 2 }}>
-                    <span>{L("Megaphone", "メガホン")}</span>
-                    <small style={{ opacity: 0.6 }}>{L("Everyone in the room hears you, wherever they are: for a class or an announcement.", "部屋の全員に、どこにいても聞こえます。授業やお知らせに。")}</small>
-                  </span>
-                </label>
-              )}
               <button type="button" style={pillButtonStyle} onClick={media.disableMic}>
                 {L("Leave voice", "ボイスから抜ける")}
               </button>
@@ -203,3 +209,10 @@ export function MegaphoneChip({ players, selfId, self }: { players: Record<strin
     </Docked>
   );
 }
+
+const MegaphoneIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M3 10v4a1 1 0 0 0 1 1h3l7 5V4L7 9H4a1 1 0 0 0-1 1z" />
+    <path d="M18 8.5a5 5 0 0 1 0 7" />
+  </svg>
+);

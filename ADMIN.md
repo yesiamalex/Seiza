@@ -83,8 +83,8 @@ After signing in, an admin can:
   Each person's browser moves its own avatar in response to a server
   message, because every player is the only authority over their own
   position.
-- **Use the megaphone.** Turn your mic on, open the **Video** button's
-  panel, and tick **Megaphone** (in a headset: the wrist menu's Play page,
+- **Use the megaphone.** Turn your mic on and press **Megaphone**,
+  beside Mute in the bottom bar (in a headset: the wrist menu's Play page,
   Megaphone, On). An editor or admin can use it: everyone in the room hears them at nearly full volume,
   wherever they are, and sees "📣 … on the megaphone". Every listener
   keeps a voice connection free for whoever holds it, so a class of 30
