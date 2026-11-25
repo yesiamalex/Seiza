@@ -14,6 +14,7 @@ import { newBodyPose, poseBody, type BodyPose } from "../body";
 import { onAddonEvent, sendAddonEvent } from "../bus";
 import { disposeTree, feetAndEye, newTrackedHand, poseHands, rigFor, toTrackedHand, type HandTarget } from "../rig";
 import { latestReading, sendGradient } from "../sport";
+import { skidSound } from "./ride";
 import { announceRide, getOffBehind, myPassenger, nearRide, parseExerEvent, passenger, passengers, playBell, releaseBell, remoteRiders, resetRide, ride, ringBell, setVehicle, startEngine, startHorn, type Engine } from "./ride";
 import { SEAT_HEIGHT } from "../../scene/layout";
 import { skyState } from "../../sky/skyState";
@@ -52,6 +53,8 @@ interface Holder {
    *  through it is (seconds): it always finishes, landed or not. */
   trick: number;
   trickT: number;
+  /** When it last skidded (performance.now), so a stop skids once. */
+  skidAt: number;
   prop: THREE.Group | null;
   wheels: THREE.Object3D[];
   detach: () => void;
@@ -314,7 +317,7 @@ export function ExerLayer({ selfId, players, getSelfPosition, selfSeated }: { se
         h = undefined;
       }
       if (!h) {
-        h = { vrm, overlay: sharedOverlay(vrm, frame), vehicle: null, grow: 0, base: 1, beam: null, lamp: null, engine: null, engineAt: 0, motion: { t: 0, speed: 0, turn: 0, air: 0, aloft: 0, stopped: 0 }, yaw: null, trick: 0, trickT: 0, prop: null, wheels: [], detach: () => {}, weight: 0, phase: 0, last: null, speed: 0, body: newBodyPose(), hands: { right: target(), left: target() }, tracked: { right: newTrackedHand(), left: newTrackedHand() } };
+        h = { vrm, overlay: sharedOverlay(vrm, frame), vehicle: null, grow: 0, base: 1, beam: null, lamp: null, engine: null, engineAt: 0, motion: { t: 0, speed: 0, turn: 0, air: 0, aloft: 0, stopped: 0, backing: 0, backPhase: 0 }, yaw: null, trick: 0, trickT: 0, skidAt: 0, prop: null, wheels: [], detach: () => {}, weight: 0, phase: 0, last: null, speed: 0, body: newBodyPose(), hands: { right: target(), left: target() }, tracked: { right: newTrackedHand(), left: newTrackedHand() } };
         holders.set(key, h);
       }
       h.overlay = sharedOverlay(vrm, frame);
@@ -365,14 +368,29 @@ export function ExerLayer({ selfId, players, getSelfPosition, selfSeated }: { se
       }
       // How far it went, for the wheels and the pedals.
       const p = vrm.scene.getWorldPosition(v2);
-      const step = h.last ? Math.hypot(p.x - h.last.x, p.z - h.last.z) : 0;
+      const mx = h.last ? p.x - h.last.x : 0;
+      const mz = h.last ? p.z - h.last.z : 0;
+      const step = Math.hypot(mx, mz);
       h.last = (h.last ?? new THREE.Vector3()).copy(p);
+      // Which way it's going along itself (ahead is -z, turned by its yaw):
+      // pushed backward, the wheels turn back and the pedals rest.
+      const facing = new THREE.Euler().setFromQuaternion((vrm.scene.parent ?? vrm.scene).getWorldQuaternion(turnQ), "YXZ").y;
+      const ahead = step > 1e-4 ? (-mx * Math.sin(facing) - mz * Math.cos(facing)) / step : 1;
+      const backward = ahead < -0.5;
+      const wasSpeed = h.speed;
       if (step < 2 && h.vehicle) {
         h.speed += (step / Math.max(dt, 1e-3) - h.speed) * (1 - Math.exp(-6 * dt));
-        for (const w of h.wheels) w.rotation.x -= step / (w.userData.wheel as number);
+        for (const w of h.wheels) w.rotation.x -= (backward ? -step : step) / (w.userData.wheel as number);
         // A crank turn every 4.4 m, as a real bike is geared (about 80 rpm at a
         // ride's speed): faster read as backward, the wagon-wheel effect.
-        h.phase += step / 0.7;
+        if (!backward) h.phase += step / 0.7;
+        else h.motion.backPhase = ((h.motion.backPhase ?? 0) + step / 0.45) % 1;
+      }
+      h.motion.backing! += ((backward && h.speed < 1.5 ? 1 : 0) - h.motion.backing!) * (1 - Math.exp(-6 * dt));
+      // A hard stop from speed skids: heard from anyone's ride, where it is.
+      if (h.vehicle && wasSpeed > 1.5 && (wasSpeed - h.speed) / dt > 3 && performance.now() - h.skidAt > 700) {
+        h.skidAt = performance.now();
+        skidSound(h.vehicle, wasSpeed, camera.getWorldPosition(v1).distanceTo(p));
       }
       const source = key === LOCAL_AVATAR ? LOCAL_TRACKING_SOURCE : key;
       const sample = trackingStore.get(source);

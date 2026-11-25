@@ -124,6 +124,22 @@ export function startHorn(distance?: number): () => void {
   return stop;
 }
 
+/** A hard stop: rubber dragged on the road, a screech falling as it slows
+ *  with the grind under it, longer the faster it was going; a moped's
+ *  engine dropping with it; a board's wheels scraping. */
+export function skidSound(kind: Vehicle, speed: number, distance?: number) {
+  const v = voice(0.9, distance, 30, 2);
+  if (!v) return;
+  const length = Math.min(0.9, 0.25 + speed * 0.07);
+  if (kind === "skateboard") {
+    noiseHit(v, { frequency: 3200, sweepTo: 1800, duration: length * 0.6, gain: 0.12, q: 1.5 });
+    return;
+  }
+  noiseHit(v, { frequency: kind === "moped" ? 2100 : 2700, sweepTo: kind === "moped" ? 1300 : 1700, duration: length, gain: 0.13, q: 6 });
+  noiseHit(v, { frequency: 600, duration: length * 0.8, gain: 0.09, q: 0.8 });
+  if (kind === "moped") toneHit(v, { frequency: 95, sweepTo: 55, duration: length, gain: 0.1, type: "sawtooth" });
+}
+
 export interface Engine {
   /** Metres a second, and how loud (0 to 1, the distance's falloff in it). */
   set(speed: number, level: number): void;

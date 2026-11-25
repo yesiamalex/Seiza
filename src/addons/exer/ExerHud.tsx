@@ -85,8 +85,8 @@ export function ExerButton() {
       )}
       <Hint accent={ACCENT}>
         {L(
-          "**T** goes through the rides (Shift+T back). **W** (or the pad) rides where you look, **A** and **D** steer, faster than walking, slower uphill. **B** rings the bike's bell, or sounds the moped's horn while held, and **Esc** (or **Get off** at the top) gets off. In VR, **hold the right trigger** to ride on (let go to coast to a stop), **squeeze the left trigger** to brake, press **A** for the bell (hold it for the moped's horn), and **B** to get off.",
-          "**T**で乗りものを切り替え(Shift+Tで戻る)。**W**(またはパッド)で見ている方へ進み、**A**と**D**で曲がります。歩くより速く、上り坂では遅くなります。**B**で自転車のベル、押している間は原付のクラクション、**Esc**(または上の「降りる」)で降ります。VRでは**右トリガーを押している間**進み(離すと止まります)、**左トリガー**でブレーキ、**A**でベル(原付は押している間クラクション)、**B**で降ります。"
+          "**T** goes through the rides (Shift+T back). **W** (or the pad) rides where you look, **A** and **D** steer, **S** (or the pad pulled back) brakes and, stopped, backs up, faster than walking, slower uphill. **B** rings the bike's bell, or sounds the moped's horn while held, and **Esc** (or **Get off** at the top) gets off. In VR, **hold the right trigger** to ride on (let go to coast to a stop), **squeeze the left trigger** to brake, press **A** for the bell (hold it for the moped's horn), and **B** to get off.",
+          "**T**で乗りものを切り替え(Shift+Tで戻る)。**W**(またはパッド)で見ている方へ進み、**A**と**D**で曲がり、**S**(またはパッドを後ろへ)でブレーキ、止まってからは後ろへ下がります。歩くより速く、上り坂では遅くなります。**B**で自転車のベル、押している間は原付のクラクション、**Esc**(または上の「降りる」)で降ります。VRでは**右トリガーを押している間**進み(離すと止まります)、**左トリガー**でブレーキ、**A**でベル(原付は押している間クラクション)、**B**で降ります。"
         )}
       </Hint>
     </ModeButton>

@@ -1172,7 +1172,10 @@ adds its own coloured button to the bar while it is on.
   uphill and a little faster down, and your avatar pedals, stands on the
   board, or sits on the moped, with the wheels turning. Getting on, off,
   or onto another ride eases: the old ride shrinks away as the rider steps
-  off it, and the new one grows in under them. On a ride, A and D steer (the view and the ride
+  off it, and the new one grows in under them. On a ride, S (or the pad pulled back) brakes, four
+  times quicker than coasting, as the VR brake does, and a hard stop from
+  speed skids, heard from anyone's ride; stopped, holding it backs the ride
+  up slowly, the rider pushing it back with their feet. On a ride, A and D steer (the view and the ride
   turn together, faster the faster it goes) instead of stepping sideways;
   on a phone, the pad's left and right do. **T** goes through the rides on a keyboard
   (Shift+T back, on foot after the last). Riders lean into turns and the ride banks

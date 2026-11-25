@@ -290,9 +290,23 @@ export interface RideMotion {
   /** Eased 0 to 1: off the ground (a jump), and stopped (a foot down). */
   aloft?: number;
   stopped?: number;
+  /** Eased 0 to 1: being pushed backward with the feet, and how far along those steps are. */
+  backing?: number;
+  backPhase?: number;
 }
 const STILL: RideMotion = { t: 0, speed: 0, turn: 0, air: 0 };
 const mix = (a: [number, number, number], b: [number, number, number], k: number): [number, number, number] => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
+
+/** Pushing a ride backward with the feet: both down, stepping back one
+ *  after the other, leaning a little forward over the bars. */
+function walkBack(out: BodyPose, motion: RideMotion, wide: number) {
+  const back = motion.backing ?? 0;
+  if (back <= 0) return;
+  const a = (motion.backPhase ?? 0) * Math.PI * 2;
+  out.left = mix(out.left, [-wide, -0.04 + 0.1 * Math.sin(a), 0.035 * Math.max(0, Math.cos(a))], back);
+  out.right = mix(out.right, [wide, -0.04 - 0.1 * Math.sin(a), 0.035 * Math.max(0, -Math.cos(a))], back);
+  out.lean += 0.08 * back;
+}
 
 /** The trick a skateboarder does in the air, by jump: a kickflip, a 360
  *  shove-it, a grab, in turn. */
@@ -338,6 +352,7 @@ export function riderPose(kind: Vehicle, phase: number, out: BodyPose, motion: R
       out.left = mix(out.left, [-0.13, -0.02, 0], stop);
       out.tilt += -0.06 * stop;
     }
+    walkBack(out, motion, 0.13);
   } else if (kind === "moped") {
     // Sat upright on the long seat, feet flat on the floorboard.
     out.lean = 0.12;
@@ -351,6 +366,7 @@ export function riderPose(kind: Vehicle, phase: number, out: BodyPose, motion: R
       out.left = mix(out.left, [-0.15, -0.1, 0], stop);
       out.right = mix(out.right, [0.15, -0.1, 0], stop);
     }
+    walkBack(out, motion, 0.15);
     // The road comes up through the seat; into the turns, less than a bike.
     out.tilt = into * 0.8;
     out.drop += 0.006 * Math.sin(motion.t * 11) * moving;

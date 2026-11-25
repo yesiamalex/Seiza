@@ -96,6 +96,8 @@ const XR_FLOOR_EASE_RATE = 8;
  *  up, rather than as drift or a snap turn. */
 const XR_SEAT_RELEASE_DISTANCE = 0.25;
 const wantVelocity = new THREE.Vector3();
+/** How fast a ride is pushed backward with the feet, m/s. */
+const BACK_UP_SPEED = 0.6;
 /** How far a seated VR player's head can wander from the seat (leaning,
  *  looking round) before it counts as standing up and walking off for real.
  *  Without it, getting up out of a real chair left the avatar sitting in
@@ -855,12 +857,16 @@ export function PlayerRig({
     const touch = touchInputRef?.current;
     const move = new THREE.Vector3();
     let jumpPressed = false;
+    // On a ride, back (S, or the pad pulled back) is the brake: a quicker stop,
+    // then, stopped, a slow push backward with the feet (see the velocity below).
+    const riding = drive.ease > 0;
+    const backWanted = !!(keys.KeyS || keys.ArrowDown || (touch && touch.y < -0.3));
+    const braking = riding && backWanted && !(keys.KeyW || keys.ArrowUp);
     if (keys.KeyW || keys.ArrowUp) move.add(forward);
-    if (keys.KeyS || keys.ArrowDown) move.sub(forward);
+    if (!riding && (keys.KeyS || keys.ArrowDown)) move.sub(forward);
     // On a ride (drive.ease is a ride's), A and D steer, as in a driving
     // game: the view and the ride turn, faster the faster it goes and a
     // little on the spot; on foot they step sideways.
-    const riding = drive.ease > 0;
     const steer = (keys.KeyA || keys.ArrowLeft ? 1 : 0) - (keys.KeyD || keys.ArrowRight ? 1 : 0) - (riding && touch ? touch.x : 0);
     if (riding && steer !== 0 && !isPresenting) {
       const turn = new THREE.Euler().setFromQuaternion(vcam.quaternion, "YXZ");
@@ -870,7 +876,7 @@ export function PlayerRig({
     if (!riding && (keys.KeyD || keys.ArrowRight)) move.add(right);
     if (!riding && (keys.KeyA || keys.ArrowLeft)) move.sub(right);
     if (touch) {
-      if (touch.y !== 0) move.addScaledVector(forward, touch.y);
+      if (touch.y !== 0 && !(riding && touch.y < 0)) move.addScaledVector(forward, touch.y);
       if (touch.x !== 0 && !riding) move.addScaledVector(right, touch.x);
       if (touch.jumpRequested) {
         touch.jumpRequested = false; // consume — one press, one jump
@@ -1173,7 +1179,14 @@ export function PlayerRig({
     }
     // On a ride, speed builds and fades (drive.ease); on foot it's at once.
     const velocity = velocityRef.current;
-    if (drive.ease > 0) velocity.lerp(want, 1 - Math.exp(-drive.ease * delta));
+    // Braking: down to a stop four times quicker than coasting (the VR brake's
+    // pace), then, held, backing up slowly, facing ahead all the while.
+    const rolling = velocity.length() > 0.4;
+    if (braking) {
+      if (rolling) want.set(0, 0, 0);
+      else want.copy(forward).multiplyScalar(-BACK_UP_SPEED);
+    }
+    if (drive.ease > 0) velocity.lerp(want, 1 - Math.exp(-(braking && rolling ? drive.ease * 4 : drive.ease) * delta));
     else velocity.copy(want);
     if (velocity.lengthSq() < 1e-4) velocity.set(0, 0, 0);
     vcam.position.addScaledVector(velocity, delta);
