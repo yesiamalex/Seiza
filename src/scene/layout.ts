@@ -233,7 +233,7 @@ export const SHORE = {
 /** Deeper than this (metres of water), you swim. */
 export const SWIM_DEPTH = 1.25;
 /** A swimmer's floor below the sea's surface: eyes just above the water. */
-const SWIM_FLOOR = 1.45;
+const SWIM_FLOOR = 1.32;
 
 /** Where the sand starts at `z`: a gently wandering line a little past the
  *  meadow's east edge. */

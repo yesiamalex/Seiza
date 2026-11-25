@@ -168,21 +168,38 @@ export function buildVehicle(kind: Vehicle): Built {
     const light = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 10).translate(0, 0.9, -0.52), new THREE.MeshBasicMaterial({ color: "#fff6d6", toneMapped: false }));
     light.userData.navIgnore = true;
     root.add(light);
-    // Its beam, a faint open cone (ExerLayer brightens it at night; your own
-    // moped also gets a real spotlight).
+    // Where it shines: a soft pool of light on the ground ahead, one flat
+    // card (ExerLayer brightens it at night; your own moped also casts a
+    // real spotlight). A see-through cone read as a traffic cone.
     const beam = new THREE.Mesh(
-      new THREE.ConeGeometry(0.75, 3.2, 16, 1, true)
-        .translate(0, -1.6, 0)
-        .rotateX(Math.PI / 2 - 0.12)
-        .translate(0, 0.9, -0.55),
-      new THREE.MeshBasicMaterial({ color: "#fff2c8", transparent: true, opacity: 0.04, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false })
+      new THREE.PlaneGeometry(1.8, 4).rotateX(-Math.PI / 2).translate(0, 0.03, -2.7),
+      new THREE.MeshBasicMaterial({ map: lightPool(), color: "#fff2c8", transparent: true, opacity: 0.04, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2 })
     );
     beam.name = "beam";
     beam.userData.navIgnore = true;
-    beam.renderOrder = 2;
     root.add(beam);
   }
   return { root, wheels };
+}
+
+/** The headlight's pool: brightest by the wheel, fading out ahead and to the sides. */
+let pool: THREE.CanvasTexture | null = null;
+function lightPool(): THREE.Texture | null {
+  if (pool || typeof document === "undefined") return pool;
+  const canvas = document.createElement("canvas");
+  canvas.width = 64;
+  canvas.height = 128;
+  const ctx = canvas.getContext("2d")!;
+  // An ellipse that's faded to nothing well inside the card's edges.
+  ctx.scale(1, 2);
+  const glow = ctx.createRadialGradient(32, 40, 0, 32, 40, 30);
+  glow.addColorStop(0, "rgba(255,255,255,1)");
+  glow.addColorStop(0.5, "rgba(255,255,255,0.45)");
+  glow.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, 64, 64);
+  pool = new THREE.CanvasTexture(canvas);
+  return pool;
 }
 
 /** The ride's own height in metres where the rider's hands go: the grips. */

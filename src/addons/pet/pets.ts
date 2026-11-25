@@ -29,6 +29,8 @@ interface Shape {
   /** How far above the body's middle the head sits (a dog's head up, a capybara's level). */
   headUp: number;
   snout: [number, number, number] | null;
+  /** A blunt, boxy head (a capybara's), not a round one. */
+  boxHead?: boolean;
   ears: "flop" | "point" | "tiny";
   tail: number;
   coat: string;
@@ -44,7 +46,7 @@ interface Shape {
 export const SHAPES: Record<Pet, Shape> = {
   dog: { length: 0.62, width: 0.24, height: 0.27, legs: 0.3, leg: 0.055, head: [0.19, 0.19, 0.22], headUp: 0.2, snout: [0.1, 0.09, 0.13], ears: "flop", tail: 0.22, coat: "#b9824e", belly: "#e2c39a", dark: "#3d2b1f", speed: 6.5, stride: 0.6, rest: "sit" },
   cat: { length: 0.42, width: 0.16, height: 0.17, legs: 0.19, leg: 0.032, head: [0.14, 0.13, 0.13], headUp: 0.12, snout: [0.06, 0.045, 0.04], ears: "point", tail: 0.34, coat: "#d4873e", belly: "#f1d7b4", dark: "#5a3a22", speed: 5.5, stride: 0.42, rest: "sit" },
-  capybara: { length: 0.95, width: 0.42, height: 0.44, legs: 0.2, leg: 0.075, head: [0.24, 0.27, 0.34], headUp: 0.08, snout: null, ears: "tiny", tail: 0, coat: "#8d6b49", belly: "#a88661", dark: "#3e2e20", speed: 4.5, stride: 0.5, rest: "lie" },
+  capybara: { length: 0.95, width: 0.42, height: 0.44, legs: 0.2, leg: 0.075, head: [0.21, 0.24, 0.36], headUp: 0.1, snout: null, boxHead: true, ears: "tiny", tail: 0, coat: "#93704c", belly: "#a88661", dark: "#3e2e20", speed: 4.5, stride: 0.5, rest: "lie" },
 };
 
 /** Bone order. */
@@ -62,6 +64,21 @@ export interface BuiltPet {
 
 const materials = new Map<Pet, THREE.MeshStandardMaterial>();
 const geometries = new Map<Pet, { geometry: THREE.BufferGeometry; joints: THREE.Vector3[] }>();
+
+/** A unit box, its corners worn halfway to a ball: a capybara's blunt head. */
+function roundedBox() {
+  const g = new THREE.BoxGeometry(1, 1, 1, 4, 4, 4);
+  const p = g.getAttribute("position");
+  const v = new THREE.Vector3();
+  for (let i = 0; i < p.count; i++) {
+    v.fromBufferAttribute(p, i);
+    const round = v.clone().setLength(0.5);
+    v.lerp(round, 0.55);
+    p.setXYZ(i, v.x, v.y, v.z);
+  }
+  g.computeVertexNormals();
+  return g;
+}
 
 /** One shape, coloured, its every vertex on one bone. */
 function part(g: THREE.BufferGeometry, bone: number, color: (y: number) => THREE.Color) {
@@ -98,7 +115,7 @@ function build(kind: Pet) {
   // A neck for the dog and the cat, from the body's front up to the head.
   if (s.headUp > 0.1) parts.push(part(new THREE.CylinderGeometry(s.head[0] * 0.32, s.width * 0.34, s.headUp + 0.06, 8).translate(0, bodyY + s.headUp / 2, front + 0.05), BODY, solid(coat)));
   // The head, its snout and nose, eyes, and ears.
-  const head: THREE.BufferGeometry[] = [new THREE.SphereGeometry(0.5, 12, 10).scale(...s.head).translate(headAt.x, headAt.y, headAt.z)];
+  const head: THREE.BufferGeometry[] = [(s.boxHead ? roundedBox() : new THREE.SphereGeometry(0.5, 12, 10)).scale(...s.head).translate(headAt.x, headAt.y, headAt.z)];
   const tip = headAt.z - s.head[2] / 2;
   if (s.snout) head.push(new THREE.BoxGeometry(...s.snout).translate(0, headAt.y - s.head[1] * 0.18, tip + s.snout[2] * 0.2));
   parts.push(...head.map((g) => part(g, HEAD, solid(coat))));

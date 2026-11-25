@@ -259,7 +259,7 @@ export function ExerLayer({ selfId, players, getSelfPosition, selfSeated }: { se
       const shown = ease(h.grow);
       if (h.prop) h.prop.scale.setScalar(h.base * Math.max(0.001, shown));
       const night = skyState.night ?? 0;
-      if (h.beam) (h.beam.material as THREE.MeshBasicMaterial).opacity = (0.025 + 0.12 * night) * shown;
+      if (h.beam) (h.beam.material as THREE.MeshBasicMaterial).opacity = (0.04 + 0.22 * night) * shown;
       if (h.lamp) h.lamp.intensity = (2 + 28 * night) * shown;
       // A moped's engine, heard nearby, putting along faster as it goes.
       const distance = camera.getWorldPosition(v1).distanceTo(vrm.scene.getWorldPosition(v2));
