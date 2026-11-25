@@ -11,10 +11,11 @@ import type { PlayerState } from "../../multiplayer/types";
 import { getAddonAvatar, LOCAL_AVATAR } from "../avatars";
 import { blendBody, carryHand, copyBody, Gait, newBodyPose, poseBody, type BodyPose } from "../body";
 import { onAddonEvent, sendAddonEvent } from "../bus";
+import { setFaceCue } from "../../avatar/useFacialExpressions";
 import { disposeTree, feetAndEye, holdInHand, newTrackedHand, pointHeld, poseHands, rigFor, toTrackedHand, wearOnChest, type HandTarget } from "../rig";
 import { announceBand, atOnce, band, localNote, musicianOf, NoteGate, parseBandEvent, play, release as releaseNote, remoteMusicians, resetBand, tapped, validNote } from "./band";
 import { CHORDS, chordOf, ELECTRIC, GONGS, holdNote, holds, isWorn, KEY_LAYOUT, KEYS_BASE, KIT, LIGHT_COLORS, PICK_BASE, playNote, preloadViolin, prepareGuitar, TAIKO, type Instrument, type Worn } from "./instruments";
-import { bandBody, updateGroove, type Groove } from "./moves";
+import { bandBody, bandFace, updateGroove, type Groove } from "./moves";
 import { buzz } from "../../xr/controls";
 
 /** Keys others are holding down, each with its release, by "player:note". */
@@ -1163,6 +1164,7 @@ export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerPr
       const moving = rig ? holder.gait.update(rig, dt) : 0;
       if (!rig || holder.weight <= 0.001 || !instrument) {
         holder.settled = null;
+        setFaceCue(vrm, "band", null);
         return;
       }
       const hands = holder.hands;
@@ -1170,6 +1172,8 @@ export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerPr
       // it, so the hands are placed on it after. Pads, keys, and the kit
       // stand on the floor, so the hands stay on them while the body moves.
       const energy = updateGroove(holder.groove, instrument, note, waving, now, dt);
+      // Playing, the face shows it (and goes back to their own between songs).
+      setFaceCue(vrm, "band", energy > 0.55 ? bandFace(instrument) : null);
       // Where along the instrument the last note was, to lean toward.
       const side =
         instrument === "drums" || instrument === "keys" ? hands.lastX[hands.last] : instrument === "kulintang" ? (GONGS_AT[hands.lastPiece[hands.last]]?.at[0] ?? 0) : 0;
@@ -1399,6 +1403,7 @@ function nearestKey(x: number, black: boolean): number | null {
 
 function release(holder: Holder) {
   holder.overlay.restore();
+  setFaceCue(holder.vrm, "band", null);
   holder.detach();
   if (holder.prop) disposeTree(holder.prop);
 }

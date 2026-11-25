@@ -1,5 +1,20 @@
 import { copyBody, NEUTRAL, type BodyPose } from "../body";
 import type { Instrument } from "./instruments";
+import type { FaceCue } from "../../avatar/useFacialExpressions";
+
+const FEELING_IT: FaceCue = { relaxed: 0.7, blink: 0.45 };
+const GRIN: FaceCue = { happy: 0.55 };
+const BEAMING: FaceCue = { happy: 0.85 };
+const ENJOYING: FaceCue = { relaxed: 0.5, happy: 0.3 };
+/** The face while playing: eyes half shut, feeling it, on the bowed and
+ *  the melodic; a grin on the drums; beaming, waving a light stick; on the
+ *  strings, a quiet smile. */
+export function bandFace(instrument: Instrument): FaceCue {
+  if (instrument === "violin" || instrument === "keys" || instrument === "kulintang") return FEELING_IT;
+  if (instrument === "drums" || instrument === "kit" || instrument === "taiko" || instrument === "shaker") return GRIN;
+  if (instrument === "lightstick") return BEAMING;
+  return ENJOYING;
+}
 
 /**
  * How a musician moves while playing (see ../body.ts for the pose itself).

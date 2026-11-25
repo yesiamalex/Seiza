@@ -60,6 +60,30 @@ const LIPSYNC_FULL_SCALE = 0.28;
 const LIPSYNC_OPEN_RATE = 26;
 const LIPSYNC_CLOSE_RATE = 14;
 
+/**
+ * Faces something other than a gesture asks for: a pat's soft smile, the
+ * relief after a drink of water, a player's concentration on a solo. Per
+ * avatar, and per asker, each a weight per expression ("blink" too, to
+ * hold the eyes shut). While any is set it replaces the avatar's own face
+ * (a gesture's, or the heat's), eased in and out more gently than a
+ * gesture's, so it settles onto the face rather than snapping. Whoever
+ * set one clears it (null) when they're done.
+ */
+export type FaceCue = Partial<Record<(typeof FACE_EXPRESSIONS)[number] | "blink", number>>;
+const cues = new WeakMap<object, Map<string, FaceCue>>();
+export function setFaceCue(vrm: VRM | null | undefined, from: string, face: FaceCue | null) {
+  if (!vrm) return;
+  let byAsker = cues.get(vrm);
+  if (!face) {
+    byAsker?.delete(from);
+    return;
+  }
+  if (!byAsker) cues.set(vrm, (byAsker = new Map()));
+  byAsker.set(from, face);
+}
+/** How quickly a cue's face comes and goes: a second or so. */
+const CUE_RATE = 3.5;
+
 const nextBlinkGap = () => BLINK_MIN_GAP + Math.random() * (BLINK_MAX_GAP - BLINK_MIN_GAP);
 
 interface FaceState {
@@ -70,6 +94,10 @@ interface FaceState {
   mouthOpen: number;
   /** How shut the eyes are held, 0..1, for a sleeping face. */
   sleep: number;
+  /** How shut a cue holds the eyes, eased; and how lately a cue was set,
+   *  so its face also fades out at the cue's gentle pace. */
+  cueBlink: number;
+  cueHold: number;
 }
 
 /**
@@ -96,6 +124,8 @@ export function useFacialExpressions(
     blinking: false,
     mouthOpen: 0,
     sleep: 0,
+    cueBlink: 0,
+    cueHold: 0,
   });
 
   // Negative priority, for the same reason AvatarAnimator's pose pass
@@ -133,7 +163,18 @@ export function useFacialExpressions(
     const sleeping = expression === "sleep";
     state.sleep += ((sleeping ? 1 : 0) - state.sleep) * (1 - Math.exp(-3 * delta));
     if (state.sleep < 0.002) state.sleep = 0;
-    if (manager.getExpression("blink")) manager.setValue("blink", Math.max(blinkWeight, state.sleep));
+    // Whatever cues are set, together: the most any of them asks of each.
+    const asked = vrm ? cues.get(vrm) : undefined;
+    let cue: FaceCue | null = null;
+    if (asked?.size) {
+      cue = {};
+      for (const face of asked.values()) for (const [name, w] of Object.entries(face) as [keyof FaceCue, number][]) cue[name] = Math.max(cue[name] ?? 0, w);
+    }
+    state.cueHold = cue ? 1.5 : Math.max(0, state.cueHold - delta);
+    const cueSmoothing = 1 - Math.exp(-CUE_RATE * delta);
+    state.cueBlink += ((cue?.blink ?? 0) - state.cueBlink) * cueSmoothing;
+    if (state.cueBlink < 0.002) state.cueBlink = 0;
+    if (manager.getExpression("blink")) manager.setValue("blink", Math.max(blinkWeight, state.sleep, state.cueBlink));
 
     // --- expression ----------------------------------------------------
     // "neutral" is the absence of the others rather than a preset to
@@ -145,12 +186,14 @@ export function useFacialExpressions(
     const airborne = airborneRef?.current ?? 0;
     const wanted =
       airborne > 0.35 ? "surprised" : sleeping ? "relaxed" : expression && expression !== "neutral" ? expression : null;
-    const smoothing = 1 - Math.exp(-EXPRESSION_RATE * delta);
+    // A cue's face, unless the avatar is mid-jump or asleep.
+    const cueFace = cue && airborne <= 0.35 && !sleeping ? cue : null;
+    const smoothing = state.cueHold > 0 ? cueSmoothing : 1 - Math.exp(-EXPRESSION_RATE * delta);
 
     for (const name of FACE_EXPRESSIONS) {
       if (name === "neutral") continue;
       if (!manager.getExpression(name)) continue;
-      const target = name === wanted ? 1 : 0;
+      const target = cueFace ? (cueFace[name] ?? 0) : name === wanted ? 1 : 0;
       const current = state.weights.get(name) ?? 0;
       const next = current + (target - current) * smoothing;
       // Snap the tail so a decaying weight actually reaches zero instead

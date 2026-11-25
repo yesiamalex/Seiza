@@ -15,6 +15,7 @@ import { newBodyPose, poseBody } from "../body";
 import { onAddonEvent, sendAddonEvent } from "../bus";
 import { feetAndEye, newTrackedHand, poseHands, rigFor, toTrackedHand, type HandTarget } from "../rig";
 import { useStore } from "../store";
+import { setFaceCue, type FaceCue } from "../../avatar/useFacialExpressions";
 import { L } from "../../i18n/lang";
 import { announcePet, preloadBarks, BODY, buildPet, disposePets, HEAD, LEGS, nearPet, parsePetEvent, pet, PET_LABELS, patPet, patted, petName, petSound, remotePets, SHAPES, TAIL, type BuiltPet, type PetLook } from "./pets";
 
@@ -38,6 +39,8 @@ const PAT_REACH = 0.28;
 const PAT_NEAR = 1.8;
 /** How long a pat takes, seconds: a few slow strokes, not a tap. */
 const PAT_TIME = 2.8;
+/** The patter's face: a soft smile, eyes half closed (useFacialExpressions). */
+const PAT_FACE: FaceCue = { relaxed: 0.65, happy: 0.35 };
 /** An uploaded pet's height at size 1, metres. */
 const MODEL_HEIGHT = 0.55;
 
@@ -406,8 +409,12 @@ export function PetLayer({ selfId, players, selfSeated }: { selfId: string | nul
       const vrm = getAddonAvatar(who);
       if (p.t > PAT_TIME || !f?.root || !vrm) {
         pats.delete(who);
+        setFaceCue(vrm, "pat", null);
         continue;
       }
+      // A soft smile, eyes half closed, the whole while (in a headset too);
+      // the last moment, it starts to fade back.
+      setFaceCue(vrm, "pat", p.t < PAT_TIME - 0.5 ? PAT_FACE : null);
       const source = who === LOCAL_AVATAR ? LOCAL_TRACKING_SOURCE : who;
       const sample = trackingStore.get(source);
       if (sample !== null && performance.now() - sample.receivedAt < TRACKING_STALE_MS) continue;
@@ -435,6 +442,8 @@ export function PetLayer({ selfId, players, selfSeated }: { selfId: string | nul
       body.twist = THREE.MathUtils.clamp(Math.atan2(local.x, -local.z), -0.7, 0.7) * weight;
       body.lean = 0.5 * weight;
       body.drop = Math.max(0, 0.55 - local.y) * 0.5 * weight;
+      // The head bows to look at it, and tips with the strokes.
+      body.nod = (0.22 + 0.05 * along) * weight;
       poseBody(rig, overlay, body, weight, weight);
       const target: HandTarget = { pos: [local.x, local.y + 0.045, local.z], blade: [0, 0, -1], fingers: [0, -0.6, -1], curl: 0.15 };
       poseHands(rig, overlay, toTrackedHand("right", target, newTrackedHand()), null, weight);

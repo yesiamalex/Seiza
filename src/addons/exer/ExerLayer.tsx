@@ -15,6 +15,12 @@ import { onAddonEvent, sendAddonEvent } from "../bus";
 import { disposeTree, feetAndEye, newTrackedHand, poseHands, rigFor, toTrackedHand, type HandTarget } from "../rig";
 import { latestReading, sendGradient } from "../sport";
 import { skidSound } from "./ride";
+import { setFaceCue, type FaceCue } from "../../avatar/useFacialExpressions";
+
+/** Riders' faces (useFacialExpressions' cues). */
+const TRICK_FACE: FaceCue = { happy: 0.8, surprised: 0.3 };
+const SKID_FACE: FaceCue = { surprised: 0.6 };
+const FAST_FACE: FaceCue = { happy: 0.45 };
 import { announceRide, getOffBehind, myPassenger, nearRide, parseExerEvent, passenger, passengers, playBell, releaseBell, remoteRiders, resetRide, ride, ringBell, setVehicle, startEngine, startHorn, type Engine } from "./ride";
 import { SEAT_HEIGHT } from "../../scene/layout";
 import { skyState } from "../../sky/skyState";
@@ -417,6 +423,8 @@ export function ExerLayer({ selfId, players, getSelfPosition, selfSeated }: { se
         h.trickT = 0;
         h.trick = (h.trick + 1) % TRICKS.length;
       }
+      // The face: thrilled in a trick, startled by a skid, smiling at speed.
+      setFaceCue(vrm, "exer", !h.vehicle ? null : h.trickT > 0 ? TRICK_FACE : performance.now() - h.skidAt < 900 ? SKID_FACE : h.speed > 4 ? FAST_FACE : null);
       if (h.prop) {
         // The ride banks into a turn, a bike most; a board does its trick.
         const bank = Math.max(-0.35, Math.min(0.35, m.turn * (h.vehicle === "bike" ? 0.12 : h.vehicle === "moped" ? 0.08 : 0.1))) * Math.min(1, h.speed / 3);
@@ -475,6 +483,7 @@ const seatQ = new THREE.Quaternion();
 
 function release(h: Holder) {
   h.overlay.restore();
+  setFaceCue(h.vrm, "exer", null);
   dropProp(h);
   h.engine?.stop();
   h.engine = null;

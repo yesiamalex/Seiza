@@ -11,6 +11,7 @@ import { cancelSelfPush, pushSelf } from "../../player/selfPush";
 import { getAddonAvatar, LOCAL_AVATAR } from "../avatars";
 import { blendBody, carryHand, copyBody, Gait, newBodyPose, poseBody, type BodyPose } from "../body";
 import { onAddonEvent, sendAddonEvent } from "../bus";
+import { setFaceCue, type FaceCue } from "../../avatar/useFacialExpressions";
 import { disposeTree, facing, feetAndEye, holdInHand, newTrackedHand, pointHeld, poseHands, rigFor, toTrackedHand, type HandTarget } from "../rig";
 import {
   acceptHit,
@@ -153,6 +154,11 @@ function settleHand(hand: Settled, goal: HandTarget | null, k: number, dt: numbe
   hand.target.curl = (hand.target.curl ?? 1) + ((goal.curl ?? 1) - (hand.target.curl ?? 1)) * k;
 }
 const seconds = () => performance.now() / 1000;
+/** Fighters' faces (useFacialExpressions' cues). */
+const SWING_FACE: FaceCue = { angry: 0.75 };
+const GUARD_FACE: FaceCue = { angry: 0.4 };
+const HURT_FACE: FaceCue = { blink: 0.8, sad: 0.5 };
+const KO_FACE: FaceCue = { blink: 1, sad: 0.4 };
 const ARROW_RANGE = 40;
 /** How far each element's special carries you forward: Havoc lunges into
  *  its plunge, Electro and Glacio hold their ground. */
@@ -813,6 +819,9 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode, selfS
       const vrm = getAddonAvatar(key);
       if (!vrm) return;
       seen.add(key);
+      // The face: out cold, wincing when struck, set on a swing, steady on guard.
+      const at = seconds();
+      setFaceCue(vrm, "fantasy", ko ? KO_FACE : !weapon ? null : at - hurtAt < 0.7 ? HURT_FACE : action && at - action.start < 0.9 ? SWING_FACE : guard ? GUARD_FACE : null);
       let holder = holders.get(key);
       if (holder && holder.vrm !== vrm) {
         releaseHolder(holder);
@@ -1131,6 +1140,7 @@ function copyKnockedOut(out: BodyPose) {
 
 function releaseHolder(holder: Holder) {
   holder.overlay.restore();
+  setFaceCue(holder.vrm, "fantasy", null);
   holder.detach();
   if (holder.prop) disposeTree(holder.prop);
   holder.trail.mesh.removeFromParent();
