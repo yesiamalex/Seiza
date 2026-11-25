@@ -14,7 +14,8 @@ import { newBodyPose, poseBody, type BodyPose } from "../body";
 import { onAddonEvent, sendAddonEvent } from "../bus";
 import { disposeTree, feetAndEye, newTrackedHand, poseHands, rigFor, toTrackedHand, type HandTarget } from "../rig";
 import { latestReading, sendGradient } from "../sport";
-import { announceRide, parseExerEvent, playBell, remoteRiders, resetRide, ride, ringBell, setVehicle } from "./ride";
+import { announceRide, parseExerEvent, playBell, releaseBell, remoteRiders, resetRide, ride, ringBell, setVehicle, startEngine, startHorn, type Engine } from "./ride";
+import { skyState } from "../../sky/skyState";
 import { buildVehicle, gripTarget, RIDE_EYE, riderPose, slopeFactor, VEHICLE_SPECS, type Vehicle } from "./vehicles";
 
 /** Walking speed (PlayerRig's MOVE_SPEED), m/s: rides go a multiple of it. */
@@ -25,10 +26,24 @@ const SLOPE_AHEAD = 1.5;
 const A_BUTTON = 4;
 const B_BUTTON = 5;
 
+/** Getting on or off, or changing rides: each half (the old ride going,
+ *  the new one coming) takes this long, seconds. */
+const SWAP = 0.3;
+/** A moped's engine is heard within this far, metres. */
+const ENGINE_RANGE = 28;
+const ease = (g: number) => g * g * (3 - 2 * g);
+
 interface Holder {
   vrm: VRM;
   overlay: PoseOverlay;
+  /** The ride shown, which may still be going or coming (grow 0 to 1). */
   vehicle: Vehicle | null;
+  grow: number;
+  base: number;
+  beam: THREE.Mesh | null;
+  lamp: THREE.SpotLight | null;
+  engine: Engine | null;
+  engineAt: number;
   prop: THREE.Group | null;
   wheels: THREE.Object3D[];
   detach: () => void;
@@ -49,6 +64,8 @@ const scaleV = new THREE.Vector3();
 export function ExerLayer({ selfId, players, getSelfPosition, selfSeated }: { selfId: string | null; players: Record<string, PlayerState>; getSelfPosition: () => [number, number, number]; selfSeated: boolean }) {
   const { gl, camera } = useThree();
   const holders = useRef(new Map<string, Holder>()).current;
+  /** Horns sounding from others, until they let go. */
+  const horns = useRef(new Map<string, () => void>()).current;
   const selfIdRef = useRef(selfId);
   selfIdRef.current = selfId;
   const playersRef = useRef(players);
@@ -73,10 +90,17 @@ export function ExerLayer({ selfId, players, getSelfPosition, selfSeated }: { se
           remoteRiders.set(from, { vehicle: event.vehicle });
           return;
         }
+        const stopHorn = horns.get(from);
+        horns.delete(from);
+        stopHorn?.();
+        if (event.k === "hu") return;
         const vehicle = remoteRiders.get(from)?.vehicle;
         const bell = vehicle ? VEHICLE_SPECS[vehicle].bell : null;
         const vrm = getAddonAvatar(from);
-        if (bell) playBell(bell, vrm ? camera.getWorldPosition(v1).distanceTo(vrm.scene.getWorldPosition(v2)) : undefined);
+        const distance = vrm ? camera.getWorldPosition(v1).distanceTo(vrm.scene.getWorldPosition(v2)) : undefined;
+        // A horn sounds until they let go ("hu"); a bell rings out.
+        if (bell === "horn") horns.set(from, startHorn(distance));
+        else if (bell) playBell(bell, distance);
       }),
     [camera]
   );
@@ -88,6 +112,8 @@ export function ExerLayer({ selfId, players, getSelfPosition, selfSeated }: { se
     () => () => {
       for (const h of holders.values()) release(h);
       holders.clear();
+      for (const stop of horns.values()) stop();
+      horns.clear();
       resetRide();
     },
     [holders]
@@ -162,10 +188,12 @@ export function ExerLayer({ selfId, players, getSelfPosition, selfSeated }: { se
         return;
       }
       l.bWas = b;
+      // A rings the bell, or sounds the horn while held.
       if (a && !l.aWas) {
         ringBell();
         buzz(gl, "right", 0.2, 30);
       }
+      if (!a && l.aWas) releaseBell();
       l.aWas = a;
       const world = trackingStore.getLocalWorld();
       const origin = gl.xr.getCamera().parent;
@@ -196,33 +224,60 @@ export function ExerLayer({ selfId, players, getSelfPosition, selfSeated }: { se
         h = undefined;
       }
       if (!h) {
-        h = { vrm, overlay: sharedOverlay(vrm, frame), vehicle: null, prop: null, wheels: [], detach: () => {}, weight: 0, phase: 0, last: null, speed: 0, body: newBodyPose(), hands: { right: target(), left: target() }, tracked: { right: newTrackedHand(), left: newTrackedHand() } };
+        h = { vrm, overlay: sharedOverlay(vrm, frame), vehicle: null, grow: 0, base: 1, beam: null, lamp: null, engine: null, engineAt: 0, prop: null, wheels: [], detach: () => {}, weight: 0, phase: 0, last: null, speed: 0, body: newBodyPose(), hands: { right: target(), left: target() }, tracked: { right: newTrackedHand(), left: newTrackedHand() } };
         holders.set(key, h);
       }
       h.overlay = sharedOverlay(vrm, frame);
-      if (vehicle !== h.vehicle) {
-        h.detach();
-        if (h.prop) disposeTree(h.prop);
-        h.prop = null;
-        h.wheels = [];
-        h.detach = () => {};
+      // A change of ride: the old one shrinks away (and the rider eases off
+      // it), then the new one grows in under them.
+      if (vehicle !== h.vehicle && h.vehicle && h.grow > 0) h.grow = Math.max(0, h.grow - dt / SWAP);
+      else if (vehicle !== h.vehicle) {
+        dropProp(h);
         h.vehicle = vehicle;
+        h.grow = 0;
         const anchor = vrm.scene.parent;
         if (vehicle && rig && anchor) {
           const built = buildVehicle(vehicle);
-          built.root.scale.setScalar(feetAndEye(rig, v1) / RIDE_EYE / anchor.getWorldScale(scaleV).y);
+          h.base = feetAndEye(rig, v1) / RIDE_EYE / anchor.getWorldScale(scaleV).y;
           anchor.add(built.root);
           h.prop = built.root;
           h.wheels = built.wheels;
+          h.beam = (built.root.getObjectByName("beam") as THREE.Mesh | undefined) ?? null;
+          // Your own moped's headlight is a real light (no shadows): the
+          // only one, and only while you ride one.
+          if (key === LOCAL_AVATAR && vehicle === "moped") {
+            const lamp = new THREE.SpotLight("#fff2d0", 0, 24, 0.5, 0.6, 1.2);
+            lamp.position.set(0, 0.9, -0.56);
+            lamp.target.position.set(0, 0.1, -6);
+            built.root.add(lamp, lamp.target);
+            h.lamp = lamp;
+          }
           const root = built.root;
           h.detach = () => anchor.remove(root);
         }
+      } else if (h.grow < 1) h.grow = Math.min(1, h.grow + dt / SWAP);
+      const shown = ease(h.grow);
+      if (h.prop) h.prop.scale.setScalar(h.base * Math.max(0.001, shown));
+      const night = skyState.night ?? 0;
+      if (h.beam) (h.beam.material as THREE.MeshBasicMaterial).opacity = (0.025 + 0.12 * night) * shown;
+      if (h.lamp) h.lamp.intensity = (2 + 28 * night) * shown;
+      // A moped's engine, heard nearby, putting along faster as it goes.
+      const distance = camera.getWorldPosition(v1).distanceTo(vrm.scene.getWorldPosition(v2));
+      if (h.vehicle === "moped" && distance < ENGINE_RANGE) {
+        h.engine ??= startEngine();
+        if (h.engine && frame - h.engineAt > 0.1) {
+          h.engineAt = frame;
+          h.engine.set(h.speed, shown * (1 - distance / ENGINE_RANGE));
+        }
+      } else if (h.engine) {
+        h.engine.stop();
+        h.engine = null;
       }
       // How far it went, for the wheels and the pedals.
       const p = vrm.scene.getWorldPosition(v2);
       const step = h.last ? Math.hypot(p.x - h.last.x, p.z - h.last.z) : 0;
       h.last = (h.last ?? new THREE.Vector3()).copy(p);
-      if (step < 2 && vehicle) {
+      if (step < 2 && h.vehicle) {
         h.speed += (step / Math.max(dt, 1e-3) - h.speed) * (1 - Math.exp(-6 * dt));
         for (const w of h.wheels) w.rotation.x -= step / (w.userData.wheel as number);
         h.phase += step / 0.35;
@@ -231,7 +286,7 @@ export function ExerLayer({ selfId, players, getSelfPosition, selfSeated }: { se
       const sample = trackingStore.get(source);
       const inHeadset = sample !== null && performance.now() - sample.receivedAt < TRACKING_STALE_MS;
       const seated = key === LOCAL_AVATAR ? seatedRef.current : !!playersRef.current[key]?.posture;
-      h.weight += ((vehicle && !inHeadset && !seated ? 1 : 0) - h.weight) * (1 - Math.exp(-6 * dt));
+      h.weight += ((h.vehicle && !inHeadset && !seated ? shown : 0) - h.weight) * (1 - Math.exp(-12 * dt));
       if (!rig || !h.vehicle || h.weight < 0.01) return;
       // Pedals turn only while moving; standing still, feet rest level.
       riderPose(h.vehicle, h.speed > 0.2 ? h.phase : Math.PI / 2, h.body);
@@ -252,8 +307,20 @@ export function ExerLayer({ selfId, players, getSelfPosition, selfSeated }: { se
   return null;
 }
 
-function release(h: Holder) {
-  h.overlay.restore();
+function dropProp(h: Holder) {
   h.detach();
   if (h.prop) disposeTree(h.prop);
+  h.prop = null;
+  h.wheels = [];
+  h.beam = null;
+  h.lamp?.dispose();
+  h.lamp = null;
+  h.detach = () => {};
+}
+
+function release(h: Holder) {
+  h.overlay.restore();
+  dropProp(h);
+  h.engine?.stop();
+  h.engine = null;
 }

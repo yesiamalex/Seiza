@@ -4,7 +4,7 @@ import { pillButtonStyle } from "../../ui/styles";
 import { useStore } from "../store";
 import { Choices, Hint, MODE_ACCENTS, ModeButton } from "../ui";
 import { activeRideSource, connectRideSource, disconnectRideSource, latestReading, onRideSourcesChange, rideSources } from "../sport";
-import { ride, ringBell, setVehicle } from "./ride";
+import { releaseBell, ride, ringBell, setVehicle } from "./ride";
 import { VEHICLE_LABELS, VEHICLE_SPECS, VEHICLES, type Vehicle } from "./vehicles";
 
 const ACCENT = MODE_ACCENTS.exer;
@@ -21,8 +21,18 @@ function useBellKey() {
       if (e.key.toLowerCase() === "b") ringBell();
       else if (e.key === "Escape") setVehicle(null);
     };
+    // The horn sounds while B is held.
+    const onUp = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === "b") releaseBell();
+    };
+    window.addEventListener("keyup", onUp);
+    window.addEventListener("blur", releaseBell);
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keyup", onUp);
+      window.removeEventListener("blur", releaseBell);
+    };
   }, []);
 }
 
@@ -49,7 +59,7 @@ export function ExerButton() {
         render={(v) => (v === NONE ? L("On foot", "徒歩") : L(...VEHICLE_LABELS[v]))}
       />
       {bell && (
-        <button type="button" style={pillButtonStyle} onClick={ringBell}>
+        <button type="button" style={pillButtonStyle} {...holdToSound}>
           {bell === "bell" ? L("Ring the bell", "ベルを鳴らす") : L("Sound the horn", "クラクション")} <kbd style={{ opacity: 0.6, fontSize: 10 }}>B</kbd>
         </button>
       )}
@@ -66,8 +76,8 @@ export function ExerButton() {
       )}
       <Hint accent={ACCENT}>
         {L(
-          "**W** (or the pad) rides where you look, faster than walking, slower uphill. **B** rings the bike's bell or sounds the moped's horn, and **Esc** (or **Get off** at the top) gets off. In VR, **hold the right trigger** to ride on (let go to coast to a stop), **squeeze the left trigger** to brake, press **A** for the bell, and **B** to get off.",
-          "**W**(またはパッド)で見ている方へ進みます。歩くより速く、上り坂では遅くなります。**B**で自転車のベルや原付のクラクション、**Esc**(または上の「降りる」)で降ります。VRでは**右トリガーを押している間**進み(離すと止まります)、**左トリガー**でブレーキ、**A**でベル、**B**で降ります。"
+          "**W** (or the pad) rides where you look, faster than walking, slower uphill. **B** rings the bike's bell, or sounds the moped's horn while held, and **Esc** (or **Get off** at the top) gets off. In VR, **hold the right trigger** to ride on (let go to coast to a stop), **squeeze the left trigger** to brake, press **A** for the bell (hold it for the moped's horn), and **B** to get off.",
+          "**W**(またはパッド)で見ている方へ進みます。歩くより速く、上り坂では遅くなります。**B**で自転車のベル、押している間は原付のクラクション、**Esc**(または上の「降りる」)で降ります。VRでは**右トリガーを押している間**進み(離すと止まります)、**左トリガー**でブレーキ、**A**でベル(原付は押している間クラクション)、**B**で降ります。"
         )}
       </Hint>
     </ModeButton>
@@ -95,7 +105,7 @@ export function ExerStatus({ touch }: { touch: boolean }) {
     <div style={statusStyle}>
       <RideStats />
       {touch && bell && (
-        <button type="button" style={{ ...pillButtonStyle, padding: "6px 12px" }} onClick={ringBell}>
+        <button type="button" style={{ ...pillButtonStyle, padding: "6px 12px" }} {...holdToSound}>
           {bell === "bell" ? L("Bell", "ベル") : L("Horn", "クラクション")}
         </button>
       )}
@@ -136,3 +146,21 @@ export const BikeIcon = () => (
     <path d="M5.5 17l4-8h5l4 8M9.5 9L8 6H6M14.5 9l-3 8" />
   </svg>
 );
+
+/** A bell or horn button: the horn sounds while it's held, the bell rings
+ *  on the press (Enter or Space on a keyboard too). */
+const holdToSound = {
+  onPointerDown: (e: React.PointerEvent) => {
+    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    ringBell();
+  },
+  onPointerUp: releaseBell,
+  onPointerCancel: releaseBell,
+  onLostPointerCapture: releaseBell,
+  onClick: (e: React.MouseEvent) => {
+    if (e.detail !== 0) return;
+    ringBell();
+    setTimeout(releaseBell, 300);
+  },
+  onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
+};

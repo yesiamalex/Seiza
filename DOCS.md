@@ -1160,11 +1160,17 @@ adds its own coloured button to the bar while it is on.
 - **ExerSeiza** (green): get on a bike (a Japanese mamachari with a basket
   and a bell), a skateboard, or a moped. You go faster than walking, slower
   uphill and a little faster down, and your avatar pedals, stands on the
-  board, or sits on the moped, with the wheels turning. B rings the bell
-  (or the moped's horn); on a phone, a Bell button shows while you ride. In
-  VR, hold the right trigger to ride on where you face (let go to coast to
-  a stop), squeeze the left trigger to brake, press A for the bell, and B to get
-  off. On a keyboard Esc gets off; everyone has a Get off button on the
+  board, or sits on the moped, with the wheels turning. Getting on, off,
+  or onto another ride eases: the old ride shrinks away as the rider steps
+  off it, and the new one grows in under them. B rings the bell, or sounds
+  the moped's horn for as long as it's held; on a phone, a Bell (or Horn)
+  button shows while you ride, held the same way. In VR, hold the right
+  trigger to ride on where you face (let go to coast to a stop), squeeze the
+  left trigger to brake, press A for the bell (hold it for the horn), and B
+  to get off. The moped's engine putters, rising with its speed, for anyone
+  within 28 m (a few Web Audio nodes, no samples), and its headlight shines
+  a soft beam that brightens at night; your own moped's is also a real
+  spotlight (one, no shadows, only while you ride it). On a keyboard Esc gets off; everyone has a Get off button on the
   ride's bar at the top. The panel shows speed, distance, climb, and the
   slope. Rides are kept on your device. Real equipment plugs in through
   SportSeiza (`src/addons/sport/`): a connected smart trainer moves you at

@@ -1,6 +1,7 @@
 import { createStore } from "../store";
 import { oneOf, sendAddonEvent, type AddonEvent } from "../bus";
 import { noiseHit, toneHit, voice } from "../sound";
+import { sfxOutput } from "../../audio/sfx";
 import { drive } from "../../player/drive";
 import { logRide } from "../sport/strava";
 import { VEHICLE_SPECS, VEHICLES, type Vehicle } from "./vehicles";
@@ -37,6 +38,7 @@ export function announceRide() {
 export function setVehicle(vehicle: Vehicle | null) {
   const before = ride.get();
   if (before.vehicle === vehicle) return;
+  releaseBell();
   // The ride that just ended, kept on this device (SportSeiza's log).
   if (before.vehicle)
     logRide({ vehicle: before.vehicle, distance: Math.round(before.distance), climb: Math.round(before.climb), seconds: Math.round((Date.now() - before.startedAt) / 1000), startedAt: before.startedAt, world: typeof location === "undefined" ? "" : location.hostname });
@@ -49,25 +51,142 @@ export function setVehicle(vehicle: Vehicle | null) {
 }
 
 let lastBell = -Infinity;
-/** Rings this ride's bell (or sounds its horn), here and for the room. */
+let localHorn: (() => void) | null = null;
+/** Rings this ride's bell, here and for the room; a horn sounds while held
+ *  (until releaseBell). */
 export function ringBell() {
   const { vehicle } = ride.get();
-  if (!vehicle || !VEHICLE_SPECS[vehicle].bell) return;
+  const kind = vehicle ? VEHICLE_SPECS[vehicle].bell : null;
+  if (!kind) return;
+  if (kind === "horn") {
+    if (localHorn) return;
+    localHorn = startHorn();
+    sendAddonEvent("exer", { k: "bell" });
+    return;
+  }
   const now = performance.now();
   if (now - lastBell < 400) return;
   lastBell = now;
-  playBell(VEHICLE_SPECS[vehicle].bell!);
+  playBell(kind);
   sendAddonEvent("exer", { k: "bell" });
 }
 
-/** A Japanese bicycle bell's two bright rings, or a moped's double beep. */
+/** Lets go of the horn (the bell rings out on its own). */
+export function releaseBell() {
+  if (!localHorn) return;
+  localHorn();
+  localHorn = null;
+  sendAddonEvent("exer", { k: "hu" });
+}
+
+/** The longest a horn sounds without a let-go heard (a dropped message). */
+const HORN_MAX = 3;
+
+/** A moped's horn, two square tones a third apart, sounding until the
+ *  returned function is called (or HORN_MAX). */
+export function startHorn(distance?: number): () => void {
+  const output = sfxOutput();
+  const level = 0.8 * (distance === undefined ? 1 : Math.max(0, 1 - distance / 40));
+  if (!output || output.ctx.state !== "running" || level <= 0.01) return () => {};
+  const { ctx } = output;
+  const t = ctx.currentTime;
+  const env = ctx.createGain();
+  env.gain.setValueAtTime(0, t);
+  env.gain.linearRampToValueAtTime(level * 0.16, t + 0.012);
+  const filter = ctx.createBiquadFilter();
+  filter.type = "lowpass";
+  filter.frequency.value = 2400;
+  filter.connect(env).connect(output.out);
+  const oscs = [420, 525].map((f) => {
+    const o = ctx.createOscillator();
+    o.type = "square";
+    o.frequency.value = f;
+    o.connect(filter);
+    o.start(t);
+    return o;
+  });
+  let done = false;
+  const stop = () => {
+    if (done) return;
+    done = true;
+    clearTimeout(cap);
+    // At least a short beep, however quick the press.
+    const end = Math.max(ctx.currentTime, t + 0.12);
+    env.gain.setTargetAtTime(0, end, 0.015);
+    for (const o of oscs) o.stop(end + 0.1);
+    setTimeout(() => env.disconnect(), (end - ctx.currentTime + 0.2) * 1000);
+  };
+  const cap = setTimeout(stop, HORN_MAX * 1000);
+  return stop;
+}
+
+export interface Engine {
+  /** Metres a second, and how loud (0 to 1, the distance's falloff in it). */
+  set(speed: number, level: number): void;
+  stop(): void;
+}
+
+/** A moped's engine: a low sawtooth and its sub, throbbing at the firing
+ *  rate through a low-pass, all rising with the speed. A few nodes, no samples. */
+export function startEngine(): Engine | null {
+  const output = sfxOutput();
+  if (!output || output.ctx.state !== "running") return null;
+  const { ctx } = output;
+  const out = ctx.createGain();
+  out.gain.value = 0;
+  out.connect(output.out);
+  const filter = ctx.createBiquadFilter();
+  filter.type = "lowpass";
+  filter.Q.value = 2;
+  filter.frequency.value = 380;
+  const throb = ctx.createGain();
+  throb.gain.value = 0.6;
+  filter.connect(throb).connect(out);
+  const saw = ctx.createOscillator();
+  saw.type = "sawtooth";
+  saw.frequency.value = 42;
+  saw.connect(filter);
+  const sub = ctx.createOscillator();
+  sub.type = "square";
+  sub.frequency.value = 21;
+  const subGain = ctx.createGain();
+  subGain.gain.value = 0.45;
+  sub.connect(subGain).connect(filter);
+  const lfo = ctx.createOscillator();
+  lfo.frequency.value = 11;
+  const depth = ctx.createGain();
+  depth.gain.value = 0.4;
+  lfo.connect(depth).connect(throb.gain);
+  for (const o of [saw, sub, lfo]) o.start();
+  return {
+    set(speed, level) {
+      const t = ctx.currentTime;
+      const rev = Math.min(1, speed / 9.6);
+      saw.frequency.setTargetAtTime(42 + 52 * rev, t, 0.2);
+      sub.frequency.setTargetAtTime(21 + 26 * rev, t, 0.2);
+      lfo.frequency.setTargetAtTime(11 + 15 * rev, t, 0.2);
+      filter.frequency.setTargetAtTime(380 + 520 * rev, t, 0.2);
+      out.gain.setTargetAtTime(level * (0.1 + 0.08 * rev), t, 0.1);
+    },
+    stop() {
+      out.gain.setTargetAtTime(0, ctx.currentTime, 0.05);
+      setTimeout(() => {
+        for (const o of [saw, sub, lfo]) o.stop();
+        out.disconnect();
+      }, 400);
+    },
+  };
+}
+
+/** A Japanese bicycle bell's two bright rings, or a moped's double beep
+ *  (heard from a visitor whose app is from before the held horn). */
 export function playBell(kind: "bell" | "horn", distance?: number) {
   const v = voice(0.8, distance, 40, 2);
   if (!v) return;
   if (kind === "bell") {
     for (const delay of [0, 0.14]) {
-      toneHit(v, { frequency: 2350, duration: 0.7, gain: 0.22, delay });
-      toneHit(v, { frequency: 3540, duration: 0.45, gain: 0.1, delay });
+      toneHit(v, { frequency: 3150, duration: 0.6, gain: 0.2, delay });
+      toneHit(v, { frequency: 4720, duration: 0.4, gain: 0.09, delay });
       noiseHit(v, { frequency: 6000, duration: 0.02, gain: 0.05, delay, q: 2 });
     }
   } else {
@@ -79,6 +198,7 @@ export function playBell(kind: "bell" | "horn", distance?: number) {
 }
 
 export function resetRide() {
+  releaseBell();
   ride.set({ vehicle: null, speed: 0, gradient: 0, distance: 0, climb: 0, startedAt: 0 });
   remoteRiders.clear();
   drive.scale = 1;
@@ -92,10 +212,10 @@ export function ridingNow(id: string | null): boolean {
   return !!remoteRiders.get(id)?.vehicle;
 }
 
-export type ExerEvent = { k: "hi" } | { k: "lo"; vehicle: Vehicle | null } | { k: "bell" };
+export type ExerEvent = { k: "hi" } | { k: "lo"; vehicle: Vehicle | null } | { k: "bell" } | { k: "hu" };
 
 export function parseExerEvent(data: AddonEvent): ExerEvent | null {
-  if (data.k === "hi" || data.k === "bell") return { k: data.k };
+  if (data.k === "hi" || data.k === "bell" || data.k === "hu") return { k: data.k };
   if (data.k === "lo") {
     if (data.v === "") return { k: "lo", vehicle: null };
     const vehicle = oneOf(data.v, VEHICLES);

@@ -168,6 +168,19 @@ export function buildVehicle(kind: Vehicle): Built {
     const light = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 10).translate(0, 0.9, -0.52), new THREE.MeshBasicMaterial({ color: "#fff6d6", toneMapped: false }));
     light.userData.navIgnore = true;
     root.add(light);
+    // Its beam, a faint open cone (ExerLayer brightens it at night; your own
+    // moped also gets a real spotlight).
+    const beam = new THREE.Mesh(
+      new THREE.ConeGeometry(0.75, 3.2, 16, 1, true)
+        .translate(0, -1.6, 0)
+        .rotateX(Math.PI / 2 - 0.12)
+        .translate(0, 0.9, -0.55),
+      new THREE.MeshBasicMaterial({ color: "#fff2c8", transparent: true, opacity: 0.04, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false })
+    );
+    beam.name = "beam";
+    beam.userData.navIgnore = true;
+    beam.renderOrder = 2;
+    root.add(beam);
   }
   return { root, wheels };
 }

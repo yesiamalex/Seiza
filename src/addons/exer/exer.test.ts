@@ -33,6 +33,7 @@ describe("ExerSeiza's rides", () => {
     expect(parseExerEvent({ k: "lo", v: "" })).toEqual({ k: "lo", vehicle: null });
     expect(parseExerEvent({ k: "lo", v: "tank" })).toBeNull();
     expect(parseExerEvent({ k: "bell" })).toEqual({ k: "bell" });
+    expect(parseExerEvent({ k: "hu" })).toEqual({ k: "hu" });
   });
 });
 
