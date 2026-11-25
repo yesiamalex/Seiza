@@ -1158,8 +1158,8 @@ adds its own coloured button to the bar while it is on.
   uphill and a little faster down, and your avatar pedals, stands on the
   board, or sits on the moped, with the wheels turning. B rings the bell
   (or the moped's horn); on a phone, a Bell button shows while you ride. In
-  VR, hold the right trigger to ride on where you face, let go to stop, and
-  press A for the bell. The panel shows speed, distance, climb, and the
+  VR, hold the right trigger to ride on where you face (let go to coast to
+  a stop), squeeze the left trigger to brake, and press A for the bell. The panel shows speed, distance, climb, and the
   slope. Rides are kept on your device. Real equipment plugs in through
   SportSeiza (`src/addons/sport/`): a connected smart trainer moves you at
   its speed and is told the slope every second.

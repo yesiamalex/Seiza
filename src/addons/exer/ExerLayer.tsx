@@ -56,7 +56,7 @@ export function ExerLayer({ selfId, players, getSelfPosition, selfSeated }: { se
   selfRef.current = getSelfPosition;
   const seatedRef = useRef(selfSeated);
   seatedRef.current = selfSeated;
-  const local = useRef({ last: null as [number, number, number] | null, heading: new THREE.Vector3(0, 0, -1), aWas: false, sentGradientAt: 0, storeAt: 0, speed: 0, gradient: 0, distance: 0, climb: 0, vehicle: null as Vehicle | null });
+  const local = useRef({ last: null as [number, number, number] | null, heading: new THREE.Vector3(0, 0, -1), aWas: false, sentGradientAt: 0, storeAt: 0, speed: 0, gradient: 0, distance: 0, climb: 0, vehicle: null as Vehicle | null, braking: false });
 
   useEffect(() => sendAddonEvent("exer", { k: "hi" }), []);
   useEffect(
@@ -138,13 +138,16 @@ export function ExerLayer({ selfId, players, getSelfPosition, selfSeated }: { se
       l.distance = l.climb = l.gradient = 0;
     }
 
-    // --- in a headset: the right trigger rides on, A rings the bell -----------------
+    // --- in a headset: the right trigger rides on, the left brakes, A rings ---------
     const session = gl.xr.getSession();
     if (session && me.vehicle) {
       let trigger = 0;
+      let brake = 0;
       let a = false;
       for (const s of session.inputSources) {
-        if (s.handedness !== "right" || !s.gamepad) continue;
+        if (!s.gamepad) continue;
+        if (s.handedness === "left") brake = s.gamepad.buttons[0]?.value ?? 0;
+        if (s.handedness !== "right") continue;
         trigger = s.gamepad.buttons[0]?.value ?? 0;
         a = !!s.gamepad.buttons[A_BUTTON]?.pressed;
       }
@@ -155,7 +158,11 @@ export function ExerLayer({ selfId, players, getSelfPosition, selfSeated }: { se
       l.aWas = a;
       const world = trackingStore.getLocalWorld();
       const origin = gl.xr.getCamera().parent;
-      const speed = drive.cruise > 0 ? drive.cruise : trigger > 0.5 ? WALK * drive.scale : 0;
+      // The brake stops everything, a smart trainer's speed included.
+      const braking = brake > 0.5;
+      if (braking && !l.braking) buzz(gl, "left", 0.25, 40);
+      l.braking = braking;
+      const speed = braking ? 0 : drive.cruise > 0 ? drive.cruise : trigger > 0.5 ? WALK * drive.scale : 0;
       if (speed > 0 && world && origin && !seatedRef.current) {
         // Along where you face, level; the walls still have their say
         // (PlayerRig corrects the head against them every frame).

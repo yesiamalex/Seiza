@@ -65,8 +65,8 @@ export function ExerButton() {
       )}
       <Hint accent={ACCENT}>
         {L(
-          "**W** (or the pad) rides where you look, faster than walking, slower uphill. **B** rings the bike's bell or sounds the moped's horn. In VR, **hold the right trigger** to ride on and let go to stop; **A** rings the bell. Pick On foot to get off.",
-          "**W**(またはパッド)で見ている方へ進みます。歩くより速く、上り坂では遅くなります。**B**で自転車のベルや原付のクラクション。VRでは**右トリガーを押している間**進み、離すと止まります。**A**でベル。降りるときは「徒歩」を選びます。"
+          "**W** (or the pad) rides where you look, faster than walking, slower uphill. **B** rings the bike's bell or sounds the moped's horn. In VR, **hold the right trigger** to ride on (let go to coast to a stop), **squeeze the left trigger** to brake, and press **A** for the bell. Pick On foot to get off.",
+          "**W**(またはパッド)で見ている方へ進みます。歩くより速く、上り坂では遅くなります。**B**で自転車のベルや原付のクラクション。VRでは**右トリガーを押している間**進み(離すと止まります)、**左トリガー**でブレーキ、**A**でベル。降りるときは「徒歩」を選びます。"
         )}
       </Hint>
     </ModeButton>
