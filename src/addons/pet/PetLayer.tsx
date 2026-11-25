@@ -394,7 +394,9 @@ export function PetLayer({ selfId, players, selfSeated }: { selfId: string | nul
       }
     }
     const nearOwner = near ? (near.key === LOCAL_AVATAR ? (selfIdRef.current ?? "") : near.key) : null;
-    if (nearPet.get().owner !== nearOwner) nearPet.set({ owner: nearOwner, name: near?.name ?? "" });
+    // Refreshed when the pet or its name changes (a dog made a cat keeps its owner).
+    const nearName = near?.name ?? "";
+    if (nearPet.get().owner !== nearOwner || nearPet.get().name !== nearName) nearPet.set({ owner: nearOwner, name: nearName });
 
     // Patting: the patter crouches and reaches to the pet's head, a few
     // strokes, then stands (not in a headset, where your hands are yours).
