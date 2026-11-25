@@ -62,7 +62,7 @@ const v2 = new THREE.Vector3();
 const scaleV = new THREE.Vector3();
 
 export function ExerLayer({ selfId, players, getSelfPosition, selfSeated }: { selfId: string | null; players: Record<string, PlayerState>; getSelfPosition: () => [number, number, number]; selfSeated: boolean }) {
-  const { gl, camera } = useThree();
+  const { gl, camera, scene } = useThree();
   const holders = useRef(new Map<string, Holder>()).current;
   /** Horns sounding from others, until they let go. */
   const horns = useRef(new Map<string, () => void>()).current;
@@ -77,6 +77,29 @@ export function ExerLayer({ selfId, players, getSelfPosition, selfSeated }: { se
   const local = useRef({ last: null as [number, number, number] | null, heading: new THREE.Vector3(0, 0, -1), aWas: false, sentGradientAt: 0, storeAt: 0, speed: 0, gradient: 0, distance: 0, climb: 0, vehicle: null as Vehicle | null, braking: false, bWas: false, vrSpeed: 0 });
 
   useEffect(() => sendAddonEvent("exer", { k: "hi" }), []);
+  // The first moped used to stall a frame: its paint, and its headlight (a
+  // light more in the scene, which every lit material's shader changes
+  // for), compiled on the spot. Warmed up here as soon as ExerSeiza is on,
+  // in the background: compiled with a spare moped and an unlit lamp in the
+  // scene, both hidden at once so no frame waits for them, then removed.
+  // Programs are cached by what they are, so the real ones reuse these.
+  useEffect(() => {
+    const warm = buildVehicle("moped").root;
+    const lamp = new THREE.SpotLight("#fff2d0", 0, 24, 0.5, 0.6, 1.2);
+    warm.add(lamp, lamp.target);
+    scene.add(warm);
+    const done = gl.compileAsync(scene, camera).catch(() => undefined);
+    warm.visible = false;
+    let gone = false;
+    const drop = () => {
+      if (gone) return;
+      gone = true;
+      // Not disposed: that would let its compiled programs go too.
+      scene.remove(warm);
+    };
+    void done.then(drop);
+    return drop;
+  }, [gl, scene, camera]);
   useEffect(
     () =>
       onAddonEvent("exer", (from, data) => {

@@ -7,7 +7,7 @@ import { realAltitude } from "../scene/mountainShape";
 import { drive } from "../player/drive";
 import { getAddonAvatar, LOCAL_AVATAR } from "../addons/avatars";
 import { remoteRiders, ride } from "../addons/exer/ride";
-import { currentHeatIndex, forgetHeat, heatLoad, heatReactionsOn, heatSpeed, heatStage, inDeclaredShade, LOCAL_HEAT, setHeat, stepHeat } from "./heat";
+import { currentHeatIndex, faintPhase, forgetHeat, heatLoad, heatReactionsOn, heatSpeed, heatStage, inDeclaredShade, LOCAL_HEAT, setFaint, setHeat, stepHeat, takeCool } from "./heat";
 
 /**
  * Heat reactions in the scene (heat.ts): every avatar's heat load from how
@@ -131,12 +131,16 @@ export function HeatLayer({ selfId, players, getSelfPosition }: { selfId: string
       // The air cools about 6.5 °C a kilometre up: the top of the mountain is milder.
       const here = at ? hi - realAltitude(at[0], at[2]) * 0.0065 : hi;
       t.load = on && at ? stepHeat(t.load, { speed: t.speed, shaded: shaded(at[0], at[2]), effort, hi: here }, dt) : 0;
+      // A drink of water, or coming to after fainting (heat.ts).
+      if (key === LOCAL_HEAT) t.load = Math.max(0, t.load - takeCool());
       setHeat(key, t.load);
       sweatFor(key, avatarKey, heatStage(t.load) >= 1);
     };
     const me = ride.get().vehicle;
     update(LOCAL_HEAT, LOCAL_AVATAR, selfRef.current(), heatReactionsOn(), effortOf(me));
     drive.heat = heatReactionsOn() ? heatSpeed(tracks.get(LOCAL_HEAT)!.load) : 1;
+    // All the way full, you faint (HeatChip's FaintOverlay takes it from here).
+    if (heatReactionsOn() && tracks.get(LOCAL_HEAT)!.load >= 0.995 && faintPhase() === "none") setFaint("dark");
     const seen = new Set([LOCAL_HEAT]);
     for (const p of Object.values(playersRef.current)) {
       if (p.id === selfIdRef.current) continue;

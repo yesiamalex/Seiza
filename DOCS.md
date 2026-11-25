@@ -337,8 +337,13 @@ guarantee yet.
   a 42 °C heat index, two at 35; shade (under a roof, or ground a world
   marks with `addShade`) slows it to a third, and rest or a cooler hour
   brings it down. As it builds, your avatar sweats, then pants, then
-  frowns and walks up to 40% slower. A chip at the top shows the heat
-  index and your load once it starts to build. "Heat reactions" in the
+  frowns and walks up to 40% slower. A chip under the top bar shows the heat
+  index and your load once it starts to build, with **Drink water**: a
+  third of the load off, once every 20 seconds. Near full the edges of the
+  screen throb red, and at full you faint: the screen goes dark, "You
+  fainted! Someone helped you into the shade," and you come to rested in
+  the nearest shade within 60 m (or at the arrival point, a choice under
+  Heat reactions). "Heat reactions" in the
   Avatar menu turns it off for your own avatar, for everyone; the only
   thing sent is a `heatCalm` flag. Every client works out the rest from
   how people move (`src/avatar/heat.ts`).
@@ -1167,7 +1172,8 @@ adds its own coloured button to the bar while it is on.
   uphill and a little faster down, and your avatar pedals, stands on the
   board, or sits on the moped, with the wheels turning. Getting on, off,
   or onto another ride eases: the old ride shrinks away as the rider steps
-  off it, and the new one grows in under them. Speed builds and fades too, a bike
+  off it, and the new one grows in under them. **T** goes through the rides on a keyboard
+  (Shift+T back, on foot after the last). Speed builds and fades too, a bike
   answering the pedals quickly, a moped's motor winding up, a board rolling
   on, and the brake stops it much sooner. B rings the bell, or sounds
   the moped's horn for as long as it's held; on a phone, a Bell (or Horn)

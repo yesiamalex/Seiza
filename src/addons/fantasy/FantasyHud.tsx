@@ -1,6 +1,7 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { L, useLang } from "../../i18n/lang";
 import { pillButtonStyle } from "../../ui/styles";
+import { Docked } from "../../ui/StatusDock";
 import { useStore } from "../store";
 import { Choices, Hint, MODE_ACCENTS, ModeButton, SwordIcon } from "../ui";
 import { fantasy, KO_SECONDS, pressCancel, pressEnd, pressStart, setElement, setGuard, setWeapon } from "./combat";
@@ -113,13 +114,10 @@ export function FantasyStatus({ touch }: { touch: boolean }) {
   return (
     <>
       {flash && <div aria-hidden style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 25, boxShadow: "inset 0 0 120px rgba(255,40,60,0.55)" }} />}
+      <Docked order={0}>
       <div
         role="status"
         style={{
-          position: "fixed",
-          left: "50%",
-          transform: "translateX(-50%)",
-          top: "calc(64px + env(safe-area-inset-top, 0px))",
           width: "min(260px, calc(100vw - 140px))",
           display: "grid",
           gap: 4,
@@ -163,6 +161,7 @@ export function FantasyStatus({ touch }: { touch: boolean }) {
           </small>
         )}
       </div>
+      </Docked>
       {touch && !state.ko && isBladed(state.weapon) && (
         <button
           type="button"

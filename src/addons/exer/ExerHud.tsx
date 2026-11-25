@@ -1,6 +1,7 @@
 import { useEffect, useSyncExternalStore, type CSSProperties } from "react";
 import { L, useLang } from "../../i18n/lang";
 import { pillButtonStyle } from "../../ui/styles";
+import { Docked } from "../../ui/StatusDock";
 import { useStore } from "../store";
 import { Choices, Hint, MODE_ACCENTS, ModeButton } from "../ui";
 import { activeRideSource, connectRideSource, disconnectRideSource, latestReading, onRideSourcesChange, rideSources } from "../sport";
@@ -13,11 +14,19 @@ const NONE = "none" as const;
 const isTyping = (target: EventTarget | null) =>
   target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
 
-/** While riding, on a keyboard: B rings the bell (or the horn), Esc gets off. */
+/** On a keyboard: T goes through the rides (Shift+T back), on foot after
+ *  the last; while riding, B rings the bell (or the horn), Esc gets off. */
 function useBellKey() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target) || !ride.get().vehicle) return;
+      if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target)) return;
+      if (e.key.toLowerCase() === "t") {
+        const order = [null, ...VEHICLES];
+        const at = order.indexOf(ride.get().vehicle);
+        setVehicle(order[(at + (e.shiftKey ? order.length - 1 : 1)) % order.length]);
+        return;
+      }
+      if (!ride.get().vehicle) return;
       if (e.key.toLowerCase() === "b") ringBell();
       else if (e.key === "Escape") setVehicle(null);
     };
@@ -76,8 +85,8 @@ export function ExerButton() {
       )}
       <Hint accent={ACCENT}>
         {L(
-          "**W** (or the pad) rides where you look, faster than walking, slower uphill. **B** rings the bike's bell, or sounds the moped's horn while held, and **Esc** (or **Get off** at the top) gets off. In VR, **hold the right trigger** to ride on (let go to coast to a stop), **squeeze the left trigger** to brake, press **A** for the bell (hold it for the moped's horn), and **B** to get off.",
-          "**W**(またはパッド)で見ている方へ進みます。歩くより速く、上り坂では遅くなります。**B**で自転車のベル、押している間は原付のクラクション、**Esc**(または上の「降りる」)で降ります。VRでは**右トリガーを押している間**進み(離すと止まります)、**左トリガー**でブレーキ、**A**でベル(原付は押している間クラクション)、**B**で降ります。"
+          "**T** goes through the rides (Shift+T back). **W** (or the pad) rides where you look, faster than walking, slower uphill. **B** rings the bike's bell, or sounds the moped's horn while held, and **Esc** (or **Get off** at the top) gets off. In VR, **hold the right trigger** to ride on (let go to coast to a stop), **squeeze the left trigger** to brake, press **A** for the bell (hold it for the moped's horn), and **B** to get off.",
+          "**T**で乗りものを切り替え(Shift+Tで戻る)。**W**(またはパッド)で見ている方へ進みます。歩くより速く、上り坂では遅くなります。**B**で自転車のベル、押している間は原付のクラクション、**Esc**(または上の「降りる」)で降ります。VRでは**右トリガーを押している間**進み(離すと止まります)、**左トリガー**でブレーキ、**A**でベル(原付は押している間クラクション)、**B**で降ります。"
         )}
       </Hint>
     </ModeButton>
@@ -102,6 +111,7 @@ export function ExerStatus({ touch }: { touch: boolean }) {
   if (!state.vehicle) return null;
   const bell = VEHICLE_SPECS[state.vehicle].bell;
   return (
+    <Docked order={1}>
     <div style={statusStyle}>
       <RideStats />
       {touch && bell && (
@@ -113,14 +123,11 @@ export function ExerStatus({ touch }: { touch: boolean }) {
         {L("Get off", "降りる")}
       </button>
     </div>
+    </Docked>
   );
 }
 
 const statusStyle: CSSProperties = {
-  position: "fixed",
-  top: 12,
-  left: "50%",
-  transform: "translateX(-50%)",
   display: "flex",
   alignItems: "center",
   gap: 10,
@@ -130,7 +137,6 @@ const statusStyle: CSSProperties = {
   color: "#fff",
   border: `1px solid ${ACCENT}`,
   pointerEvents: "auto",
-  zIndex: 26,
 };
 
 const toggle = (on: boolean): CSSProperties => ({

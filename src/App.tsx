@@ -95,7 +95,8 @@ import { saveProfile, type StoredAvatarChoice } from "./profile/profileStore";
 import { currentHeatIndex, HEAT_LEVEL_LABELS, heatExpression, heatLevel, LOCAL_HEAT, setHeatReactions, useHeatReactions, useHeatStage } from "./avatar/heat";
 import { HeatLayer } from "./avatar/HeatLayer";
 import { SwimLayer } from "./avatar/SwimLayer";
-import { HeatChip } from "./avatar/HeatChip";
+import { FaintOverlay, HeatChip, WakeChoice, wakeSpot } from "./avatar/HeatChip";
+import { StatusDock } from "./ui/StatusDock";
 import { AVATAR_DESIGN_PRESETS } from "./avatar/designer/avatarSpec";
 import { deliverWorldMessage, unwrapWorldMessage, WorldExtension, WorldOverlay, wrapWorldMessage } from "./worlds/WorldExtension";
 import { AddonBarButtons, AddonOverlay, AddonScene, addonHandsBusy, addonHoldsClicks, connectAddonBus, ridingNow, useAddonRideScale, LOCAL_AVATAR, RoomFilters, RoomModes, setAddonAvatar, useAddonRooted, useAddonXrSections } from "./addons";
@@ -1823,6 +1824,7 @@ export default function App() {
                     </small>
                   </span>
                 </label>
+                {heatReactions && <WakeChoice />}
               </div>
             )}
             </div>
@@ -1944,7 +1946,9 @@ export default function App() {
           which hid every world card until the drawer was opened. */}
       <WorldOverlay />
       <AddonOverlay worldState={worldState} touch={showTouchControls} />
+      <StatusDock />
       <HeatChip />
+      <FaintOverlay respawn={() => warpTo(wakeSpot(getSelfPosition(), [world.spawnPoint.x, world.spawnPoint.y, world.spawnPoint.z]))} />
       {world.portals && <PortalCard config={world.portals} inXr={xrSessionActive} />}
       {openImageId && objects[openImageId]?.kind === "image" && <ImageViewer object={objects[openImageId]} onClose={closeImage} />}
       {/* Someone is talking but the browser still holds audio back (the

@@ -976,11 +976,18 @@ export function PlayerRig({
         // In a model world, walls are the navmesh's edges (navGround.ts).
         getGround()?.limitView?.(pivot, camera.position);
         const floor = floorHeightAt(camera.position.x, camera.position.z);
-        camera.position.y = THREE.MathUtils.clamp(
-          camera.position.y,
-          floor + 0.3,
-          ceilingHeightAt(camera.position.x, camera.position.z)
-        );
+        let lifted = Math.max(camera.position.y, floor + 0.3);
+        // On a hill (Mt. Makiling): not looking up at you from down the
+        // slope, and the slope never between you and the camera. The line
+        // from you to it is lifted wherever the ground would rise over it.
+        if (Math.abs(floor - feetY) > 0.3) lifted = Math.max(lifted, pivot.y - 0.3);
+        for (let i = 1; i < 6; i++) {
+          const k = i / 6;
+          const ground = floorHeightAt(pivot.x + (camera.position.x - pivot.x) * k, pivot.z + (camera.position.z - pivot.z) * k) + 0.35;
+          const line = pivot.y + (lifted - pivot.y) * k;
+          if (ground > line) lifted = pivot.y + (ground - pivot.y) / k;
+        }
+        camera.position.y = Math.min(lifted, ceilingHeightAt(camera.position.x, camera.position.z));
         camera.lookAt(pivot);
       } else {
         camera.position.copy(vcam.position);

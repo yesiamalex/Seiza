@@ -110,6 +110,51 @@ export function useHeatStage(id: string): HeatStage {
   );
 }
 
+// --- a drink of water, and fainting --------------------------------------------
+
+/** A drink takes this much off your heat load, once every so often. */
+const DRINK = 0.35;
+export const DRINK_COOLDOWN_MS = 20_000;
+let pendingCool = 0;
+let lastDrink = -Infinity;
+/** Drinks some water, if it's been long enough since the last: true if so. */
+export function drinkWater(): boolean {
+  const now = performance.now();
+  if (now - lastDrink < DRINK_COOLDOWN_MS) return false;
+  lastDrink = now;
+  pendingCool += DRINK;
+  return true;
+}
+export const drinkReadyIn = () => Math.max(0, DRINK_COOLDOWN_MS - (performance.now() - lastDrink));
+/** Cools your load by this much on its next tick (fainting rests you most of the way). */
+export function coolBy(amount: number) {
+  pendingCool += amount;
+}
+/** What's waiting to come off your load (HeatLayer takes it each tick). */
+export function takeCool(): number {
+  const c = pendingCool;
+  pendingCool = 0;
+  return c;
+}
+
+/** Fainting at a full load: "dark" while the screen goes, "wake" while you
+ *  come to somewhere cool (HeatChip's FaintOverlay), then back to "none". */
+export type FaintPhase = "none" | "dark" | "wake";
+let faint: FaintPhase = "none";
+const faintListeners = new Set<() => void>();
+export const faintPhase = () => faint;
+export function setFaint(next: FaintPhase) {
+  if (faint === next) return;
+  faint = next;
+  for (const f of faintListeners) f();
+}
+export function onFaintChange(f: () => void) {
+  faintListeners.add(f);
+  return () => {
+    faintListeners.delete(f);
+  };
+}
+
 // --- shade: worlds mark their roofs ------------------------------------------
 
 /** Covered ground a world declares (a roofed walkway, a tree's canopy): a
