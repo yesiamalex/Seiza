@@ -1,6 +1,6 @@
 import { createStore } from "../store";
 import { oneOf, readNumber, sendAddonEvent, type AddonEvent } from "../bus";
-import { holdNote, holds, INSTRUMENTS, isWorn, KEYS_RANGE, LIGHT_COLORS, noteCount, pickable, pickedMidi, pickNote, PICK_BASE, playNote, unpick, type Instrument } from "./instruments";
+import { holdNote, holds, INSTRUMENTS, isWorn, KEYS_RANGE, LIGHT_COLORS, noteCount, pickable, pickedMidi, pickNote, PICK_BASE, playNote, preloadViolin, unpick, type Instrument } from "./instruments";
 
 /**
  * Band mode's state. Notes are events, played by every client from its own
@@ -25,9 +25,15 @@ export interface LocalMusician {
   /** Guitar, lead, bass: the chord the fret hand holds, whose strings a
    *  pick plays (see PICK_BASE). */
   chord: number;
+  /** The bass slapped and popped, not plucked. */
+  slap: boolean;
 }
 
-export const band = createStore<LocalMusician>({ instrument: null, color: 0, waving: false, pair: false, playing: false, octave: 0, menuOpen: false, chord: 0 });
+export const band = createStore<LocalMusician>({ instrument: null, color: 0, waving: false, pair: false, playing: false, octave: 0, menuOpen: false, chord: 0, slap: false });
+/** Slap (and pop) the bass, or pluck it. */
+export function setSlap(slap: boolean) {
+  band.set((s) => ({ ...s, slap }));
+}
 
 export interface RemoteMusician {
   instrument: Instrument | null;
@@ -53,6 +59,8 @@ export function announceBand() {
 
 export function setInstrument(instrument: Instrument | null) {
   releaseAll();
+  // The violin's recorded notes, fetched once it's picked, so the first bow sounds real.
+  if (instrument === "violin") preloadViolin();
   band.set((s) => ({ ...s, instrument, chord: 0, playing: instrument !== null && instrument !== "lightstick" ? s.playing : false, waving: instrument === "lightstick" && s.waving }));
   announceBand();
 }
@@ -137,12 +145,12 @@ export function play(note: number, hold = false) {
     // One more than may ring at once lets the first go.
     if (!held.has(note) && held.size >= atOnce(instrument)) release(held.keys().next().value!);
     held.set(note, holdNote(instrument, note));
-  } else playNote(instrument, note);
+  } else playNote(instrument, note, undefined, instrument === "bass" && band.get().slap);
   // A strum is the fret hand moving to that chord: picks play from it.
   if (isWorn(instrument) && note < PICK_BASE && pickable(instrument, note) && band.get().chord !== note) band.set((s) => ({ ...s, chord: note }));
   localNote.prev = localNote.note;
   localNote.note = { n: note, at: performance.now() / 1000 };
-  sendAddonEvent("band", { k: "n", n: note, ...(holds(instrument) && hold ? { h: 1 } : {}) });
+  sendAddonEvent("band", { k: "n", n: note, ...(holds(instrument) && hold ? { h: 1 } : {}), ...(instrument === "bass" && band.get().slap ? { s: 1 } : {}) });
 }
 
 /** Lets a held key go, here and for the room. */
@@ -173,7 +181,7 @@ export function validNote(instrument: Instrument, note: number) {
 export type BandEvent =
   | { k: "hi" }
   | { k: "lo"; instrument: Instrument | null; color: number; waving: boolean; pair: boolean }
-  | { k: "n"; note: number; hold: boolean }
+  | { k: "n"; note: number; hold: boolean; slap?: boolean }
   | { k: "f"; note: number };
 
 export function parseBandEvent(data: AddonEvent): BandEvent | null {
@@ -187,7 +195,7 @@ export function parseBandEvent(data: AddonEvent): BandEvent | null {
   if (data.k === "n" || data.k === "f") {
     const note = readNumber(data.n, 0, 127);
     if (note === null) return null;
-    return data.k === "n" ? { k: "n", note: Math.round(note), hold: data.h === 1 } : { k: "f", note: Math.round(note) };
+    return data.k === "n" ? { k: "n", note: Math.round(note), hold: data.h === 1, ...(data.s === 1 ? { slap: true } : {}) } : { k: "f", note: Math.round(note) };
   }
   return null;
 }

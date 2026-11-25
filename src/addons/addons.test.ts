@@ -235,6 +235,7 @@ describe("band events", () => {
     expect(parseBandEvent({ k: "n", n: 61.4 })).toEqual({ k: "n", note: 61, hold: false });
     // A key held down, and let go.
     expect(parseBandEvent({ k: "n", n: 64, h: 1 })).toEqual({ k: "n", note: 64, hold: true });
+    expect(parseBandEvent({ k: "n", n: 40, s: 1 })).toEqual({ k: "n", note: 40, hold: false, slap: true });
     expect(parseBandEvent({ k: "f", n: 64 })).toEqual({ k: "f", note: 64 });
     expect(parseBandEvent({ k: "f", n: "E" })).toBeNull();
   });

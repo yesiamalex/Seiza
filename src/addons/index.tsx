@@ -10,7 +10,7 @@ import { ELEMENT_LABELS, ELEMENTS, WEAPON_SPECS, WEAPONS } from "./fantasy/weapo
 import { INSTRUMENT_LABELS, INSTRUMENTS, isStand, LIGHT_COLORS } from "./band/instruments";
 import { useStore } from "./store";
 import type { XrHudSection } from "../xr/hud/hudPanel";
-import { band, setInstrument, setLightColor, setPair, tapped } from "./band/band";
+import { band, setInstrument, setLightColor, setPair, setSlap, tapped } from "./band/band";
 import { MODE_ACCENTS, ModeSwitch } from "./ui";
 import { FILTER_KEYS } from "../moderation/profanity";
 import { ExerLayer } from "./exer/ExerLayer";
@@ -319,6 +319,16 @@ export function useAddonXrSections(worldState: WorldState, switches?: XrModeSwit
         ],
       });
     }
+    if (musician.instrument === "bass")
+      sections.push({
+        id: "bass",
+        title: L("Bass", "ベース"),
+        columns: 2,
+        choices: [
+          { id: "pluck", label: L("Pluck", "指弾き"), active: !musician.slap, onPress: () => setSlap(false) },
+          { id: "slap", label: L("Slap and pop", "スラップ"), active: musician.slap, onPress: () => setSlap(true) },
+        ],
+      });
     if (musician.instrument === "keys") {
       const shift = (by: number) => band.set((s) => ({ ...s, octave: Math.max(-2, Math.min(2, s.octave + by)) }));
       sections.push({

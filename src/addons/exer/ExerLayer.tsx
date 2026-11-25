@@ -391,7 +391,7 @@ export function ExerLayer({ selfId, players, getSelfPosition, selfSeated }: { se
       if (airborne) m.air += dt;
       else m.air = 0;
       // Eased, so the body goes into a tuck or puts a foot down gradually.
-      m.aloft! += ((airborne ? 1 : 0) - m.aloft!) * (1 - Math.exp(-12 * dt));
+      m.aloft! += ((airborne ? 1 : 0) - m.aloft!) * (1 - Math.exp(-7 * dt));
       m.stopped! += ((h.speed < 0.3 ? 1 : 0) - m.stopped!) * (1 - Math.exp(-4 * dt));
       // A trick runs its whole course once begun, then the next jump does the next one.
       if (airborne || h.trickT > 0) h.trickT += dt;

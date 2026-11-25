@@ -3,7 +3,7 @@ import { L, useLang } from "../../i18n/lang";
 import { panelStyle, pillButtonStyle } from "../../ui/styles";
 import { useStore } from "../store";
 import { Choices, Hint, MODE_ACCENTS, ModeButton, MusicIcon } from "../ui";
-import { band, fret, pick, play, release, setInstrument, setLightColor, setPair, setPlaying, setWaving } from "./band";
+import { band, fret, pick, play, release, setInstrument, setLightColor, setPair, setPlaying, setSlap, setWaving } from "./band";
 import { holds, INSTRUMENT_LABELS, INSTRUMENTS, isStand, isWorn, KEY_LAYOUT, KEYS_BASE, LIGHT_COLORS, noteName, PAD_COLUMNS, PADS, PICK_KEYS, pickedMidi, STRINGS, type Instrument } from "./instruments";
 
 const ACCENT = MODE_ACCENTS.band;
@@ -233,7 +233,7 @@ export function BandStage() {
   }, [active]);
 
   if (!shown) return null;
-  const { instrument, octave, chord } = state;
+  const { instrument, octave, chord, slap } = state;
   return (
     <div role="group" aria-label={L("Instrument", "楽器")} style={stageStyle}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
@@ -248,6 +248,11 @@ export function BandStage() {
               +
             </button>
           </span>
+        )}
+        {instrument === "bass" && (
+          <button type="button" style={{ ...smallButton, ...(slap ? { background: ACCENT, color: "#1a1026" } : {}) }} aria-pressed={slap} onClick={() => setSlap(!slap)} title={L("Slap the low strings and pop the high ones", "低い弦をスラップ、高い弦をプル")}>
+            {L("Slap", "スラップ")}
+          </button>
         )}
         <button type="button" style={smallButton} onClick={() => setPlaying(false)}>
           {L("Done", "終了")} <kbd style={{ opacity: 0.6, fontSize: 10 }}>Esc</kbd>

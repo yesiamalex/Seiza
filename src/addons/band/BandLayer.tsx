@@ -738,7 +738,8 @@ export function buildViolin() {
   group.add(merged(strings, material("#e9e4da", { metalness: 0.6, roughness: 0.35 })));
   // Under the chin on the left collarbone, the neck out to the front left
   // and a little up, the strings tipped toward the bow on the right.
-  group.position.set(-0.1, 0.1, -0.06);
+  // Clear of the chest, so a fuller figure doesn't swallow its body or the arms.
+  group.position.set(-0.11, 0.115, -0.11);
   group.rotation.set(0.12, 0.6, -0.5, "YXZ");
   return group;
 }
@@ -932,7 +933,7 @@ export function BandLayer({ selfId, players, editMode, selfSeated }: BandLayerPr
           remoteHeld.delete(theirs[0]);
         }
         remoteHeld.set(heldKey, holdNote(m.instrument, event.note, distance));
-      } else playNote(m.instrument, event.note, distance);
+      } else playNote(m.instrument, event.note, distance, event.slap);
     });
   }, [camera]);
 

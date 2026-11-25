@@ -715,7 +715,8 @@ export function applyTrackedPose(rig: BodyRig, overlay: PoseOverlay, pose: Track
     arm.upper.getWorldPosition(pole)
       .addScaledVector(up, -0.35 * eye * (1 - 0.75 * raised))
       .addScaledVector(back, 0.15 * eye * (1 + raised))
-      .addScaledVector(right, outward * eye * (0.25 + 0.3 * raised + 0.2 * across));
+      // Out enough to clear a fuller figure or loose sleeves, not only a slim one.
+      .addScaledVector(right, outward * eye * (0.32 + 0.3 * raised + 0.3 * across));
     solveTwoBone(overlay, arm.upper, arm.lower, arm.hand, target, pole, weight);
 
     toWorldQuaternion(hand.pose, pointQ);

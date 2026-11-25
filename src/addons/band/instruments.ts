@@ -368,6 +368,71 @@ export function holdKey(midi: number, distance?: number): () => void {
   return release;
 }
 
+// --- the violin, recorded ---------------------------------------------------------------
+// A real solo violin, bowed with vibrato (VSCO 2 Community Edition, CC0;
+// see THIRD_PARTY_ASSETS.md): five notes, each about 2.4 s, mono 22 kHz,
+// 100 KB, made with a seamless loop from 0.7 to 2.2 s so a held bow
+// sustains. Fetched only once someone picks the violin (preloadViolin);
+// until they've come, the synthesized one below plays.
+const VIOLIN_SAMPLES: [string, number][] = [
+  ["G3", 55],
+  ["C4", 60],
+  ["E4", 64],
+  ["A4", 69],
+  ["C5", 72],
+];
+const VIOLIN_LOOP = { start: 0.7, end: 2.2 };
+let violinSet: { ctx: AudioContext; buffers: { midi: number; buffer: AudioBuffer }[] } | null = null;
+let violinLoading = false;
+function loadViolin(ctx: AudioContext) {
+  if (violinSet?.ctx === ctx || violinLoading) return;
+  violinLoading = true;
+  Promise.all(
+    VIOLIN_SAMPLES.map(async ([name, midi]) => {
+      const response = await fetch(`/audio/violin/${name}.wav`);
+      return { midi, buffer: await ctx.decodeAudioData(await response.arrayBuffer()) };
+    })
+  )
+    .then((buffers) => (violinSet = { ctx, buffers }))
+    .catch(() => undefined)
+    .finally(() => (violinLoading = false));
+}
+export function preloadViolin() {
+  const output = sfxOutput();
+  if (output) loadViolin(output.ctx);
+}
+const nearestViolin = (ctx: AudioContext, midi: number) =>
+  violinSet?.ctx === ctx ? violinSet.buffers.reduce((best, b) => (Math.abs(b.midi - midi) < Math.abs(best.midi - midi) ? b : best)) : null;
+
+/** A held note from the recordings: the nearest one, tuned to the note, its
+ *  loop held while the bow moves, a soft start and a short release. */
+function holdRecordedViolin(v: Voice, midi: number, recorded: { midi: number; buffer: AudioBuffer }): () => void {
+  const { ctx, t } = v;
+  const source = ctx.createBufferSource();
+  source.buffer = recorded.buffer;
+  source.loop = true;
+  source.loopStart = VIOLIN_LOOP.start;
+  source.loopEnd = VIOLIN_LOOP.end;
+  source.playbackRate.value = Math.pow(2, (midi - recorded.midi) / 12);
+  const env = ctx.createGain();
+  env.gain.setValueAtTime(0.0001, t);
+  env.gain.exponentialRampToValueAtTime(1.6, t + 0.05);
+  chain(source, filter(ctx, "highpass", 150, 0.7), env, v.out);
+  source.start(t);
+  let released = false;
+  const release = () => {
+    if (released) return;
+    released = true;
+    const now = ctx.currentTime;
+    env.gain.cancelScheduledValues(now);
+    env.gain.setValueAtTime(Math.max(0.0001, env.gain.value), now);
+    env.gain.setTargetAtTime(0.0001, now, 0.1);
+    source.stop(now + 0.8);
+  };
+  setTimeout(release, KEY_HOLD_SECONDS * 1000);
+  return release;
+}
+
 /** A bowed string's tone: every harmonic, falling off a little faster than
  *  a sawtooth's, unevenly (as a real string's do), so it isn't a synth's. */
 let violinTone: { ctx: AudioContext; wave: PeriodicWave } | null = null;
@@ -395,6 +460,9 @@ export function holdViolin(midi: number, distance?: number): () => void {
   const v = voice(0.8, distance, FALLOFF, KEY_HOLD_SECONDS + 2, 0.3);
   if (!v) return () => {};
   const { ctx, t } = v;
+  loadViolin(ctx);
+  const recorded = nearestViolin(ctx, midi);
+  if (recorded) return holdRecordedViolin(v, midi, recorded);
   const f = hz(midi);
   const env = ctx.createGain();
   env.gain.setValueAtTime(0.0001, t);
@@ -659,9 +727,35 @@ function amped(notes: number[], distance?: number) {
  * heard where its fundamental can't be), and a sine at the root under it.
  * The old one was nearly all sine, which small speakers barely play.
  */
-export function playBass(note: number, distance?: number) {
+export function playBass(note: number, distance?: number, slap = false) {
   const root = CHORDS[note]?.root;
-  if (root !== undefined) bassNote(root, distance);
+  if (root !== undefined) (slap ? slapNote(root, distance, false) : bassNote(root, distance));
+}
+
+/**
+ * Slap bass: the thumb snapping a low string against the frets, or a finger
+ * popping a high one off the fingerboard. Brighter and shorter than a
+ * plucked note: a hard click, the string's whole bright spectrum let
+ * through and then closing fast, more grit, the low thump still under it;
+ * a pop is snappier and higher still.
+ */
+function slapNote(midi: number, distance: number | undefined, pop: boolean) {
+  const v = voice(1, distance, FALLOFF);
+  if (!v) return;
+  const warm = v.ctx.createWaveShaper();
+  warm.curve = shaper(pop ? 2.6 : 2.2, 0.15);
+  warm.oversample = "2x";
+  const tone = filter(v.ctx, "lowpass", pop ? 5200 : 4200, 1.8);
+  tone.frequency.setValueAtTime(pop ? 5200 : 4200, v.t);
+  tone.frequency.exponentialRampToValueAtTime(pop ? 900 : 650, v.t + 0.22);
+  const level = v.ctx.createGain();
+  level.gain.value = 0.75;
+  const input = chain(warm, tone, filter(v.ctx, "peaking", 90, 1, 4), filter(v.ctx, "peaking", pop ? 2400 : 1600, 1.4, 6), filter(v.ctx, "highpass", 35), level, v.out);
+  strum(v, [midi], input, 0.95, 0, { sustain: 0.45, soft: 0.05 });
+  toneHit(v, { frequency: hz(midi), duration: 0.5, gain: 0.2, attack: 0.003 });
+  // The thumb on the frets, or the finger letting the string snap back.
+  noiseHit(v, { frequency: pop ? 3800 : 2600, duration: pop ? 0.025 : 0.035, gain: pop ? 0.22 : 0.18, q: 0.9 });
+  if (!pop) noiseHit(v, { frequency: 180, duration: 0.05, gain: 0.12, q: 0.7 });
 }
 
 function bassNote(root: number, distance?: number) {
@@ -726,24 +820,26 @@ export function playShaker(note: number, distance?: number) {
 }
 
 /** One string picked (see PICK_BASE), on whichever worn instrument. */
-export function playPick(instrument: Worn, note: number, distance?: number) {
+export function playPick(instrument: Worn, note: number, distance?: number, slap = false) {
   const pick = unpick(note);
   const midi = pick ? pickedMidi(instrument, pick.chord, pick.string) : null;
   if (midi === null) return;
   if (instrument === "guitar") acoustic([midi], distance);
   else if (instrument === "electric") amped([midi], distance);
+  // Slapping, the low strings are thumbed and the high ones popped.
+  else if (slap) slapNote(midi, distance, (pick?.string ?? 0) >= 2);
   else bassNote(midi, distance);
 }
 
 /** Any musician's note, by instrument. */
-export function playNote(instrument: Instrument, note: number, distance?: number) {
-  if (isWorn(instrument) && note >= PICK_BASE) playPick(instrument, note, distance);
+export function playNote(instrument: Instrument, note: number, distance?: number, slap = false) {
+  if (isWorn(instrument) && note >= PICK_BASE) playPick(instrument, note, distance, slap);
   else if (instrument === "drums") playDrum(note, distance);
   else if (instrument === "kit") playKit(note, distance);
   else if (instrument === "keys") playKey(note, distance);
   else if (instrument === "guitar") playChord(note, distance);
   else if (instrument === "electric") playElectric(note, distance);
-  else if (instrument === "bass") playBass(note, distance);
+  else if (instrument === "bass") playBass(note, distance, slap);
   else if (instrument === "kulintang") playGong(note, distance);
   else if (instrument === "taiko") playTaiko(note, distance);
   else if (instrument === "shaker") playShaker(note, distance);
