@@ -1,0 +1,23 @@
+// admin.seiza.cc: Seiza's research dashboard. See README.md here for how to
+// put it behind Cloudflare Access and deploy it.
+{
+  "name": "seiza-admin",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-01-01",
+  // The page is served by the Worker, never straight from storage, so the
+  // Access check comes first on every request.
+  "assets": { "directory": "./public", "binding": "ASSETS", "run_worker_first": true },
+  "routes": [{ "pattern": "admin.seiza.cc", "custom_domain": true }],
+  "workers_dev": false,
+  "keep_vars": true,
+  "vars": {
+    // Your Access team's name (the part before .cloudflareaccess.com) and
+    // this application's Audience (AUD) tag, from the Access dashboard.
+    "ACCESS_TEAM": "",
+    "ACCESS_AUD": "",
+    // The worlds to read, each with the address its counts are asked at.
+    "SEIZA_WORLDS": "[{\"id\":\"default\",\"name\":\"Seiza\",\"url\":\"https://seiza.cc\"},{\"id\":\"seizora\",\"name\":\"Seizora\",\"url\":\"https://seizora.seiza.cc\"},{\"id\":\"seizorai\",\"name\":\"Seizorai\",\"url\":\"https://seizorai.seiza.cc\"},{\"id\":\"seilaya\",\"name\":\"Seilaya\",\"url\":\"https://seilaya.seiza.cc\"},{\"id\":\"seisugbo\",\"name\":\"Seisugbo\",\"url\":\"https://seisugbo.seiza.cc\"},{\"id\":\"seiou\",\"name\":\"SeiOU\",\"url\":\"https://seiou.seiza.cc\"},{\"id\":\"seinag\",\"name\":\"Seinag\",\"url\":\"https://seinag.seiza.cc\"},{\"id\":\"tulay\",\"name\":\"Tulay\",\"url\":\"https://tulay.seiza.cc\"},{\"id\":\"iscolab\",\"name\":\"ISCOLab\",\"url\":\"https://iscolab.seiza.cc\"}]"
+  }
+  // And one secret: npx wrangler secret put SEIZA_STATS_TOKEN (the same one
+  // every world has).
+}

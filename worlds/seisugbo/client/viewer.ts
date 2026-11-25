@@ -1,3 +1,4 @@
+import { track } from "../../../src/analytics/track";
 // Which piece (or board) is open for a closer look, shared by the flat
 // screen's lightbox (Hud.tsx) and the headset's panel (Xr.tsx), so the two
 // never disagree. Opening a piece remembers the row it was opened from, so
@@ -20,6 +21,8 @@ function set(next: ViewerState) {
 }
 
 export function openPiece(id: string | null, sequence?: string[]) {
+  // Which pieces are looked at, for the room's research counts (counted only).
+  if (id !== null) track(`piece.${id}`);
   set({ open: id, sequence: id === null ? [] : sequence ?? (state.sequence.includes(id) ? state.sequence : [id]) });
 }
 

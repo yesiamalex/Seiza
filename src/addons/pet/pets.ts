@@ -37,7 +37,8 @@ interface Shape {
   coat: string;
   belly: string;
   dark: string;
-  /** Top speed (m/s) and stride (m a step cycle). */
+  /** Top speed (m/s) and stride (m a whole step cycle, as a real one of its
+   *  size: shorter reads as a frantic shuffle). */
   speed: number;
   stride: number;
   /** How it rests: sits up, or lies down. */
@@ -45,9 +46,9 @@ interface Shape {
 }
 
 export const SHAPES: Record<Pet, Shape> = {
-  dog: { length: 0.62, width: 0.24, height: 0.27, legs: 0.3, leg: 0.055, head: [0.19, 0.19, 0.22], headUp: 0.2, snout: [0.1, 0.09, 0.13], ears: "flop", tail: 0.22, coat: "#b9824e", belly: "#e2c39a", dark: "#3d2b1f", speed: 6.5, stride: 0.6, rest: "sit" },
-  cat: { length: 0.42, width: 0.16, height: 0.17, legs: 0.19, leg: 0.032, head: [0.14, 0.13, 0.13], headUp: 0.12, snout: [0.06, 0.045, 0.04], ears: "point", tail: 0.34, coat: "#d4873e", belly: "#f1d7b4", dark: "#5a3a22", speed: 5.5, stride: 0.42, rest: "sit" },
-  capybara: { length: 0.95, width: 0.42, height: 0.44, legs: 0.2, leg: 0.075, head: [0.21, 0.24, 0.36], headUp: 0.1, snout: null, boxHead: true, ears: "tiny", tail: 0, coat: "#93704c", belly: "#a88661", dark: "#3e2e20", speed: 4.5, stride: 0.5, rest: "lie" },
+  dog: { length: 0.62, width: 0.24, height: 0.27, legs: 0.3, leg: 0.055, head: [0.19, 0.19, 0.22], headUp: 0.2, snout: [0.1, 0.09, 0.13], ears: "flop", tail: 0.22, coat: "#b9824e", belly: "#e2c39a", dark: "#3d2b1f", speed: 6.5, stride: 1.1, rest: "sit" },
+  cat: { length: 0.42, width: 0.16, height: 0.17, legs: 0.19, leg: 0.032, head: [0.14, 0.13, 0.13], headUp: 0.12, snout: [0.06, 0.045, 0.04], ears: "point", tail: 0.34, coat: "#d4873e", belly: "#f1d7b4", dark: "#5a3a22", speed: 5.5, stride: 0.75, rest: "sit" },
+  capybara: { length: 0.95, width: 0.42, height: 0.44, legs: 0.2, leg: 0.075, head: [0.21, 0.24, 0.36], headUp: 0.1, snout: null, boxHead: true, ears: "tiny", tail: 0, coat: "#93704c", belly: "#a88661", dark: "#3e2e20", speed: 4.5, stride: 0.9, rest: "lie" },
 };
 
 /** Bone order. */

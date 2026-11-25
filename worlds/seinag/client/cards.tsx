@@ -1,3 +1,4 @@
+import { track } from "../../../src/analytics/track";
 // Seinag's cards, opened from the dashboard or a guide's answer: how the
 // campus solar works, and what the campus uses. They share the world's one
 // overlay slot with the guides' chat (Hud.tsx), so they go through this
@@ -26,6 +27,8 @@ let open: CardKey | null = null;
 const listeners = new Set<() => void>();
 
 export function openCard(key: CardKey | null) {
+  // Which cards are read, for the room's research counts (counted only).
+  if (key !== null) track(`card.${key}`);
   open = key;
   for (const l of listeners) l();
 }

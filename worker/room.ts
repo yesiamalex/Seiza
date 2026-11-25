@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { FILTER_KEYS, filterOn, hasProfanity, maskProfanity } from "../src/moderation/profanity";
+import { RoomStats } from "./stats";
 import {
   ADDON_MODES,
   addonModeKey,
@@ -277,10 +278,23 @@ export class SeizaRoom extends DurableObject<Env> {
       this.worldState = (await ctx.storage.get<Record<string, WorldStateValue>>(WORLD_STATE_STORAGE_KEY)) ?? {};
       this.lights = { ...this.lights, ...((await ctx.storage.get<Record<LightZone, boolean>>(LIGHTS_STORAGE_KEY)) ?? {}) };
       this.roomPassword = (await ctx.storage.get<string | null>(ROOM_PASSWORD_STORAGE_KEY)) ?? null;
+      // Research counts, only where the deployment has asked for them.
+      if ((env.SEIZA_STATS_TOKEN ?? "").length >= 24) {
+        this.stats = new RoomStats(ctx.storage);
+        await this.stats.load();
+      }
     });
   }
 
+  private stats: RoomStats | null = null;
+
   async fetch(request: Request): Promise<Response> {
+    // The counts, asked for by the Worker itself (worker/index.ts's
+    // /api/stats, behind its token); a visitor's /rooms/… path never matches.
+    if (new URL(request.url).pathname === "/stats") {
+      await this.ready;
+      return Response.json(this.stats ? await this.stats.read() : null);
+    }
     if (request.headers.get("Upgrade") !== "websocket") {
       return new Response("Expected a WebSocket upgrade", { status: 426 });
     }
@@ -376,6 +390,7 @@ export class SeizaRoom extends DurableObject<Env> {
         // A reconnect from the same page replaces its old connection now,
         // rather than leaving a frozen copy until that socket times out.
         if (session) this.dropOtherSessionConnections(ws, session);
+        this.stats?.join(attachment.connId, session, this.listPlayers().length + 1);
         this.save(ws, {
           ...attachment,
           player,
@@ -410,6 +425,7 @@ export class SeizaRoom extends DurableObject<Env> {
         // visually break the room for everyone.
         if (!Array.isArray(message.position) || message.position.length !== 3) return;
         if (!message.position.every(isFiniteInBounds)) return;
+        this.stats?.sample(this.listPlayers());
         if (typeof message.rotationY !== "number" || !Number.isFinite(message.rotationY)) return;
         // Optional and clamped rather than merely validated: this drives
         // a neck rotation on every other client, and a value outside a
@@ -459,6 +475,7 @@ export class SeizaRoom extends DurableObject<Env> {
         if (!attachment.player) return;
         const gesture = message.gesture;
         if (gesture !== null && (typeof gesture !== "string" || !GESTURE_NAME.test(gesture))) return;
+        if (gesture) this.stats?.did(attachment.connId, "gesture");
         // A together gesture only plays for someone who has just agreed to
         // it with someone else, once. Without this a modified client could
         // send "hug" at anyone; the menu hiding it would mean nothing.
@@ -488,6 +505,7 @@ export class SeizaRoom extends DurableObject<Env> {
       }
       case "setPosture": {
         if (!attachment.player) return;
+        if (message.posture) this.stats?.did(attachment.connId, "sit");
         // Same shape rule as a gesture name, since a posture *is* the name
         // of a clip. null means standing.
         const raw = message.posture;
@@ -632,6 +650,7 @@ export class SeizaRoom extends DurableObject<Env> {
       }
       case "objectHold":
       case "objectDrop": {
+        if (message.type === "objectHold" && attachment.player) this.stats?.did(attachment.connId, "grab");
         // Picking something up: an editor, anything (as moving it in Edit
         // mode); anyone, a ball. Holding is relayed and never kept; the
         // drop is kept, like a move.
@@ -682,6 +701,7 @@ export class SeizaRoom extends DurableObject<Env> {
         break;
       }
       case "objectSetText": {
+        if (attachment.player) this.stats?.did(attachment.connId, "board");
         // Deliberately NOT editor-gated, on the same principle as
         // objectPresent below: writing on a board that already exists is
         // using the room, not restructuring it. Placing, moving, or
@@ -710,6 +730,7 @@ export class SeizaRoom extends DurableObject<Env> {
         break;
       }
       case "objectPresent": {
+        if (attachment.player && message.active) this.stats?.did(attachment.connId, "present");
         // Deliberately not editor-gated: presenting is using the room, not
         // changing it. A screen can only be claimed when free, and only the
         // presenter can give it back.
@@ -742,6 +763,7 @@ export class SeizaRoom extends DurableObject<Env> {
       }
       case "setMedia": {
         if (!attachment.player) return;
+        if (message.media && typeof message.media === "object") this.stats?.setMedia(attachment.connId, message.media);
         const now = Date.now();
         if (attachment.lastMediaAt && now - attachment.lastMediaAt < MEDIA_MIN_INTERVAL_MS) return;
         const media = sanitizeMedia(message.media);
@@ -795,6 +817,9 @@ export class SeizaRoom extends DurableObject<Env> {
           if (attachment.lastLightAt && now - attachment.lastLightAt < LIGHT_MIN_INTERVAL_MS) return;
           attachment.lastLightAt = now;
           this.save(ws, attachment);
+        } else if (typeof key === "string" && key.startsWith("stats.")) {
+          // The room's own, never a visitor's to set.
+          return;
         } else if (typeof key === "string" && key.startsWith("filter.")) {
           // The profanity filters are an admin's to switch, not an editor's.
           if (!attachment.isAdmin || typeof value !== "boolean") return;
@@ -847,6 +872,7 @@ export class SeizaRoom extends DurableObject<Env> {
         const text = this.filter("chat") ? maskProfanity(typed) : typed;
         if (!text) return;
         attachment.lastChatAt = now;
+        this.stats?.did(attachment.connId, "chat");
         this.save(ws, attachment);
         // Ephemeral by design — not persisted to ctx.storage like
         // objects are, so history doesn't carry across a reconnect.
@@ -886,6 +912,7 @@ export class SeizaRoom extends DurableObject<Env> {
         if (!attachment.player || !this.allow(attachment.connId, "together", TOGETHER_RATE)) return;
         const { to, gesture } = message;
         if (typeof to !== "string" || to === attachment.connId || !isTogetherGesture(gesture)) return;
+        this.stats?.did(attachment.connId, "together");
         const target = this.findConnection(to);
         const targetPlayer = target ? this.att(target)?.player : null;
         if (!target || !targetPlayer) return;
@@ -953,7 +980,15 @@ export class SeizaRoom extends DurableObject<Env> {
         if (target) this.sendTo(target, { type: "togetherClosed", id: message.id, reason: "cancelled" });
         break;
       }
+      case "track": {
+        // A world's own thing done (src/analytics/track.ts): counted, nothing else.
+        if (!attachment.player || typeof message.key !== "string" || !/^[a-z0-9][a-z0-9._-]{0,47}$/.test(message.key)) return;
+        if (!this.allow(attachment.connId, "track", { perSecond: 2, burst: 8 })) return;
+        this.stats?.did(attachment.connId, `world.${message.key}`);
+        break;
+      }
       case "addon": {
+        if (attachment.player && (ADDON_MODES as readonly unknown[]).includes(message.mode)) this.stats?.did(attachment.connId, `mode.${message.mode}`);
         // A room mode's event (src/addons/): relayed to everyone else,
         // never read or kept. Only while an editor has that mode on, so a
         // room that never uses the modes passes none of it.
@@ -1009,6 +1044,11 @@ export class SeizaRoom extends DurableObject<Env> {
   async webSocketClose(ws: WebSocket) {
     const attachment = this.att(ws);
     if (attachment?.player) this.removePlayer(attachment.connId);
+    if (attachment && this.stats) {
+      this.stats.leave(attachment.connId);
+      // The last one out: today's counts saved, in case the room sleeps now.
+      if (this.listPlayers().length === 0) await this.stats.save();
+    }
     if (attachment) {
       this.lastTrackingAt.delete(attachment.connId);
       this.lastPositionPersist.delete(attachment.connId);
@@ -1091,7 +1131,8 @@ export class SeizaRoom extends DurableObject<Env> {
   /** The world state as joiners get it: with the filters' defaults filled
    *  in (never stored, so a world's default can still change). */
   private worldStateForClients(): Record<string, WorldStateValue> {
-    return { ...this.worldState, [FILTER_KEYS.chat]: this.filter("chat"), [FILTER_KEYS.names]: this.filter("names") };
+    // `stats.on`: this room keeps research counts, so the page can say so.
+    return { ...this.worldState, [FILTER_KEYS.chat]: this.filter("chat"), [FILTER_KEYS.names]: this.filter("names"), "stats.on": this.stats !== null };
   }
 
   private maxOccupants(): number {

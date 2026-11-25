@@ -268,7 +268,10 @@ export type ClientMessage =
   // A room mode's own event (src/addons/): a swing, a hit, a note. Relayed
   // to everyone else in the room, never read or stored, and only while an
   // editor has that mode switched on (see ADDON_MODES).
-  | { type: "addon"; mode: AddonMode; data: Record<string, unknown> };
+  | { type: "addon"; mode: AddonMode; data: Record<string, unknown> }
+  /** A world's own thing done, for the room's research counts (worker/stats.ts):
+   *  "image.court-3", say. Only counted, never relayed or kept with anyone. */
+  | { type: "track"; key: string };
 
 export type ServerMessage =
   | {

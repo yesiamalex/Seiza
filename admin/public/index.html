@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Seiza research</title>
+<style>
+  :root { --night: #0b1029; --deep: #121a3d; --panel: rgba(18, 26, 61, 0.72); --ink: #f3efe6; --muted: rgba(243, 239, 230, 0.68); --faint: rgba(243, 239, 230, 0.45); --line: rgba(243, 239, 230, 0.13); --lantern: #f2b84b; --dawn: #ff8f6b; --sky: #8fd3ff; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--night); color: var(--ink); font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; padding: 12px 20px; background: rgba(11, 16, 41, 0.92); border-bottom: 1px solid var(--line); backdrop-filter: blur(8px); }
+  header h1 { margin: 0 auto 0 0; font: 700 18px/1 Georgia, serif; letter-spacing: 0.01em; }
+  header h1 span { color: var(--lantern); }
+  select, button { font: inherit; color: var(--ink); background: var(--deep); border: 1px solid var(--line); border-radius: 4px; padding: 6px 10px; }
+  button { cursor: pointer; }
+  button:hover, select:hover { border-color: rgba(243, 239, 230, 0.35); }
+  main { width: min(1180px, 100% - 32px); margin: 22px auto 60px; display: grid; gap: 18px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+  .card, section { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; }
+  .card b { display: block; font: 700 26px/1.1 Georgia, serif; }
+  .card span { color: var(--muted); font-size: 13px; }
+  section h2 { margin: 0 0 4px; font: 700 18px Georgia, serif; }
+  section > p { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 860px) { .two { grid-template-columns: 1fr; } }
+  .bars { display: grid; gap: 8px; }
+  .bar { display: grid; grid-template-columns: minmax(130px, 220px) 1fr 92px; gap: 10px; align-items: center; font-size: 14px; }
+  .bar i { display: block; height: 10px; border-radius: 5px; background: linear-gradient(90deg, var(--lantern), var(--dawn)); min-width: 2px; }
+  .bar em { font-style: normal; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  th { color: var(--faint); font-weight: 600; font-size: 12px; }
+  td.n { text-align: right; font-variant-numeric: tabular-nums; }
+  .chart { display: flex; align-items: flex-end; gap: 3px; height: 120px; }
+  .chart div { flex: 1; background: linear-gradient(180deg, var(--lantern), rgba(242, 184, 75, 0.35)); border-radius: 2px 2px 0 0; min-height: 1px; position: relative; }
+  .axis { display: flex; justify-content: space-between; color: var(--faint); font-size: 11px; margin-top: 4px; }
+  canvas { width: 100%; height: auto; background: #070a1d; border-radius: 4px; display: block; image-rendering: pixelated; }
+  .layers { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .layers button[aria-pressed="true"] { background: var(--lantern); color: var(--night); border-color: var(--lantern); }
+  .tag { display: inline-block; padding: 0 8px; border-radius: 999px; font-size: 12px; border: 1px solid currentColor; }
+  .note { color: var(--faint); font-size: 13px; }
+  .worlds-status { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--muted); }
+  .worlds-status b { color: var(--ink); }
+  .off { color: #ff9a8a; }
+  footer { width: min(1180px, 100% - 32px); margin: 0 auto 40px; color: var(--faint); font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Seiza <span>research</span></h1>
+  <label>World <select id="world"><option value="">All worlds</option></select></label>
+  <label>Days <select id="range"><option value="7">Last 7</option><option value="30" selected>Last 30</option></select></label>
+  <button type="button" id="csv">Download CSV</button>
+  <button type="button" id="json">Download JSON</button>
+</header>
+<main>
+  <p class="worlds-status" id="status">Asking the worlds…</p>
+  <div class="cards" id="cards"></div>
+  <div class="two">
+    <section><h2>Communication</h2><p>Of the visitors, how many used each way of talking or showing.</p><div class="bars" id="comms"></div></section>
+    <section><h2>Interaction</h2><p>Of the visitors, how many did each thing at least once, and how often in all.</p><div class="bars" id="acts"></div></section>
+  </div>
+  <section><h2>Exhibits and a world's own things</h2><p>Pieces opened, cards read: what each world reports for itself (Seisugbo's artworks, Seinag's cards).</p><table><thead><tr><th>World</th><th>What</th><th class="n">People</th><th class="n">Times</th></tr></thead><tbody id="exhibits"></tbody></table></section>
+  <div class="two">
+    <section><h2>When</h2><p>Time spent in the worlds by hour of the day, Manila time.</p><div class="chart" id="hours"></div><div class="axis"><span>00</span><span>06</span><span>12</span><span>18</span><span>23</span></div></section>
+    <section><h2>By day</h2><p>Visitors each day.</p><div class="chart" id="daily"></div><div class="axis" id="daily-axis"></div></section>
+  </div>
+  <section id="where"><h2>Where, and what people did there</h2><p>Pick one world. Each square is 2 m of floor; brighter is more time. The layers show which share of that time people were talking (mic on), sitting, near someone (within 3 m), or moving, the closest counts come to why a place is used.</p>
+    <div class="layers" id="layers"></div>
+    <canvas id="map" width="600" height="400"></canvas>
+    <h2 style="margin-top:16px">The most-used places</h2>
+    <table><thead><tr><th>Place (m)</th><th>Reads as</th><th class="n">Hours</th><th class="n">Talking</th><th class="n">Sitting</th><th class="n">Together</th><th class="n">Moving</th></tr></thead><tbody id="zones"></tbody></table>
+  </section>
+</main>
+<footer>Counts only, kept 30 days in each world: no names, accounts, addresses, recordings, or anyone's path. A visitor here is one visit to a page (a reload is another); "people" over several days adds up each day's. Visitors see a notice that the world is counting.</footer>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, text, cls) => { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (cls) e.className = cls; return e; };
+  const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0) + "%";
+  const LABELS = {
+    mic: "Turned on their mic", camera: "Turned on a camera", screen: "Shared a screen", chat: "Sent a chat message", together: "Asked for a together gesture",
+    gesture: "Played a gesture", sit: "Sat or knelt", board: "Wrote on a board", grab: "Picked something up", present: "Presented on a screen",
+    "mode.fantasy": "Fantasy mode", "mode.band": "Band mode", "mode.exer": "ExerSeiza (rides)", "mode.pet": "Pets",
+  };
+  const COMMS = ["mic", "camera", "screen", "chat", "together"];
+  let data = null;
+
+  fetch("/api/summary").then((r) => r.json()).then((d) => { data = d; setup(); render(); }).catch(() => ($("status").textContent = "Couldn't reach the summary."));
+
+  function setup() {
+    const status = $("status");
+    status.textContent = "";
+    for (const w of data.worlds) {
+      const option = el("option", w.name);
+      option.value = w.id;
+      $("world").append(option);
+      const s = el("span");
+      s.append(el("b", w.name + " "), el("span", w.days ? `${w.days.length} day${w.days.length === 1 ? "" : "s"}` : w.note, w.days ? "" : "off"));
+      status.append(s);
+    }
+    $("world").onchange = render;
+    $("range").onchange = render;
+    $("json").onclick = () => download("seiza-research.json", JSON.stringify(data, null, 2), "application/json");
+    $("csv").onclick = () => download("seiza-research.csv", csv(), "text/csv");
+  }
+
+  /** The chosen days of the chosen world(s), each with its world. */
+  function days() {
+    const want = $("world").value;
+    const since = new Date(Date.now() + 8 * 3600e3 - (Number($("range").value) - 1) * 86400e3).toISOString().slice(0, 10);
+    return data.worlds.filter((w) => w.days && (!want || w.id === want)).flatMap((w) => w.days.filter((d) => d.day >= since).map((d) => ({ ...d, world: w })));
+  }
+
+  function render() {
+    const list = days();
+    const sum = (f) => list.reduce((a, d) => a + f(d), 0);
+    const visitors = sum((d) => d.people);
+    const seconds = sum((d) => d.seconds);
+    const did = {};
+    for (const d of list) for (const [k, [people, times]] of Object.entries(d.did)) { const t = (did[k] ??= [0, 0]); t[0] += people; t[1] += times; }
+
+    // The headline numbers.
+    const cards = $("cards");
+    cards.replaceChildren();
+    for (const [value, label] of [
+      [sum((d) => d.joins), "visits"],
+      [visitors, "visitors (each day's, added)"],
+      [Math.max(0, ...list.map((d) => d.peak)), "most at once"],
+      [(seconds / 3600).toFixed(1), "hours spent in all"],
+      [pct(sum((d) => d.together), seconds), "of that time near someone"],
+      [visitors ? Math.round(seconds / visitors / 60) + " min" : "–", "a visitor's average stay"],
+    ]) { const c = el("div", undefined, "card"); c.append(el("b", String(value)), el("span", label)); cards.append(c); }
+
+    const bars = (target, keys) => {
+      const box = $(target);
+      box.replaceChildren();
+      for (const k of keys) {
+        const [people, times] = did[k] ?? [0, 0];
+        const row = el("div", undefined, "bar");
+        const track = el("div");
+        const fill = el("i");
+        fill.style.width = (visitors ? Math.min(100, (people / visitors) * 100) : 0) + "%";
+        track.append(fill);
+        row.append(el("span", LABELS[k] ?? k), track, el("em", `${pct(people, visitors)} · ${times}`));
+        box.append(row);
+      }
+      if (!keys.length) box.append(el("p", "Nothing yet.", "note"));
+    };
+    bars("comms", COMMS);
+    bars("acts", Object.keys(did).filter((k) => !COMMS.includes(k) && !k.startsWith("world.")).sort((a, b) => did[b][0] - did[a][0]));
+
+    // A world's own things, per world.
+    const exhibits = $("exhibits");
+    exhibits.replaceChildren();
+    const own = {};
+    for (const d of list) for (const [k, [people, times]] of Object.entries(d.did)) if (k.startsWith("world.")) { const key = d.world.name + "|" + k.slice(6); const t = (own[key] ??= [0, 0]); t[0] += people; t[1] += times; }
+    const ownRows = Object.entries(own).sort((a, b) => b[1][1] - a[1][1]).slice(0, 60);
+    for (const [key, [people, times]] of ownRows) { const [w, what] = key.split("|"); const tr = el("tr"); tr.append(el("td", w), el("td", what), el("td", String(people), "n"), el("td", String(times), "n")); exhibits.append(tr); }
+    if (!ownRows.length) { const tr = el("tr"); tr.append(el("td", "Nothing yet.", "note")); exhibits.append(tr); }
+
+    // When, and by day.
+    const hours = new Array(24).fill(0);
+    for (const d of list) d.hours.forEach((s, h) => (hours[h] += s));
+    chart("hours", hours);
+    const byDay = {};
+    for (const d of list) byDay[d.day] = (byDay[d.day] ?? 0) + d.people;
+    const dayKeys = Object.keys(byDay).sort();
+    chart("daily", dayKeys.map((k) => byDay[k]), dayKeys);
+    const axis = $("daily-axis");
+    axis.replaceChildren(...(dayKeys.length ? [el("span", dayKeys[0].slice(5)), el("span", dayKeys[dayKeys.length - 1].slice(5))] : []));
+
+    renderWhere(list);
+  }
+
+  function chart(target, values, titles) {
+    const box = $(target);
+    box.replaceChildren();
+    const top = Math.max(1, ...values);
+    values.forEach((v, i) => { const bar = el("div"); bar.style.height = (v / top) * 100 + "%"; bar.title = (titles ? titles[i] + ": " : `${String(i).padStart(2, "0")}:00: `) + (titles ? v : (v / 3600).toFixed(1) + " h"); box.append(bar); });
+  }
+
+  // --- where ------------------------------------------------------------------------
+  const LAYERS = [["present", "Time spent", 0], ["talking", "Talking", 1], ["seated", "Sitting", 2], ["together", "Together", 3], ["moving", "Moving", 4]];
+  let layer = 0;
+  function renderWhere(list) {
+    const one = $("world").value;
+    const section = $("where");
+    section.style.display = one ? "" : "none";
+    if (!one) return;
+    const zones = {};
+    for (const d of list) for (const [key, z] of Object.entries(d.zones)) {
+      // Storeys merge on the map: x and z only.
+      const [x, zz] = key.split(",");
+      const t = (zones[`${x},${zz}`] ??= [0, 0, 0, 0, 0]);
+      z.forEach((v, i) => (t[i] += v));
+    }
+    const box = $("layers");
+    box.replaceChildren();
+    for (const [, label, i] of LAYERS) { const b = el("button", label); b.type = "button"; b.setAttribute("aria-pressed", String(i === layer)); b.onclick = () => { layer = i; renderWhere(list); }; box.append(b); }
+    const entries = Object.entries(zones);
+    const canvas = $("map");
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!entries.length) return;
+    const cells = entries.map(([k, z]) => { const [x, zz] = k.split(",").map(Number); return { x, z: zz, v: z }; });
+    const minX = Math.min(...cells.map((c) => c.x)), maxX = Math.max(...cells.map((c) => c.x));
+    const minZ = Math.min(...cells.map((c) => c.z)), maxZ = Math.max(...cells.map((c) => c.z));
+    const w = maxX - minX + 1, h = maxZ - minZ + 1;
+    const s = Math.max(1, Math.floor(Math.min(900 / w, 520 / h)));
+    canvas.width = w * s;
+    canvas.height = h * s;
+    const top = Math.max(...cells.map((c) => c.v[0]));
+    for (const c of cells) {
+      const amount = layer === 0 ? Math.sqrt(c.v[0] / top) : c.v[0] ? c.v[layer] / c.v[0] : 0;
+      const light = layer === 0 ? amount : amount * Math.min(1, Math.sqrt(c.v[0] / top) * 2);
+      ctx.fillStyle = layer === 0 ? `rgba(242,184,75,${0.12 + 0.88 * light})` : `rgba(143,211,255,${0.08 + 0.92 * light})`;
+      ctx.fillRect((c.x - minX) * s, (c.z - minZ) * s, s, s);
+    }
+    // The ten most-used places, and what they read as.
+    const zonesBody = $("zones");
+    zonesBody.replaceChildren();
+    for (const c of cells.sort((a, b) => b.v[0] - a.v[0]).slice(0, 10)) {
+      const [p, talk, sit, near, move] = c.v;
+      const share = (v) => (p ? v / p : 0);
+      const reads = share(sit) >= 0.5 ? "A place to sit" : share(talk) >= 0.3 && share(near) >= 0.5 ? "Where people talk" : share(near) >= 0.6 ? "Where people gather" : share(move) >= 0.6 ? "A way through" : share(near) < 0.25 && share(move) < 0.3 ? "Lingering alone (looking, reading)" : "Mixed use";
+      const tr = el("tr");
+      tr.append(el("td", `${c.x * 2}, ${c.z * 2}`), el("td", reads), el("td", (p / 3600).toFixed(2), "n"), el("td", pct(talk, p), "n"), el("td", pct(sit, p), "n"), el("td", pct(near, p), "n"), el("td", pct(move, p), "n"));
+      zonesBody.append(tr);
+    }
+  }
+
+  function csv() {
+    const kinds = [...new Set(data.worlds.flatMap((w) => (w.days ?? []).flatMap((d) => Object.keys(d.did))))].sort();
+    const head = ["world", "day", "visits", "visitors", "peak", "hours", "hours_near_someone", ...kinds.flatMap((k) => [`${k}_people`, `${k}_times`])];
+    const rows = data.worlds.flatMap((w) => (w.days ?? []).map((d) => [w.id, d.day, d.joins, d.people, d.peak, (d.seconds / 3600).toFixed(3), (d.together / 3600).toFixed(3), ...kinds.flatMap((k) => d.did[k] ?? [0, 0])]));
+    return [head, ...rows].map((r) => r.map((v) => (/[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : v)).join(",")).join("\n");
+  }
+
+  function download(name, text, type) {
+    const a = el("a");
+    a.href = URL.createObjectURL(new Blob([text], { type }));
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+</script>
+</body>
+</html>

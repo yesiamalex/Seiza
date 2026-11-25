@@ -44,6 +44,12 @@ export interface Env {
    *  admin can switch either for a room. */
   SEIZA_CHAT_FILTER?: string;
   SEIZA_NAME_FILTER?: string;
+  /** Optional, a secret. Set, the room keeps research counts (worker/stats.ts)
+   *  and gives them, at /api/stats, to whoever brings this token: the admin
+   *  page (admin/). Unset, nothing is counted. */
+  SEIZA_STATS_TOKEN?: string;
+  /** The world this deployment serves; its room is named after it. */
+  SEIZA_WORLD_ID?: string;
   /** Optional. This deployment's own address, like
    *  https://seizora.seiza.org, once it has one. Visitors who open the old
    *  *.workers.dev address are sent there (a 301), so old links keep
@@ -294,6 +300,10 @@ export default {
       return routeToRoom(request, url, env);
     }
 
+    if (url.pathname === "/api/stats" && request.method === "GET") {
+      return handleStats(request, env);
+    }
+
     if (url.pathname === "/api/avatars" && request.method === "POST") {
       return handleUpload(request, env);
     }
@@ -335,6 +345,26 @@ function routeToRoom(request: Request, url: URL, env: Env): Response | Promise<R
   const id = env.ROOMS.idFromName(roomId);
   const stub = env.ROOMS.get(id);
   return stub.fetch(request);
+}
+
+/** The room's research counts, for the admin page alone: without the right
+ *  token (or with counting off) it's as if there were nothing here. */
+async function handleStats(request: Request, env: Env): Promise<Response> {
+  const token = env.SEIZA_STATS_TOKEN ?? "";
+  const given = (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
+  if (token.length < 24 || !sameSecret(given, token)) return new Response("Not found", { status: 404 });
+  const stub = env.ROOMS.get(env.ROOMS.idFromName(env.SEIZA_WORLD_ID ?? "default"));
+  const counts = await stub.fetch("https://room/stats");
+  return new Response(counts.body, { headers: { "content-type": "application/json", "cache-control": "no-store" } });
+}
+
+/** A constant-time comparison, so the token can't be guessed by timing. */
+function sameSecret(a: string, b: string): boolean {
+  const x = new TextEncoder().encode(a);
+  const y = new TextEncoder().encode(b);
+  let diff = x.length ^ y.length;
+  for (let i = 0; i < Math.max(x.length, y.length); i++) diff |= (x[i] ?? 0) ^ (y[i] ?? 0);
+  return diff === 0;
 }
 
 async function handleUpload(request: Request, env: Env): Promise<Response> {

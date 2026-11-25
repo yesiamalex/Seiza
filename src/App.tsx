@@ -100,6 +100,7 @@ import { StatusDock } from "./ui/StatusDock";
 import { AVATAR_DESIGN_PRESETS } from "./avatar/designer/avatarSpec";
 import { deliverWorldMessage, unwrapWorldMessage, WorldExtension, WorldOverlay, wrapWorldMessage } from "./worlds/WorldExtension";
 import { addonSeats } from "./addons/avatars";
+import { connectTrack } from "./analytics/track";
 import { AddonBarButtons, AddonOverlay, AddonScene, addonHandsBusy, addonHoldsClicks, connectAddonBus, ridingNow, useAddonRideScale, LOCAL_AVATAR, RoomFilters, RoomModes, setAddonAvatar, useAddonRooted, useAddonXrSections } from "./addons";
 import { PortalCard, Portals } from "./worlds/Portals";
 import { BAR_LABEL_CLASS, barButtonActiveStyle, barButtonStyle, inputStyle, panelStyle, pillButtonStyle, primaryButtonStyle } from "./ui/styles";
@@ -466,8 +467,13 @@ export default function App() {
   // Room modes (src/addons/): their events go out on the room socket.
   useEffect(() => {
     connectAddonBus(connected ? (mode, data) => send({ type: "addon", mode, data }) : null);
-    return () => connectAddonBus(null);
-  }, [connected, send]);
+    // A world's own things done, for the room's research counts, only where it keeps them.
+    connectTrack(connected && worldState["stats.on"] === true ? (key) => send({ type: "track", key }) : null);
+    return () => {
+      connectAddonBus(null);
+      connectTrack(null);
+    };
+  }, [connected, send, worldState]);
   useEffect(() => {
     setAddonAvatar(LOCAL_AVATAR, localVrm);
     return () => setAddonAvatar(LOCAL_AVATAR, null);
@@ -843,6 +849,18 @@ export default function App() {
   // --- boards, notes and screens --------------------------------------------
   const [editingText, setEditingText] = useState<WorldObject | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // A world that keeps research counts (worker/stats.ts) says so, once a visit.
+  const statsOn = worldState["stats.on"] === true;
+  useEffect(() => {
+    if (!statsOn) return;
+    try {
+      if (sessionStorage.getItem("seiza.statsNoticed")) return;
+      sessionStorage.setItem("seiza.statsNoticed", "1");
+    } catch {
+      // No storage: say it anyway.
+    }
+    setNotice(L("This world keeps anonymous counts for research: how many visit, what they use, and where people gather. Never who you are, and nothing is recorded.", "この世界では研究のために匿名の集計をしています:訪問数、使われた機能、人が集まる場所。あなたが誰かは記録せず、録音・録画もしません。"));
+  }, [statsOn]);
 
   // ---- seiza endurance (see avatar/seizaEndurance.ts) -------------------
   const seizaReactions = useSeizaReactions();
