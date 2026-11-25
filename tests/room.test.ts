@@ -171,7 +171,7 @@ describe.skipIf(!built)("room server", () => {
     const late = await client(room, "Late", ["batch"]);
     const welcome = late.received.find((m) => m.type === "welcome");
     // With the profanity filters' defaults filled in: chat on, names off.
-    expect(welcome?.type === "welcome" && welcome.worldState).toEqual({ "breaker.wind": false, "battery.mode": "hold", "filter.chat": true, "filter.names": false });
+    expect(welcome?.type === "welcome" && welcome.worldState).toEqual({ "breaker.wind": false, "battery.mode": "hold", "filter.chat": true, "filter.names": false, "stats.on": false });
     a.socket.close();
     b.socket.close();
     late.socket.close();
