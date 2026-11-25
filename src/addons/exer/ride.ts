@@ -95,7 +95,8 @@ export function startHorn(distance?: number): () => void {
   const t = ctx.currentTime;
   const env = ctx.createGain();
   env.gain.setValueAtTime(0, t);
-  env.gain.linearRampToValueAtTime(level * 0.16, t + 0.012);
+  // Level with the bike's bell and the room's other sounds.
+  env.gain.linearRampToValueAtTime(level * 0.11, t + 0.012);
   const filter = ctx.createBiquadFilter();
   filter.type = "lowpass";
   filter.frequency.value = 2400;
@@ -169,7 +170,8 @@ export function startEngine(): Engine | null {
       sub.frequency.setTargetAtTime(21 + 26 * rev, t, 0.2);
       lfo.frequency.setTargetAtTime(11 + 15 * rev, t, 0.2);
       filter.frequency.setTargetAtTime(380 + 520 * rev, t, 0.2);
-      out.gain.setTargetAtTime(level * (0.1 + 0.08 * rev), t, 0.1);
+      // About half what it was: it carried over everything else.
+      out.gain.setTargetAtTime(level * (0.05 + 0.04 * rev), t, 0.1);
     },
     stop() {
       out.gain.setTargetAtTime(0, ctx.currentTime, 0.05);

@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { clampToRooms, floorHeightAt, OUTER_GROUND_Y, setMountain, SUMMIT_BENCHES, type Ground } from "./layout";
+import { clampToRooms, floorHeightAt, OUTER_GROUND_Y, setMountain, SUMMIT_BENCHES, viewFloorAt, type Ground } from "./layout";
 import { MountainGround } from "./mountainGround";
-import { MAKILING_SUMMIT_M, mountainHeight, placeMountain, realAltitude, SUMMIT, TRAIL_FROM } from "./mountainShape";
+import { MAKILING_SUMMIT_M, MOUNTAIN, mountainHeight, placeMountain, realAltitude, SUMMIT, TRAIL_FROM } from "./mountainShape";
 
 describe("Mt. Makiling", () => {
   afterEach(() => setMountain(true));
@@ -26,6 +26,14 @@ describe("Mt. Makiling", () => {
 
   it("puts its benches on the summit's ground", () => {
     for (const b of SUMMIT_BENCHES) expect(b.position[1]).toBeCloseTo(floorHeightAt(b.position[0], b.position[2]));
+  });
+
+  it("keeps a camera above the hill's whole surface, past where you can walk", () => {
+    // Near its edge, outside the walkable square, the hill is still drawn.
+    const x = MOUNTAIN.x + MOUNTAIN.size * 0.495;
+    const z = MOUNTAIN.z;
+    if (mountainHeight(x, z) > 0) expect(viewFloorAt(x, z)).toBeGreaterThanOrEqual(OUTER_GROUND_Y + mountainHeight(x, z) - 1e-6);
+    expect(viewFloorAt(SUMMIT[0], SUMMIT[1])).toBeCloseTo(floorHeightAt(SUMMIT[0], SUMMIT[1]));
   });
 
   it("isn't there in a world that turns it off", () => {

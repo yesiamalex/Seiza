@@ -48,8 +48,10 @@ interface Holder {
   /** How the ride is going (vehicles.ts's RideMotion), for the body. */
   motion: RideMotion;
   yaw: number | null;
-  /** Which trick the next jump does (a skateboard's), by turn. */
+  /** Which trick the next jump does (a skateboard's), by turn, and how far
+   *  through it is (seconds): it always finishes, landed or not. */
   trick: number;
+  trickT: number;
   prop: THREE.Group | null;
   wheels: THREE.Object3D[];
   detach: () => void;
@@ -67,6 +69,8 @@ const v1 = new THREE.Vector3();
 const v2 = new THREE.Vector3();
 const scaleV = new THREE.Vector3();
 const turnQ = new THREE.Quaternion();
+/** A board trick's length, seconds: inside a jump's ~0.65 s in the air. */
+const TRICK_TIME = 0.55;
 
 export function ExerLayer({ selfId, players, getSelfPosition, selfSeated }: { selfId: string | null; players: Record<string, PlayerState>; getSelfPosition: () => [number, number, number]; selfSeated: boolean }) {
   const { gl, camera, scene } = useThree();
@@ -310,7 +314,7 @@ export function ExerLayer({ selfId, players, getSelfPosition, selfSeated }: { se
         h = undefined;
       }
       if (!h) {
-        h = { vrm, overlay: sharedOverlay(vrm, frame), vehicle: null, grow: 0, base: 1, beam: null, lamp: null, engine: null, engineAt: 0, motion: { t: 0, speed: 0, turn: 0, air: 0 }, yaw: null, trick: 0, prop: null, wheels: [], detach: () => {}, weight: 0, phase: 0, last: null, speed: 0, body: newBodyPose(), hands: { right: target(), left: target() }, tracked: { right: newTrackedHand(), left: newTrackedHand() } };
+        h = { vrm, overlay: sharedOverlay(vrm, frame), vehicle: null, grow: 0, base: 1, beam: null, lamp: null, engine: null, engineAt: 0, motion: { t: 0, speed: 0, turn: 0, air: 0, aloft: 0, stopped: 0 }, yaw: null, trick: 0, trickT: 0, prop: null, wheels: [], detach: () => {}, weight: 0, phase: 0, last: null, speed: 0, body: newBodyPose(), hands: { right: target(), left: target() }, tracked: { right: newTrackedHand(), left: newTrackedHand() } };
         holders.set(key, h);
       }
       h.overlay = sharedOverlay(vrm, frame);
@@ -385,8 +389,14 @@ export function ExerLayer({ selfId, players, getSelfPosition, selfSeated }: { se
       h.yaw = anchorYaw;
       const airborne = p.y - floorHeightAt(p.x, p.z) > 0.15;
       if (airborne) m.air += dt;
-      else if (m.air > 0) {
-        m.air = 0;
+      else m.air = 0;
+      // Eased, so the body goes into a tuck or puts a foot down gradually.
+      m.aloft! += ((airborne ? 1 : 0) - m.aloft!) * (1 - Math.exp(-12 * dt));
+      m.stopped! += ((h.speed < 0.3 ? 1 : 0) - m.stopped!) * (1 - Math.exp(-4 * dt));
+      // A trick runs its whole course once begun, then the next jump does the next one.
+      if (airborne || h.trickT > 0) h.trickT += dt;
+      if (h.trickT >= TRICK_TIME) {
+        h.trickT = 0;
         h.trick = (h.trick + 1) % TRICKS.length;
       }
       if (h.prop) {
@@ -394,8 +404,8 @@ export function ExerLayer({ selfId, players, getSelfPosition, selfSeated }: { se
         const bank = Math.max(-0.35, Math.min(0.35, m.turn * (h.vehicle === "bike" ? 0.12 : h.vehicle === "moped" ? 0.08 : 0.1))) * Math.min(1, h.speed / 3);
         h.prop.rotation.set(0, 0, bank);
         h.prop.position.y = 0;
-        if (h.vehicle === "skateboard" && m.air > 0) {
-          const k = Math.min(1, m.air / 0.55);
+        if (h.vehicle === "skateboard" && h.trickT > 0) {
+          const k = Math.min(1, h.trickT / TRICK_TIME);
           const spin = Math.PI * 2 * k * k * (3 - 2 * k);
           const trick = TRICKS[h.trick];
           if (trick === "kickflip") h.prop.rotation.z = spin;

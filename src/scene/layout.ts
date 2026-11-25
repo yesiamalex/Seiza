@@ -254,6 +254,17 @@ export function shoreY(d: number): number {
   return out <= SHORE.shelf ? SHORE.seaY - 0.025 * out : SHORE.seaY - 0.025 * SHORE.shelf - 0.1 * (out - SHORE.shelf);
 }
 
+/** The ground a camera must stay above, which is more than where you can
+ *  walk: Mt. Makiling's whole surface, wherever it's drawn (its walkable
+ *  part stops short of its edges), and the sea's surface over the water. */
+export function viewFloorAt(x: number, z: number): number {
+  let floor = floorHeightAt(x, z);
+  const hill = mountainHeight(x, z);
+  if (mountain && hill > 0) floor = Math.max(floor, MOUNTAIN.y + hill);
+  if (onShore(x, z) && x - coastX(z) > SHORE.toWater) floor = Math.max(floor, SHORE.seaY);
+  return floor;
+}
+
 /** Out of your depth at the beach: swimming (src/avatar/SwimLayer.tsx). */
 export function swimmingAt(x: number, z: number): boolean {
   return onShore(x, z) && SHORE.seaY - shoreY(x - coastX(z)) > SWIM_DEPTH;

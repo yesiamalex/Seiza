@@ -222,8 +222,12 @@ export interface RideMotion {
   speed: number;
   turn: number;
   air: number;
+  /** Eased 0 to 1: off the ground (a jump), and stopped (a foot down). */
+  aloft?: number;
+  stopped?: number;
 }
 const STILL: RideMotion = { t: 0, speed: 0, turn: 0, air: 0 };
+const mix = (a: [number, number, number], b: [number, number, number], k: number): [number, number, number] => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
 
 /** The trick a skateboarder does in the air, by jump: a kickflip, a 360
  *  shove-it, a grab, in turn. */
@@ -263,6 +267,12 @@ export function riderPose(kind: Vehicle, phase: number, out: BodyPose, motion: R
     out.tilt = into + 0.025 * Math.sin(phase) * moving;
     out.nod = 0.03 * Math.sin(phase * 2) * moving;
     out.lean += 0.05 * moving;
+    // Stopped, the left foot comes off its pedal to the ground, to balance.
+    const stop = motion.stopped ?? 0;
+    if (stop > 0) {
+      out.left = mix(out.left, [-0.13, -0.02, 0], stop);
+      out.tilt += -0.06 * stop;
+    }
   } else if (kind === "moped") {
     // Sat upright on the long seat, feet flat on the floorboard.
     out.lean = 0.12;
@@ -270,6 +280,12 @@ export function riderPose(kind: Vehicle, phase: number, out: BodyPose, motion: R
     out.shiftZ = 0.06;
     out.left = [-0.05, -0.12, 0.13];
     out.right = [0.05, -0.12, 0.13];
+    // Stopped, both feet come off the floorboard to the ground.
+    const stop = motion.stopped ?? 0;
+    if (stop > 0) {
+      out.left = mix(out.left, [-0.15, -0.1, 0], stop);
+      out.right = mix(out.right, [0.15, -0.1, 0], stop);
+    }
     // The road comes up through the seat; into the turns, less than a bike.
     out.tilt = into * 0.8;
     out.drop += 0.006 * Math.sin(motion.t * 11) * moving;
@@ -286,12 +302,14 @@ export function riderPose(kind: Vehicle, phase: number, out: BodyPose, motion: R
     out.tilt = into * 1.3 + 0.05 * Math.sin(motion.t * 1.4) * moving;
     out.twist = 0.25 + 0.05 * Math.sin(motion.t * 1.4) * moving;
     out.drop = 0.05 + 0.025 * (0.5 + 0.5 * Math.sin(motion.t * 2.1)) * moving;
-    if (motion.air > 0) {
-      // Tucked up over the board, the feet with it; a grab reaches down.
-      out.drop = trick === "grab" ? 0.24 : 0.17;
-      out.lean = trick === "grab" ? 0.35 : 0.18;
-      out.left = [0.02, -0.17, 0.1];
-      out.right = [-0.02, 0.13, 0.1];
+    // Into the tuck and out of it smoothly (aloft eases), never a snap:
+    // knees up over the board, the feet with it; a grab reaches down.
+    const up = motion.aloft ?? (motion.air > 0 ? 1 : 0);
+    if (up > 0) {
+      out.drop += ((trick === "grab" ? 0.24 : 0.17) - out.drop) * up;
+      out.lean += ((trick === "grab" ? 0.35 : 0.18) - out.lean) * up;
+      out.left = mix(out.left, [0.02, -0.17, 0.1], up);
+      out.right = mix(out.right, [-0.02, 0.13, 0.1], up);
     }
   }
   return out;
