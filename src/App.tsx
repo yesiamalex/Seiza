@@ -1528,6 +1528,7 @@ export default function App() {
               environmentIsCustom={!!environmentUrl}
               environmentCollision={currentWorld.environmentCollision !== false}
               meadowTree={currentWorld.meadowTree ?? true}
+              mountain={currentWorld.mountain !== false}
               skyboxUrl={skyboxUrl}
               onFloorDoubleClick={handleFloorClick}
               // In Edit Mode a click belongs to the object gizmos, so the

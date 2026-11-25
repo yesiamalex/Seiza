@@ -85,7 +85,9 @@ const canopyColors = Object.fromEntries(Object.entries(CANOPY_COLORS).map(([seas
  * (seasonWeight), and thins away into winter and fills out of it. Cheap
  * either way: two meshes, and a colour mixed once a frame.
  */
-export function MeadowTree({ at = MEADOW_TREE_AT }: { at?: [number, number] }) {
+/** `solid`: its trunk is in the way (the meadow's); a second tree elsewhere
+ *  (the summit's) leaves the scenery obstacles to the first. */
+export function MeadowTree({ at = MEADOW_TREE_AT, solid = true }: { at?: [number, number]; solid?: boolean }) {
   const { wood, canopy } = useMemo(buildTree, []);
   const woodMaterial = useMemo(() => new THREE.MeshLambertMaterial({ color: "#5a4334", flatShading: true }), []);
   const canopyMaterial = useMemo(() => new THREE.MeshLambertMaterial({ color: CANOPY_COLORS.summer, flatShading: true }), []);
@@ -130,9 +132,10 @@ export function MeadowTree({ at = MEADOW_TREE_AT }: { at?: [number, number] }) {
   );
   // Its trunk is solid while it's there.
   useEffect(() => {
+    if (!solid) return;
     setSceneryObstacles([makeObstacle(at[0], at[1], TRUNK_RADIUS + 0.05, TRUNK_RADIUS + 0.05)]);
     return () => setSceneryObstacles([]);
-  }, [at]);
+  }, [at, solid]);
   const y = floorHeightAt(at[0], at[1]);
   return (
     <group position={[at[0], y, at[1]]}>

@@ -3,6 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { PlayerState } from "../multiplayer/types";
 import { ceilingHeightAt } from "../scene/layout";
+import { realAltitude } from "../scene/mountainShape";
 import { drive } from "../player/drive";
 import { getAddonAvatar, LOCAL_AVATAR } from "../addons/avatars";
 import { remoteRiders, ride } from "../addons/exer/ride";
@@ -126,7 +127,9 @@ export function HeatLayer({ selfId, players, getSelfPosition }: { selfId: string
         t.speed = moved < 30 ? moved / dt : 0;
       }
       if (at) t.last = [at[0], at[1], at[2]];
-      t.load = on && at ? stepHeat(t.load, { speed: t.speed, shaded: shaded(at[0], at[2]), effort, hi }, dt) : 0;
+      // The air cools about 6.5 °C a kilometre up: the top of the mountain is milder.
+      const here = at ? hi - realAltitude(at[0], at[2]) * 0.0065 : hi;
+      t.load = on && at ? stepHeat(t.load, { speed: t.speed, shaded: shaded(at[0], at[2]), effort, hi: here }, dt) : 0;
       setHeat(key, t.load);
       sweatFor(key, avatarKey, heatStage(t.load) >= 1);
     };

@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { MOUNTAIN, mountainHeight, SUMMIT } from "./mountainShape";
 
 /**
  * The floor plan of the built-in world, in one place, because three
@@ -252,6 +253,24 @@ export function setShore(on: boolean): void {
 
 const onShore = (x: number, z: number) => shore && x > FIELD.maxX && contains(SHORE_WALK, x, z);
 
+/** Mt. Makiling's ground (mountain.ts), walkable from the meadow's far end
+ *  up to the summit and all round it. On in every built-in world unless
+ *  the world turns it off (world.json `mountain: false`). */
+const MOUNTAIN_WALK: Rect = { minX: MOUNTAIN.x - MOUNTAIN.size * 0.48, maxX: MOUNTAIN.x + MOUNTAIN.size * 0.48, minZ: FIELD.maxZ - 3, maxZ: MOUNTAIN.z + MOUNTAIN.size * 0.48 };
+let mountain = true;
+export function setMountain(on: boolean): void {
+  mountain = on;
+}
+const onMountainWalk = (x: number, z: number) => mountain && contains(MOUNTAIN_WALK, x, z);
+
+/** Two benches just below the summit, facing back over the meadow. */
+const SUMMIT_FLOOR = (x: number, z: number) => OUTER_GROUND_Y + mountainHeight(x, z);
+export const SUMMIT_BENCHES: BenchPlacement[] = [-1.5, 1.5].map((dx) => {
+  const x = SUMMIT[0] + dx;
+  const z = SUMMIT[1] - 3.2;
+  return { position: [x, SUMMIT_FLOOR(x, z), z], rotationY: 0 };
+});
+
 /**
  * Pulls a position back into the walkable floor plan. Replaces the old
  * circular bounds clamp: with two rooms, a circle would either cut off the
@@ -262,7 +281,7 @@ export function clampToRooms(position: THREE.Vector3, margin = 0): void {
   // A world made of its own model has no rooms to stay in: walking is the
   // ground's (see setGround), and the camera goes where it likes.
   if (ground) return;
-  const walkable = shore ? WALKABLE_WITH_SHORE : WALKABLE;
+  const walkable = [...(shore ? WALKABLE_WITH_SHORE : WALKABLE), ...(mountain ? [MOUNTAIN_WALK] : [])];
   for (const room of walkable) {
     if (contains(inset(room, -margin), position.x, position.z)) return;
   }
@@ -480,6 +499,13 @@ export const SEATS: Seat[] = [
       label: "Garden bench",
     }));
   }),
+  ...SUMMIT_BENCHES.flatMap((bench, i) =>
+    [-1, 1].map((side) => {
+      const x = bench.position[0] + side * BENCH_LENGTH * 0.25;
+      const at = seatAt(x, bench.position[2], bench.rotationY);
+      return { id: `summit-bench-${i}-${side > 0 ? "r" : "l"}`, position: [at[0], bench.position[1], at[2]] as [number, number, number], rotationY: bench.rotationY, label: "Summit bench" };
+    })
+  ),
   ...DESKS.map((desk) => ({
     id: `desk-${desk.row}-${desk.column}`,
     // Students face the board, which is at the -Z end of the classroom.
@@ -934,6 +960,7 @@ export function floorHeightAt(x: number, z: number): number {
   // per step.
   if (onSteps(x, z)) return (FIELD_Y * (z - GARDEN_STEPS.z)) / (STEPS_RUN + GARDEN_STEPS.tread);
   if (inField(x, z)) return meadowHeight(x, z);
+  if (onMountainWalk(x, z)) return OUTER_GROUND_Y + mountainHeight(x, z);
   // Grass up to the sand, then down the beach, and a little way into the
   // shallows: wading, not swimming.
   if (onShore(x, z)) return Math.max(shoreY(Math.max(0, x - coastX(z))), SHORE.seaY - 0.15);
@@ -952,7 +979,7 @@ export function surfaceAt(x: number, z: number): FloorSurface {
   if (onShore(x, z)) return x - coastX(z) > SHORE.toWater ? "water" : "grass";
   // The garden is gravel and stepping stones rather than floorboards.
   if (contains(OUTDOOR, x, z) || onSteps(x, z)) return "stone";
-  if (inField(x, z)) return "grass";
+  if (inField(x, z) || onMountainWalk(x, z)) return "grass";
   return "wood";
 }
 

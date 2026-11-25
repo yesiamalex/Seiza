@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { seasonWeight, skyState } from "../sky/skyState";
 import { SEASONS, type Season } from "../sky/seasons";
 import { coastX, FIELD, POND_CENTER, POND_WATER_RADIUS } from "./layout";
+import { onMountain } from "./mountainShape";
 import { buildMeadowGeometry } from "./meadow";
 import { getWorldTheme } from "./materials";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
@@ -392,6 +393,8 @@ export function Outdoors() {
           position.z > FIELD.minZ - FIELD_TREE_MARGIN &&
           position.z < FIELD.maxZ + FIELD_TREE_MARGIN) ||
         position.x > coastX(position.z) - 5 ||
+        // nor on Mt. Makiling, which has its own forest (Mountain.tsx).
+        onMountain(position.x, position.z, 4) ||
         // nor on the way from the meadow down to the beach.
         (position.x > FIELD.maxX - 2 && position.z > FIELD.minZ && position.z < FIELD.maxZ)
       ) {
@@ -419,6 +422,8 @@ export function Outdoors() {
       scale.set(spread, 16 + random() * 16, spread);
       // Over the sea, a hill would be an island in the way of the horizon.
       if (position.x > coastX(position.z) - spread * 0.6) continue;
+      // Nor in front of the mountain, or through it.
+      if (onMountain(position.x, position.z, spread * 0.6)) continue;
       matrix.compose(position, quaternion, scale);
       hills.push(...matrix.elements);
     }

@@ -37,6 +37,7 @@ import {
   OUTDOOR,
   GARDEN_LAMPS,
   OUTDOOR_BENCHES,
+  SUMMIT_BENCHES,
   POND_CENTER,
   POND_WATER_RADIUS,
   SEATS,
@@ -973,6 +974,8 @@ function OutdoorGarden({
   return (
     <group>
       {OUTDOOR_BENCHES.map((bench, i) => <Bench key={`outdoor-bench-${i}`} placement={bench} m={m} />)}
+      {/* Mt. Makiling's summit benches, facing back over the meadow. */}
+      {SUMMIT_BENCHES.map((bench, i) => <Bench key={`summit-bench-${i}`} placement={bench} m={m} />)}
       <Pond lit={lit} />
 
       <GardenLamps m={m} lamp={lamp} lit={lit} />

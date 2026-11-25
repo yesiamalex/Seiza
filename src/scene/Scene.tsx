@@ -12,6 +12,18 @@ import type { Seat } from "./layout";
 import { LightPool } from "./LightPool";
 import { SkyDriver } from "../sky/SkyDriver";
 import { MEADOW_TREE_AT, MeadowTree, Seasons } from "./Seasons";
+import { Mountain } from "./Mountain";
+import { setMountain } from "./layout";
+import { useEffect as useMountainEffect } from "react";
+
+/** A world without the mountain: its ground isn't walkable either. */
+function NoMountain() {
+  useMountainEffect(() => {
+    setMountain(false);
+    return () => setMountain(true);
+  }, []);
+  return null;
+}
 import { Rain } from "./Rain";
 import { Beach } from "./Beach";
 import type { SkyConfig } from "../sky/skyState";
@@ -54,6 +66,8 @@ interface SceneProps {
   /** The tree on the meadow (world.json `meadowTree`): where it stands, or
    *  false for none. Default: on, where it usually stands. */
   meadowTree?: boolean | { x: number; z: number };
+  /** Mt. Makiling beyond the meadow's far end (world.json `mountain`). */
+  mountain?: boolean;
 }
 
 /** How often the frozen shadow map refreshes anyway, to pick up geometry
@@ -234,6 +248,7 @@ export const Scene = memo(function Scene({
   sky,
   roomSky = null,
   meadowTree = true,
+  mountain = true,
 }: SceneProps) {
   const moving = sky?.cycle === "realtime" || roomSky !== null;
   const treeX = typeof meadowTree === "object" ? meadowTree.x : MEADOW_TREE_AT[0];
@@ -271,6 +286,8 @@ export const Scene = memo(function Scene({
       {builtin && <Outdoors />}
       {builtin && <Beach />}
       {builtin && treeAt && <MeadowTree at={treeAt} />}
+      {builtin && mountain && <Mountain />}
+      {builtin && !mountain && <NoMountain />}
       {/* Warm sky above, warmer bounce off the wooden floor below. A big
           share of the light comes from here rather than the sun, which is
           what keeps the shadows soft. */}

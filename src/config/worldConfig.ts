@@ -34,6 +34,9 @@ export interface WorldConfig {
    *  at x 14, z 47; `{ "x", "z" }` moves it, for a world that builds where
    *  it usually stands, and false removes it. Built-in grounds only. */
   meadowTree?: boolean | { x: number; z: number };
+  /** Mt. Makiling beyond the meadow's far end, walkable to its summit
+   *  (src/scene/mountainShape.ts). On unless false. */
+  mountain?: boolean;
   /**
    * What the world is made of. "builtin" (the default): Seiza's own hall,
    * classroom, garden, and meadow, with `sceneUrl` layered over them.
