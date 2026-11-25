@@ -278,13 +278,25 @@ export function setMountain(on: boolean): void {
 }
 const onMountainWalk = (x: number, z: number) => mountain && contains(MOUNTAIN_WALK, x, z);
 
-/** Two benches just below the summit, facing back over the meadow. */
-const SUMMIT_FLOOR = (x: number, z: number) => OUTER_GROUND_Y + mountainHeight(x, z);
-export const SUMMIT_BENCHES: BenchPlacement[] = [-1.5, 1.5].map((dx) => {
-  const x = SUMMIT[0] + dx;
-  const z = SUMMIT[1] - 3.2;
-  return { position: [x, SUMMIT_FLOOR(x, z), z], rotationY: 0 };
-});
+/** Two benches just below the summit, facing back down the trail, where
+ *  the mountain is now (a model world moves it: placeMountain). */
+export function summitBenches(): BenchPlacement[] {
+  return [-1.5, 1.5].map((dx) => {
+    const x = SUMMIT[0] + dx;
+    const z = SUMMIT[1] - 3.2;
+    return { position: [x, MOUNTAIN.y + mountainHeight(x, z), z], rotationY: 0 };
+  });
+}
+export const SUMMIT_BENCHES = summitBenches();
+/** Their seats, two a bench. */
+export function summitSeats(benches: BenchPlacement[]): Seat[] {
+  return benches.flatMap((bench, i) =>
+    [-1, 1].map((side) => {
+      const at = seatAt(bench.position[0] + side * BENCH_LENGTH * 0.25, bench.position[2], bench.rotationY);
+      return { id: `summit-bench-${i}-${side > 0 ? "r" : "l"}`, position: [at[0], bench.position[1], at[2]] as [number, number, number], rotationY: bench.rotationY, label: "Summit bench" };
+    })
+  );
+}
 
 /**
  * Pulls a position back into the walkable floor plan. Replaces the old
@@ -409,7 +421,7 @@ export function facingVector(rotationY: number): [number, number] {
   return [-Math.sin(rotationY), -Math.cos(rotationY)];
 }
 
-export const seatAt = (x: number, z: number, rotationY: number): [number, number, number] => {
+const seatAt = (x: number, z: number, rotationY: number): [number, number, number] => {
   const [fx, fz] = facingVector(rotationY);
   return [x + fx * SEAT_FORWARD_OFFSET, 0, z + fz * SEAT_FORWARD_OFFSET];
 };
@@ -514,13 +526,7 @@ export const SEATS: Seat[] = [
       label: "Garden bench",
     }));
   }),
-  ...SUMMIT_BENCHES.flatMap((bench, i) =>
-    [-1, 1].map((side) => {
-      const x = bench.position[0] + side * BENCH_LENGTH * 0.25;
-      const at = seatAt(x, bench.position[2], bench.rotationY);
-      return { id: `summit-bench-${i}-${side > 0 ? "r" : "l"}`, position: [at[0], bench.position[1], at[2]] as [number, number, number], rotationY: bench.rotationY, label: "Summit bench" };
-    })
-  ),
+  ...summitSeats(SUMMIT_BENCHES),
   ...DESKS.map((desk) => ({
     id: `desk-${desk.row}-${desk.column}`,
     // Students face the board, which is at the -Z end of the classroom.

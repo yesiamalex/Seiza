@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { addShade } from "../avatar/heat";
 import { skyState } from "../sky/skyState";
 import { MAKILING_SUMMIT_M, MOUNTAIN, MOUNTAIN_SCALE, mountainHeight, nearTrail, placeMountain, SUMMIT } from "./mountainShape";
-import { BENCH_LENGTH, SEAT_HEIGHT, seatAt, setGroundWrap, setMountain, type BenchPlacement, type Seat } from "./layout";
+import { BENCH_LENGTH, SEAT_HEIGHT, setGroundWrap, setMountain, summitBenches, summitSeats, type Seat } from "./layout";
 import { MountainGround } from "./mountainGround";
 import { MeadowTree } from "./Seasons";
 import { SeatPad } from "./SeatPad";
@@ -205,15 +205,6 @@ export function Mountain() {
   );
 }
 
-/** The summit's two benches, a little below it, facing back down the trail. */
-function summitBenches(): BenchPlacement[] {
-  return [-1.5, 1.5].map((dx) => {
-    const x = SUMMIT[0] + dx;
-    const z = SUMMIT[1] - 3.2;
-    return { position: [x, floorAt(x, z), z], rotationY: 0 };
-  });
-}
-
 /**
  * Mt. Makiling in a model world (world.json `mountain: {x, z, y}`): put
  * where the world says, its ground joined to the world's navmesh
@@ -232,17 +223,7 @@ export function ModelMountain({ at, onSit, occupiedSeatId }: { at: { x: number; 
     };
   }, [at]);
   const benches = useMemo(summitBenches, [at]);
-  const seats = useMemo<Seat[]>(
-    () =>
-      benches.flatMap((bench, i) =>
-        [-1, 1].map((side) => {
-          const x = bench.position[0] + side * BENCH_LENGTH * 0.25;
-          const s = seatAt(x, bench.position[2], bench.rotationY);
-          return { id: `summit-bench-${i}-${side > 0 ? "r" : "l"}`, position: [s[0], bench.position[1], s[2]] as [number, number, number], rotationY: bench.rotationY, label: "Summit bench" };
-        })
-      ),
-    [benches]
-  );
+  const seats = useMemo(() => summitSeats(benches), [benches]);
   return (
     <>
       <Mountain key={`${at.x},${at.z}`} />

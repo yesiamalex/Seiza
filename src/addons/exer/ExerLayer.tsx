@@ -100,7 +100,7 @@ export function ExerLayer({ selfId, players, getSelfPosition, selfSeated }: { se
         const distance = vrm ? camera.getWorldPosition(v1).distanceTo(vrm.scene.getWorldPosition(v2)) : undefined;
         // A horn sounds until they let go ("hu"); a bell rings out.
         if (bell === "horn") horns.set(from, startHorn(distance));
-        else if (bell) playBell(bell, distance);
+        else if (bell) playBell(distance);
       }),
     [camera]
   );

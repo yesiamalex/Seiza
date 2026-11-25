@@ -14,11 +14,10 @@ import { SkyDriver } from "../sky/SkyDriver";
 import { MEADOW_TREE_AT, MeadowTree, Seasons } from "./Seasons";
 import { ModelMountain, Mountain } from "./Mountain";
 import { setMountain } from "./layout";
-import { useEffect as useMountainEffect } from "react";
 
 /** A world without the mountain: its ground isn't walkable either. */
 function NoMountain() {
-  useMountainEffect(() => {
+  useEffect(() => {
     setMountain(false);
     return () => setMountain(true);
   }, []);

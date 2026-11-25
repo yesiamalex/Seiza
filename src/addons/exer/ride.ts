@@ -67,7 +67,7 @@ export function ringBell() {
   const now = performance.now();
   if (now - lastBell < 400) return;
   lastBell = now;
-  playBell(kind);
+  playBell();
   sendAddonEvent("exer", { k: "bell" });
 }
 
@@ -178,22 +178,14 @@ export function startEngine(): Engine | null {
   };
 }
 
-/** A Japanese bicycle bell's two bright rings, or a moped's double beep
- *  (heard from a visitor whose app is from before the held horn). */
-export function playBell(kind: "bell" | "horn", distance?: number) {
+/** A Japanese bicycle bell's two bright rings (a horn is startHorn's). */
+export function playBell(distance?: number) {
   const v = voice(0.8, distance, 40, 2);
   if (!v) return;
-  if (kind === "bell") {
-    for (const delay of [0, 0.14]) {
-      toneHit(v, { frequency: 3150, duration: 0.6, gain: 0.2, delay });
-      toneHit(v, { frequency: 4720, duration: 0.4, gain: 0.09, delay });
-      noiseHit(v, { frequency: 6000, duration: 0.02, gain: 0.05, delay, q: 2 });
-    }
-  } else {
-    for (const delay of [0, 0.22]) {
-      toneHit(v, { frequency: 420, duration: 0.16, gain: 0.18, type: "square", delay });
-      toneHit(v, { frequency: 525, duration: 0.16, gain: 0.12, type: "square", delay });
-    }
+  for (const delay of [0, 0.14]) {
+    toneHit(v, { frequency: 3150, duration: 0.6, gain: 0.2, delay });
+    toneHit(v, { frequency: 4720, duration: 0.4, gain: 0.09, delay });
+    noiseHit(v, { frequency: 6000, duration: 0.02, gain: 0.05, delay, q: 2 });
   }
 }
 
