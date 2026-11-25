@@ -82,6 +82,24 @@ function mergeAll(parts: THREE.BufferGeometry[]) {
 }
 
 /** A wheel, spinning about x: a tyre and a hub, its own object. */
+/** A box with its corners worn round: smoother panels than a plain box. */
+function rounded(w: number, h: number, d: number, round = 0.45) {
+  const g = new THREE.BoxGeometry(1, 1, 1, 3, 3, 3);
+  const at = g.getAttribute("position");
+  const p = new THREE.Vector3();
+  for (let i = 0; i < at.count; i++) {
+    p.fromBufferAttribute(at, i);
+    p.lerp(p.clone().setLength(0.5 * Math.SQRT2 * 0.82), round * (p.length() > 0.6 ? 1 : 0.5));
+    at.setXYZ(i, p.x * w, p.y * h, p.z * d);
+  }
+  g.computeVertexNormals();
+  return g;
+}
+
+/** A mudguard: a strip of arc over a wheel of radius r at (y, z). */
+const mudguard = (r: number, y: number, z: number, arc = Math.PI * 0.7) =>
+  new THREE.TorusGeometry(r + 0.035, 0.022, 3, 18, arc).rotateZ(Math.PI / 2 - arc / 2 + 0.25).rotateY(Math.PI / 2).scale(1.6, 1, 1).translate(0, y, z);
+
 function wheel(r: number, z: number, y = r) {
   const group = new THREE.Group();
   group.position.set(0, y, z);
@@ -126,12 +144,37 @@ export function buildVehicle(kind: Vehicle): Built {
         [
           tube(0.014, v(0, 0.82, -0.42), v(0, 0.98, -0.42)), // stem
           tube(0.013, v(-0.28, 0.98, -0.4), v(0.28, 0.98, -0.4)), // handlebar
-          new THREE.SphereGeometry(0.03, 10, 8).translate(0.2, 1.0, -0.4), // the bell
+          new THREE.CylinderGeometry(0.022, 0.026, 0.05, 12).rotateX(Math.PI / 2).translate(0, 0.78, -0.53), // headlamp
+          new THREE.CylinderGeometry(0.085, 0.085, 0.01, 20).rotateZ(Math.PI / 2).translate(0.045, 0.36, 0.06), // chainring
+          tube(0.01, v(0.06, 0.36, 0.06), v(0.06, 0.28, 0.0)), // crank, right
+          tube(0.01, v(-0.04, 0.36, 0.06), v(-0.04, 0.44, 0.12)), // crank, left
+          tube(0.008, v(0.04, 0.33, 0.4), v(0.09, 0.015, 0.47)), // kickstand
+          new THREE.CylinderGeometry(0.012, 0.012, 0.06, 6).translate(-0.04, 0.82, 0.24), // saddle springs
+          new THREE.CylinderGeometry(0.012, 0.012, 0.06, 6).translate(0.04, 0.82, 0.24),
+          new THREE.BoxGeometry(0.36, 0.012, 0.012).translate(0, 0.97, -0.53), // the basket's rim
+          new THREE.BoxGeometry(0.36, 0.012, 0.012).translate(0, 0.97, -0.79),
+          new THREE.BoxGeometry(0.33, 0.006, 0.25).translate(0, 0.75, -0.66), // and its floor
         ],
         chrome
       )
     );
-    root.add(mesh([new THREE.BoxGeometry(0.17, 0.05, 0.26).translate(0, 0.88, 0.24)], material("#5a3a28", { roughness: 0.7 }))); // seat
+    // A brass dome bell by the right grip, its lever to the thumb.
+    root.add(
+      mesh(
+        [
+          new THREE.SphereGeometry(0.038, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2).translate(0.17, 0.995, -0.4),
+          new THREE.CylinderGeometry(0.039, 0.039, 0.008, 16).translate(0.17, 0.995, -0.4),
+          new THREE.BoxGeometry(0.008, 0.006, 0.04).rotateY(0.5).translate(0.2, 0.99, -0.38),
+        ],
+        material("#f0c056", { metalness: 0.85, roughness: 0.18 })
+      )
+    );
+    root.add(mesh([new THREE.CylinderGeometry(0.016, 0.016, 0.1, 10).rotateZ(Math.PI / 2).translate(0.25, 0.98, -0.4), new THREE.CylinderGeometry(0.016, 0.016, 0.1, 10).rotateZ(Math.PI / 2).translate(-0.25, 0.98, -0.4)], material("#1d1b1a", { roughness: 0.85 }))); // grips
+    root.add(mesh([mudguard(0.33, 0.33, -0.55), mudguard(0.33, 0.33, 0.55)], frame));
+    root.add(mesh([new THREE.SphereGeometry(0.5, 14, 8).scale(0.18, 0.07, 0.27).translate(0, 0.875, 0.24)], material("#5a3a28", { roughness: 0.55 }))); // a sprung leather saddle
+    const lens = new THREE.Mesh(new THREE.CircleGeometry(0.02, 12).translate(0, 0, 0.001).rotateY(Math.PI).translate(0, 0.78, -0.556), new THREE.MeshBasicMaterial({ color: "#fff6d6", toneMapped: false }));
+    lens.userData.navIgnore = true;
+    root.add(lens);
     // The basket: a wire box, open on top.
     const basket = new THREE.Group();
     const wire = material("#b8bdc4", { metalness: 0.6, roughness: 0.35, wireframe: true });
@@ -158,15 +201,37 @@ export function buildVehicle(kind: Vehicle): Built {
     root.add(
       mesh(
         [
-          new THREE.BoxGeometry(0.3, 0.06, 0.62).translate(0, 0.3, 0.02), // floorboard
-          new THREE.BoxGeometry(0.34, 0.5, 0.08).translate(0, 0.56, -0.36), // leg shield
-          new THREE.BoxGeometry(0.34, 0.3, 0.5).translate(0, 0.48, 0.42), // rear body
+          rounded(0.3, 0.06, 0.62, 0.3).translate(0, 0.3, 0.02), // floorboard
+          rounded(0.34, 0.52, 0.09).translate(0, 0.56, -0.36), // leg shield
+          rounded(0.35, 0.32, 0.54).translate(0, 0.48, 0.42), // rear body
+          rounded(0.16, 0.2, 0.2).translate(0, 0.86, -0.47), // headset cowl
           new THREE.CylinderGeometry(0.05, 0.05, 0.5, 10).translate(0, 0.62, -0.44).rotateX(0), // steering column
+          mudguard(0.22, 0.22, -0.58, Math.PI * 0.6), // front mudguard
         ],
         body
       )
     );
-    root.add(mesh([new THREE.BoxGeometry(0.26, 0.08, 0.5).translate(0, 0.7, 0.36)], material("#2b2724", { roughness: 0.8 }))); // seat
+    root.add(mesh([rounded(0.27, 0.09, 0.52, 0.5).translate(0, 0.7, 0.36)], material("#2b2724", { roughness: 0.75 }))); // seat
+    root.add(
+      mesh(
+        [
+          tube(0.012, v(-0.14, 0.76, 0.6), v(0.14, 0.76, 0.6)), // grab rail behind the seat
+          tube(0.01, v(-0.14, 0.76, 0.6), v(-0.14, 0.72, 0.42)),
+          tube(0.01, v(0.14, 0.76, 0.6), v(0.14, 0.72, 0.42)),
+          tube(0.008, v(-0.2, 0.98, -0.46), v(-0.24, 1.12, -0.44)), // mirrors' stalks
+          tube(0.008, v(0.2, 0.98, -0.46), v(0.24, 1.12, -0.44)),
+          new THREE.CylinderGeometry(0.035, 0.035, 0.01, 14).rotateX(Math.PI / 2).translate(-0.245, 1.15, -0.44),
+          new THREE.CylinderGeometry(0.035, 0.035, 0.01, 14).rotateX(Math.PI / 2).translate(0.245, 1.15, -0.44),
+          tube(0.025, v(0.16, 0.28, 0.1), v(0.17, 0.3, 0.72)), // exhaust
+          new THREE.TorusGeometry(0.066, 0.01, 6, 18).translate(0, 0.9, -0.535), // the headlight's bezel
+        ],
+        material("#c9cdd3", { metalness: 0.8, roughness: 0.25 })
+      )
+    );
+    root.add(mesh([new THREE.CylinderGeometry(0.018, 0.018, 0.1, 10).rotateZ(Math.PI / 2).translate(0.27, 0.98, -0.46), new THREE.CylinderGeometry(0.018, 0.018, 0.1, 10).rotateZ(Math.PI / 2).translate(-0.27, 0.98, -0.46)], material("#1d1b1a", { roughness: 0.85 }))); // grips
+    const tail = new THREE.Mesh(rounded(0.1, 0.04, 0.03).translate(0, 0.6, 0.7), new THREE.MeshBasicMaterial({ color: "#ff3b3b", toneMapped: false }));
+    tail.userData.navIgnore = true;
+    root.add(tail);
     root.add(mesh([tube(0.015, v(-0.3, 0.98, -0.46), v(0.3, 0.98, -0.46)), new THREE.CylinderGeometry(0.03, 0.03, 0.3, 10).translate(0, 0.84, -0.46)], material("#c9cdd3", { metalness: 0.75, roughness: 0.3 })));
     const light = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 10).translate(0, 0.9, -0.52), new THREE.MeshBasicMaterial({ color: "#fff6d6", toneMapped: false }));
     light.userData.navIgnore = true;
@@ -207,8 +272,8 @@ function lightPool(): THREE.Texture | null {
 
 /** The ride's own height in metres where the rider's hands go: the grips. */
 const GRIPS: Partial<Record<Vehicle, { x: number; y: number; z: number }>> = {
-  bike: { x: 0.25, y: 0.98, z: -0.4 },
-  moped: { x: 0.27, y: 0.98, z: -0.46 },
+  bike: { x: 0.25, y: 0.995, z: -0.39 },
+  moped: { x: 0.27, y: 0.995, z: -0.45 },
 };
 
 /** The metre height these rides are drawn for: an eye height of 1.55. */
