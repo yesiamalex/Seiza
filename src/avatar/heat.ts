@@ -112,13 +112,17 @@ export function useHeatStage(id: string): HeatStage {
 
 // --- shade: worlds mark their roofs ------------------------------------------
 
-/** Covered ground a world declares (a roofed walkway), x and z bounds. */
-const shades = new Set<{ x0: number; x1: number; z0: number; z1: number }>();
-export function addShade(rect: { x0: number; x1: number; z0: number; z1: number }) {
-  shades.add(rect);
-  return () => shades.delete(rect);
+/** Covered ground a world declares (a roofed walkway, a tree's canopy): a
+ *  test of whether a point on the ground is under it. Returns the removal. */
+type ShadeTest = (x: number, z: number) => boolean;
+const shades = new Set<ShadeTest>();
+export function addShade(covers: ShadeTest) {
+  shades.add(covers);
+  return () => {
+    shades.delete(covers);
+  };
 }
-export const inDeclaredShade = (x: number, z: number) => [...shades].some((r) => x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1);
+export const inDeclaredShade = (x: number, z: number) => [...shades].some((covers) => covers(x, z));
 
 // --- the viewer's own switch (as useSeizaReactions) ---------------------------
 

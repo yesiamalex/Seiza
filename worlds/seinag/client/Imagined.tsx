@@ -18,6 +18,7 @@ import { skyState } from "../../../src/sky/skyState";
 import { L, useLang } from "../../../src/i18n/lang";
 import { Clickable, FONT, mergedGeometry, roundRect, standard, useCanvasTexture, wrapText, type BoxSpec, type CylinderSpec } from "../../seizora/client/kit";
 import { openCard, type CardKey } from "./cards";
+import { addShade } from "../../../src/avatar/heat";
 import {
   BED,
   bedPositions,
@@ -33,6 +34,10 @@ import {
   LAYERS,
   shadeOffset,
   treeList,
+  underWalkway,
+  WALKWAY_MODULE,
+  WALKWAY_MWP,
+  walkwayModules,
   walkwayPosts,
   WALKWAY_HEIGHT,
   WALKWAY_LENGTH,
@@ -101,6 +106,8 @@ function Shade({ geometry, height }: { geometry: THREE.BufferGeometry; height: n
 const concrete = standard("#c4beb3", 0.92, 0);
 const steel = standard("#4f5863", 0.45, 0.6);
 const roofMetal = standard("#3f6150", 0.55, 0.3);
+/** Solar cells: deep blue glass, a little glossy. */
+const pvMaterial = new THREE.MeshStandardMaterial({ color: "#1d2c4f", roughness: 0.25, metalness: 0.35, emissive: "#0b1530", emissiveIntensity: 0.25 });
 const darkSteel = standard("#2c3138", 0.5, 0.5);
 const panelBlue = standard("#1c2f52", 0.3, 0.4);
 
@@ -228,11 +235,28 @@ function Walkway() {
     return merged;
   });
   useEffect(() => () => Object.values(parts).forEach((g) => g.dispose()), [parts]);
+  // The solar modules on the roof: one instanced mesh, one draw call.
+  const panels = useMemo(() => {
+    const modules = walkwayModules();
+    const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(WALKWAY_MODULE.width, 0.04, WALKWAY_MODULE.depth), pvMaterial, modules.length);
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const up = new THREE.Vector3(0, 1, 0);
+    modules.forEach((p, i) => mesh.setMatrixAt(i, m.compose(new THREE.Vector3(p.at[0], WALKWAY_HEIGHT + 0.22, p.at[1]), q.setFromAxisAngle(up, p.angle), new THREE.Vector3(1, 1, 1))));
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.castShadow = true;
+    mesh.userData.navIgnore = true;
+    return mesh;
+  }, []);
+  useEffect(() => () => panels.geometry.dispose(), [panels]);
+  // Shade for heat reactions (src/avatar/heat.ts) under the roof.
+  useEffect(() => addShade(underWalkway), []);
   return (
     <group userData={{ navIgnore: true }}>
       <mesh geometry={parts.floor} material={concrete} receiveShadow />
       <mesh geometry={parts.frame} material={steel} castShadow />
       <mesh geometry={parts.roof} material={roofMetal} castShadow />
+      <primitive object={panels} />
       <Shade geometry={shade} height={WALKWAY_HEIGHT + 0.16} />
     </group>
   );
@@ -246,6 +270,7 @@ const WALKWAY_INFO: Info = {
     L(`${Math.round(WALKWAY_LENGTH)} m from the Academic Residences to the WCMPB, across the lawn people cross in the open today.`, `アカデミック・レジデンスからWCMPBまで${Math.round(WALKWAY_LENGTH)} m。今は日なたを歩いて渡る芝生の上です。`),
     L("Its shade falls where the real sun puts it, hour by hour.", "日陰は、実際の太陽が落とす場所に、時刻とともに動きます。"),
     L("Solar lampposts along it light the walk after dark.", "通路ぞいのソーラー街灯が、暗くなると道を照らします。"),
+    L(`Its roof is ${walkwayModules().length} solar modules (${Math.round(WALKWAY_MWP * 1000)} kWp), wired into the campus plant: switch the walkway off and the station's numbers lose them.`, `屋根は太陽光モジュール${walkwayModules().length}枚(${Math.round(WALKWAY_MWP * 1000)} kWp)で、キャンパスの発電所につながっています。通路をオフにすると、ステーションの数値からその分が消えます。`),
   ],
   now: () => L(`Now: ${shadeNow("en")}`, `現在:${shadeNow("ja")}`),
 };
@@ -419,6 +444,11 @@ function TreeShade({ trees }: { trees: Tree[] }) {
 
 function Trees() {
   const trees = useMemo(() => treeList(), []);
+  // Under a canopy is shade, for heat reactions (src/avatar/heat.ts).
+  useEffect(
+    () => addShade((x, z) => trees.some((t) => Math.hypot(x - t.at[0], z - t.at[1]) < CANOPY_RADIUS[t.kind] * t.scale * 0.8)),
+    [trees]
+  );
   const byKind = useMemo(() => (["narra", "acacia"] as const).map((kind) => ({ kind, list: trees.filter((t) => t.kind === kind) })), [trees]);
   return (
     <group userData={{ navIgnore: true }}>

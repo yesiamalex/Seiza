@@ -67,6 +67,37 @@ export function segments(line: [number, number][]): Segment[] {
 }
 
 export const WALKWAY_SEGMENTS = segments(WALKWAY);
+
+/** The walkway's roof is solar: two rows of the campus's 400 W modules
+ *  (1.7 m × 1.1 m, world/solar.json) laid end to end down every segment,
+ *  wired into the campus plant (plant.ts) while the walkway is shown. */
+export const WALKWAY_MODULE = { width: 1.7, depth: 1.1, wp: 400 };
+export function walkwayModules(): { at: [number, number]; angle: number }[] {
+  const out: { at: [number, number]; angle: number }[] = [];
+  for (const s of WALKWAY_SEGMENTS) {
+    const ux = (s.to[0] - s.from[0]) / s.length;
+    const uz = (s.to[1] - s.from[1]) / s.length;
+    const count = Math.floor((s.length + 0.6) / (WALKWAY_MODULE.width + 0.04));
+    const start = -((count - 1) * (WALKWAY_MODULE.width + 0.04)) / 2;
+    for (let k = 0; k < count; k++) {
+      const t = start + k * (WALKWAY_MODULE.width + 0.04);
+      for (const side of [-0.58, 0.58]) out.push({ at: [s.mid[0] + ux * t - uz * side, s.mid[1] + uz * t + ux * side], angle: s.angle });
+    }
+  }
+  return out;
+}
+export const WALKWAY_MWP = (walkwayModules().length * WALKWAY_MODULE.wp) / 1e6;
+
+/** Whether a point on the ground is under the walkway's roof. */
+export function underWalkway(x: number, z: number): boolean {
+  const half = (WALKWAY_WIDTH + 0.7) / 2;
+  return WALKWAY_SEGMENTS.some((s) => {
+    const dx = s.to[0] - s.from[0];
+    const dz = s.to[1] - s.from[1];
+    const t = Math.max(0, Math.min(1, ((x - s.from[0]) * dx + (z - s.from[1]) * dz) / (s.length * s.length)));
+    return Math.hypot(x - (s.from[0] + t * dx), z - (s.from[1] + t * dz)) <= half;
+  });
+}
 export const WALKWAY_LENGTH = WALKWAY_SEGMENTS.reduce((n, s) => n + s.length, 0);
 
 /** Post positions: both sides, every POST_SPACING along each segment, with
@@ -159,11 +190,14 @@ export function treeList(): Tree[] {
   }
   // The Main Building's back lawn, toward the walkway.
   for (let z = -28; z <= 30; z += 14) add(146, z, "acacia");
-  // Along the walkway's lawn, set back from it on the side away from the lamps.
+  // Along the walkway's lawn, both sides, set back from it: closer
+  // together on the side away from the lamps, and a staggered row beyond
+  // the lamps on theirs, so the walk to it is shaded from either side.
   for (const s of WALKWAY_SEGMENTS) {
     const ux = (s.to[0] - s.from[0]) / s.length;
     const uz = (s.to[1] - s.from[1]) / s.length;
-    for (let t = 12; t < s.length - 6; t += 22) add(s.from[0] + ux * t - uz * 9, s.from[1] + uz * t + ux * 9, i % 3 === 0 ? "narra" : "acacia");
+    for (let t = 12; t < s.length - 6; t += 14) add(s.from[0] + ux * t - uz * 9, s.from[1] + uz * t + ux * 9, i % 3 === 0 ? "narra" : "acacia");
+    for (let t = 19; t < s.length - 6; t += 18) add(s.from[0] + ux * t + uz * 10, s.from[1] + uz * t - ux * 10, i % 2 === 0 ? "narra" : "acacia");
   }
   return trees;
 }

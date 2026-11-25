@@ -36,7 +36,7 @@ describe("heat reactions", () => {
   });
 
   it("knows the shade a world declares", () => {
-    const off = addShade({ x0: 0, x1: 2, z0: 0, z1: 10 });
+    const off = addShade((x, z) => x >= 0 && x <= 2 && z >= 0 && z <= 10);
     expect(inDeclaredShade(1, 5)).toBe(true);
     expect(inDeclaredShade(3, 5)).toBe(false);
     off();

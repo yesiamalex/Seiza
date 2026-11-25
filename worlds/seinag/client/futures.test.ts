@@ -137,3 +137,15 @@ describe("what the guides say about it", () => {
     expect(FUTURE_TOPICS.find((t) => t.id === "adopt")!.answer).toMatch(/are real/);
   });
 });
+
+describe("the walkway's solar roof", () => {
+  it("covers the roof in two rows of modules, adds about 100 kWp, and shades the walk", async () => {
+    const { walkwayModules, WALKWAY_MWP, underWalkway, WALKWAY } = await import("./futures");
+    expect(walkwayModules().length).toBeGreaterThan(200);
+    expect(WALKWAY_MWP).toBeGreaterThan(0.08);
+    expect(WALKWAY_MWP).toBeLessThan(0.15);
+    const [[x0, z0], [x1, z1]] = WALKWAY;
+    expect(underWalkway((x0 + x1) / 2, (z0 + z1) / 2)).toBe(true);
+    expect(underWalkway((x0 + x1) / 2 + 20, (z0 + z1) / 2)).toBe(false);
+  });
+});

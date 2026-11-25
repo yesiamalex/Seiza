@@ -15,7 +15,8 @@ import { CHANCY, CHANCY_AVATAR, CHANCY_ROUTE, DEAN_ROB, DEAN_ROB_AVATAR, DEAN_RO
 import { ConferenceHalls, conferenceObstacles } from "../../seiou/client/Conference";
 import { CardHost, cardTitle, openCard, type CardKey } from "./cards";
 import { Futures, KIOSK_AT } from "./Imagined";
-import { futuresObstacles, LAYER_KEY, LAYERS } from "./futures";
+import { futuresObstacles, LAYER_KEY, layerOn, LAYERS, WALKWAY_MWP } from "./futures";
+import { CAMPUS, ROOFTOP_MWP } from "./plant";
 import { Station, stationObstacles } from "./Station";
 import { controlsFrom, live } from "./live";
 import { seinagKnowledge } from "./knowledge";
@@ -37,6 +38,8 @@ function Hud() {
 export function Scene({ warp, getSelfPosition, findPath, canEdit, connected, roomSky, setRoomSky, worldState, setWorldState, sit, occupiedSeatId }: WorldSceneProps) {
   // The console's switches, shared through the room, drive the plant.
   live.controls = controlsFrom(worldState);
+  // The walkway's solar roof is part of the plant while the walkway is shown.
+  CAMPUS.siliconMwp = ROOFTOP_MWP + (layerOn(worldState, "walkway") ? WALKWAY_MWP : 0);
   // The station's, the conference halls' tables (SeiOU's campus), and
   // whichever imagined layers are switched on (futures.ts).
   const layers = LAYERS.map((layer) => worldState[LAYER_KEY[layer]] !== false).join(",");

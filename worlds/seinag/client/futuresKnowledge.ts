@@ -10,7 +10,7 @@
 // FMDS for those rather than quoting them.
 import type { LiveIntent, Place, Topic } from "../../../src/guides/brain";
 import { skyState } from "../../../src/sky/skyState";
-import { GARDEN, gardenToWorld, shadeOffset, WALKWAY, WALKWAY_HEIGHT, WALKWAY_LENGTH } from "./futures";
+import { GARDEN, gardenToWorld, shadeOffset, WALKWAY, WALKWAY_HEIGHT, WALKWAY_LENGTH, WALKWAY_MWP, walkwayModules } from "./futures";
 
 const spot = (id: string, label: string, labelJa: string, [x, z]: readonly [number, number]): Place => ({ id, label, labelJa, at: [x, 0.2, z], walk: true });
 const inGarden = (id: string, label: string, labelJa: string, local: readonly [number, number]) => spot(id, label, labelJa, gardenToWorld(local));
@@ -50,13 +50,13 @@ export const FUTURE_TOPICS: Topic[] = [
   {
     id: "walkway",
     title: "The covered walkway",
-    answer: `Between the Academic Residences and the WCMPB there's no covered path today: you cross about ${Math.round(WALKWAY_LENGTH)} m of open lawn, which is hot at noon and wet in the rain. The walkway here follows that line under a steel roof, and its shade falls where the real sun casts it: right under it at noon, east of it in the afternoon. ${IMAGINED}`,
+    answer: `Between the Academic Residences and the WCMPB there's no covered path today: you cross about ${Math.round(WALKWAY_LENGTH)} m of open lawn, which is hot at noon and wet in the rain. The walkway here follows that line under a steel roof, and its shade falls where the real sun casts it: right under it at noon, east of it in the afternoon. Its roof is solar too: ${walkwayModules().length} modules, ${Math.round(WALKWAY_MWP * 1000)} kWp, wired into the same campus plant as the rooftops, so the station counts them while the walkway is shown. ${IMAGINED}`,
     asks: ["covered walkway", "catwalk", "covered path", "walkway", "shade from ar to wcmpb", "is there shade to the wcmpb", "how do i get from the ar to the wcmpb", "walk to wcmpb in the shade", "shelter from the rain", "path between ar and wcmpb", "roofed walk"],
     card: "walkway",
     place: FUTURE_PLACES.walkway,
     ja: {
       title: "屋根つき通路",
-      answer: `アカデミック・レジデンスとWCMPBのあいだには、今は屋根のある道がなく、約${Math.round(WALKWAY_LENGTH)} mの芝生を渡ります。正午は暑く、雨の日はぬれます。ここの通路はその線に沿った鉄骨の屋根で、日陰は実際の太陽が落とす場所にできます。正午は真下、午後は東側です。${IMAGINED_JA}`,
+      answer: `アカデミック・レジデンスとWCMPBのあいだには、今は屋根のある道がなく、約${Math.round(WALKWAY_LENGTH)} mの芝生を渡ります。正午は暑く、雨の日はぬれます。ここの通路はその線に沿った鉄骨の屋根で、日陰は実際の太陽が落とす場所にできます。正午は真下、午後は東側です。屋根も太陽光で、モジュール${walkwayModules().length}枚、${Math.round(WALKWAY_MWP * 1000)} kWp。屋上と同じキャンパスの発電所につながり、通路が表示されている間はステーションの数値に入ります。${IMAGINED_JA}`,
       asks: ["屋根つき通路", "渡り廊下", "通路", "ARからWCMPBまで日陰", "WCMPBへの行き方", "雨よけ"],
     },
   },
