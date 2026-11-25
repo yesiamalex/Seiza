@@ -339,7 +339,10 @@ guarantee yet.
   brings it down. As it builds, your avatar sweats, then pants, then
   frowns and walks up to 40% slower. A chip under the top bar shows the heat
   index and your load once it starts to build, with **Drink water**: a
-  third of the load off, once every 20 seconds. Near full the edges of the
+  third of the load off, once every 20 seconds. Your avatar raises a
+  bottle, tips it back for a few gulps with its eyes shut, and sighs with
+  relief; the room sees it too (a `drink` message, at most one every 10
+  seconds). Near full the edges of the
   screen throb red, and at full you faint: the screen goes dark, "You
   fainted! Someone helped you into the shade," and you come to rested in
   the nearest shade within 60 m (or at the arrival point, a choice under
@@ -1208,7 +1211,7 @@ adds its own coloured button to the bar while it is on.
   down), swims at the beach, turns its head to you, and a dog wags. Near
   any pet, a Pat prompt shows (P on a keyboard), as the together gestures
   do; in VR a hand on its head does it. Whoever pats it crouches and
-  reaches down to stroke its head, the room sees that, and the pet hops
+  reaches down to stroke its head with a soft smile, the room sees that, and the pet hops
   and barks, meows, or chirps. Its owner picks its coat, its size (70 to
   140%), and a name (a rude one shows as the kind instead), or uploads a
   model of its own (.glb or .vrm, through the same checked upload as
@@ -2381,9 +2384,15 @@ it isn't production-hardened. These limitations are known:
   download or license. They're intentionally modest: tatami sounds different
   from floorboards, but the goal isn't realism.
 - **Facial expressions aren't sent over the network.** Each client derives
-  expressions from the synced gesture, so they stay consistent without extra
-  traffic. However, you can't give an avatar an expression without a
-  gesture, and uploaded VRMs without expression data show none.
+  expressions from what it already knows (the synced gesture, heat, and
+  what a room mode shows someone doing), so they stay consistent without
+  extra traffic. A room mode or the heat layer sets a face with
+  `setFaceCue(vrm, from, face)` in `src/avatar/useFacialExpressions.ts`: a
+  soft smile while patting a pet, relief after a drink, eyes half shut on
+  the violin, a grin on the drums, set on a swing, thrilled in a skateboard
+  trick. A cue eases in and out over about a second and stands in for the
+  avatar's own face while it's set. Uploaded VRMs without expression data
+  show none.
 - **Physics is a clamp and a list of boxes, not a simulation.** Every way of
   moving (WASD, the D-pad, click-to-move, the VR thumbstick, and walking
   around a headset's play area) is resolved against the same set of

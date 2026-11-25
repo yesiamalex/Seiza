@@ -31,6 +31,7 @@ const PAGE_SESSION_ID =
 import { trackingStore } from "../xr/body/trackingStore";
 import { receiveTogether } from "../interactions/together";
 import { deliverAddonEvent } from "../addons/bus";
+import { seeDrink } from "../avatar/heat";
 
 // The production Worker serves both the app and the Durable Object route, so
 // same-origin is the reliable default. Set VITE_SEIZA_ROOM_HOST only when the
@@ -481,6 +482,9 @@ export function useRoomSocket(
             break;
           case "playerPosture":
             setPlayers((prev) => (prev[msg.id] ? { ...prev, [msg.id]: { ...prev[msg.id], posture: msg.posture } } : prev));
+            break;
+          case "playerDrink":
+            seeDrink(msg.id);
             break;
           case "playerHeatCalm":
             setPlayers((prev) => (prev[msg.id] ? { ...prev, [msg.id]: { ...prev[msg.id], heatCalm: msg.calm } } : prev));

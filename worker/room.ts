@@ -127,6 +127,8 @@ const MAX_WORLD_MESSAGE_CHARS = 1024;
 const WORLD_MESSAGE_RATE = { perSecond: 4, burst: 20 };
 /** Room-mode events (src/addons/): a drum roll is the fastest real use. */
 const ADDON_RATE = { perSecond: 12, burst: 24 };
+/** Drinks of water: the client allows one every 20 s; a little slack. */
+const DRINK_RATE = { perSecond: 0.1, burst: 2 };
 /** Room password guesses per connection before it's closed. */
 const MAX_ROOM_AUTH_ATTEMPTS = 5;
 /**
@@ -541,6 +543,12 @@ export class SeizaRoom extends DurableObject<Env> {
         attachment.player.heatCalm = message.calm;
         this.save(ws, attachment);
         this.broadcast({ type: "playerHeatCalm", id: attachment.connId, calm: message.calm }, attachment.connId);
+        break;
+      }
+      case "drink": {
+        // A drink of water: the others see the bottle. Once in a while at most.
+        if (!attachment.player || !this.allow(attachment.connId, "drink", DRINK_RATE)) return;
+        this.broadcast({ type: "playerDrink", id: attachment.connId }, attachment.connId);
         break;
       }
       case "setAvatar": {

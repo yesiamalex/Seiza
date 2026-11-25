@@ -123,7 +123,23 @@ export function drinkWater(): boolean {
   if (now - lastDrink < DRINK_COOLDOWN_MS) return false;
   lastDrink = now;
   pendingCool += DRINK;
+  // You're seen to drink, here and by the room (DrinkLayer).
+  drinkers.set("local", now);
+  tellRoom?.();
   return true;
+}
+
+/** Who's drinking, by avatar key ("local" for you, else a player's id),
+ *  since when (performance.now): DrinkLayer puts a bottle in their hand. */
+export const drinkers = new Map<string, number>();
+let tellRoom: (() => void) | null = null;
+/** App connects the room socket here, so the room sees you drink. */
+export const connectDrinks = (send: (() => void) | null) => {
+  tellRoom = send;
+};
+/** Someone else in the room had a drink. */
+export function seeDrink(id: string) {
+  drinkers.set(id, performance.now());
 }
 export const drinkReadyIn = () => Math.max(0, DRINK_COOLDOWN_MS - (performance.now() - lastDrink));
 /** Cools your load by this much on its next tick (fainting rests you most of the way). */

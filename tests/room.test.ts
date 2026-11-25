@@ -96,6 +96,21 @@ describe.skipIf(!built)("room server", () => {
     b.socket.close();
   });
 
+  it("shows the room a drink of water, but not a flood of them", async () => {
+    const room = freshRoom();
+    const a = await client(room, "A", ["batch"]);
+    const b = await client(room, "B", ["batch"]);
+    for (let i = 0; i < 5; i++) a.send({ type: "drink" });
+    await until(() => b.received.find((m) => m.type === "playerDrink"));
+    await new Promise((r) => setTimeout(r, 100));
+    const drinks = b.received.filter((m) => m.type === "playerDrink");
+    expect(drinks.length).toBe(2);
+    expect(typeof (drinks[0].type === "playerDrink" && drinks[0].id)).toBe("string");
+    expect(a.received.some((m) => m.type === "playerDrink")).toBe(false);
+    a.socket.close();
+    b.socket.close();
+  });
+
   it("replaces a page's old connection when it reconnects", async () => {
     // A dropped network leaves the old socket open on the server; the page
     // then reconnects with the same session. Nobody should see two of them.

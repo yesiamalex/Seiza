@@ -7,7 +7,14 @@ import { realAltitude } from "../scene/mountainShape";
 import { drive } from "../player/drive";
 import { getAddonAvatar, LOCAL_AVATAR } from "../addons/avatars";
 import { remoteRiders, ride } from "../addons/exer/ride";
-import { currentHeatIndex, faintPhase, forgetHeat, heatLoad, heatReactionsOn, heatSpeed, heatStage, inDeclaredShade, LOCAL_HEAT, setFaint, setHeat, stepHeat, takeCool } from "./heat";
+import type { VRM } from "@pixiv/three-vrm";
+import { sharedOverlay, type BodyRig, type PoseOverlay } from "../xr/body/bodyIk";
+import { LOCAL_TRACKING_SOURCE, trackingStore } from "../xr/body/trackingStore";
+import { TRACKING_STALE_MS } from "../xr/body/trackingWire";
+import { newBodyPose, poseBody } from "../addons/body";
+import { disposeTree, feetAndEye, holdInHand, newTrackedHand, poseHands, rigFor, toTrackedHand, type HandTarget } from "../addons/rig";
+import { setFaceCue, type FaceCue } from "./useFacialExpressions";
+import { currentHeatIndex, drinkers, faintPhase, forgetHeat, heatLoad, heatReactionsOn, heatSpeed, heatStage, inDeclaredShade, LOCAL_HEAT, setFaint, setHeat, stepHeat, takeCool } from "./heat";
 
 /**
  * Heat reactions in the scene (heat.ts): every avatar's heat load from how
@@ -154,6 +161,183 @@ export function HeatLayer({ selfId, players, getSelfPosition }: { selfId: string
         sweats.get(key)?.detach();
         sweats.delete(key);
       }
+  });
+
+  return null;
+}
+
+// --- a drink of water, seen -----------------------------------------------------------
+
+/** How long a drink takes, from reaching for the bottle to the last of the sigh. */
+const DRINK_TIME = 4.6;
+const DRINKING_FACE: FaceCue = { blink: 0.85, relaxed: 0.25 };
+/** After it: relief, eyes soft, a small smile. */
+const RELIEVED_FACE: FaceCue = { relaxed: 0.9, happy: 0.3 };
+
+const ease = (x: number) => {
+  const c = Math.max(0, Math.min(1, x));
+  return c * c * (3 - 2 * c);
+};
+
+/** A water bottle: its origin in the middle of the grip, the cap toward
+ *  +y (the thumb's side, as holdInHand holds things). Clear plastic,
+ *  water in it, a blue label, a white cap. */
+export function makeBottle(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "seiza-water-bottle";
+  const clear = new THREE.MeshStandardMaterial({ color: "#cfeaff", roughness: 0.1, metalness: 0, transparent: true, opacity: 0.45, depthWrite: false });
+  const water = new THREE.MeshStandardMaterial({ color: "#5fb4ff", roughness: 0.2, metalness: 0, transparent: true, opacity: 0.55, depthWrite: false });
+  const label = new THREE.MeshStandardMaterial({ color: "#2d7fd6", roughness: 0.6, metalness: 0 });
+  const cap = new THREE.MeshStandardMaterial({ color: "#f4f6f8", roughness: 0.5, metalness: 0 });
+  const part = (geometry: THREE.BufferGeometry, material: THREE.Material, y: number) => {
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.y = y;
+    mesh.renderOrder = 2;
+    group.add(mesh);
+  };
+  part(new THREE.CylinderGeometry(0.031, 0.031, 0.16, 14), clear, -0.015);
+  part(new THREE.CylinderGeometry(0.027, 0.028, 0.11, 12), water, -0.035);
+  part(new THREE.CylinderGeometry(0.0318, 0.0318, 0.05, 14), label, -0.02);
+  part(new THREE.CylinderGeometry(0.013, 0.031, 0.035, 14), clear, 0.082);
+  part(new THREE.CylinderGeometry(0.0135, 0.0135, 0.02, 12), cap, 0.108);
+  return group;
+}
+
+/** The arm comes up (0.7 s), the bottle tips (from 0.6 s), and back
+ *  down (from 2.3 s); a sigh after (from 2.9 s). Each 0 to 1. */
+function drinkPhases(t: number) {
+  return {
+    raise: ease(t / 0.7) * (1 - ease((t - 2.6) / 0.6)),
+    tip: ease((t - 0.6) / 0.5) * (1 - ease((t - 2.3) / 0.5)),
+    sigh: t > 2.9 ? Math.sin(Math.PI * Math.min(1, (t - 2.9) / 1.4)) : 0,
+  };
+}
+
+const dv = new THREE.Vector3();
+const dq = new THREE.Quaternion();
+const dBlade = new THREE.Vector3();
+const dFingers = new THREE.Vector3();
+const dPalm = new THREE.Vector3();
+
+/** A drink's arm and body, `t` seconds in; `feet` and `eye` from feetAndEye. */
+export function poseDrink(vrm: VRM, rig: BodyRig, overlay: PoseOverlay, t: number, feet: THREE.Vector3, eye: number) {
+  const { raise, tip, sigh } = drinkPhases(t);
+  if (raise <= 0.001 && sigh <= 0.001) return;
+  // The head back as it tips, a small bob with each gulp; leaning back a
+  // little; then, in the sigh, the shoulders fall and it settles.
+  const gulp = tip * 0.05 * Math.max(0, Math.sin((t - 1.1) * 7.5));
+  const body = newBodyPose();
+  body.nod = -0.24 * tip - gulp + 0.12 * sigh;
+  body.lean = -0.06 * tip + 0.07 * sigh;
+  body.drop = 0.02 * sigh;
+  const bodyWeight = Math.max(raise, sigh);
+  poseBody(rig, overlay, body, bodyWeight, bodyWeight);
+  if (raise <= 0.001) return;
+  // Where the lips are, in the body frame (eye heights: x right, y up, z
+  // back): from the head bone, where the head meets the neck, a little up
+  // and out in front; higher and further back as the head tips.
+  const head = vrm.humanoid.getNormalizedBoneNode("head");
+  if (!head) return;
+  const scale = rig.root.getWorldScale(dv).y;
+  const yawInverse = (rig.scene.parent ?? rig.scene).getWorldQuaternion(dq).invert();
+  head.getWorldPosition(dv).sub(feet).applyQuaternion(yawInverse).divideScalar(eye);
+  const m = scale / eye;
+  const mouth = [dv.x, dv.y + (0.03 + 0.02 * tip) * m, dv.z + (-0.1 + 0.02 * tip) * m];
+  // The bottle upright at first, then tipped up with its bottom high, its
+  // cap (this far from the middle of the grip) at the lips.
+  const blade = dBlade.set(0, 0.75 - 0.95 * tip, 0.66 + 0.3 * tip).normalize();
+  // The forearm comes up from in front and to the right, so the hand points
+  // back toward the face: in to the left, and up.
+  const fingers = dFingers.set(-0.3, 0.85, 0.45);
+  fingers.addScaledVector(blade, -fingers.dot(blade)).normalize();
+  const palm = dPalm.crossVectors(blade, fingers);
+  // The grip is out along the hand from the wrist, toward the palm (as
+  // holdInHand puts it), so the wrist goes that far back from it.
+  const knuckle = vrm.humanoid.getNormalizedBoneNode("rightMiddleProximal");
+  const hand = (knuckle ? knuckle.position.length() : 0.08) * m;
+  const cap = 0.115 * m;
+  const target: HandTarget = {
+    pos: [0, 1, 2].map((a) => mouth[a] - blade.getComponent(a) * cap - fingers.getComponent(a) * hand * 0.55 - palm.getComponent(a) * hand * 0.32) as [number, number, number],
+    blade: [blade.x, blade.y, blade.z],
+    fingers: [fingers.x, fingers.y, fingers.z],
+    curl: 0.85,
+  };
+  poseHands(rig, overlay, toTrackedHand("right", target, newTrackedHand()), null, raise);
+}
+
+interface Bottle {
+  vrm: VRM;
+  prop: THREE.Group;
+  detach: () => void;
+}
+
+/**
+ * Anyone drinking water (heat.ts's drinkers: you, from the heat chip's
+ * button, or anyone in the room): a bottle in the right hand, raised to
+ * the lips, tipped up with the head back for a few gulps, eyes shut, then
+ * lowered, and a sigh of relief with a soft face. Eased in from whatever
+ * the avatar was doing (standing, panting, walking) and back out to it.
+ * In a headset, your hands are your own: the bottle's in your hand and the
+ * face is the same, the arm isn't moved.
+ */
+export function DrinkLayer() {
+  const bottles = useRef(new Map<string, Bottle>()).current;
+  const feet = useMemo(() => new THREE.Vector3(), []);
+  const yawQ = useMemo(() => new THREE.Quaternion(), []);
+
+  const putAway = (key: string) => {
+    const b = bottles.get(key);
+    if (!b) return;
+    b.detach();
+    disposeTree(b.prop);
+    bottles.delete(key);
+  };
+  useEffect(
+    () => () => {
+      for (const [key, b] of bottles) {
+        setFaceCue(b.vrm, "drink", null);
+        putAway(key);
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
+
+  useFrame((state) => {
+    const now = performance.now();
+    const frame = state.clock.elapsedTime;
+    for (const key of [...bottles.keys()]) if (!drinkers.has(key)) putAway(key);
+    for (const [key, since] of drinkers) {
+      const t = (now - since) / 1000;
+      const vrm = getAddonAvatar(key);
+      if (t > DRINK_TIME || !vrm) {
+        drinkers.delete(key);
+        setFaceCue(vrm, "drink", null);
+        putAway(key);
+        continue;
+      }
+      const { raise } = drinkPhases(t);
+      setFaceCue(vrm, "drink", t < 0.5 ? null : t < 2.6 ? DRINKING_FACE : t < DRINK_TIME - 0.4 ? RELIEVED_FACE : null);
+
+      let b = bottles.get(key);
+      if (b && b.vrm !== vrm) {
+        putAway(key);
+        b = undefined;
+      }
+      if (raise > 0.02 && !b) {
+        const prop = makeBottle();
+        b = { vrm, prop, detach: holdInHand(vrm, "right", prop) };
+        bottles.set(key, b);
+      }
+      if (b) b.prop.scale.setScalar(Math.max(0.001, Math.min(1, t / 0.25, (3.3 - t) / 0.25)));
+      if (t > 3.3) putAway(key);
+
+      const source = key === LOCAL_AVATAR ? LOCAL_TRACKING_SOURCE : key;
+      const sample = trackingStore.get(source);
+      if (sample !== null && now - sample.receivedAt < TRACKING_STALE_MS) continue;
+      const rig = rigFor(vrm);
+      if (rig) poseDrink(vrm, rig, sharedOverlay(vrm, frame), t, feet, feetAndEye(rig, feet));
+    }
   });
 
   return null;

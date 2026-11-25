@@ -92,8 +92,8 @@ import { CameraViewToggle } from "./ui/CameraViewToggle";
 import { AvatarChooser, avatarUrlForChoice } from "./ui/AvatarChooser";
 import { useMediaQuery, useWantsTouchControls } from "./ui/useMediaQuery";
 import { saveProfile, type StoredAvatarChoice } from "./profile/profileStore";
-import { currentHeatIndex, HEAT_LEVEL_LABELS, heatExpression, heatLevel, LOCAL_HEAT, setHeatReactions, useHeatReactions, useHeatStage } from "./avatar/heat";
-import { HeatLayer } from "./avatar/HeatLayer";
+import { connectDrinks, currentHeatIndex, HEAT_LEVEL_LABELS, heatExpression, heatLevel, LOCAL_HEAT, setHeatReactions, useHeatReactions, useHeatStage } from "./avatar/heat";
+import { DrinkLayer, HeatLayer } from "./avatar/HeatLayer";
 import { SwimLayer } from "./avatar/SwimLayer";
 import { FaintOverlay, HeatChip, WakeChoice, wakeSpot } from "./avatar/HeatChip";
 import { StatusDock } from "./ui/StatusDock";
@@ -467,10 +467,12 @@ export default function App() {
   // Room modes (src/addons/): their events go out on the room socket.
   useEffect(() => {
     connectAddonBus(connected ? (mode, data) => send({ type: "addon", mode, data }) : null);
+    connectDrinks(connected ? () => send({ type: "drink" }) : null);
     // A world's own things done, for the room's research counts, only where it keeps them.
     connectTrack(connected && worldState["stats.on"] === true ? (key) => send({ type: "track", key }) : null);
     return () => {
       connectAddonBus(null);
+      connectDrinks(null);
       connectTrack(null);
     };
   }, [connected, send, worldState]);
@@ -1618,6 +1620,7 @@ export default function App() {
             {/* Room modes an editor switched on (src/addons/). */}
             {/* Heat reactions: sweat, panting, and a slower walk after a hot one. */}
             <HeatLayer selfId={selfId} players={players} getSelfPosition={getSelfPosition} />
+            <DrinkLayer />
             <SwimLayer selfId={selfId} players={players} />
             <AddonScene worldState={worldState} selfId={selfId} players={players} getSelfPosition={getSelfPosition} editMode={editMode} selfSeated={!!posture || !!seat} />
             {world.portals && <Portals config={world.portals} builtin={world.environment !== "model"} />}

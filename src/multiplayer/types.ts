@@ -172,6 +172,8 @@ export type ClientMessage =
   // meetings where a dozing avatar would be out of place.
   | { type: "setCalm"; calm: boolean }
   | { type: "setHeatCalm"; calm: boolean }
+  /** A drink of water (heat reactions): everyone else sees the bottle. */
+  | { type: "drink" }
   | { type: "objectAdd"; object: Omit<WorldObject, "id" | "ownerId"> }
   | { type: "objectMove"; id: string; position: [number, number, number]; rotationY: number }
   // Holding (or throwing) an object: where it is now, relayed and never
@@ -337,6 +339,7 @@ export type ServerMessage =
   | { type: "playerPosture"; id: string; posture: Posture }
   | { type: "playerCalm"; id: string; calm: boolean }
   | { type: "playerHeatCalm"; id: string; calm: boolean }
+  | { type: "playerDrink"; id: string }
   | { type: "playerLeft"; id: string }
   | { type: "objectAdded"; object: WorldObject }
   | { type: "objectMoved"; id: string; position: [number, number, number]; rotationY: number }
