@@ -89,7 +89,7 @@ const worldCards = worlds
         <span class="ring" aria-hidden="true"></span>
         <h3>${esc(w.name)}</h3>
         <p>${esc(w.blurb)}</p>
-        <span class="go">${esc(w.url.replace("https://", ""))} →</span>
+        <span class="go">${esc(w.url.replace("https://", ""))}</span>
       </a>`
   )
   .join("\n");
@@ -200,22 +200,26 @@ copyFileSync(here("news.mjs"), here("public/news.mjs"));
 // The gallery: pictures and clips from the README's own (docs/media),
 // copied in at build so they live in one place in the repository.
 const GALLERY = [
-  { file: "hero.gif", wide: true, caption: "In the hall: waving, bowing, and dozing off in seiza", alt: "In Seiza's hall, avatars wave, bow on the tatami, kneel in seiza and doze, and clap and cheer." },
-  { file: "campsite.jpg", caption: "The campsite at night", alt: "Night at the campsite: an avatar sits by a campfire under a starry sky, a tent to one side." },
-  { file: "fantasy.gif", caption: "Fantasy mode: a katana against a necromancer", alt: "A fighter swings a katana and lets go a fire special while a necromancer casts a bolt and raises three small skeletons." },
-  { file: "band.gif", caption: "Band mode: taiko, guitar, drums, keys, kulintang, and light sticks", alt: "A taiko player, a guitarist, a drummer at a kit, a keyboard player, and a kulintang player perform while two fans wave light sticks." },
-  { file: "together-consent.gif", caption: "A hug, only after a yes", alt: "One avatar asks another for a hug; after Yes, they step close and hug." },
-  { file: "classroom.jpg", caption: "The classroom", alt: "A classroom with students at desks, one raising a hand, the teacher at the board, and a screen." },
-  { file: "garden.jpg", caption: "The garden and its pond", alt: "The garden at dusk: an avatar wades in the pond among koi and lily pads." },
-  { file: "designer.jpg", caption: "The avatar designer", alt: "The avatar designer: a preview of a designed avatar beside controls for its look." },
+  { file: "makiling-climb.gif", title: "Up Mt. Makiling", caption: "its real shape, with a dog along for the walk", alt: "An avatar walks up a dirt trail on a forested hill toward a flagpole and a summit marker, a dog trotting beside her." },
+  { file: "swim.gif", title: "Swimming", caption: "out past the shallows, beside a capybara", alt: "An avatar swims a breaststroke in the sea, her head above the water, a capybara paddling alongside." },
+  { file: "pets.gif", title: "Pets", caption: "a dog, a cat, or a capybara that sits when you stop", alt: "At golden hour on the mountain, an avatar stands with a sitting dog, a sitting cat, and a capybara lying in the grass." },
+  { file: "ride-night.gif", title: "Rides at night", caption: "a moped's headlight, and a bike with a basket", alt: "At night a rider on a moped and a rider on a bike roll along side by side, the moped's headlight lighting the ground ahead." },
+  { file: "fantasy.gif", title: "Fantasy mode", caption: "a katana against a necromancer", alt: "A fighter swings a katana and lets go a fire special while a necromancer casts a bolt and raises three small skeletons." },
+  { file: "band.gif", title: "Band mode", caption: "taiko, guitar, drums, keys, kulintang, and light sticks", alt: "A taiko player, a guitarist, a drummer at a kit, a keyboard player, and a kulintang player perform while two fans wave light sticks." },
+  { file: "together-consent.gif", title: "A hug", caption: "only after a yes", alt: "One avatar asks another for a hug; after Yes, they step close and hug." },
+  { file: "campsite.jpg", title: "The campsite", caption: "at night, by the fire", alt: "Night at the campsite: an avatar sits by a campfire under a starry sky, a tent to one side." },
+  { file: "classroom.jpg", title: "The classroom", caption: "a hand up, the teacher at the board", alt: "A classroom with students at desks, one raising a hand, the teacher at the board, and a screen." },
+  { file: "garden.jpg", title: "The garden", caption: "wading in the pond among the koi", alt: "The garden at dusk: an avatar wades in the pond among koi and lily pads." },
+  { file: "designer.jpg", title: "The avatar designer", caption: "in the browser, nothing to install", alt: "The avatar designer: a preview of a designed avatar beside controls for its look." },
 ];
 mkdirSync(here("public/media"), { recursive: true });
-for (const g of GALLERY) copyFileSync(new URL(`../docs/media/${g.file}`, import.meta.url), here(`public/media/${g.file}`));
+// The hall's clip leads the hero; the rest run along the filmstrip, newest first.
+for (const file of ["hero.gif", ...GALLERY.map((g) => g.file)]) copyFileSync(new URL(`../docs/media/${file}`, import.meta.url), here(`public/media/${file}`));
 const gallery = GALLERY.map(
-  (g) => `      <figure class="shot${g.wide ? " wide" : ""}">
-        <a href="media/${esc(g.file)}"><img src="media/${esc(g.file)}" alt="${esc(g.alt)}" loading="lazy" decoding="async"></a>
-        <figcaption>${esc(g.caption)}</figcaption>
-      </figure>`
+  (g) => `        <figure class="shot">
+          <a href="media/${esc(g.file)}"><img src="media/${esc(g.file)}" alt="${esc(g.alt)}" width="640" height="360" loading="lazy" decoding="async"></a>
+          <figcaption><b>${esc(g.title)}</b>, ${esc(g.caption)}</figcaption>
+        </figure>`
 ).join("\n");
 
 const template = readFileSync(here("index.html"), "utf8");

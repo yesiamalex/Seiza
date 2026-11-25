@@ -66,12 +66,46 @@ For the full guide, see [DOCS.md](DOCS.md).
   guitars you can strum or pick a melody on, a bass, a shaker, and light
   sticks, and the whole room hears and sees what you play. In a headset,
   both are in the wrist menu, where an editor can switch them on too.
+- **Go outside.** Climb Mt. Makiling past the meadow, its real shape
+  scaled down so its slopes are true, to a flag, a summit marker, benches,
+  and a tree that turns with the seasons. Wade into the sea and swim out
+  past the shallows. On a hot afternoon a long walk slows you down and
+  your avatar sweats, until you find shade (or the water).
+- **Ride, and bring a pet, when the host switches them on.** ExerSeiza
+  hands out a bike with a basket and a bell, a skateboard, or a moped with
+  a horn, an engine, and a headlight; slopes slow you down, and a smart
+  trainer can drive the ride (SportSeiza). Pets gives you a dog, a cat, or
+  a capybara that follows you, sits when you stop, swims, and can be
+  patted.
 - **Reflect and throw.** Every world has a mirror near arrival, and
   editors can place more, along with balls anyone can pick up and throw.
 - **More freedom in a headset.** Teleport or walk, snap or smooth turning,
   vibration, tracked hands (pinch to press, play keys with a fingertip),
   picking things up, a menu in pages, and your health on your wrist in a
   fight.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/media/makiling-climb.gif" alt="An avatar walks up a dirt trail on a forested hill toward a flagpole and a summit marker on Mt. Makiling, a dog trotting beside her."></td>
+    <td width="50%"><img src="docs/media/swim.gif" alt="An avatar swims a breaststroke in the sea, her head above the water, a capybara paddling alongside."></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Up Mt. Makiling, with a dog along for the walk</sub></td>
+    <td align="center"><sub>Swimming out past the shallows, beside a capybara</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/media/pets.gif" alt="At golden hour on the mountain, an avatar stands with a sitting dog, a sitting cat, and a capybara lying in the grass."></td>
+    <td width="50%"><img src="docs/media/ride-night.gif" alt="At night a rider on a moped and a rider on a bike roll along side by side, the moped's headlight lighting the ground ahead."></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Pets: a dog, a cat, or a capybara</sub></td>
+    <td align="center"><sub>ExerSeiza at night: a moped's headlight, and a bike</sub></td>
+  </tr>
+</table>
+
+<details>
+<summary><b>More pictures and clips</b>: the campsite, the classroom, the garden, avatars, together gestures, and the Fantasy and Band modes</summary>
+<br>
 
 <img src="docs/media/campsite.jpg" width="720" alt="Night at the campsite: an avatar sits in a low folding chair by a campfire under a sky full of stars, an orange tent with a sleeping bag inside to the left, and the hall's lamps glowing across the meadow.">
 
@@ -123,6 +157,8 @@ For the full guide, see [DOCS.md](DOCS.md).
     <td align="center"><sub>Band mode: taiko, guitar, drums, keys, and kulintang, and the light sticks</sub></td>
   </tr>
 </table>
+
+</details>
 
 The same link works on a phone, a laptop, or a VR headset. In a headset, your
 avatar follows your head and hands, and turning your left palm toward you
