@@ -857,11 +857,21 @@ export function PlayerRig({
     let jumpPressed = false;
     if (keys.KeyW || keys.ArrowUp) move.add(forward);
     if (keys.KeyS || keys.ArrowDown) move.sub(forward);
-    if (keys.KeyD || keys.ArrowRight) move.add(right);
-    if (keys.KeyA || keys.ArrowLeft) move.sub(right);
+    // On a ride (drive.ease is a ride's), A and D steer, as in a driving
+    // game: the view and the ride turn, faster the faster it goes and a
+    // little on the spot; on foot they step sideways.
+    const riding = drive.ease > 0;
+    const steer = (keys.KeyA || keys.ArrowLeft ? 1 : 0) - (keys.KeyD || keys.ArrowRight ? 1 : 0) - (riding && touch ? touch.x : 0);
+    if (riding && steer !== 0 && !isPresenting) {
+      const turn = new THREE.Euler().setFromQuaternion(vcam.quaternion, "YXZ");
+      turn.y += Math.max(-1, Math.min(1, steer)) * (0.6 + 1.1 * Math.min(1, velocityRef.current.length() / 6)) * delta;
+      vcam.quaternion.setFromEuler(turn);
+    }
+    if (!riding && (keys.KeyD || keys.ArrowRight)) move.add(right);
+    if (!riding && (keys.KeyA || keys.ArrowLeft)) move.sub(right);
     if (touch) {
       if (touch.y !== 0) move.addScaledVector(forward, touch.y);
-      if (touch.x !== 0) move.addScaledVector(right, touch.x);
+      if (touch.x !== 0 && !riding) move.addScaledVector(right, touch.x);
       if (touch.jumpRequested) {
         touch.jumpRequested = false; // consume — one press, one jump
         jumpPressed = true;

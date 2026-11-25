@@ -7,6 +7,7 @@ import {
   tuneOpus,
   VOICE_MAX_BITRATE,
   voiceVolume,
+  MEGAPHONE_VOLUME,
 } from "./meshPolicy";
 import type { PlayerMedia, PlayerState } from "../multiplayer/types";
 import { audioRunning, closeVoiceAudioContext, onAudioStateChange, unlockAudio, voiceAudioContext } from "./audioContext";
@@ -219,6 +220,9 @@ export interface RealtimeMediaState {
   enableMic: () => Promise<void>;
   disableMic: () => void;
   toggleMute: () => void;
+  /** On the megaphone: everyone in the room hears you (a host's). */
+  megaphone: boolean;
+  setMegaphone: (on: boolean) => void;
   /** See forceMute's implementation comment above for what this does and
    *  why it exists alongside toggleMute. */
   forceMute: (muted: boolean) => void;
@@ -266,6 +270,8 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
   const [micEnabled, setMicEnabled] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [muted, setMuted] = useState(false);
+  const [megaphone, setMegaphoneState] = useState(false);
+  const megaphoneRef = useRef(false);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   const [speakingLevels, setSpeakingLevels] = useState<Record<string, number>>({});
@@ -349,8 +355,19 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
       camera: paused.camera ? null : (cameraStreamRef.current?.id ?? null),
       screen: screenStreamRef.current?.id ?? null,
       ...(micStreamRef.current && (mutedRef.current || paused.mic) ? { micMuted: true } : {}),
+      ...(micStreamRef.current && megaphoneRef.current ? { megaphone: true } : {}),
     });
   }, []);
+
+  /** On the megaphone, or off it (the room lets only hosts). */
+  const setMegaphone = useCallback(
+    (on: boolean) => {
+      megaphoneRef.current = on;
+      setMegaphoneState(on);
+      publishLocalMedia();
+    },
+    [publishLocalMedia]
+  );
 
   /** Follows a local track the phone may pause or end. */
   const watchTrack = useCallback(
@@ -951,6 +968,7 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
       selfId,
       players,
       localActive,
+      localMegaphone: megaphoneRef.current && micEnabled,
       here: localPositionRef.current,
       existing: peersRef.current,
       busyUntil: busyUntilRef.current,
@@ -964,7 +982,7 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
       closePeer(id);
     }
     for (const id of plan.create) createPeer(id);
-  }, [players, selfId, localActive, createPeer, closePeer]);
+  }, [players, selfId, localActive, megaphone, createPeer, closePeer]);
 
   useEffect(
     () => () => {
@@ -1003,7 +1021,9 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
         const player = playersRef.current[peerId];
         if (player) {
           // Silent for someone this viewer has blocked (playerFilter.ts).
-          const volume = isPlayerBlocked(peerId) ? 0 : voiceVolume(player.position[0] - localPosition[0], player.position[2] - localPosition[2]);
+          // On the megaphone, heard wherever you are.
+          const near = voiceVolume(player.position[0] - localPosition[0], player.position[2] - localPosition[2]);
+          const volume = isPlayerBlocked(peerId) ? 0 : player.media?.megaphone ? Math.max(near, MEGAPHONE_VOLUME) : near;
           for (const audio of peer.audio.values()) {
             audio.gain.gain.setTargetAtTime(volume, audio.gain.context.currentTime, 0.1);
           }
@@ -1040,6 +1060,8 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
     disableMic,
     toggleMute,
     forceMute,
+    megaphone,
+    setMegaphone,
     selectDevice,
     startCamera,
     stopCamera,

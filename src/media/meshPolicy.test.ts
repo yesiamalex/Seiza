@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PlayerMedia } from "../multiplayer/types";
-import { BUSY_BACKOFF_MS, PEER_MIN_LIFETIME_MS, planPeers, rankPeers, tuneOpus, VOICE_FULL_DISTANCE, VOICE_MESH_SOFT_CAP, VOICE_SILENT_DISTANCE, voiceVolume, type PeerPlanInput } from "./meshPolicy";
+import { BUSY_BACKOFF_MS, PEER_MIN_LIFETIME_MS, planPeers, rankPeers, tuneOpus, VOICE_FULL_DISTANCE, VOICE_MESH_SOFT_CAP, VOICE_SILENT_DISTANCE, voiceVolume, type PeerPlanInput, MEGAPHONE_VOLUME } from "./meshPolicy";
 
 const MIC: PlayerMedia = { mic: "m" };
 const MUTED: PlayerMedia = { mic: "m", micMuted: true };
@@ -158,5 +158,15 @@ describe("voiceVolume", () => {
     expect(voiceVolume(9.5, 0)).toBeCloseTo(0.5, 1);
     expect(voiceVolume(0, VOICE_SILENT_DISTANCE)).toBe(0);
     expect(voiceVolume(40, 0)).toBe(0);
+  });
+});
+
+describe("the megaphone", () => {
+  it("puts whoever is on it first for every listener, however far", () => {
+    expect(rankPeers([{ id: "near", distance: 1, sending: true }, { id: "host", distance: 40, sending: true, megaphone: true }])[0]).toBe("host");
+  });
+  it("is heard wherever you are", () => {
+    expect(voiceVolume(40, 0)).toBe(0);
+    expect(Math.max(voiceVolume(40, 0), MEGAPHONE_VOLUME)).toBeGreaterThan(0.8);
   });
 });

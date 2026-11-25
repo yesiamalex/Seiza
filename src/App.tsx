@@ -67,7 +67,7 @@ import {
 } from "./avatar/seizaEndurance";
 import { SeizaMood } from "./avatar/SeizaMood";
 import { formatSeizaTime, loadSeizaTimerView, saveSeizaTimerView, SeizaTimer, SeizaTimerBadge, type SeizaTimerView } from "./ui/SeizaTimer";
-import { MediaControls } from "./media/MediaControls";
+import { MediaControls, MegaphoneChip } from "./media/MediaControls";
 import { CameraBadge } from "./media/CameraBadge";
 import { ScreenZoomOverlay } from "./media/ScreenZoomOverlay";
 import { ImageViewer } from "./edit/ImageViewer";
@@ -1889,6 +1889,7 @@ export default function App() {
         <div className="seiza-bar-divider" aria-hidden />
         <MediaControls
           media={media}
+          canMegaphone={canEditWorld || isAdmin}
           voiceEnabled={voiceVisible}
           onShareScreen={shareOnNearestScreen}
           onStopScreen={stopSharing}
@@ -1977,6 +1978,7 @@ export default function App() {
       <WorldOverlay />
       <AddonOverlay worldState={worldState} touch={showTouchControls} />
       <StatusDock />
+      <MegaphoneChip players={players} selfId={selfId} self={media.megaphone && media.micEnabled && !media.muted} />
       <HeatChip />
       <FaintOverlay respawn={() => warpTo(wakeSpot(getSelfPosition(), [world.spawnPoint.x, world.spawnPoint.y, world.spawnPoint.z]))} />
       {world.portals && <PortalCard config={world.portals} inXr={xrSessionActive} />}

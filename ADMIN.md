@@ -83,6 +83,12 @@ After signing in, an admin can:
   Each person's browser moves its own avatar in response to a server
   message, because every player is the only authority over their own
   position.
+- **Use the megaphone.** In the Voice panel, an editor or admin can turn
+  on the megaphone: everyone in the room hears them at nearly full volume,
+  wherever they are, and sees "📣 … on the megaphone". Every listener
+  keeps a voice connection free for whoever holds it, so a class of 30
+  hears its teacher across the hall. The room server lets only hosts use it
+  (anyone, in a world where editing is open).
 - **Switch the language filters.** In the admin panel, under Language
   filters: **Filter chat** stars rude words in chat for everyone (on by
   default), and **Filter names** has anyone joining with a rude name join

@@ -36,9 +36,10 @@ export const isSending = (media: PlayerMedia | undefined) =>
  * listening. Voice fades to nothing at a distance, so the people left out
  * are the ones who couldn't be heard anyway.
  */
-export function rankPeers(candidates: { id: string; distance: number; sending: boolean }[]): string[] {
+export function rankPeers(candidates: { id: string; distance: number; sending: boolean; megaphone?: boolean }[]): string[] {
   return candidates
-    .map((candidate) => ({ id: candidate.id, score: candidate.distance - (candidate.sending ? SPEAKER_PRIORITY_METRES : 0) }))
+    // Whoever's on the megaphone comes before anyone: everyone hears them.
+    .map((candidate) => ({ id: candidate.id, score: candidate.megaphone ? -1e6 : candidate.distance - (candidate.sending ? SPEAKER_PRIORITY_METRES : 0) }))
     .sort((a, b) => a.score - b.score || a.id.localeCompare(b.id))
     .map((candidate) => candidate.id);
 }
@@ -48,6 +49,8 @@ export interface PeerPlanInput {
   players: Record<string, { position: [number, number, number]; media?: PlayerMedia }>;
   /** Whether this client has any media on (a muted mic counts). */
   localActive: boolean;
+  /** This client is on the megaphone: it reaches everyone, past the budget. */
+  localMegaphone?: boolean;
   /** Where this client is, or null before the first position tick. */
   here: [number, number, number] | null;
   /** Current connections, by peer id, with when each was opened. */
@@ -91,7 +94,7 @@ export function planPeers(input: PeerPlanInput): PeerPlan {
   const wanted = Object.keys(players).filter(
     (id) => id !== selfId && (localActive || hasAnyMedia(players[id]?.media)) && (busyUntil.get(id) ?? 0) <= now
   );
-  if (wanted.length <= VOICE_MESH_SOFT_CAP) {
+  if (wanted.length <= VOICE_MESH_SOFT_CAP || input.localMegaphone) {
     plan.create = wanted.filter((id) => !kept.has(id));
     return plan;
   }
@@ -100,7 +103,7 @@ export function planPeers(input: PeerPlanInput): PeerPlan {
     wanted.map((id) => {
       const position = players[id].position;
       const distance = here ? Math.hypot(position[0] - here[0], position[1] - here[1], position[2] - here[2]) : 0;
-      return { id, distance, sending: isSending(players[id]?.media) };
+      return { id, distance, sending: isSending(players[id]?.media), megaphone: !!players[id]?.media?.megaphone };
     })
   );
   const chosen = new Set(ranked.slice(0, VOICE_MESH_SOFT_CAP));
@@ -175,6 +178,9 @@ export const VOICE_SILENT_DISTANCE = 16;
  * on the floor plan: standing on a step or the tatami doesn't quieten
  * anyone.
  */
+/** How loud someone on the megaphone is, wherever you are. */
+export const MEGAPHONE_VOLUME = 0.9;
+
 export function voiceVolume(dx: number, dz: number): number {
   const d = Math.hypot(dx, dz);
   const t = Math.min(1, Math.max(0, (d - VOICE_FULL_DISTANCE) / (VOICE_SILENT_DISTANCE - VOICE_FULL_DISTANCE)));

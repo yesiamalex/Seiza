@@ -768,6 +768,8 @@ export class SeizaRoom extends DurableObject<Env> {
         if (attachment.lastMediaAt && now - attachment.lastMediaAt < MEDIA_MIN_INTERVAL_MS) return;
         const media = sanitizeMedia(message.media);
         if (!media) return;
+        // The megaphone is a host's: an editor or an admin (anyone, where editing is open).
+        if (media.megaphone && this.editingRequiresAuth() && !attachment.isEditor && !attachment.isAdmin) delete media.megaphone;
         attachment.lastMediaAt = now;
         attachment.player.media = media;
         this.save(ws, attachment);
@@ -1394,6 +1396,7 @@ function sanitizeMedia(input: unknown): PlayerMedia | null {
     media[key] = value;
   }
   if (raw.micMuted === true) media.micMuted = true;
+  if (raw.megaphone === true && media.mic) media.megaphone = true;
   return media;
 }
 

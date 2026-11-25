@@ -158,10 +158,11 @@ export function WakeChoice() {
           setAt(next);
           setWakeAt(next);
         }}
-        style={{ background: "rgba(255,255,255,0.08)", color: "inherit", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 6, padding: "3px 6px" }}
+        // Dark, its list too: a white menu with the panel's white text was unreadable.
+        style={{ background: "#1b2030", color: "#fff", colorScheme: "dark", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 6, padding: "3px 6px" }}
       >
-        <option value="shade">{L("in the nearest shade", "近くの日陰で")}</option>
-        <option value="arrival">{L("at the arrival point", "最初の場所で")}</option>
+        <option value="shade" style={{ background: "#1b2030", color: "#fff" }}>{L("in the nearest shade", "近くの日陰で")}</option>
+        <option value="arrival" style={{ background: "#1b2030", color: "#fff" }}>{L("at the arrival point", "最初の場所で")}</option>
       </select>
     </label>
   );

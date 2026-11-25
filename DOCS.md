@@ -1172,7 +1172,9 @@ adds its own coloured button to the bar while it is on.
   uphill and a little faster down, and your avatar pedals, stands on the
   board, or sits on the moped, with the wheels turning. Getting on, off,
   or onto another ride eases: the old ride shrinks away as the rider steps
-  off it, and the new one grows in under them. **T** goes through the rides on a keyboard
+  off it, and the new one grows in under them. On a ride, A and D steer (the view and the ride
+  turn together, faster the faster it goes) instead of stepping sideways;
+  on a phone, the pad's left and right do. **T** goes through the rides on a keyboard
   (Shift+T back, on foot after the last). Riders lean into turns and the ride banks
   with them; a bike's rider rocks with the pedals, a moped's feels the road,
   and a skateboarder carves from edge to edge, knees pumping, and does a

@@ -115,6 +115,9 @@ export interface PlayerMedia {
    *  have to choose whom to connect to rank someone who can actually be
    *  heard first (see useRealtimeMedia's peer selection). */
   micMuted?: boolean;
+  /** On the megaphone: heard by everyone in the room, wherever they are
+   *  (a host's, for a class: the room server lets only hosts set it). */
+  megaphone?: boolean;
 }
 
 /** One player's movement, as carried in a batched playersUpdated. */

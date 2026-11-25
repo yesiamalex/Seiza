@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useExclusiveMenu } from "../ui/exclusiveMenu";
 import type { RealtimeMediaState } from "./useRealtimeMedia";
-import type { PresentSource } from "../multiplayer/types";
+import type { PlayerMedia, PresentSource } from "../multiplayer/types";
+import { Docked } from "../ui/StatusDock";
 import { VOICE_ENABLED } from "./useRealtimeMedia";
 import { BAR_LABEL_CLASS, barButtonActiveStyle, barButtonStyle, panelStyle, pillButtonActiveStyle, pillButtonStyle, popoverStyle } from "../ui/styles";
 import { CameraIcon, MicIcon, MicOffIcon, ScreenShareIcon } from "../ui/icons";
@@ -16,6 +17,8 @@ interface MediaControlsProps {
    *  Returns a reason when it can't, or null on success. */
   onShareScreen: (source?: PresentSource) => string | null;
   onStopScreen: () => void;
+  /** A host (editor or admin) may use the megaphone. */
+  canMegaphone?: boolean;
 }
 
 /**
@@ -25,7 +28,7 @@ interface MediaControlsProps {
  * permanently, and each capture stays off until asked for, so a visitor who
  * only wants to look around never gives up a device or an upload.
  */
-export function MediaControls({ media, voiceEnabled, onShareScreen, onStopScreen }: MediaControlsProps) {
+export function MediaControls({ media, voiceEnabled, onShareScreen, onStopScreen, canMegaphone = false }: MediaControlsProps) {
   useLang();
   const [open, setOpen] = useState(false);
   useExclusiveMenu("media", open, () => setOpen(false));
@@ -150,19 +153,29 @@ export function MediaControls({ media, voiceEnabled, onShareScreen, onStopScreen
                     value={media.selectedDeviceId ?? ""}
                     onChange={(event) => void media.selectDevice(event.target.value)}
                     style={{
-                      background: "rgba(255,255,255,0.1)",
+                      background: "#1b2030",
                       color: "white",
+                      colorScheme: "dark",
                       border: "1px solid rgba(255,255,255,0.2)",
                       borderRadius: 6,
                       padding: "6px 8px",
                     }}
                   >
                     {media.devices.map((device) => (
-                      <option key={device.deviceId} value={device.deviceId} style={{ color: "black" }}>
+                      <option key={device.deviceId} value={device.deviceId} style={{ background: "#1b2030", color: "white" }}>
                         {device.label || L("Microphone", "マイク")}
                       </option>
                     ))}
                   </select>
+                </label>
+              )}
+              {canMegaphone && (
+                <label style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, cursor: "pointer" }}>
+                  <input type="checkbox" checked={media.megaphone} onChange={(e) => media.setMegaphone(e.target.checked)} style={{ marginTop: 2, accentColor: "#f2b84b" }} />
+                  <span style={{ display: "grid", gap: 2 }}>
+                    <span>{L("Megaphone", "メガホン")}</span>
+                    <small style={{ opacity: 0.6 }}>{L("Everyone in the room hears you, wherever they are: for a class or an announcement.", "部屋の全員に、どこにいても聞こえます。授業やお知らせに。")}</small>
+                  </span>
                 </label>
               )}
               <button type="button" style={pillButtonStyle} onClick={media.disableMic}>
@@ -173,5 +186,19 @@ export function MediaControls({ media, voiceEnabled, onShareScreen, onStopScreen
         </div>
       )}
     </div>
+  );
+}
+
+/** Who's on the megaphone, so everyone knows whose voice reaches them. */
+export function MegaphoneChip({ players, selfId, self }: { players: Record<string, { displayName: string; media?: PlayerMedia }>; selfId: string | null; self: boolean }) {
+  useLang();
+  const names = [...(self ? [L("You", "あなた")] : []), ...Object.entries(players).filter(([id, p]) => id !== selfId && p.media?.megaphone && !p.media.micMuted).map(([, p]) => p.displayName)];
+  if (!names.length) return null;
+  return (
+    <Docked order={-1}>
+      <div role="status" style={{ padding: "5px 12px", borderRadius: 999, background: "rgba(16,18,24,0.78)", border: "1px solid #f2b84b", color: "#fff", fontSize: 12 }}>
+        {L(`📣 ${names.join(", ")} on the megaphone`, `📣 ${names.join("、")}がメガホンで話しています`)}
+      </div>
+    </Docked>
   );
 }
