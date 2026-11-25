@@ -1427,6 +1427,22 @@ export default function App() {
 
   const xrHudModel: XrHudModel = {
     sections: [
+      // The megaphone, for a host with their mic on: everyone hears them.
+      ...((canEditWorld || isAdmin) && media.micEnabled
+        ? [
+            {
+              id: "megaphone",
+              tab: "play",
+              title: L("Megaphone", "メガホン"),
+              note: L("Everyone in the room hears you, wherever they are.", "部屋の全員に、どこにいても聞こえます。"),
+              columns: 2,
+              choices: [
+                { id: "off", label: L("Off", "オフ"), active: !media.megaphone, onPress: () => media.setMegaphone(false) },
+                { id: "on", label: L("On", "オン"), active: media.megaphone, onPress: () => media.setMegaphone(true) },
+              ],
+            },
+          ]
+        : []),
       ...addonXrSections,
       avatarSection,
       ...(editSection ? [editSection] : []),

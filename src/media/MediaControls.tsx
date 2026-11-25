@@ -24,7 +24,8 @@ interface MediaControlsProps {
 /**
  * Microphone, camera and screen sharing in one control.
  *
- * The details panel is opened by the caret rather than sitting on screen
+ * The details panel (voice, camera, screens, the megaphone) is opened by
+ * the Video button rather than sitting on screen
  * permanently, and each capture stays off until asked for, so a visitor who
  * only wants to look around never gives up a device or an upload.
  */
