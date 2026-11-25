@@ -1,18 +1,23 @@
 // admin.seiza.cc: Seiza's research dashboard. See README.md here for how to
 // put it behind Cloudflare Access and deploy it.
 {
-  "name": "seiza-admin",
+  // Named "admin", so its workers.dev fallback is admin.<your subdomain>.workers.dev
+  // (admin.figueroaziedell.workers.dev), beside admin.seiza.cc.
+  "name": "admin",
   "main": "worker.mjs",
   "compatibility_date": "2026-01-01",
   // The page is served by the Worker, never straight from storage, so the
   // Access check comes first on every request.
   "assets": { "directory": "./public", "binding": "ASSETS", "run_worker_first": true },
   "routes": [{ "pattern": "admin.seiza.cc", "custom_domain": true }],
-  "workers_dev": false,
+  // The fallback address. Safe even before Access covers it: without Access's
+  // signed login, the Worker answers 403 to everyone.
+  "workers_dev": true,
   "keep_vars": true,
   "vars": {
-    // Your Access team's name (the part before .cloudflareaccess.com) and
-    // this application's Audience (AUD) tag, from the Access dashboard.
+    // Your Access team's name (the part before .cloudflareaccess.com), and the
+    // Audience (AUD) tag of each Access application in front of this Worker
+    // (admin.seiza.cc's, and the workers.dev one's), comma-separated.
     "ACCESS_TEAM": "",
     "ACCESS_AUD": "",
     // The worlds to read, each with the address its counts are asked at.

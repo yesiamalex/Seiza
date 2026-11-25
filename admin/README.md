@@ -37,74 +37,93 @@ storage, never in the page or the browser.
 
 ## Deploy it
 
-You need the Cloudflare account the worlds are on, with `seiza.cc` added to
-it, and Node and this repository on your computer (`npm install` done).
+It answers at two addresses: **admin.seiza.cc**, and
+**admin.figueroaziedell.workers.dev** as a fallback (the Worker is named
+`admin`, so its workers.dev address is `admin.<your subdomain>.workers.dev`).
+Both go behind Cloudflare Access. The fallback is safe even before you do:
+without Access's signed login, the Worker answers 403 to everyone.
+
+Everything below can be done in the Cloudflare dashboard and on github.com.
 
 ### 1. Make one token
+
+Use a password manager's generator for a random password of 32 characters
+or more (the worlds ignore anything under 24). Or, with Node:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-Copy what it prints. It's the one key to the counts: keep it somewhere safe
-(a password manager), and never paste it into a page, a chat, or git.
+It's the one key to the counts: keep it in a password manager, never in a
+page, a chat, or git.
 
 ### 2. Give it to every world you want counted
 
-Each world is its own Worker, so each gets the secret. Paste the token when
-asked:
+In **Workers & Pages**, open each world's Worker, then **Settings →
+Variables and Secrets → Add**: type **Secret**, name `SEIZA_STATS_TOKEN`,
+the token as its value, and **Deploy**. The new version starts counting at
+once. (From the command line instead: `npx wrangler secret put
+SEIZA_STATS_TOKEN`, with `--config worlds/<world>/wrangler.jsonc` for each
+world but Seiza itself.) A world you leave out shows as "not counting".
 
-```bash
-npx wrangler secret put SEIZA_STATS_TOKEN                                   # Seiza itself
-npx wrangler secret put SEIZA_STATS_TOKEN --config worlds/seiou/wrangler.jsonc
-npx wrangler secret put SEIZA_STATS_TOKEN --config worlds/seinag/wrangler.jsonc
-npx wrangler secret put SEIZA_STATS_TOKEN --config worlds/seisugbo/wrangler.jsonc
-# …and the same for seizora, seizorai, seilaya, tulay, iscolab
-```
+### 3. Put both addresses behind Cloudflare Access
 
-Then redeploy each world (`npm run deploy` for Seiza, and
-`npx wrangler deploy --config worlds/<world>/wrangler.jsonc` for the rest,
-after their builds) so the room servers start counting. A world you leave
-out simply shows as "not counting" on the dashboard.
+Open **Zero Trust** (the first time, pick a team name and the free plan).
+Your team name is the part before `.cloudflareaccess.com`, shown under
+**Settings → Custom Pages**.
 
-### 3. Put admin.seiza.cc behind Cloudflare Access
+For **admin.seiza.cc**: **Access → Applications → Add an application →
+Self-hosted**. Domain `admin.seiza.cc`; a policy with action **Allow**,
+rule **Emails**, and the addresses allowed to see the counts. Save, and copy
+the application's **Audience (AUD) tag** from its Overview.
 
-In the Cloudflare dashboard:
+For **the workers.dev fallback**: after step 5 has created the Worker, open
+it, then **Settings → Domains & Routes**, and on the **workers.dev** row
+choose **Enable Cloudflare Access**. That makes a second Access application
+for `admin.figueroaziedell.workers.dev`; open it under **Access →
+Applications**, give it the same Allow policy (your emails), and copy its
+AUD tag too.
 
-1. Open **Zero Trust** (the first time, pick a team name and the free plan;
-   no card is needed for it). Your team name is what Access lives at:
-   `<team>.cloudflareaccess.com`.
-2. Go to **Access → Applications → Add an application → Self-hosted**.
-3. **Application domain:** `admin.seiza.cc`. Give it a name, such as
-   "Seiza research".
-4. Add a **policy**: action **Allow**, rule **Emails**, and list the
-   addresses of everyone who may see the counts (yours, a co-researcher's).
-   Leave the login method as the one-time PIN by email, or add Google.
-5. Save. On the application's **Overview**, copy its **Audience (AUD)
-   tag**.
+### 4. Tell the dashboard who it trusts
 
-### 4. Tell the dashboard who it trusts, and deploy it
+On github.com, open `admin/wrangler.jsonc`, click the pencil, and fill in:
 
-In `admin/wrangler.jsonc`, fill in:
+- `ACCESS_TEAM`: your team name.
+- `ACCESS_AUD`: both AUD tags, comma-separated:
+  `"<admin.seiza.cc's tag>,<the workers.dev one's tag>"`. (Until you've
+  made the second, put just the first.)
 
-- `ACCESS_TEAM`: your team name (just the part before `.cloudflareaccess.com`).
-- `ACCESS_AUD`: the AUD tag from step 3.
-- `SEIZA_WORLDS`: already lists the nine worlds and their addresses; edit it
-  if yours differ.
+Commit. Neither value is a secret.
 
-Then, from the repository's root:
+### 5. Create the admin Worker from the repository
 
-```bash
-cd admin
-npx wrangler secret put SEIZA_STATS_TOKEN     # the same token as the worlds
-npx wrangler deploy
-```
+**Workers & Pages → Create → Import a repository**, pick this repository,
+and set **Root directory** `admin`, **Build command** empty, **Deploy
+command** `npx wrangler deploy`. Deploy. It redeploys itself on every push
+from then on. Then open the new `admin` Worker, **Settings → Variables and
+Secrets**, and add the same `SEIZA_STATS_TOKEN` as a secret.
 
-The `routes` entry makes `admin.seiza.cc` its address and adds the DNS
-record for it. Open `https://admin.seiza.cc`: Access asks you to sign in,
-and then the dashboard loads. If it says 403 after signing in, the team
-name or AUD tag doesn't match; if a world shows "not counting", its token
-is missing or different.
+(From the command line instead: `cd admin`, `npx wrangler secret put
+SEIZA_STATS_TOKEN`, `npx wrangler deploy`.)
+
+The config claims `admin.seiza.cc` as a custom domain (it needs
+`seiza.cc` on the same Cloudflare account) and turns on the workers.dev
+address. If `admin.seiza.cc` doesn't show under **Settings → Domains &
+Routes**, add it there as a **Custom domain**; if `seiza.cc` isn't on this
+account at all, delete the `routes` line in `admin/wrangler.jsonc` and
+use the workers.dev address alone.
+
+### 6. Open it
+
+`https://admin.seiza.cc`, or `https://admin.figueroaziedell.workers.dev`.
+Access asks you to sign in, then the dashboard loads.
+
+- **403 after signing in:** `ACCESS_TEAM` is wrong, or that address's AUD
+  tag isn't in `ACCESS_AUD` (each address has its own).
+- **403 without being asked to sign in (the workers.dev address):** Access
+  isn't on for it yet: step 3's second half.
+- **A world says "not counting":** its `SEIZA_STATS_TOKEN` is missing or
+  differs from the admin Worker's.
 
 ## Changing a token
 

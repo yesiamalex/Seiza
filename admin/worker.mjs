@@ -29,9 +29,11 @@ let certs = null;
 /** The signed-in person's email, if Access vouches for them; else null. */
 async function signedIn(request, env) {
   const team = env.ACCESS_TEAM;
-  const aud = env.ACCESS_AUD;
+  // One AUD tag per Access application in front of it: admin.seiza.cc's,
+  // and the workers.dev fallback's, comma-separated.
+  const auds = (env.ACCESS_AUD ?? "").split(",").map((a) => a.trim()).filter(Boolean);
   const jwt = request.headers.get("cf-access-jwt-assertion");
-  if (!team || !aud || !jwt) return null;
+  if (!team || !auds.length || !jwt) return null;
   const [head, body, signature] = jwt.split(".");
   if (!signature) return null;
   try {
@@ -39,7 +41,7 @@ async function signedIn(request, env) {
     const claims = JSON.parse(new TextDecoder().decode(base64url(body)));
     const issuer = `https://${team}.cloudflareaccess.com`;
     const audiences = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
-    if (claims.iss !== issuer || !audiences.includes(aud) || !(claims.exp * 1000 > Date.now())) return null;
+    if (claims.iss !== issuer || !audiences.some((a) => auds.includes(a)) || !(claims.exp * 1000 > Date.now())) return null;
     if (!certs || certs.at < Date.now() - 3600_000) certs = { at: Date.now(), keys: (await (await fetch(`${issuer}/cdn-cgi/access/certs`)).json()).keys };
     const jwk = certs.keys.find((k) => k.kid === header.kid);
     if (!jwk) return null;
