@@ -170,7 +170,8 @@ describe.skipIf(!built)("room server", () => {
     a.send({ type: "setWorldState", key: "battery.mode", value: "hold" });
     const late = await client(room, "Late", ["batch"]);
     const welcome = late.received.find((m) => m.type === "welcome");
-    expect(welcome?.type === "welcome" && welcome.worldState).toEqual({ "breaker.wind": false, "battery.mode": "hold" });
+    // With the profanity filters' defaults filled in: chat on, names off.
+    expect(welcome?.type === "welcome" && welcome.worldState).toEqual({ "breaker.wind": false, "battery.mode": "hold", "filter.chat": true, "filter.names": false });
     a.socket.close();
     b.socket.close();
     late.socket.close();
@@ -454,6 +455,15 @@ describe.skipIf(!built)("room server", () => {
     a.socket.close();
   });
 
+  it("stars rude words in chat by default", async () => {
+    const room = freshRoom();
+    const a = await client(room, "A", ["batch"]);
+    a.send({ type: "chat", text: "this is shit, a classic" });
+    const chat = await until(() => a.received.find((m) => m.type === "chat"));
+    expect(chat.type === "chat" && chat.message.text).toBe("this is s***, a classic");
+    a.socket.close();
+  });
+
   it("checks what's inside an uploaded avatar, not just its header", async () => {
     const { writeGlb } = await import("../src/avatar/import/glbToVrm");
     const tracker = writeGlb({ asset: { version: "2.0" }, images: [{ uri: "https://tracker.example/p.png" }] } as never, null);
@@ -553,6 +563,27 @@ describe.skipIf(!built)("room server with passwords", () => {
     await sleep(200);
     expect(visitor.received.filter((m) => m.type === "worldStateChanged")).toHaveLength(1);
     visitor.socket.close();
+  });
+
+  it("lets only an admin switch the name filter, which then renames a rude joiner", async () => {
+    const room = `names-${Date.now()}`;
+    const admin = await open(room);
+    admin.send({ type: "join", displayName: "Admin", avatarUrl: "" });
+    await until(() => admin.received.find((m) => m.type === "welcome"));
+    admin.send({ type: "setWorldState", key: "filter.names", value: true });
+    await sleep(200);
+    expect(admin.received.some((m) => m.type === "worldStateChanged")).toBe(false);
+    admin.send({ type: "authAdmin", key: ADMIN_KEY });
+    await until(() => admin.received.find((m) => m.type === "adminAuthResult"));
+    admin.send({ type: "setWorldState", key: "filter.names", value: true });
+    await until(() => admin.received.find((m) => m.type === "worldStateChanged"));
+    const rude = await open(room);
+    rude.send({ type: "join", displayName: "xXfuckXx", avatarUrl: "" });
+    const welcome = await until(() => rude.received.find((m) => m.type === "welcome"));
+    const me = welcome.type === "welcome" ? welcome.players.find((p) => p.id === welcome.selfId) : undefined;
+    expect(me?.displayName).toMatch(/^Guest /);
+    admin.socket.close();
+    rude.socket.close();
   });
 
   it("doesn't let a second join reset the admin key guess limit", async () => {

@@ -39,6 +39,11 @@ export interface Env {
   SEIZA_ADMIN_KEY?: string;
   /** Maximum simultaneous joined players for the deployed world. */
   SEIZA_MAX_OCCUPANTS?: string;
+  /** The profanity filters' defaults (src/moderation/profanity.ts): chat is
+   *  masked unless this is "off"; names are checked when this is "on". An
+   *  admin can switch either for a room. */
+  SEIZA_CHAT_FILTER?: string;
+  SEIZA_NAME_FILTER?: string;
   /** Optional. This deployment's own address, like
    *  https://seizora.seiza.org, once it has one. Visitors who open the old
    *  *.workers.dev address are sent there (a 301), so old links keep

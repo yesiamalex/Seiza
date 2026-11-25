@@ -83,6 +83,18 @@ After signing in, an admin can:
   Each person's browser moves its own avatar in response to a server
   message, because every player is the only authority over their own
   position.
+- **Switch the language filters.** In the admin panel, under Language
+  filters: **Filter chat** stars rude words in chat for everyone (on by
+  default), and **Filter names** has anyone joining with a rude name join
+  as a guest instead (on by default in SeiOU, Seinag, ISCOLab, and Tulay).
+  The room server applies both, so no visitor's browser can skip them.
+  Names already in the room stay until those people rejoin. A world sets
+  its own defaults with the `SEIZA_CHAT_FILTER` (`"off"` to start with chat
+  unfiltered) and `SEIZA_NAME_FILTER` (`"on"`) vars in its
+  `wrangler.jsonc`. The words are in `src/moderation/profanity.ts`:
+  English, Tagalog, Cebuano, and a few Japanese, matched as whole words
+  (so "class" and "assume" pass) and seen through common disguises like
+  sh1t or f.u.c.k.
 
 ### Why do I have to enter the admin key again after reloading?
 

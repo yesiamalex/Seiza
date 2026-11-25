@@ -98,7 +98,7 @@ import { SwimLayer } from "./avatar/SwimLayer";
 import { HeatChip } from "./avatar/HeatChip";
 import { AVATAR_DESIGN_PRESETS } from "./avatar/designer/avatarSpec";
 import { deliverWorldMessage, unwrapWorldMessage, WorldExtension, WorldOverlay, wrapWorldMessage } from "./worlds/WorldExtension";
-import { AddonBarButtons, AddonOverlay, AddonScene, addonHandsBusy, addonHoldsClicks, connectAddonBus, ridingNow, useAddonRideScale, LOCAL_AVATAR, RoomModes, setAddonAvatar, useAddonRooted, useAddonXrSections } from "./addons";
+import { AddonBarButtons, AddonOverlay, AddonScene, addonHandsBusy, addonHoldsClicks, connectAddonBus, ridingNow, useAddonRideScale, LOCAL_AVATAR, RoomFilters, RoomModes, setAddonAvatar, useAddonRooted, useAddonXrSections } from "./addons";
 import { PortalCard, Portals } from "./worlds/Portals";
 import { BAR_LABEL_CLASS, barButtonActiveStyle, barButtonStyle, inputStyle, panelStyle, pillButtonStyle, primaryButtonStyle } from "./ui/styles";
 import { CloseIcon, LockIcon, PersonIcon, VrHeadsetIcon } from "./ui/icons";
@@ -1729,6 +1729,7 @@ export default function App() {
                   onSetRoomPassword={adminSetRoomPassword}
                 >
                   <RoomModes worldState={worldState} setWorldState={setWorldState} disabled={!connected} />
+                  <RoomFilters worldState={worldState} setWorldState={setWorldState} disabled={!connected} />
                 </AdminButton>
               )}
               <button

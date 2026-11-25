@@ -12,6 +12,7 @@ import { useStore } from "./store";
 import type { XrHudSection } from "../xr/hud/hudPanel";
 import { band, setInstrument, setLightColor, setPair, tapped } from "./band/band";
 import { MODE_ACCENTS, ModeSwitch } from "./ui";
+import { FILTER_KEYS } from "../moderation/profanity";
 import { ExerLayer } from "./exer/ExerLayer";
 import { ExerButton, ExerStatus } from "./exer/ExerHud";
 import { ride, ridingNow, ringBell, setVehicle } from "./exer/ride";
@@ -116,6 +117,34 @@ export function AddonOverlay({ worldState, touch }: { worldState: WorldState; to
       {on(worldState, "band") && <BandStage />}
       {on(worldState, "exer") && <ExerStatus touch={touch} />}
     </>
+  );
+}
+
+/** The profanity filters' switches, for the admin panel only (the room
+ *  server takes them from an admin alone). */
+export function RoomFilters({ worldState, setWorldState, disabled }: { worldState: WorldState; setWorldState: (key: string, value: WorldStateValue) => void; disabled?: boolean }) {
+  useLang();
+  const isOn = (key: string, fallback: boolean) => (typeof worldState[key] === "boolean" ? worldState[key] === true : fallback);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10, borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 10 }}>
+      <strong style={{ fontSize: 12 }}>{L("Language filters", "言葉のフィルター")}</strong>
+      <ModeSwitch
+        label={L("Filter chat", "チャットをフィルター")}
+        description={L("Rude words in chat show as their first letter and stars, for everyone in the room.", "チャットの乱暴な言葉を、最初の一文字と伏せ字で表示します。")}
+        on={isOn(FILTER_KEYS.chat, true)}
+        accent="#8fd3ff"
+        disabled={disabled}
+        onChange={(value) => setWorldState(FILTER_KEYS.chat, value)}
+      />
+      <ModeSwitch
+        label={L("Filter names", "名前をフィルター")}
+        description={L("Someone joining with a rude name joins as a guest instead. Names already in the room stay until they rejoin.", "乱暴な名前で入ろうとした人はゲストとして入ります。すでにいる人の名前は、入り直すまでそのままです。")}
+        on={isOn(FILTER_KEYS.names, false)}
+        accent="#8fd3ff"
+        disabled={disabled}
+        onChange={(value) => setWorldState(FILTER_KEYS.names, value)}
+      />
+    </div>
   );
 }
 

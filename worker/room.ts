@@ -1,4 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
+import { FILTER_KEYS, filterOn, hasProfanity, maskProfanity } from "../src/moderation/profanity";
 import {
   ADDON_MODES,
   addonModeKey,
@@ -352,7 +353,9 @@ export class SeizaRoom extends DurableObject<Env> {
         // a guarantee. An unvalidated avatarUrl here would be the exact
         // "make every other client's browser fetch an arbitrary URL"
         // hole that objectAdd already guards against.
-        const displayName = sanitizeDisplayName(message.displayName);
+        // A rude name, where this room checks names, becomes a guest's.
+        const typedName = sanitizeDisplayName(message.displayName);
+        const displayName = this.filter("names") && hasProfanity(typedName) ? `Guest ${attachment.connId.slice(0, 4)}` : typedName;
         // An avatar this room won't pass on becomes the default one,
         // rather than keeping the person out.
         const avatarUrl = sanitizeAvatarUrl(message.avatarUrl, this.avatarOrigins()) ?? "";
@@ -392,7 +395,7 @@ export class SeizaRoom extends DurableObject<Env> {
           skyboxUrl: this.skyboxUrl,
           lights: this.lights,
           roomSky: this.roomSky,
-          worldState: this.worldState,
+          worldState: this.worldStateForClients(),
         };
         ws.send(JSON.stringify(welcome));
         this.broadcast({ type: "playerJoined", player }, attachment.connId);
@@ -792,6 +795,9 @@ export class SeizaRoom extends DurableObject<Env> {
           if (attachment.lastLightAt && now - attachment.lastLightAt < LIGHT_MIN_INTERVAL_MS) return;
           attachment.lastLightAt = now;
           this.save(ws, attachment);
+        } else if (typeof key === "string" && key.startsWith("filter.")) {
+          // The profanity filters are an admin's to switch, not an editor's.
+          if (!attachment.isAdmin || typeof value !== "boolean") return;
         } else if (this.editingRequiresAuth() && !attachment.isEditor) return;
         if (typeof key !== "string" || !WORLD_STATE_LIMITS.keyPattern.test(key)) return;
         const ok =
@@ -837,7 +843,8 @@ export class SeizaRoom extends DurableObject<Env> {
         // direction overrides that can make a message display as
         // something other than what was typed. It's only ever shown as
         // text, never run, so there are no commands to smuggle.
-        const text = stripUnsafeCharacters(message.text, { newlines: false }).trim().slice(0, 500);
+        const typed = stripUnsafeCharacters(message.text, { newlines: false }).trim().slice(0, 500);
+        const text = this.filter("chat") ? maskProfanity(typed) : typed;
         if (!text) return;
         attachment.lastChatAt = now;
         this.save(ws, attachment);
@@ -1073,6 +1080,18 @@ export class SeizaRoom extends DurableObject<Env> {
    *  setEnvironment/setSkybox case checks this alongside isEditor. */
   private editingRequiresAuth(): boolean {
     return !!(this.env.SEIZA_EDITOR_PASSWORD || this.env.SEIZA_ADMIN_KEY);
+  }
+
+  /** A profanity filter's state: the room's switch, or the world's default. */
+  private filter(kind: "chat" | "names"): boolean {
+    const fallback = kind === "chat" ? this.env.SEIZA_CHAT_FILTER !== "off" : this.env.SEIZA_NAME_FILTER === "on";
+    return filterOn(this.worldState, FILTER_KEYS[kind], fallback);
+  }
+
+  /** The world state as joiners get it: with the filters' defaults filled
+   *  in (never stored, so a world's default can still change). */
+  private worldStateForClients(): Record<string, WorldStateValue> {
+    return { ...this.worldState, [FILTER_KEYS.chat]: this.filter("chat"), [FILTER_KEYS.names]: this.filter("names") };
   }
 
   private maxOccupants(): number {

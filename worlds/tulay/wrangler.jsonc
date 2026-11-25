@@ -27,6 +27,7 @@
   "keep_vars": true,
   "vars": {
     "SEIZA_WORLD_ID": "tulay",
-    "SEIZA_MAX_OCCUPANTS": "16"
+    "SEIZA_MAX_OCCUPANTS": "16",
+    "SEIZA_NAME_FILTER": "on"
   }
 }
