@@ -21,6 +21,7 @@ own acceptance of that source's terms.
 | VRoid "HairSample_Female" | Same as above | CC0 1.0 | Yes | Same as above | `public/avatars/vroid/sample-female.vrm`. Same processing. |
 | VRoid "HairSample_Male" | Same as above | CC0 1.0 | Yes | Same as above | `public/avatars/vroid/sample-male.vrm`. Same processing. |
 | Solo violin, bowed with vibrato (G3, C4, E4, A4, C5, soft) | [VSCO 2 Community Edition](https://github.com/sgossner/VSCO-2-CE) by Versilian Studios (Sam Gossner) | CC0 1.0 | Yes | Yes, committed | `public/audio/violin/*.wav`: each trimmed to 2.4 s from the bow's start, mixed to mono, resampled to 22.05 kHz 16-bit, loudness-matched, and given a crossfaded loop from 0.7 to 2.2 s. Loaded only when someone plays the violin (`src/addons/band/instruments.ts`). |
+| A dog's barks (four) | ["dog barking mono"](https://opengameart.org/content/dog-barking-mono) on OpenGameArt | CC0 1.0 (dual-licensed with OGA-BY 3.0; used under CC0) | Yes | Yes, committed | `public/audio/pets/bark1-4.wav`: the recording split into its four barks, mono 22.05 kHz 16-bit, each normalized with a short fade. Fetched only once there's a dog about (`src/addons/pet/pets.ts`). |
 
 ### About the VRoid samples
 

@@ -1055,5 +1055,9 @@ export function ceilingHeightAt(x: number, z: number): number {
   // down on the campsite (the hall's walls are WALL_HEIGHT; over the
   // garden it used to share their limit, which only mattered indoors).
   if (inField(x, z) || onShore(x, z)) return 9;
+  // Open sky over Mt. Makiling: its slopes rise far past any room's
+  // ceiling, and a ceiling here held the camera down inside the hill (and
+  // made the whole mountain count as shade).
+  if (onMountainWalk(x, z) || (mountain && mountainHeight(x, z) > 0)) return Infinity;
   return WALL_HEIGHT - 0.5;
 }

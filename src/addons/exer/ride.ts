@@ -170,8 +170,8 @@ export function startEngine(): Engine | null {
       sub.frequency.setTargetAtTime(21 + 26 * rev, t, 0.2);
       lfo.frequency.setTargetAtTime(11 + 15 * rev, t, 0.2);
       filter.frequency.setTargetAtTime(380 + 520 * rev, t, 0.2);
-      // About half what it was: it carried over everything else.
-      out.gain.setTargetAtTime(level * (0.05 + 0.04 * rev), t, 0.1);
+      // Three-quarters of what it first was: heard, without carrying over everything else.
+      out.gain.setTargetAtTime(level * (0.075 + 0.06 * rev), t, 0.1);
     },
     stop() {
       out.gain.setTargetAtTime(0, ctx.currentTime, 0.05);

@@ -204,7 +204,7 @@ export function buildVehicle(kind: Vehicle): Built {
           rounded(0.3, 0.06, 0.62, 0.3).translate(0, 0.3, 0.02), // floorboard
           rounded(0.34, 0.52, 0.09).translate(0, 0.56, -0.36), // leg shield
           rounded(0.35, 0.32, 0.54).translate(0, 0.48, 0.42), // rear body
-          rounded(0.16, 0.2, 0.2).translate(0, 0.86, -0.47), // headset cowl
+          rounded(0.17, 0.2, 0.16).translate(0, 0.85, -0.45), // headset cowl, under the bar, the lamp in its face
           new THREE.CylinderGeometry(0.05, 0.05, 0.5, 10).translate(0, 0.62, -0.44).rotateX(0), // steering column
           mudguard(0.22, 0.22, -0.58, Math.PI * 0.6), // front mudguard
         ],
@@ -232,7 +232,7 @@ export function buildVehicle(kind: Vehicle): Built {
     const tail = new THREE.Mesh(rounded(0.1, 0.04, 0.03).translate(0, 0.6, 0.7), new THREE.MeshBasicMaterial({ color: "#ff3b3b", toneMapped: false }));
     tail.userData.navIgnore = true;
     root.add(tail);
-    root.add(mesh([tube(0.015, v(-0.3, 0.98, -0.46), v(0.3, 0.98, -0.46)), new THREE.CylinderGeometry(0.03, 0.03, 0.3, 10).translate(0, 0.84, -0.46)], material("#c9cdd3", { metalness: 0.75, roughness: 0.3 })));
+    root.add(mesh([tube(0.015, v(-0.3, 0.98, -0.46), v(0.3, 0.98, -0.46))], material("#c9cdd3", { metalness: 0.75, roughness: 0.3 })));
     const light = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 10).translate(0, 0.9, -0.52), new THREE.MeshBasicMaterial({ color: "#fff6d6", toneMapped: false }));
     light.userData.navIgnore = true;
     root.add(light);

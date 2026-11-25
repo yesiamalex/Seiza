@@ -4,6 +4,7 @@ import { createStore } from "../store";
 import { oneOf, sendAddonEvent, type AddonEvent } from "../bus";
 import { hasProfanity } from "../../moderation/profanity";
 import { noiseHit, voice, type Voice } from "../sound";
+import { sfxOutput } from "../../audio/sfx";
 
 /**
  * Pets: a dog (aso), a cat (pusa), or a capybara that follows you. Each is
@@ -258,11 +259,45 @@ function call(v: Voice, o: { delay: number; length: number; gain: number; pitch:
   if (o.breath) noiseHit(v, { frequency: 2400, duration: o.length * 0.8, gain: o.breath, q: 0.6, delay: o.delay });
 }
 
+/** A real dog's barks (OpenGameArt "dog barking mono", CC0; see
+ *  THIRD_PARTY_ASSETS.md): four, about 15 KB each, fetched once there's a
+ *  dog about. Until they've come, the made one below barks instead. */
+let barks: { ctx: AudioContext; buffers: AudioBuffer[] } | null = null;
+let barksLoading = false;
+export function preloadBarks() {
+  const output = sfxOutput();
+  if (!output || barks?.ctx === output.ctx || barksLoading) return;
+  barksLoading = true;
+  Promise.all([1, 2, 3, 4].map(async (n) => output.ctx.decodeAudioData(await (await fetch(`/audio/pets/bark${n}.wav`)).arrayBuffer())))
+    .then((buffers) => (barks = { ctx: output.ctx, buffers }))
+    .catch(() => undefined)
+    .finally(() => (barksLoading = false));
+}
+
 /** A happy sound, by kind: two barks, a meow, a capybara's soft chirps. */
 export function petSound(kind: Pet, distance?: number) {
   const v = voice(0.8, distance, 25, 2.5);
   if (!v) return;
+  if (kind === "dog" && barks?.ctx === v.ctx) {
+    // Two different barks, each a touch higher or lower, never the same twice.
+    const first = Math.floor(Math.random() * barks.buffers.length);
+    const second = (first + 1 + Math.floor(Math.random() * (barks.buffers.length - 1))) % barks.buffers.length;
+    for (const [n, delay] of [
+      [first, 0],
+      [second, 0.3],
+    ]) {
+      const source = v.ctx.createBufferSource();
+      source.buffer = barks.buffers[n];
+      source.playbackRate.value = 0.94 + Math.random() * 0.12;
+      const level = v.ctx.createGain();
+      level.gain.value = 0.55;
+      source.connect(level).connect(v.out);
+      source.start(v.t + delay);
+    }
+    return;
+  }
   if (kind === "dog") {
+    preloadBarks();
     // Ruff, ruff: a jump up in pitch and down, a growl in it, the second lower.
     for (const [delay, lift] of [
       [0, 1],
@@ -344,6 +379,7 @@ export function announcePet() {
 
 export function setPet(kind: Pet | null) {
   if (pet.get().kind === kind) return;
+  if (kind === "dog") preloadBarks();
   pet.set({ kind, look: kind ? { ...defaultLook(kind), ...remembered(kind) } : null });
   announcePet();
 }

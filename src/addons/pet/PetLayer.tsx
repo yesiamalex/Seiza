@@ -16,7 +16,7 @@ import { onAddonEvent, sendAddonEvent } from "../bus";
 import { feetAndEye, newTrackedHand, poseHands, rigFor, toTrackedHand, type HandTarget } from "../rig";
 import { useStore } from "../store";
 import { L } from "../../i18n/lang";
-import { announcePet, BODY, buildPet, disposePets, HEAD, LEGS, nearPet, parsePetEvent, pet, PET_LABELS, patPet, patted, petName, petSound, remotePets, SHAPES, TAIL, type BuiltPet, type PetLook } from "./pets";
+import { announcePet, preloadBarks, BODY, buildPet, disposePets, HEAD, LEGS, nearPet, parsePetEvent, pet, PET_LABELS, patPet, patted, petName, petSound, remotePets, SHAPES, TAIL, type BuiltPet, type PetLook } from "./pets";
 
 /**
  * Every pet in the room, each following its owner: along the trail the
@@ -229,6 +229,7 @@ export function PetLayer({ selfId, players, selfSeated }: { selfId: string | nul
 
   /** Puts a pet's body in the scene: built now, or its model once loaded. */
   const embody = (f: Follower) => {
+    if (f.look.kind === "dog") preloadBarks();
     if (!f.look.model) {
       f.built = buildPet(f.look.kind, f.look.coat);
       f.built.mesh.scale.setScalar(f.look.size);

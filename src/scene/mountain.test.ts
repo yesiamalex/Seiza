@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { clampToRooms, floorHeightAt, OUTER_GROUND_Y, setMountain, SUMMIT_BENCHES, viewFloorAt, type Ground } from "./layout";
+import { ceilingHeightAt, clampToRooms, floorHeightAt, OUTER_GROUND_Y, setMountain, SUMMIT_BENCHES, viewFloorAt, type Ground } from "./layout";
 import { MountainGround } from "./mountainGround";
 import { MAKILING_SUMMIT_M, MOUNTAIN, mountainHeight, placeMountain, realAltitude, SUMMIT, TRAIL_FROM } from "./mountainShape";
 
@@ -34,6 +34,9 @@ describe("Mt. Makiling", () => {
     const z = MOUNTAIN.z;
     if (mountainHeight(x, z) > 0) expect(viewFloorAt(x, z)).toBeGreaterThanOrEqual(OUTER_GROUND_Y + mountainHeight(x, z) - 1e-6);
     expect(viewFloorAt(SUMMIT[0], SUMMIT[1])).toBeCloseTo(floorHeightAt(SUMMIT[0], SUMMIT[1]));
+    // Open sky over it: no ceiling to hold a camera down inside the hill.
+    expect(ceilingHeightAt(SUMMIT[0], SUMMIT[1])).toBe(Infinity);
+    expect(ceilingHeightAt(TRAIL_FROM[0], TRAIL_FROM[1] + 10)).toBe(Infinity);
   });
 
   it("isn't there in a world that turns it off", () => {
