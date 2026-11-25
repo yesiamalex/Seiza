@@ -135,7 +135,17 @@
   /* The worlds as one constellation: each a star in its colour, joined. */
   .constellation { position: relative; margin: 0 0 28px; border-radius: 6px; background: radial-gradient(90% 120% at 30% 0%, rgba(75, 42, 102, 0.45), transparent 70%), rgba(18, 26, 61, 0.55); border: 1px solid var(--line); overflow: hidden; }
   .constellation svg { display: block; width: 100%; height: auto; }
-  .constellation .link { stroke: rgba(242, 184, 75, 0.35); stroke-width: 1; }
+  .constellation .link { stroke: rgba(255, 214, 140, 0.55); stroke-width: 1.2; }
+  .constellation .glow { stroke: rgba(242, 184, 75, 0.35); stroke-width: 6; filter: url(#soft); }
+  .constellation .grid { fill: none; stroke: rgba(243, 239, 230, 0.06); stroke-width: 1; }
+  .constellation .dust { fill: #f3efe6; }
+  .constellation .twinkle { animation: twinkle 3.5s ease-in-out infinite; animation-delay: var(--d, 0s); }
+  @keyframes twinkle { 50% { opacity: 0.15; } }
+  .constellation .ring { fill: none; stroke-width: 1.5; stroke-dasharray: 5 7; transform-box: fill-box; transform-origin: center; opacity: 0.6; }
+  .constellation a:hover .ring, .constellation a:focus-visible .ring { animation: spin 3s linear infinite; opacity: 1; }
+  .constellation .blurb { font: 400 12px var(--text); fill: var(--muted); opacity: 0; transition: opacity 200ms; }
+  .constellation a:hover .blurb, .constellation a:focus-visible .blurb { opacity: 1; }
+  .constellation figcaption { position: absolute; left: 16px; bottom: 12px; font-size: 13px; color: var(--faint); }
   .constellation a { cursor: pointer; }
   .constellation a .halo { opacity: 0.35; transition: opacity 200ms, r 200ms; }
   .constellation a:hover .halo, .constellation a:focus-visible .halo { opacity: 0.9; }
@@ -149,8 +159,9 @@
   @keyframes rise { from { opacity: 0; transform: translateY(24px); } }
   @media (prefers-reduced-motion: reduce) { .poster span { animation: none; } }
 
-  .facts { margin: 0; padding: 18px 0; font-size: 15px; color: var(--muted); border-top: 1px solid var(--line); position: relative; }
-  .facts strong { color: var(--ink); }
+  /* Its own band, so the hero's fade into the night never washes it out. */
+  .facts { position: relative; z-index: 1; margin: 0 0 28px; padding: 13px 18px; font-size: 15px; color: var(--ink); background: rgba(11, 16, 41, 0.62); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); border: 1px solid var(--line); border-radius: 4px; text-shadow: none; }
+  .facts strong { color: var(--lantern); }
 
   /* --- sections --- */
   section { padding: 88px 0 8px; }
@@ -167,8 +178,11 @@
 
   .features { display: grid; grid-template-columns: repeat(2, 1fr); gap: 2px 48px; margin: 0 0 40px; }
   @media (max-width: 760px) { .features { grid-template-columns: 1fr; } }
-  .features div { padding: 14px 0; border-bottom: 1px solid var(--line); }
-  .features dt { font-weight: 700; }
+  .features div { display: grid; grid-template-columns: 44px 1fr; column-gap: 14px; padding: 16px 0; border-bottom: 1px solid var(--line); }
+  .features svg { grid-row: span 2; width: 40px; height: 40px; padding: 9px; border-radius: 50%; color: var(--lantern); background: radial-gradient(circle at 35% 30%, rgba(242, 184, 75, 0.22), rgba(242, 184, 75, 0.06) 70%); border: 1px solid rgba(242, 184, 75, 0.25); transition: transform 300ms cubic-bezier(.2, .7, .2, 1), box-shadow 300ms; }
+  .features div:hover svg { transform: rotate(-8deg) scale(1.08); box-shadow: 0 0 18px rgba(242, 184, 75, 0.35); }
+  .features dt { font-weight: 700; align-self: center; }
+  .features div { align-content: start; }
   .features dd { margin: 2px 0 0; color: var(--muted); font-size: 16px; }
 
   /* The filmstrip: every clip in one row that scrolls sideways, newest first. */
@@ -214,10 +228,14 @@
   .month li, .live li { display: grid; grid-template-columns: 68px 1fr; gap: 14px; align-items: baseline; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 16px; }
   .live li { grid-template-columns: 68px 1fr auto; }
   .live li time { font-size: 13px; color: var(--faint); }
-  .tag { font-size: 13px; font-weight: 700; }
-  .tag.new { color: var(--lantern); }
-  .tag.world { color: #8fd3ff; }
-  .tag.better { color: var(--faint); }
+  .tag { justify-self: start; font-size: 12px; font-weight: 700; padding: 1px 9px; border-radius: 999px; border: 1px solid currentColor; }
+  .tag.new { color: var(--lantern); background: rgba(242, 184, 75, 0.1); }
+  .tag.world { color: #8fd3ff; background: rgba(143, 211, 255, 0.1); }
+  .tag.better { color: rgba(243, 239, 230, 0.6); }
+  .month li { transition: background 200ms; border-radius: 3px; }
+  .month li:hover { background: rgba(243, 239, 230, 0.04); }
+  .month:first-child > div { padding: 18px 20px 8px; border-radius: 6px; background: radial-gradient(120% 90% at 0% 0%, rgba(242, 184, 75, 0.12), transparent 60%), rgba(18, 26, 61, 0.6); border: 1px solid rgba(242, 184, 75, 0.25); }
+  .month:first-child .summary { font: 800 clamp(19px, 2vw, 23px)/1.35 var(--display); margin-bottom: 14px; }
   @media (max-width: 480px) { .month li, .live li { grid-template-columns: 1fr; gap: 2px; } }
   .month li.show-all-row { display: block; border: 0; }
   .js-folding .month li.extra { display: none; }
@@ -233,7 +251,25 @@
   .live h3 { margin: 0 0 6px; font-size: 16px; }
   .live h3 small { font-weight: 400; color: var(--faint); margin-left: 6px; }
 
-  /* --- hosting: a real sequence, so numbered --- */
+  /* --- hosting: a real sequence, so numbered, joined, and shown --- */
+  .flow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin: 8px 0 28px; padding: 0; list-style: none; counter-reset: step; position: relative; }
+  .flow::before { content: ""; position: absolute; top: 22px; left: 22px; right: 22px; height: 1px; background: linear-gradient(90deg, var(--lantern), var(--dawn)); opacity: 0.5; }
+  .flow li { position: relative; display: grid; gap: 10px; align-content: start; }
+  .flow li::before { counter-increment: step; content: counter(step); width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; font: 800 20px var(--display); color: var(--night); background: var(--lantern); box-shadow: 0 0 0 6px var(--night), 0 0 22px rgba(242, 184, 75, 0.45); }
+  .flow h3 { margin: 4px 0 0; font-size: 19px; }
+  .flow p { margin: 0; color: var(--muted); font-size: 16px; }
+  .shell { margin: 4px 0 0; padding: 12px 14px; border-radius: 6px; background: #070a1d; border: 1px solid var(--line); font: 13px/1.65 ui-monospace, "Cascadia Code", Menlo, Consolas, monospace; color: #d9dbe8; overflow-x: auto; white-space: pre; }
+  .shell .ok { color: #7fe0a6; }
+  .shell .dim { color: rgba(217, 219, 232, 0.5); }
+  .shell .key { color: #8fd3ff; }
+  .shell .str { color: var(--lantern); }
+  .link-card { margin-top: 4px; display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 6px; background: rgba(18, 26, 61, 0.7); border: 1px solid var(--line); font-size: 14px; }
+  .link-card b { color: var(--ink); }
+  .link-card span { color: var(--faint); font-size: 13px; }
+  .faces { display: flex; }
+  .faces i { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #121a3d; margin-left: -6px; background: var(--c); }
+  .cost { margin: 0 0 22px; color: var(--muted); font-size: 15px; }
+  @media (max-width: 860px) { .flow { grid-template-columns: 1fr; } .flow::before { top: 22px; bottom: 22px; left: 21px; right: auto; width: 1px; height: auto; background: linear-gradient(180deg, var(--lantern), var(--dawn)); } .flow li { padding-left: 62px; } .flow li::before { position: absolute; left: 0; top: 0; } }
   .steps { counter-reset: step; display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; margin: 0 0 26px; padding: 0; list-style: none; border-top: 1px solid var(--line); }
   .steps li { padding: 20px 24px 6px 0; }
   .steps li + li { padding-left: 24px; border-left: 1px solid var(--line); }
@@ -337,16 +373,16 @@
     <h2 id="inside-title">Inside a room</h2>
     <div class="intro"><p>The same in every world, on every device.</p></div>
     <dl class="features">
-      <div><dt>Voice like a real room</dt><dd>Voices fade with distance, so groups can talk side by side. Share your screen onto the wall.</dd></div>
-      <div><dt>An avatar of your own</dt><dd>Design one in the browser, bring a VRM, or make one from a photo.</dd></div>
-      <div><dt>Gestures, with consent</dt><dd>Wave, bow, or raise a hand. A high five or a hug needs both people's yes.</dd></div>
-      <div><dt>Your whole body in VR</dt><dd>Your avatar leans, reaches, and steps the way you do.</dd></div>
-      <div><dt>A sky that runs live</dt><dd>The sun, weather, and seasons follow Philippine time, and a hot afternoon slows a long walk.</dd></div>
-      <div><dt>Out past the meadow</dt><dd>Climb Mt. Makiling, its real shape, to a flag and benches at the top, or swim out from the beach.</dd></div>
-      <div><dt>Rides and pets</dt><dd>A bike, a skateboard, or a moped with a headlight, and a dog, a cat, or a capybara that follows you.</dd></div>
-      <div><dt>Modes for play</dt><dd>Fantasy: weapons and elemental specials. Band: drums, taiko, keys, kulintang, guitars, and a violin.</dd></div>
-      <div><dt>Guides who answer</dt><dd>Ask a world's guide about it. A person wrote every answer, and your questions stay on your device.</dd></div>
-      <div><dt>Hosts stay in charge</dt><dd>Mute, remove, or gather people, and lock a room. Nothing is recorded.</dd></div>
+      <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M19 11a7 7 0 0 1-14 0M12 18v3"/></svg><dt>Voice like a real room</dt><dd>Voices fade with distance, so groups can talk side by side. Share your screen onto the wall.</dd></div>
+      <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg><dt>An avatar of your own</dt><dd>Design one in the browser, bring a VRM, or make one from a photo.</dd></div>
+      <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 11V6a2 2 0 0 1 4 0v5M11 10V4a2 2 0 0 1 4 0v6M15 10V6a2 2 0 0 1 4 0v8a7 7 0 0 1-7 7h-1a6 6 0 0 1-5-2.7L3.5 14a2 2 0 0 1 3.2-2.4L7 12"/></svg><dt>Gestures, with consent</dt><dd>Wave, bow, or raise a hand. A high five or a hug needs both people's yes.</dd></div>
+      <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="10" rx="4"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="12" r="2"/></svg><dt>Your whole body in VR</dt><dd>Your avatar leans, reaches, and steps the way you do.</dd></div>
+      <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><dt>A sky that runs live</dt><dd>The sun, weather, and seasons follow Philippine time, and a hot afternoon slows a long walk.</dd></div>
+      <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 20 6-10 4 6 3-4 5 8z"/><path d="M14 5v4M14 5l3 1-3 1"/></svg><dt>Out past the meadow</dt><dd>Climb Mt. Makiling, its real shape, to a flag and benches at the top, or swim out from the beach.</dd></div>
+      <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="17" r="3.5"/><circle cx="18" cy="17" r="3.5"/><path d="M6 17l4-8h5l3 8M10 9 8.5 6H6.5M14.5 9l-3 8"/></svg><dt>Rides and pets</dt><dd>A bike, a skateboard, or a moped with a headlight, a friend on the back, and a dog, a cat, or a capybara that follows you.</dd></div>
+      <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg><dt>Modes for play</dt><dd>Fantasy: weapons and elemental specials. Band: drums, taiko, keys, kulintang, guitars, and a violin.</dd></div>
+      <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><dt>Guides who answer</dt><dd>Ask a world's guide about it. A person wrote every answer, and your questions stay on your device.</dd></div>
+      <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><dt>Hosts stay in charge</dt><dd>Mute, remove, or gather people, lock a room, and filter rude words. Nothing is recorded.</dd></div>
     </dl>
     <div class="strip" aria-label="A look inside">
       <div class="track" id="track" tabindex="0" aria-label="Clips from inside Seiza. Scroll sideways for more.">
@@ -363,7 +399,7 @@
   <section id="worlds" aria-labelledby="worlds-title">
     <h2 id="worlds-title">The worlds</h2>
     <div class="intro"><p>Each is its own room, open now. Portals in every one lead to the rest.</p></div>
-    <figure class="constellation" id="constellation" hidden><svg viewBox="0 0 1000 420" role="group" aria-label="The worlds, as one constellation"></svg></figure>
+    <figure class="constellation" id="constellation" hidden><svg viewBox="0 0 1000 420" role="group" aria-label="The worlds, as one constellation"></svg><figcaption>Point at a star to see the world; select it to go there.</figcaption></figure>
     <div class="worlds" id="world-list">
 <!--WORLDS-->
     </div>
@@ -385,11 +421,31 @@
   <section id="host" aria-labelledby="host-title">
     <h2 id="host-title">Host your own</h2>
     <div class="intro"><p>On a free Cloudflare account, with no server to look after.</p></div>
-    <ol class="steps">
-      <li><h3>Deploy</h3><p>Press the button below, or run <code>npm run deploy</code>. The site and the room server go up together.</p></li>
-      <li><h3>Make it yours</h3><p>Name the world, pick avatars, and set an admin key in one <code>world.json</code>.</p></li>
-      <li><h3>Share the link</h3><p>Your class picks a name and an avatar and they're in. No app, no sign-up.</p></li>
+    <ol class="flow">
+      <li>
+        <h3>Deploy</h3>
+        <p>Press the button below, or run one command. The site and the room server go up together.</p>
+        <div class="shell" aria-label="A terminal"><span class="dim">$</span> npm run deploy
+<span class="ok">✓</span> Site uploaded
+<span class="ok">✓</span> Room server running
+<span class="dim">→ https://my-class.workers.dev</span></div>
+      </li>
+      <li>
+        <h3>Make it yours</h3>
+        <p>Name the world, pick its avatars, and set an admin key, all in one file.</p>
+        <div class="shell" aria-label="world.json">{
+  <span class="key">"displayName"</span>: <span class="str">"Bio 101"</span>,
+  <span class="key">"maxOccupants"</span>: 30,
+  <span class="key">"defaultAvatars"</span>: [<span class="dim">…</span>]
+}</div>
+      </li>
+      <li>
+        <h3>Share the link</h3>
+        <p>Your class picks a name and an avatar and they're in. No app, no sign-up.</p>
+        <div class="link-card"><span class="faces" aria-hidden="true"><i style="--c:#f2b84b"></i><i style="--c:#ff8f6b"></i><i style="--c:#8fd3ff"></i><i style="--c:#b48cff"></i></span><div><b>my-class.workers.dev</b><br><span>4 people in the hall</span></div></div>
+      </li>
     </ol>
+    <p class="cost">A class usually fits in Cloudflare's free plan. Nothing to install on anyone's device, and no server of your own to look after.</p>
     <div class="actions">
       <a class="button primary" href="https://deploy.workers.cloudflare.com/?url=https://github.com/yesiamalex/Seiza">Deploy to Cloudflare</a>
       <a class="button" href="https://github.com/yesiamalex/Seiza/blob/main/DOCS.md">Read the docs</a>
@@ -444,10 +500,25 @@
     const ns = "http://www.w3.org/2000/svg";
     const el = (name, attrs) => { const e = document.createElementNS(ns, name); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); return e; };
     const points = cards.slice(0, SHAPE.length).map((card, i) => ({ card, x: SHAPE[i][0], y: SHAPE[i][1] }));
+    const defs = el("defs", {});
+    defs.innerHTML = '<filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="3"/></filter><radialGradient id="band" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#b48cff" stop-opacity="0.22"/><stop offset="0.6" stop-color="#4b2a66" stop-opacity="0.12"/><stop offset="1" stop-color="#0b1029" stop-opacity="0"/></radialGradient>';
+    svg.append(defs);
+    svg.append(el("ellipse", { cx: 520, cy: 210, rx: 620, ry: 120, fill: "url(#band)", transform: "rotate(-14 520 210)" }));
+    for (const r of [140, 260, 380]) svg.append(el("circle", { class: "grid", cx: 500, cy: 640, r: r + 300 }));
+    for (const x of [200, 500, 800]) svg.append(el("line", { class: "grid", x1: x, y1: 0, x2: x + 60, y2: 420 }));
+    // The same dust every visit: a fixed seed.
+    let seed = 7;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    for (let i = 0; i < 160; i++) {
+      const dust = el("circle", { class: "dust" + (i % 5 === 0 ? " twinkle" : ""), cx: (rnd() * 1000).toFixed(1), cy: (rnd() * 420).toFixed(1), r: (rnd() * 1.1 + 0.3).toFixed(2), opacity: (rnd() * 0.5 + 0.15).toFixed(2) });
+      if (i % 5 === 0) dust.style.setProperty("--d", (rnd() * 3).toFixed(2) + "s");
+      svg.append(dust);
+    }
     if (points.length > 1) {
       for (let i = 1; i < points.length; i++) {
         const a = points[i - 1], b = points[i];
         const len = Math.hypot(b.x - a.x, b.y - a.y);
+        svg.append(el("line", { class: "glow", x1: a.x, y1: a.y, x2: b.x, y2: b.y }));
         svg.append(el("line", { class: "link", x1: a.x, y1: a.y, x2: b.x, y2: b.y, "stroke-dasharray": len, style: `--len: ${len}; animation: draw-in 900ms ${200 + i * 140}ms ease both` }));
       }
       for (const { card, x, y } of points) {
@@ -456,10 +527,21 @@
         const link = el("a", { href: card.getAttribute("href") });
         link.append(el("title", {}));
         link.lastChild.textContent = card.getAttribute("aria-label") ?? name;
-        link.append(el("circle", { class: "halo", cx: x, cy: y, r: 16, fill: c, style: `--d: ${(x % 7) * 0.4}s` }), el("circle", { cx: x, cy: y, r: 5, fill: "#fff" }), el("circle", { cx: x, cy: y, r: 3, fill: c }));
-        const label = el("text", x > 760 ? { x: x - 14, y: y - 12, "text-anchor": "end" } : { x: x + 14, y: y - 12 });
+        const spikes = `M${x - 13} ${y} L${x - 2} ${y - 1.2} L${x} ${y - 13} L${x + 2} ${y - 1.2} L${x + 13} ${y} L${x + 2} ${y + 1.2} L${x} ${y + 13} L${x - 2} ${y + 1.2} Z`;
+        link.append(
+          el("circle", { class: "halo", cx: x, cy: y, r: 18, fill: c, style: `--d: ${(x % 7) * 0.4}s` }),
+          el("circle", { class: "ring", cx: x, cy: y, r: 24, stroke: c }),
+          el("path", { d: spikes, fill: "#fff", opacity: 0.85 }),
+          el("circle", { cx: x, cy: y, r: 4.5, fill: "#fff" }),
+          el("circle", { cx: x, cy: y, r: 2.6, fill: c })
+        );
+        const right = x > 760;
+        const label = el("text", right ? { x: x - 30, y: y - 10, "text-anchor": "end" } : { x: x + 30, y: y - 10 });
         label.textContent = name;
-        link.append(label);
+        const blurb = el("text", { class: "blurb", x: right ? x - 30 : x + 30, y: y + 8, ...(right ? { "text-anchor": "end" } : {}) });
+        const about = card.querySelector("p")?.textContent ?? "";
+        blurb.textContent = about.length > 52 ? about.slice(0, 50).replace(/\s+\S*$/, "") + "…" : about;
+        link.append(label, blurb);
         svg.append(link);
       }
       figure.hidden = false;
