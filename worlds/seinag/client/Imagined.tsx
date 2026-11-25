@@ -491,32 +491,53 @@ const fruitRed = standard("#c7372f", 0.6, 0);
 const fruitPurple = standard("#5b2d6e", 0.5, 0);
 const fruitYellow = standard("#e7b928", 0.6, 0);
 const drumBlue = standard("#2f6db3", 0.5, 0.1);
-const tankWhite = standard("#e8ecee", 0.4, 0.05, { transparent: true, opacity: 0.92 });
+const tankWhite = standard("#eef0ec", 0.55, 0);
+const cageSteel = standard("#a3aaaf", 0.45, 0.6);
+const pipeGrey = standard("#8f979c", 0.5, 0.1);
+const trayBlack = standard("#2b2b2b", 0.9, 0);
+const bananaGreen = standard("#86a04a", 0.7, 0);
 const netMaterial = standard("#2b5e35", 0.9, 0, { transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false });
+
+const UP = new THREE.Vector3(0, 1, 0);
+/** A round piece (a rail, a pipe, a limb) from one local garden point to another. */
+function along(a: [number, number, number], b: [number, number, number], radius: number, segments = 6): CylinderSpec {
+  const dir = new THREE.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+  const height = dir.length();
+  const e = new THREE.Euler().setFromQuaternion(new THREE.Quaternion().setFromUnitVectors(UP, dir.normalize()));
+  return { radiusTop: radius, radiusBottom: radius, height, at: g3((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2), rotation: [e.x, e.y, e.z], segments };
+}
 
 function gardenParts() {
   const W = GARDEN.w;
   const D = GARDEN.d;
-  const fence: BoxSpec[] = [];
-  const fencePosts: CylinderSpec[] = [];
-  // A low bamboo fence, open at the gate on the west side.
+  const fence: CylinderSpec[] = [];
+  const stems: CylinderSpec[] = [];
+  // A low bamboo fence: round rails lashed to posts a metre apart, each post
+  // with a node near its top, open at the gate on the west side.
   const edge = (ax: number, az: number, bx: number, bz: number) => {
-    const length = Math.hypot(bx - ax, bz - az);
-    const angle = -Math.atan2(bz - az, bx - ax);
-    for (const y of [0.45, 0.85]) fence.push({ size: [length, 0.05, 0.05], at: g3((ax + bx) / 2, y, (az + bz) / 2), rotation: [0, angle, 0] });
-    const n = Math.round(length / 2);
-    for (let i = 0; i <= n; i++) fencePosts.push({ radiusTop: 0.04, radiusBottom: 0.04, height: 1.0, at: g3(ax + ((bx - ax) * i) / n, 0.5, az + ((bz - az) * i) / n), segments: 6 });
+    for (const y of [0.42, 0.82]) fence.push(along([ax, y, az], [bx, y, bz], 0.032));
+    const n = Math.max(1, Math.round(Math.hypot(bx - ax, bz - az)));
+    for (let i = 0; i <= n; i++) {
+      const x = ax + ((bx - ax) * i) / n;
+      const z = az + ((bz - az) * i) / n;
+      fence.push({ radiusTop: 0.038, radiusBottom: 0.045, height: 1.0, at: g3(x, 0.5, z), segments: 7 });
+      fence.push({ radiusTop: 0.05, radiusBottom: 0.05, height: 0.03, at: g3(x, 0.93, z), segments: 7 });
+    }
   };
   edge(-W / 2, -D / 2, W / 2, -D / 2);
   edge(W / 2, -D / 2, W / 2, D / 2);
   edge(W / 2, D / 2, -W / 2, D / 2);
   edge(-W / 2, D / 2, -W / 2, 1.8);
   edge(-W / 2, -1.8, -W / 2, -D / 2);
+  // The gate: a bamboo arch over the opening, two crossbars lashed on top.
+  for (const dz of [-1.8, 1.8]) fence.push({ radiusTop: 0.06, radiusBottom: 0.07, height: 2.5, at: g3(-W / 2, 1.25, dz), segments: 7 });
+  for (const y of [2.15, 2.42]) fence.push(along([-W / 2, y, -2.15], [-W / 2, y, 2.15], 0.045));
 
-  // Adopt-A-Plot's raised beds: a timber frame, soil, and a name stake.
+  // Adopt-A-Plot's raised beds: stacked boards, corner posts, a cap rail to
+  // sit on, soil, and a name stake.
   const frames: BoxSpec[] = [];
   const soils: BoxSpec[] = [];
-  const stakes: BoxSpec[] = [];
+  const soilCones: CylinderSpec[] = [];
   const leaves: BlobSpec[] = [];
   const reds: BlobSpec[] = [];
   const purples: BlobSpec[] = [];
@@ -524,38 +545,54 @@ function gardenParts() {
   const trellis: CylinderSpec[] = [];
   bedPositions().forEach(([bx, bz], i) => {
     const s = BED.size;
-    for (const [dx, dz, w, d] of [[0, -s / 2, s, 0.06], [0, s / 2, s, 0.06], [-s / 2, 0, 0.06, s], [s / 2, 0, 0.06, s]] as const) frames.push({ size: [w, BED.height, d], at: g3(bx + dx, BED.height / 2, bz + dz) });
-    soils.push({ size: [s - 0.08, 0.04, s - 0.08], at: g3(bx, BED.height - 0.04, bz) });
-    stakes.push({ size: [0.16, 0.22, 0.02], at: g3(bx - s / 2 + 0.15, BED.height + 0.1, bz - s / 2 - 0.05) });
-    // What each plot grows: leafy greens, eggplant, tomatoes on a trellis,
-    // or herbs and flowers, by turns.
+    const h = BED.height;
+    for (const [dx, dz, w, d] of [[0, -s / 2, s, 0.06], [0, s / 2, s, 0.06], [-s / 2, 0, 0.06, s], [s / 2, 0, 0.06, s]] as const) {
+      for (const y of [h * 0.25, h * 0.75]) frames.push({ size: [w, h / 2 - 0.012, d], at: g3(bx + dx, y, bz + dz) });
+      frames.push({ size: [w > d ? s + 0.12 : 0.13, 0.03, w > d ? 0.13 : s + 0.12], at: g3(bx + dx, h + 0.015, bz + dz) });
+    }
+    for (const cx of [-1, 1]) for (const cz of [-1, 1]) frames.push({ size: [0.09, h + 0.06, 0.09], at: g3(bx + (cx * s) / 2, (h + 0.06) / 2, bz + (cz * s) / 2) });
+    soils.push({ size: [s - 0.08, 0.04, s - 0.08], at: g3(bx, h - 0.04, bz) });
+    frames.push({ size: [0.16, 0.22, 0.02], at: g3(bx - s / 2 + 0.2, h + 0.14, bz - s / 2 - 0.08) });
+    frames.push({ size: [0.03, 0.4, 0.03], at: g3(bx - s / 2 + 0.2, h - 0.02, bz - s / 2 - 0.1) });
+    // What each plot grows, by turns: pechay, eggplant, staked tomatoes, or
+    // herbs with marigolds.
     const crop = i % 4;
+    const y = h - 0.02;
     for (let r = 0; r < 3; r++)
       for (let c = 0; c < 3; c++) {
         const x = bx - 0.6 + c * 0.6;
         const z = bz - 0.6 + r * 0.6;
-        const y = BED.height + 0.08;
-        if (crop === 0) leaves.push({ r: 0.2, at: g3(x, y, z), scale: [1.2, 0.6, 1.2] });
-        else if (crop === 1) {
-          leaves.push({ r: 0.22, at: g3(x, y + 0.15, z), scale: [1, 1.1, 1] });
-          purples.push({ r: 0.06, at: g3(x + 0.12, y + 0.08, z), scale: [0.8, 1.6, 0.8] });
+        const jitter = ((r * 3 + c + i) % 3) * 0.03;
+        if (crop === 0) {
+          for (const [ox, oz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) leaves.push({ r: 0.11, at: g3(x + ox * 0.1, y + 0.08, z + oz * 0.1), scale: [ox ? 1.5 : 0.75, 0.45, oz ? 1.5 : 0.75] });
+          leaves.push({ r: 0.07, at: g3(x, y + 0.14 + jitter, z), scale: [0.9, 1.6, 0.9] });
+        } else if (crop === 1) {
+          leaves.push({ r: 0.035, at: g3(x, y + 0.12, z), scale: [1, 3.4, 1] });
+          leaves.push({ r: 0.2, at: g3(x, y + 0.32 + jitter, z), scale: [1, 0.75, 1] });
+          leaves.push({ r: 0.13, at: g3(x + 0.1, y + 0.46 + jitter, z - 0.06) });
+          purples.push({ r: 0.05, at: g3(x + 0.14, y + 0.19, z + 0.06), scale: [0.8, 2.2, 0.8] });
+          if ((r + c) % 2 === 0) purples.push({ r: 0.045, at: g3(x - 0.13, y + 0.21, z - 0.08), scale: [0.8, 2, 0.8] });
         } else if (crop === 2) {
-          leaves.push({ r: 0.18, at: g3(x, y + 0.35, z), scale: [0.9, 1.6, 0.9] });
-          reds.push({ r: 0.05, at: g3(x + 0.1, y + 0.4, z + 0.05) });
+          trellis.push({ radiusTop: 0.012, radiusBottom: 0.016, height: 1.1, at: g3(x + 0.06, y + 0.55, z), segments: 4 });
+          for (let k = 0; k < 3; k++) leaves.push({ r: 0.13 - k * 0.02, at: g3(x + (k % 2 ? 0.05 : -0.03), y + 0.2 + k * 0.28 + jitter, z + (k % 2 ? -0.03 : 0.04)), scale: [1.1, 0.8, 1.1] });
+          reds.push({ r: 0.045, at: g3(x + 0.1, y + 0.32, z + 0.07) });
+          reds.push({ r: 0.04, at: g3(x - 0.09, y + 0.56, z + 0.07) });
+          leaves.push({ r: 0.035, at: g3(x + 0.11, y + 0.64, z - 0.06) });
         } else {
-          leaves.push({ r: 0.14, at: g3(x, y, z) });
-          if ((r + c) % 2 === 0) yellows.push({ r: 0.07, at: g3(x, y + 0.14, z) });
+          leaves.push({ r: 0.12 + jitter, at: g3(x, y + 0.08, z), scale: [1.2, 0.8, 1.2] });
+          if ((r + c) % 2 === 0) {
+            yellows.push({ r: 0.06, at: g3(x - 0.04, y + 0.26, z), scale: [1, 0.6, 1] });
+            yellows.push({ r: 0.05, at: g3(x + 0.07, y + 0.23, z + 0.05), scale: [1, 0.6, 1] });
+          } else reds.push({ r: 0.04, at: g3(x, y + 0.24, z), scale: [1, 0.6, 1] });
         }
       }
-    if (crop === 2) {
-      for (const dx of [-0.7, 0.7]) trellis.push({ radiusTop: 0.02, radiusBottom: 0.02, height: 1.3, at: g3(bx + dx, BED.height + 0.65, bz), segments: 5 });
-      trellis.push({ radiusTop: 0.02, radiusBottom: 0.02, height: 1.5, at: g3(bx, BED.height + 1.28, bz), rotation: [0, 0, Math.PI / 2], segments: 5 });
-    }
   });
 
-  // The herb spiral: stones climbing round in a coil, herbs on every turn.
+  // The herb spiral: a mound of soil, stones climbing round it in a coil,
+  // herbs on every turn and flowers here and there.
   const stones: BlobSpec[] = [];
   const [sx, sz] = GARDEN_SPOTS.spiral;
+  soilCones.push({ radiusTop: 0.22, radiusBottom: 1.05, height: 0.8, at: g3(sx, 0.4, sz), segments: 18 });
   for (let k = 0; k < 46; k++) {
     const t = k / 46;
     const angle = t * Math.PI * 4;
@@ -563,96 +600,217 @@ function gardenParts() {
     const x = sx + Math.cos(angle) * radius;
     const z = sz + Math.sin(angle) * radius;
     const h = t * 0.7;
-    for (let y = 0.08; y <= h + 0.08; y += 0.16) stones.push({ r: 0.1, at: g3(x, y, z), scale: [1.2, 0.8, 1] });
-    if (k % 3 === 0) leaves.push({ r: 0.13, at: g3(sx + Math.cos(angle) * (radius - 0.2), h + 0.22, sz + Math.sin(angle) * (radius - 0.2)) });
+    for (let y = 0.08; y <= h + 0.08; y += 0.16) stones.push({ r: 0.1 + (k % 3) * 0.012, at: g3(x, y, z), scale: [1.2, 0.8, 1] });
+    if (k % 3 === 0) leaves.push({ r: 0.13, at: g3(sx + Math.cos(angle) * (radius - 0.2), h + 0.22, sz + Math.sin(angle) * (radius - 0.2)), scale: [1, 0.8, 1] });
+    if (k % 7 === 3) (k % 2 ? purples : yellows).push({ r: 0.045, at: g3(sx + Math.cos(angle) * (radius - 0.2), h + 0.36, sz + Math.sin(angle) * (radius - 0.2)) });
   }
 
-  // Compost: three timber bays, filling, turning, ready.
+  // Compost: three bays of slatted timber, gaps to let the air in, filling,
+  // turning, ready: fresh greens on the first, dark and fine in the last.
   const [cx, cz] = GARDEN_SPOTS.compost;
   const compost: BlobSpec[] = [];
   for (let b = -1; b <= 1; b++) {
     const x = cx + b * 1.4;
-    frames.push({ size: [1.3, 0.9, 0.06], at: g3(x, 0.45, cz + 0.6) }); // back
-    frames.push({ size: [0.06, 0.9, 1.2], at: g3(x - 0.65, 0.45, cz) });
-    frames.push({ size: [0.06, 0.9, 1.2], at: g3(x + 0.65, 0.45, cz) });
-    frames.push({ size: [1.3, 0.35, 0.06], at: g3(x, 0.18, cz - 0.6) }); // low front board
-    compost.push({ r: 0.5, at: g3(x, 0.2 + (b + 1) * 0.08, cz), scale: [1.1, 0.5 + (1 - b) * 0.1, 0.9] });
+    for (let k = 0; k < 4; k++) {
+      const y = 0.1 + k * 0.23;
+      frames.push({ size: [1.3, 0.15, 0.04], at: g3(x, y, cz + 0.6) });
+      frames.push({ size: [0.04, 0.15, 1.2], at: g3(x - 0.65, y, cz) });
+      frames.push({ size: [0.04, 0.15, 1.2], at: g3(x + 0.65, y, cz) });
+    }
+    for (const y of [0.1, 0.3]) frames.push({ size: [1.3, 0.15, 0.04], at: g3(x, y, cz - 0.6) });
+    for (const px of [-0.65, 0.65]) for (const pz of [-0.6, 0.6]) frames.push({ size: [0.07, 0.98, 0.07], at: g3(x + px, 0.49, cz + pz) });
+    const top = 0.22 + (1 - b) * 0.07;
+    compost.push({ r: 0.5, at: g3(x, top, cz), scale: [1.1, 0.55, 0.9] });
+    for (let k = 0; k < 5; k++) {
+      const a = k * 1.3 + b;
+      compost.push({ r: 0.2, at: g3(x + Math.cos(a) * 0.35, top - 0.06, cz + Math.sin(a) * 0.28), scale: [1, 0.7, 1] });
+    }
+    if (b === -1) {
+      for (let k = 0; k < 7; k++) {
+        const a = k * 0.9;
+        (k % 3 ? leaves : yellows).push({ r: 0.07, at: g3(x + Math.cos(a) * 0.25, top + 0.24, cz + Math.sin(a) * 0.2), scale: [1.4, 0.4, 1] });
+      }
+    }
   }
 
-  // Rainwater: the learning hut's gutter feeds an IBC tank and two drums.
+  // Rainwater: the hut's east eave has a gutter; its downpipe turns and runs
+  // over to an IBC tank (white, in its steel cage, on a pallet), which
+  // overflows into two blue drums. Each has a tap at the bottom.
   const [wx, wz] = GARDEN_SPOTS.water;
-  const tanks: BoxSpec[] = [{ size: [1.1, 1.0, 1.0], at: g3(wx, 0.6, wz) }];
-  const drums: CylinderSpec[] = [
-    { radiusTop: 0.3, radiusBottom: 0.3, height: 0.9, at: g3(wx + 1.0, 0.45, wz + 0.1), segments: 14 },
-    { radiusTop: 0.3, radiusBottom: 0.3, height: 0.9, at: g3(wx - 1.0, 0.45, wz + 0.1), segments: 14 },
-  ];
-  const cage: BoxSpec[] = [{ size: [1.16, 0.08, 1.06], at: g3(wx, 0.06, wz) }];
-
-  // The learning hut (a kubo): bamboo posts, a raised floor, a nipa roof.
   const [hx, hz] = GARDEN_SPOTS.hut;
+  const tanks: BoxSpec[] = [{ size: [1.04, 0.92, 0.94], at: g3(wx, 0.62, wz) }];
+  const tankLids: CylinderSpec[] = [{ radiusTop: 0.15, radiusBottom: 0.15, height: 0.05, at: g3(wx, 1.1, wz), segments: 14 }];
+  frames.push({ size: [1.2, 0.04, 1.0], at: g3(wx, 0.14, wz) });
+  for (const dz of [-0.42, 0, 0.42]) frames.push({ size: [1.2, 0.12, 0.1], at: g3(wx, 0.06, wz + dz) });
+  const cage: BoxSpec[] = [];
+  for (const y of [0.17, 0.63, 1.09]) {
+    for (const dz of [-0.49, 0.49]) cage.push({ size: [1.1, 0.025, 0.025], at: g3(wx, y, wz + dz) });
+    for (const dx of [-0.54, 0.54]) cage.push({ size: [0.025, 0.025, 1.0], at: g3(wx + dx, y, wz) });
+  }
+  for (const dx of [-0.54, -0.18, 0.18, 0.54]) for (const dz of [-0.49, 0.49]) cage.push({ size: [0.025, 0.94, 0.025], at: g3(wx + dx, 0.63, wz + dz) });
+  for (const dx of [-0.54, 0.54]) for (const dz of [-0.165, 0.165]) cage.push({ size: [0.025, 0.94, 0.025], at: g3(wx + dx, 0.63, wz + dz) });
+  cage.push({ size: [0.08, 0.08, 0.1], at: g3(wx, 0.24, wz + 0.52) }, { size: [0.14, 0.02, 0.02], at: g3(wx, 0.3, wz + 0.54) });
+  const drums: CylinderSpec[] = [];
+  const pipes: CylinderSpec[] = [];
+  for (const dz of [-0.36, 0.36]) {
+    const at = (y: number) => g3(wx + 0.95, y, wz + dz);
+    drums.push({ radiusTop: 0.29, radiusBottom: 0.29, height: 0.88, at: at(0.44), segments: 16 });
+    for (const y of [0.3, 0.6]) drums.push({ radiusTop: 0.302, radiusBottom: 0.302, height: 0.035, at: at(y), segments: 16 });
+    drums.push({ radiusTop: 0.3, radiusBottom: 0.3, height: 0.03, at: at(0.885), segments: 16 });
+    cage.push({ size: [0.08, 0.06, 0.06], at: g3(wx + 1.27, 0.14, wz + dz) });
+    pipes.push(along([wx + 0.52, 0.98, wz + dz * 0.5], [wx + 0.95, 0.98, wz + dz], 0.025), { radiusTop: 0.03, radiusBottom: 0.03, height: 0.1, at: g3(wx + 0.95, 0.93, wz + dz), segments: 6 });
+  }
+  const gx = hx + 2.52;
+  pipes.push(
+    along([gx, 2.38, wz], [gx, 1.27, wz], 0.04),
+    along([gx, 1.27, wz], [wx, 1.27, wz], 0.04),
+    along([wx, 1.27, wz], [wx, 1.12, wz], 0.04),
+    { radiusTop: 0.05, radiusBottom: 0.05, height: 0.1, at: g3(gx, 1.27, wz), segments: 8 },
+    { radiusTop: 0.05, radiusBottom: 0.05, height: 0.1, at: g3(wx, 1.27, wz), segments: 8 }
+  );
+  const gutter: BoxSpec[] = [{ size: [0.12, 0.09, 4.7], at: g3(gx, 2.38, hz) }];
+
+  // The learning hut (a kubo): six bamboo posts, a raised slatted floor on
+  // joists, railings open at the front for the steps, a bench along the back
+  // and a low table, and a nipa roof: two layers, a fringe at the eave, the
+  // hips capped, a finial at the top.
   const hut: CylinderSpec[] = [];
-  for (const dx of [-1.8, 1.8]) for (const dz of [-1.3, 1.3]) hut.push({ radiusTop: 0.07, radiusBottom: 0.08, height: 2.5, at: g3(hx + dx, 1.25, hz + dz), segments: 7 });
-  const hutFloor: BoxSpec[] = [
-    { size: [3.8, 0.1, 2.8], at: g3(hx, 0.45, hz) },
-    { size: [3.2, 0.06, 0.4], at: g3(hx, 0.85, hz + 0.9) }, // bench
-    { size: [4.6, 0.08, 0.12], at: g3(hx, 2.42, hz + 1.5) }, // the gutter
+  for (const dx of [-1.8, 0, 1.8]) for (const dz of [-1.3, 1.3]) hut.push({ radiusTop: 0.07, radiusBottom: 0.085, height: 2.55, at: g3(hx + dx, 1.275, hz + dz), segments: 7 });
+  const rail = (ax: number, az: number, bx: number, bz: number) => {
+    for (const y of [0.82, 1.15]) hut.push(along([hx + ax, y, hz + az], [hx + bx, y, hz + bz], 0.03));
+  };
+  rail(-1.8, -1.3, 1.8, -1.3);
+  rail(-1.8, -1.3, -1.8, 1.3);
+  rail(1.8, -1.3, 1.8, 1.3);
+  rail(-1.8, 1.3, -0.6, 1.3);
+  rail(0.6, 1.3, 1.8, 1.3);
+  for (let k = 0; k < 9; k++) hut.push({ radiusTop: 0.018, radiusBottom: 0.018, height: 0.65, at: g3(hx - 1.6 + k * 0.4, 0.83, hz - 1.3), segments: 5 });
+  for (const dx of [-1.8, 1.8]) for (let k = 0; k < 6; k++) hut.push({ radiusTop: 0.018, radiusBottom: 0.018, height: 0.65, at: g3(hx + dx, 0.83, hz - 1.0 + k * 0.4), segments: 5 });
+  const hutWood: BoxSpec[] = [
+    { size: [3.8, 0.08, 2.8], at: g3(hx, 0.46, hz) },
+    { size: [3.2, 0.05, 0.4], at: g3(hx, 0.92, hz - 0.95) },
+    { size: [1.3, 0.05, 0.7], at: g3(hx, 1.22, hz + 0.15) },
+    { size: [1.1, 0.07, 0.3], at: g3(hx, 0.31, hz + 1.56) },
+    { size: [1.1, 0.07, 0.3], at: g3(hx, 0.15, hz + 1.86) },
   ];
-  const roof: CylinderSpec[] = [{ radiusTop: 0, radiusBottom: 3.4, height: 1.6, at: g3(hx, 3.25, hz), rotation: [0, Math.PI / 4, 0], segments: 4 }];
-  const downpipe: CylinderSpec[] = [{ radiusTop: 0.04, radiusBottom: 0.04, height: 1.4, at: g3(wx + 0.4, 1.7, hz + 1.5), segments: 6 }];
+  for (const dz of [-1.3, 0, 1.3]) hutWood.push({ size: [3.8, 0.1, 0.08], at: g3(hx, 0.37, hz + dz) });
+  for (const dz of [-1.3, 1.3]) hutWood.push({ size: [3.9, 0.12, 0.1], at: g3(hx, 2.5, hz + dz) });
+  for (const dx of [-1.8, 1.8]) hutWood.push({ size: [0.1, 0.12, 2.9], at: g3(hx + dx, 2.5, hz) });
+  for (const dx of [-1.4, 0, 1.4]) hutWood.push({ size: [0.05, 0.4, 0.3], at: g3(hx + dx, 0.7, hz - 0.95) });
+  for (const dx of [-0.58, 0.58]) for (const dz of [-0.28, 0.28]) hutWood.push({ size: [0.05, 0.7, 0.05], at: g3(hx + dx, 0.85, hz + 0.15 + dz) });
+  const roof: CylinderSpec[] = [
+    { radiusTop: 0, radiusBottom: 3.4, height: 1.6, at: g3(hx, 3.25, hz), rotation: [0, Math.PI / 4, 0], segments: 4 },
+    { radiusTop: 0, radiusBottom: 2.26, height: 1.12, at: g3(hx, 3.59, hz), rotation: [0, Math.PI / 4, 0], segments: 4 },
+  ];
+  const fringe: BoxSpec[] = [
+    { size: [4.9, 0.14, 0.1], at: g3(hx, 2.42, hz - 2.42) },
+    { size: [4.9, 0.14, 0.1], at: g3(hx, 2.42, hz + 2.42) },
+    { size: [0.1, 0.14, 4.9], at: g3(hx - 2.42, 2.42, hz) },
+    { size: [0.1, 0.14, 4.9], at: g3(hx + 2.42, 2.42, hz) },
+  ];
+  for (const ex of [-1, 1]) for (const ez of [-1, 1]) stems.push(along([hx, 4.12, hz], [hx + ex * 2.42, 2.45, hz + ez * 2.42], 0.05));
+  stems.push({ radiusTop: 0.03, radiusBottom: 0.07, height: 0.4, at: g3(hx, 4.3, hz), segments: 6 });
 
   // The food forest along the east side: a mango over bananas, papayas,
   // malunggay, calamansi bushes, and sweet potato on the ground.
   const forest: BlobSpec[] = [];
-  const stems: CylinderSpec[] = [];
+  const bananaStems: CylinderSpec[] = [];
+  const blades: BoxSpec[] = [];
+  // A long leaf from a crown, as two flat blades: the first rising, the
+  // second drooping from its tip (banana, papaya).
+  const blade = (x: number, y: number, z: number, a: number, length: number, width: number, rise: number, droop: number) => {
+    const ux = Math.cos(a);
+    const uz = -Math.sin(a);
+    const l1 = length * 0.55;
+    const l2 = length * 0.45;
+    const h1 = (l1 / 2) * Math.cos(rise);
+    blades.push({ size: [l1, 0.02, width], at: g3(x + ux * h1, y + (l1 / 2) * Math.sin(rise), z + uz * h1), rotation: [0, a, rise] });
+    const ex = x + ux * l1 * Math.cos(rise);
+    const ey = y + l1 * Math.sin(rise);
+    const ez = z + uz * l1 * Math.cos(rise);
+    const h2 = (l2 / 2) * Math.cos(droop);
+    blades.push({ size: [l2, 0.02, width * 0.8], at: g3(ex + ux * h2, ey - (l2 / 2) * Math.sin(droop), ez + uz * h2), rotation: [0, a, -droop] });
+  };
   const [fx, fz] = GARDEN_SPOTS.forest;
-  for (const [dx, dz] of [[-1.5, -7], [1.6, -3.5], [-1.2, 2], [1.4, 6]]) {
-    // Bananas: a clump of stems and long, drooping leaves.
-    for (let k = 0; k < 3; k++) stems.push({ radiusTop: 0.09, radiusBottom: 0.13, height: 2.2, at: g3(fx + dx + k * 0.25, 1.1, fz + dz + (k % 2) * 0.25), segments: 7 });
-    for (let k = 0; k < 6; k++) {
-      const a = (k / 6) * Math.PI * 2;
-      forest.push({ r: 0.5, at: g3(fx + dx + Math.cos(a) * 0.75, 2.35 - (k % 2) * 0.15, fz + dz + Math.sin(a) * 0.75), scale: [1.6, 0.18, 0.6] });
-    }
+  const [mx, mz] = [fx + 0.2, fz - 0.8];
+  stems.push({ radiusTop: 0.17, radiusBottom: 0.27, height: 2.4, at: g3(mx, 1.2, mz), segments: 9 });
+  for (const [ax, az] of [[0.9, 0.3], [-0.7, 0.6], [0.1, -0.9]]) stems.push(along([mx, 2.2, mz], [mx + ax, 3.2, mz + az], 0.08));
+  forest.push({ r: 1.1, at: g3(mx, 3.85, mz), scale: [1.2, 0.8, 1.2] });
+  for (let k = 0; k < 6; k++) {
+    const a = (k / 6) * Math.PI * 2;
+    forest.push({ r: 0.8, at: g3(mx + Math.cos(a) * 1.15, 3.4 + (k % 2) * 0.3, mz + Math.sin(a) * 1.15) });
+    yellows.push({ r: 0.07, at: g3(mx + Math.cos(a + 0.4) * 1.45, 2.85, mz + Math.sin(a + 0.4) * 1.45), scale: [0.8, 1.3, 0.8] });
   }
+  [[-1.5, -7], [1.6, -3.5], [-1.2, 2], [1.4, 6]].forEach(([dx, dz], n) => {
+    // Bananas: a clump of stems, long leaves rising then drooping, and on one
+    // stem a hanging bunch with its purple heart below.
+    for (let k = 0; k < 3; k++) bananaStems.push({ radiusTop: 0.08, radiusBottom: 0.12, height: 2.2 - k * 0.25, at: g3(fx + dx + k * 0.25, 1.1 - k * 0.125, fz + dz + (k % 2) * 0.25), segments: 8 });
+    for (let k = 0; k < 7; k++) blade(fx + dx + 0.12, 2.1 - (k % 3) * 0.12, fz + dz + 0.12, (k / 7) * Math.PI * 2 + n, 1.9, 0.36, 0.6, 0.55 + (k % 2) * 0.2);
+    for (let k = 0; k < 6; k++) leaves.push({ r: 0.07, at: g3(fx + dx + 0.25 + Math.cos(k) * 0.12, 1.78 + (k % 3) * 0.1, fz + dz + 0.25 + Math.sin(k) * 0.12), scale: [0.7, 1.6, 0.7] });
+    purples.push({ r: 0.09, at: g3(fx + dx + 0.25, 1.5, fz + dz + 0.25), scale: [0.8, 1.5, 0.8] });
+  });
   for (const [dx, dz] of [[0.2, -10], [-0.4, 9]]) {
-    // Papaya: a bare stem, a crown of leaves, fruit under it.
+    // Papaya: a bare stem, a crown of hand-shaped leaves, fruit under it.
     stems.push({ radiusTop: 0.06, radiusBottom: 0.1, height: 2.6, at: g3(fx + dx, 1.3, fz + dz), segments: 6 });
-    forest.push({ r: 0.6, at: g3(fx + dx, 2.75, fz + dz), scale: [1.4, 0.3, 1.4] });
-    for (let k = 0; k < 4; k++) yellows.push({ r: 0.09, at: g3(fx + dx + Math.cos(k * 1.6) * 0.14, 2.45, fz + dz + Math.sin(k * 1.6) * 0.14), scale: [1, 1.4, 1] });
+    forest.push({ r: 0.18, at: g3(fx + dx, 2.68, fz + dz), scale: [1, 0.8, 1] });
+    for (let k = 0; k < 8; k++) blade(fx + dx, 2.62, fz + dz, (k / 8) * Math.PI * 2, 0.95, 0.5, 0.3, 0.35);
+    for (let k = 0; k < 5; k++) (k % 2 ? leaves : yellows).push({ r: 0.09, at: g3(fx + dx + Math.cos(k * 1.3) * 0.14, 2.4 - (k % 2) * 0.12, fz + dz + Math.sin(k * 1.3) * 0.14), scale: [1, 1.4, 1] });
   }
   for (const [dx, dz] of [[2.4, -8.5], [2.6, 1]]) {
     // Malunggay: slim, with a light, feathery crown.
     stems.push({ radiusTop: 0.05, radiusBottom: 0.08, height: 3, at: g3(fx + dx, 1.5, fz + dz), segments: 6 });
-    for (let k = 0; k < 5; k++) forest.push({ r: 0.35, at: g3(fx + dx + Math.cos(k) * 0.45, 3.0 + (k % 2) * 0.3, fz + dz + Math.sin(k) * 0.45), scale: [1, 0.5, 1] });
+    for (let k = 0; k < 11; k++) leaves.push({ r: 0.22, at: g3(fx + dx + Math.cos(k * 2.4) * (0.2 + (k % 3) * 0.18), 2.75 + (k % 4) * 0.15, fz + dz + Math.sin(k * 2.4) * (0.2 + (k % 3) * 0.18)), scale: [1.1, 0.7, 1.1] });
   }
   for (const [dx, dz] of [[-2.4, -1.5], [-2.2, 4.5], [0.4, 12]]) {
     // Calamansi bushes, with fruit.
     forest.push({ r: 0.55, at: g3(fx + dx, 0.55, fz + dz), scale: [1, 0.9, 1] });
-    for (let k = 0; k < 4; k++) yellows.push({ r: 0.05, at: g3(fx + dx + Math.cos(k * 1.7) * 0.5, 0.6 + (k % 2) * 0.2, fz + dz + Math.sin(k * 1.7) * 0.5) });
+    forest.push({ r: 0.35, at: g3(fx + dx + 0.3, 0.8, fz + dz - 0.2) });
+    for (let k = 0; k < 7; k++) yellows.push({ r: 0.045, at: g3(fx + dx + Math.cos(k * 1.7) * 0.5, 0.45 + (k % 3) * 0.17, fz + dz + Math.sin(k * 1.7) * 0.5) });
   }
-  for (let k = 0; k < 14; k++) forest.push({ r: 0.32, at: g3(fx - 3 + (k % 7) * 1.0, 0.1, fz - 12 + Math.floor(k / 7) * 22 + (k % 3)), scale: [1.4, 0.35, 1.2] });
+  // Sweet potato: low patches of leaves, close together, covering the soil.
+  for (const [px, pz] of [[-1.8, -9.6], [-1.2, 9.5]]) for (let k = 0; k < 15; k++) leaves.push({ r: 0.2, at: g3(fx + px + (k % 5) * 0.32 + ((k * 7) % 3) * 0.05, 0.08 + (k % 2) * 0.03, fz + pz + Math.floor(k / 5) * 0.34), scale: [1.3, 0.35, 1.1] });
 
-  // The nursery: seedlings on benches under a shade net.
+  // The nursery: seedling trays on benches under a shade net on a bamboo
+  // frame, and saplings potted up beside it, waiting for a place.
   const [nx, nz] = GARDEN_SPOTS.nursery;
-  const nurseryFrame: CylinderSpec[] = [];
-  for (const dx of [-2, 2]) for (const dz of [-1.2, 1.2]) nurseryFrame.push({ radiusTop: 0.04, radiusBottom: 0.04, height: 2.1, at: g3(nx + dx, 1.05, nz + dz), segments: 6 });
-  const benches: BoxSpec[] = [
-    { size: [3.4, 0.06, 0.7], at: g3(nx, 0.75, nz - 0.6) },
-    { size: [3.4, 0.06, 0.7], at: g3(nx, 0.75, nz + 0.6) },
-  ];
-  for (let k = 0; k < 16; k++) leaves.push({ r: 0.07, at: g3(nx - 1.5 + (k % 8) * 0.43, 0.84, nz - 0.6 + Math.floor(k / 8) * 1.2), scale: [1.2, 0.7, 1.2] });
+  for (const dx of [-2, 0, 2]) for (const dz of [-1.2, 1.2]) fence.push({ radiusTop: 0.04, radiusBottom: 0.045, height: 2.1, at: g3(nx + dx, 1.05, nz + dz), segments: 6 });
+  for (const dz of [-1.2, 1.2]) fence.push(along([nx - 2.1, 2.08, nz + dz], [nx + 2.1, 2.08, nz + dz], 0.035));
+  for (const dx of [-2, 0, 2]) fence.push(along([nx + dx, 2.08, nz - 1.3], [nx + dx, 2.08, nz + 1.3], 0.035));
+  const trays: BoxSpec[] = [];
+  const pots: CylinderSpec[] = [];
+  for (const dz of [-0.6, 0.6]) {
+    frames.push({ size: [3.4, 0.05, 0.7], at: g3(nx, 0.75, nz + dz) });
+    for (const lx of [-1.6, 0, 1.6]) for (const lz of [-0.3, 0.3]) frames.push({ size: [0.05, 0.73, 0.05], at: g3(nx + lx, 0.365, nz + dz + lz) });
+    for (let t = 0; t < 5; t++) {
+      const tx = nx - 1.36 + t * 0.68;
+      trays.push({ size: [0.6, 0.06, 0.4], at: g3(tx, 0.805, nz + dz) });
+      for (let k = 0; k < 8; k++) leaves.push({ r: 0.035 + (t % 3) * 0.008, at: g3(tx - 0.21 + (k % 4) * 0.14, 0.86 + (t % 3) * 0.01, nz + dz - 0.09 + Math.floor(k / 4) * 0.18), scale: [1.3, 0.8, 1.3] });
+    }
+  }
+  for (let k = 0; k < 7; k++) {
+    const px = nx - 1.8 + k * 0.6;
+    pots.push({ radiusTop: 0.11, radiusBottom: 0.08, height: 0.2, at: g3(px, 0.1, nz + 1.75), segments: 8 });
+    stems.push({ radiusTop: 0.012, radiusBottom: 0.016, height: 0.4, at: g3(px, 0.4, nz + 1.75), segments: 4 });
+    leaves.push({ r: 0.12, at: g3(px, 0.62 + (k % 2) * 0.05, nz + 1.75), scale: [1, 1.2, 1] });
+  }
 
   // A strip of flowers for the bees along the south fence.
   for (let k = 0; k < 22; k++) (k % 2 ? yellows : reds).push({ r: 0.1, at: g3(-12 + k * 1.1, 0.25, D / 2 - 0.7), scale: [1, 0.8, 1] });
   for (let k = 0; k < 22; k++) leaves.push({ r: 0.16, at: g3(-12 + k * 1.1, 0.12, D / 2 - 0.7), scale: [1.2, 0.5, 1] });
 
   return {
-    bamboo: mergedGeometry(fence, [...fencePosts, ...trellis, ...hut, ...nurseryFrame]),
-    timber: mergedGeometry([...frames, ...stakes, ...hutFloor, ...benches]),
-    soil: mergedGeometry(soils),
-    thatch: mergedGeometry([], roof),
-    tank: mergedGeometry(tanks),
-    drums: mergedGeometry(cage, [...drums, ...downpipe]),
+    bamboo: mergedGeometry([], [...fence, ...trellis, ...hut]),
+    timber: mergedGeometry([...frames, ...hutWood]),
+    soil: mergedGeometry(soils, soilCones),
+    thatch: mergedGeometry(fringe, roof),
+    tank: mergedGeometry(tanks, tankLids),
+    steel: mergedGeometry(cage),
+    drums: mergedGeometry([], drums),
+    pipes: mergedGeometry(gutter, pipes),
+    trays: mergedGeometry(trays, pots),
     stems: mergedGeometry([], stems),
+    bananaStems: mergedGeometry([], bananaStems),
+    blades: mergedGeometry(blades),
     leaves: blobGeometry(leaves, 0),
     forest: blobGeometry(forest, 0),
     stones: blobGeometry(stones, 0),
@@ -675,11 +833,16 @@ function Garden() {
       </mesh>
       <mesh geometry={parts.bamboo} material={bamboo} castShadow />
       <mesh geometry={parts.timber} material={timber} castShadow receiveShadow />
-      <mesh geometry={parts.soil} material={soil} />
+      <mesh geometry={parts.soil} material={soil} receiveShadow />
       <mesh geometry={parts.thatch} material={thatch} castShadow />
-      <mesh geometry={parts.tank} material={tankWhite} />
-      <mesh geometry={parts.drums} material={drumBlue} />
-      <mesh geometry={parts.stems} material={bark} />
+      <mesh geometry={parts.tank} material={tankWhite} castShadow />
+      <mesh geometry={parts.steel} material={cageSteel} />
+      <mesh geometry={parts.drums} material={drumBlue} castShadow />
+      <mesh geometry={parts.pipes} material={pipeGrey} />
+      <mesh geometry={parts.trays} material={trayBlack} />
+      <mesh geometry={parts.stems} material={bark} castShadow />
+      <mesh geometry={parts.bananaStems} material={bananaGreen} castShadow />
+      <mesh geometry={parts.blades} material={leafGreen} castShadow />
       <mesh geometry={parts.leaves} material={leafGreen} />
       <mesh geometry={parts.forest} material={darkLeaf} castShadow />
       <mesh geometry={parts.stones} material={stone} />
