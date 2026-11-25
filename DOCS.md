@@ -1192,12 +1192,20 @@ adds its own coloured button to the bar while it is on.
   follows you along the way you walked (round corners, not through walls),
   about a metre behind, trotting to catch up and appearing beside you after
   a warp. It sits when you sit or stand still a while (a capybara lies
-  down), swims at the beach, turns its head to you, and a dog wags. Pat it
-  with the Pat button, or in VR by putting a hand on any pet's head: it
-  hops and barks, meows, or chirps, for the room to hear. Each pet is one
-  skinned mesh built in code with a seven-bone skeleton (body, head, four
-  legs, tail): one draw call, nothing downloaded. The room hears only which
-  pet you have, and pats; everyone works out the following themselves.
+  down), swims at the beach, turns its head to you, and a dog wags. Near
+  any pet, a Pat prompt shows (P on a keyboard), as the together gestures
+  do; in VR a hand on its head does it. Whoever pats it crouches and
+  reaches down to stroke its head, the room sees that, and the pet hops
+  and barks, meows, or chirps. Its owner picks its coat, its size (70 to
+  140%), and a name (a rude one shows as the kind instead), or uploads a
+  model of its own (.glb or .vrm, through the same checked upload as
+  avatars, and only ever loaded from this deployment): it plays that
+  model's own walk and idle clips if it has them, and trots and bobs if
+  it doesn't. A built pet is one skinned mesh made in code on a seven-bone
+  skeleton (body, head, four legs, tail), every pet of a kind sharing its
+  shape, each tinted its coat: one draw call, nothing downloaded. The room
+  hears only how your pet looks, and pats; everyone works out the
+  following themselves.
 - **Band** (violet): pick a drum pad, a drum kit, a taiko, keys, a
   kulintang, an acoustic guitar, a lead guitar, a bass, a violin, a shaker,
   or a light stick. The violin rests on your left shoulder with a bow in

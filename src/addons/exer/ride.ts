@@ -179,14 +179,22 @@ export function startEngine(): Engine | null {
   };
 }
 
-/** A Japanese bicycle bell's two bright rings (a horn is startHorn's). */
+/** A Japanese mamachari's dome bell, chirin chirin: two quick strikes, high
+ *  and bright, ringing out for a second and a half. A second tone a few
+ *  hertz off the first beats against it, the shimmer a real dome has, over
+ *  a higher partial and the click of the striker. (A horn is startHorn's.) */
 export function playBell(distance?: number) {
-  const v = voice(0.8, distance, 40, 2);
+  const v = voice(0.8, distance, 40, 3);
   if (!v) return;
-  for (const delay of [0, 0.14]) {
-    toneHit(v, { frequency: 3150, duration: 0.6, gain: 0.2, delay });
-    toneHit(v, { frequency: 4720, duration: 0.4, gain: 0.09, delay });
-    noiseHit(v, { frequency: 6000, duration: 0.02, gain: 0.05, delay, q: 2 });
+  for (const [delay, gain] of [
+    [0, 1],
+    [0.13, 0.8],
+  ]) {
+    toneHit(v, { frequency: 3620, duration: 1.6, gain: 0.15 * gain, delay });
+    toneHit(v, { frequency: 3631, duration: 1.4, gain: 0.1 * gain, delay });
+    toneHit(v, { frequency: 5390, duration: 0.8, gain: 0.05 * gain, delay });
+    toneHit(v, { frequency: 8650, duration: 0.25, gain: 0.025 * gain, delay });
+    noiseHit(v, { frequency: 7000, duration: 0.015, gain: 0.05 * gain, delay, q: 2 });
   }
 }
 

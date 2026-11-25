@@ -18,7 +18,7 @@ import { ExerButton, ExerStatus } from "./exer/ExerHud";
 import { ride, ridingNow, ringBell, setVehicle } from "./exer/ride";
 import { VEHICLE_LABELS, VEHICLE_SPECS, VEHICLES } from "./exer/vehicles";
 import { PetLayer } from "./pet/PetLayer";
-import { PetButton } from "./pet/PetHud";
+import { PetButton, PetPrompt } from "./pet/PetHud";
 import { PET_LABELS, PETS, pet, setPet } from "./pet/pets";
 
 export { ridingNow };
@@ -116,6 +116,7 @@ export function AddonOverlay({ worldState, touch }: { worldState: WorldState; to
       {on(worldState, "fantasy") && <FantasyStatus touch={touch} />}
       {on(worldState, "band") && <BandStage />}
       {on(worldState, "exer") && <ExerStatus touch={touch} />}
+      {on(worldState, "pet") && <PetPrompt />}
     </>
   );
 }

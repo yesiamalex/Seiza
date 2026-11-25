@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { createStore } from "../store";
 import { oneOf, sendAddonEvent, type AddonEvent } from "../bus";
+import { hasProfanity } from "../../moderation/profanity";
 import { noiseHit, toneHit, voice } from "../sound";
 
 /**
@@ -62,7 +63,10 @@ export interface BuiltPet {
   bodyY: number;
 }
 
-const materials = new Map<Pet, THREE.MeshStandardMaterial>();
+/** The shared shape is painted in greys (belly white, coat this); each pet's
+ *  own material tints it its coat, so every pet of a kind still shares one
+ *  geometry and one shader. */
+const COAT_GREY = 0.72;
 const geometries = new Map<Pet, { geometry: THREE.BufferGeometry; joints: THREE.Vector3[] }>();
 
 /** A unit box, its corners worn halfway to a ball: a capybara's blunt head. */
@@ -100,9 +104,13 @@ function part(g: THREE.BufferGeometry, bone: number, color: (y: number) => THREE
 
 function build(kind: Pet) {
   const s = SHAPES[kind];
-  const coat = new THREE.Color(s.coat);
-  const belly = new THREE.Color(s.belly);
-  const dark = new THREE.Color(s.dark);
+  const coat = new THREE.Color(COAT_GREY, COAT_GREY, COAT_GREY);
+  const belly = new THREE.Color(1, 1, 1);
+  // The nose, eyes, and paws: a dark grey, so any coat's tint keeps them dark
+  // and only warms them toward its colour.
+  const lum = (c: THREE.Color) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+  const shade = Math.min(0.6, (lum(new THREE.Color(s.dark)) * COAT_GREY) / Math.max(lum(new THREE.Color(s.coat)), 1e-3));
+  const dark = new THREE.Color(shade, shade, shade);
   const earColor = coat.clone().lerp(dark, 0.45);
   const bodyY = s.legs + s.height / 2;
   const front = -s.length / 2;
@@ -157,12 +165,14 @@ function build(kind: Pet) {
   return { geometry, joints };
 }
 
-/** A new pet, its own skeleton over the kind's shared shape and paint. */
-export function buildPet(kind: Pet): BuiltPet {
+/** A coat colour as a pet's tint over the grey shape. */
+export const coatTint = (coat: string) => new THREE.Color(coat).multiplyScalar(1 / COAT_GREY);
+
+/** A new pet, its own skeleton over the kind's shared shape, in its coat. */
+export function buildPet(kind: Pet, coat = SHAPES[kind].coat): BuiltPet {
   let made = geometries.get(kind);
   if (!made) geometries.set(kind, (made = build(kind)));
-  let material = materials.get(kind);
-  if (!material) materials.set(kind, (material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 })));
+  const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, color: coatTint(coat) });
   const bones = made.joints.map(() => new THREE.Bone());
   const [bodyAt] = made.joints;
   bones[BODY].position.copy(bodyAt);
@@ -183,9 +193,7 @@ export function buildPet(kind: Pet): BuiltPet {
 
 export function disposePets() {
   for (const g of geometries.values()) g.geometry.dispose();
-  for (const m of materials.values()) m.dispose();
   geometries.clear();
-  materials.clear();
 }
 
 /** A happy sound, by kind: a bark, a meow, a capybara's chirps. */
@@ -205,35 +213,103 @@ export function petSound(kind: Pet, distance?: number) {
 
 // --- this visitor's pet, and everyone else's ------------------------------------------
 
-export const pet = createStore<{ kind: Pet | null }>({ kind: null });
-export const remotePets = new Map<string, Pet>();
+/** How a pet looks: its kind, coat, size, name, and, if its owner gave it
+ *  one, its own model (uploaded here, as avatars are). */
+export interface PetLook {
+  kind: Pet;
+  coat: string;
+  /** 0.7 to 1.4 of the kind's size. */
+  size: number;
+  name: string;
+  /** This deployment's own upload (/api/avatars/…), never anywhere else. */
+  model: string | null;
+}
+export const PET_SIZE = { min: 0.7, max: 1.4 };
+export const COATS: Record<Pet, string[]> = {
+  dog: ["#b9824e", "#3b2a20", "#e8d8bf", "#8a5a33", "#d9a35b", "#6f6a66"],
+  cat: ["#d4873e", "#2b2724", "#f2ece2", "#8b8580", "#c9a77a", "#5b4a3f"],
+  capybara: ["#93704c", "#7a5a3b", "#a8875f", "#6b5340"],
+};
+const MODEL_URL = /^\/api\/avatars\/[0-9a-f-]{36}\.vrm$/;
+const HEX = /^#[0-9a-f]{6}$/i;
+
+export const defaultLook = (kind: Pet): PetLook => ({ kind, coat: SHAPES[kind].coat, size: 1, name: "", model: null });
+/** A pet's name as shown: what its owner called it, unless rude, else its kind. */
+export const petName = (look: PetLook, label: string) => (look.name && !hasProfanity(look.name) ? look.name : label);
+
+export const pet = createStore<{ kind: Pet | null; look: PetLook | null }>({ kind: null, look: null });
+export const remotePets = new Map<string, PetLook>();
 
 export function announcePet() {
-  sendAddonEvent("pet", { k: "pe", v: pet.get().kind ?? "" });
+  const { look } = pet.get();
+  sendAddonEvent("pet", look ? { k: "pe", v: look.kind, c: look.coat, s: look.size, n: look.name, u: look.model ?? "" } : { k: "pe", v: "" });
 }
 
 export function setPet(kind: Pet | null) {
   if (pet.get().kind === kind) return;
-  pet.set({ kind });
+  pet.set({ kind, look: kind ? { ...defaultLook(kind), ...remembered(kind) } : null });
   announcePet();
 }
 
-/** Pats are heard locally (patted) and by the room: whose pet, by owner id
- *  ("" for your own, from where it's sent). */
-export const patted = createStore<{ owner: string; at: number }>({ owner: "", at: 0 });
-export function patPet(owner: string, local = true) {
-  patted.set({ owner, at: performance.now() });
-  if (local) sendAddonEvent("pet", { k: "pat", v: owner });
+/** Changes how your pet looks, for you and the room, and remembers it. */
+export function setPetLook(change: Partial<Omit<PetLook, "kind">>) {
+  const { kind, look } = pet.get();
+  if (!kind || !look) return;
+  const next = { ...look, ...change };
+  pet.set({ kind, look: next });
+  try {
+    localStorage.setItem(`seiza.pet.${kind}`, JSON.stringify(next));
+  } catch {
+    // Private mode: it's only for now.
+  }
+  announcePet();
 }
 
-export type PetEvent = { k: "hi" } | { k: "pe"; kind: Pet | null } | { k: "pat"; owner: string };
+function remembered(kind: Pet): Partial<PetLook> {
+  try {
+    const saved = readLook({ ...JSON.parse(localStorage.getItem(`seiza.pet.${kind}`) ?? "{}"), v: kind });
+    return saved ?? {};
+  } catch {
+    return {};
+  }
+}
+
+/** A look from the room (or storage), every field checked. */
+function readLook(data: Record<string, unknown>): PetLook | null {
+  const kind = oneOf(data.v ?? data.kind, PETS);
+  if (!kind) return null;
+  const size = typeof (data.s ?? data.size) === "number" ? Number(data.s ?? data.size) : 1;
+  const name = typeof (data.n ?? data.name) === "string" ? String(data.n ?? data.name).replace(/[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]/g, "").slice(0, 16) : "";
+  const coat = String(data.c ?? data.coat ?? "");
+  const model = String(data.u ?? data.model ?? "");
+  return {
+    kind,
+    coat: HEX.test(coat) ? coat : SHAPES[kind].coat,
+    size: Number.isFinite(size) ? Math.min(PET_SIZE.max, Math.max(PET_SIZE.min, size)) : 1,
+    name,
+    model: MODEL_URL.test(model) ? model : null,
+  };
+}
+
+/** Pats are heard locally (patted) and by the room: whose pet (its owner's
+ *  id), and who patted it (theirs; "" for this visitor). */
+export const patted = createStore<{ owner: string; by: string; at: number }>({ owner: "", by: "", at: 0 });
+export function patPet(owner: string, by = "") {
+  patted.set({ owner, by, at: performance.now() });
+  if (by === "") sendAddonEvent("pet", { k: "pat", v: owner });
+}
+
+/** The pet nearest you, close enough to pat (PetLayer keeps it current). */
+export const nearPet = createStore<{ owner: string | null; name: string }>({ owner: null, name: "" });
+
+export type PetEvent = { k: "hi" } | { k: "pe"; look: PetLook | null } | { k: "pat"; owner: string };
 
 export function parsePetEvent(data: AddonEvent): PetEvent | null {
   if (data.k === "hi") return { k: "hi" };
   if (data.k === "pe") {
-    if (data.v === "") return { k: "pe", kind: null };
-    const kind = oneOf(data.v, PETS);
-    return kind ? { k: "pe", kind } : null;
+    if (data.v === "") return { k: "pe", look: null };
+    const look = readLook(data);
+    return look ? { k: "pe", look } : null;
   }
   if (data.k === "pat" && typeof data.v === "string" && data.v.length <= 64) return { k: "pat", owner: data.v };
   return null;

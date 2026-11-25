@@ -1,5 +1,5 @@
 import { sfxOutput } from "../../audio/sfx";
-import { noiseHit, toneHit, voice, type Voice } from "../sound";
+import { noiseBuffer, noiseHit, toneHit, voice, type Voice } from "../sound";
 
 export const INSTRUMENTS = ["drums", "kit", "taiko", "keys", "kulintang", "guitar", "electric", "bass", "violin", "shaker", "lightstick"] as const;
 export type Instrument = (typeof INSTRUMENTS)[number];
@@ -368,44 +368,92 @@ export function holdKey(midi: number, distance?: number): () => void {
   return release;
 }
 
+/** A bowed string's tone: every harmonic, falling off a little faster than
+ *  a sawtooth's, unevenly (as a real string's do), so it isn't a synth's. */
+let violinTone: { ctx: AudioContext; wave: PeriodicWave } | null = null;
+function bowedWave(ctx: AudioContext): PeriodicWave {
+  if (violinTone?.ctx === ctx) return violinTone.wave;
+  const n = 48;
+  const real = new Float32Array(n);
+  const imag = new Float32Array(n);
+  for (let k = 1; k < n; k++) imag[k] = (1 / Math.pow(k, 1.12)) * (0.82 + 0.18 * Math.sin(k * 2.3));
+  const wave = ctx.createPeriodicWave(real, imag);
+  violinTone = { ctx, wave };
+  return wave;
+}
+
 /**
- * A bowed violin note that sounds while the bow keeps moving (held):
- * two sawtooth voices a few cents apart, through a violin body's
- * resonances (the air, the wood, the bridge's bright one), a little bow
- * scratch as it starts, and vibrato that comes in once the note settles.
- * Returns the release.
+ * A bowed violin note that sounds while the bow keeps moving (held). One
+ * string, not a chorus: a bowed tone through a violin body's resonances
+ * (its air at 280 Hz, the wood's around 450 and 1,100, the bridge's bright
+ * hill near 3 kHz, little above 6), the rosin's hiss under it all along, a
+ * bow pressure that wavers, and vibrato that comes in once the note settles
+ * and never quite repeats, as a hand's doesn't. A little of the room's
+ * reverb, as in a real one. Returns the release.
  */
 export function holdViolin(midi: number, distance?: number): () => void {
-  const v = voice(0.75, distance, FALLOFF, KEY_HOLD_SECONDS + 1);
+  const v = voice(0.8, distance, FALLOFF, KEY_HOLD_SECONDS + 2, 0.3);
   if (!v) return () => {};
   const { ctx, t } = v;
   const f = hz(midi);
   const env = ctx.createGain();
   env.gain.setValueAtTime(0.0001, t);
-  env.gain.exponentialRampToValueAtTime(0.5, t + 0.09);
-  env.gain.setTargetAtTime(0.38, t + 0.1, 0.4);
-  const body = chain(filter(ctx, "peaking", 290, 1.2, 6), filter(ctx, "peaking", 1000, 1.1, 3), filter(ctx, "peaking", 2800, 1.4, 4), filter(ctx, "lowpass", 5200, 0.7), env, v.out);
-  const lfo = ctx.createOscillator();
-  lfo.frequency.value = 5.6;
+  env.gain.exponentialRampToValueAtTime(0.42, t + 0.12);
+  env.gain.setTargetAtTime(0.34, t + 0.14, 0.5);
+  const body = chain(
+    filter(ctx, "highpass", 180, 0.7),
+    filter(ctx, "peaking", 280, 1.4, 6),
+    filter(ctx, "peaking", 460, 2, 4),
+    filter(ctx, "peaking", 1100, 1.2, 2),
+    filter(ctx, "peaking", 1600, 2, -3),
+    filter(ctx, "peaking", 2900, 1.1, 5),
+    filter(ctx, "lowpass", 6200, 0.6),
+    env,
+    v.out
+  );
+  // The bow's pressure, never quite even.
+  const bow = ctx.createGain();
+  bow.gain.value = 1;
+  const pressure = ctx.createOscillator();
+  pressure.frequency.value = 7.3;
+  const pressureDepth = ctx.createGain();
+  pressureDepth.gain.value = 0.035;
+  pressure.connect(pressureDepth).connect(bow.gain);
+  bow.connect(body);
+  // Vibrato: in after the note settles, a little uneven (two rates).
+  const vib = ctx.createOscillator();
+  vib.frequency.value = 5.7;
+  const drift = ctx.createOscillator();
+  drift.frequency.value = 1.3;
   const depth = ctx.createGain();
   depth.gain.setValueAtTime(0, t);
-  depth.gain.linearRampToValueAtTime(0, t + 0.25);
-  depth.gain.linearRampToValueAtTime(f * 0.006, t + 0.65);
-  lfo.connect(depth);
-  lfo.start(t);
-  const oscillators = [0, 6].map((cents) => {
-    const osc = ctx.createOscillator();
-    osc.type = "sawtooth";
-    osc.frequency.value = f;
-    osc.detune.value = cents;
-    depth.connect(osc.frequency);
-    const g = ctx.createGain();
-    g.gain.value = 0.16;
-    osc.connect(g).connect(body);
-    osc.start(t);
-    return osc;
-  });
-  noiseHit(v, { frequency: 3200, duration: 0.07, gain: 0.035, q: 1 });
+  depth.gain.linearRampToValueAtTime(0, t + 0.3);
+  depth.gain.linearRampToValueAtTime(f * 0.0045, t + 0.8);
+  const driftDepth = ctx.createGain();
+  driftDepth.gain.value = f * 0.0012;
+  vib.connect(depth);
+  drift.connect(driftDepth);
+  const string = ctx.createOscillator();
+  string.setPeriodicWave(bowedWave(ctx));
+  string.frequency.setValueAtTime(f * 0.992, t);
+  // A bow catches the string a hair flat and pulls it up to pitch.
+  string.frequency.exponentialRampToValueAtTime(f, t + 0.08);
+  depth.connect(string.frequency);
+  driftDepth.connect(string.frequency);
+  const level = ctx.createGain();
+  level.gain.value = 0.2;
+  string.connect(level).connect(bow);
+  // The rosin: a quiet hiss the whole time the bow moves, louder at first.
+  const hiss = ctx.createBufferSource();
+  hiss.buffer = noiseBuffer(ctx);
+  hiss.loop = true;
+  const rosin = ctx.createGain();
+  rosin.gain.setValueAtTime(0.06, t);
+  rosin.gain.setTargetAtTime(0.018, t + 0.05, 0.12);
+  chain(hiss, filter(ctx, "bandpass", Math.min(6000, f * 5), 0.9), rosin, bow);
+  for (const o of [pressure, vib, drift, string]) o.start(t);
+  hiss.start(t, Math.random());
+  const oscillators = [pressure, vib, drift, string];
   let released = false;
   const release = () => {
     if (released) return;
@@ -413,8 +461,9 @@ export function holdViolin(midi: number, distance?: number): () => void {
     const now = ctx.currentTime;
     env.gain.cancelScheduledValues(now);
     env.gain.setValueAtTime(Math.max(0.0001, env.gain.value), now);
-    env.gain.setTargetAtTime(0.0001, now, 0.08);
-    for (const osc of [...oscillators, lfo]) osc.stop(now + 0.6);
+    env.gain.setTargetAtTime(0.0001, now, 0.09);
+    for (const osc of oscillators) osc.stop(now + 0.7);
+    hiss.stop(now + 0.7);
   };
   setTimeout(release, KEY_HOLD_SECONDS * 1000);
   return release;
@@ -650,14 +699,17 @@ export function playGong(gong: number, distance?: number) {
   noiseHit(v, { frequency: 1600, duration: 0.02, gain: 0.07, q: 1.2 });
 }
 
-/** The taiko: a deep, long don on the face, a dry wooden ka on the rim. */
+/** The taiko: a deep, long don on the face that fills the room and rings
+ *  on in it (the reverb), a dry wooden ka on the rim. Louder than the rest
+ *  of the band, and heard further off, as a real one is. */
 export function playTaiko(note: number, distance?: number) {
-  const v = voice(1, distance, FALLOFF, 2);
+  const v = voice(1.5, distance, FALLOFF * 1.5, 4, 0.5);
   if (!v) return;
   if (note === TAIKO.donLeft || note === TAIKO.donRight) {
-    toneHit(v, { frequency: 92, sweepTo: 64, duration: 1.1, gain: 1 });
-    toneHit(v, { frequency: 180, sweepTo: 138, duration: 0.3, gain: 0.35, type: "triangle" });
-    noiseHit(v, { frequency: 500, duration: 0.09, gain: 0.35, q: 0.7 });
+    toneHit(v, { frequency: 92, sweepTo: 62, duration: 1.5, gain: 1 });
+    toneHit(v, { frequency: 52, sweepTo: 44, duration: 0.9, gain: 0.55 });
+    toneHit(v, { frequency: 180, sweepTo: 136, duration: 0.35, gain: 0.35, type: "triangle" });
+    noiseHit(v, { frequency: 420, duration: 0.12, gain: 0.4, q: 0.7 });
   } else {
     toneHit(v, { frequency: 1250, duration: 0.05, gain: 0.28, type: "triangle" });
     noiseHit(v, { frequency: 2600, duration: 0.04, gain: 0.45, q: 3 });
