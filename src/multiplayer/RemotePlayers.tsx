@@ -19,6 +19,7 @@ import { RemoteMotion } from "./remoteMotion";
 import { viewerPosition } from "../xr/viewer";
 import { setAddonAvatar } from "../addons/avatars";
 import { ridingNow } from "../addons";
+import { heatExpression, useHeatStage } from "../avatar/heat";
 
 /** A position that never changes, for an animator that shouldn't walk. */
 const STILL: [number, number, number] = [0, 0, 0];
@@ -242,6 +243,8 @@ function RemotePlayerAvatar({
   // Not for a player who opted their own avatar out. A viewer's own
   // switch never hides anyone else's: the room should see the same thing.
   const seiza = useSeizaEndurance(player.posture === SEIZA_GESTURE_NAME && !player.calm);
+  // A long hot walk (src/avatar/heat.ts), worked out here from how they move.
+  const heat = useHeatStage(player.id);
 
   const playerId = player.id;
   const updateEvery = useCallback(() => detailRef.current.get(playerId) ?? 1, [detailRef, playerId]);
@@ -270,7 +273,8 @@ function RemotePlayerAvatar({
         speakingLevel={speakingLevel}
         headPitch={player.headPitch ?? 0}
         layerWeightsRef={layerWeightsRef}
-        expression={enduranceExpression(seiza.phase)}
+        expression={enduranceExpression(seiza.phase) ?? heatExpression(heat)}
+        pant={heat >= 2 ? (heat === 3 ? 1 : 0.6) : 0}
         doze={seiza.phase === "dozing"}
         tremble={enduranceTremble(seiza.phase)}
       />

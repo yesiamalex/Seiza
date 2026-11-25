@@ -71,6 +71,8 @@ export interface MultiplayerState {
   setPosture: (posture: Posture) => void;
   /** Opt our avatar out of seiza endurance for everyone, or back in. */
   setCalm: (calm: boolean) => void;
+  /** Opts this avatar out of heat reactions, for everyone (src/avatar/heat.ts). */
+  setHeatCalm: (calm: boolean) => void;
   /** Write on a board or a note. */
   setObjectText: (id: string, text: string) => void;
   /** Sets an image's link ("" removes it). Editors only. */
@@ -259,6 +261,7 @@ export function useRoomSocket(
   const sendChat = useCallback((text: string) => send({ type: "chat", text }), [send]);
   const setPosture = useCallback((posture: Posture) => send({ type: "setPosture", posture }), [send]);
   const setCalm = useCallback((calm: boolean) => send({ type: "setCalm", calm }), [send]);
+  const setHeatCalm = useCallback((calm: boolean) => send({ type: "setHeatCalm", calm }), [send]);
   const setObjectText = useCallback((id: string, text: string) => send({ type: "objectSetText", id, text }), [send]);
   const setObjectLink = useCallback((id: string, link: string) => send({ type: "objectSetLink", id, link }), [send]);
   const presentOnObject = useCallback(
@@ -479,6 +482,9 @@ export function useRoomSocket(
           case "playerPosture":
             setPlayers((prev) => (prev[msg.id] ? { ...prev, [msg.id]: { ...prev[msg.id], posture: msg.posture } } : prev));
             break;
+          case "playerHeatCalm":
+            setPlayers((prev) => (prev[msg.id] ? { ...prev, [msg.id]: { ...prev[msg.id], heatCalm: msg.calm } } : prev));
+            break;
           case "playerCalm":
             setPlayers((prev) => (prev[msg.id] ? { ...prev, [msg.id]: { ...prev[msg.id], calm: msg.calm } } : prev));
             break;
@@ -609,6 +615,7 @@ export function useRoomSocket(
     sendChat,
     setPosture,
     setCalm,
+    setHeatCalm,
     setObjectText,
     setObjectLink,
     presentOnObject,

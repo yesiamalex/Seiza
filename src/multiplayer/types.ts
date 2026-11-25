@@ -36,6 +36,9 @@ export interface PlayerState {
   /** Opted out of seiza endurance: everyone sees this avatar kneel
    *  without dozing off or wincing. Absent means false. */
   calm?: boolean;
+  /** Opted out of heat reactions (src/avatar/heat.ts): never sweats or
+   *  tires from a hot walk, for anyone. Absent means false. */
+  heatCalm?: boolean;
 }
 
 // "sign" is a text object like "text", but shaped and typeset to be read
@@ -165,6 +168,7 @@ export type ClientMessage =
   // Opts this player's avatar out of (or back into) seiza endurance, for
   // meetings where a dozing avatar would be out of place.
   | { type: "setCalm"; calm: boolean }
+  | { type: "setHeatCalm"; calm: boolean }
   | { type: "objectAdd"; object: Omit<WorldObject, "id" | "ownerId"> }
   | { type: "objectMove"; id: string; position: [number, number, number]; rotationY: number }
   // Holding (or throwing) an object: where it is now, relayed and never
@@ -326,6 +330,7 @@ export type ServerMessage =
   | { type: "playerAvatarChanged"; id: string; avatarUrl: string }
   | { type: "playerPosture"; id: string; posture: Posture }
   | { type: "playerCalm"; id: string; calm: boolean }
+  | { type: "playerHeatCalm"; id: string; calm: boolean }
   | { type: "playerLeft"; id: string }
   | { type: "objectAdded"; object: WorldObject }
   | { type: "objectMoved"; id: string; position: [number, number, number]; rotationY: number }

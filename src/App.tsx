@@ -92,6 +92,9 @@ import { CameraViewToggle } from "./ui/CameraViewToggle";
 import { AvatarChooser, avatarUrlForChoice } from "./ui/AvatarChooser";
 import { useMediaQuery, useWantsTouchControls } from "./ui/useMediaQuery";
 import { saveProfile, type StoredAvatarChoice } from "./profile/profileStore";
+import { currentHeatIndex, HEAT_LEVEL_LABELS, heatExpression, heatLevel, LOCAL_HEAT, setHeatReactions, useHeatReactions, useHeatStage } from "./avatar/heat";
+import { HeatLayer } from "./avatar/HeatLayer";
+import { HeatChip } from "./avatar/HeatChip";
 import { AVATAR_DESIGN_PRESETS } from "./avatar/designer/avatarSpec";
 import { deliverWorldMessage, unwrapWorldMessage, WorldExtension, WorldOverlay, wrapWorldMessage } from "./worlds/WorldExtension";
 import { AddonBarButtons, AddonOverlay, AddonScene, addonHandsBusy, addonHoldsClicks, connectAddonBus, ridingNow, useAddonRideScale, LOCAL_AVATAR, RoomModes, setAddonAvatar, useAddonRooted, useAddonXrSections } from "./addons";
@@ -363,6 +366,7 @@ export default function App() {
     sendChat,
     setPosture: sendPosture,
     setCalm,
+    setHeatCalm,
     setObjectText,
     setObjectLink,
     presentOnObject,
@@ -831,12 +835,18 @@ export default function App() {
 
   // ---- seiza endurance (see avatar/seizaEndurance.ts) -------------------
   const seizaReactions = useSeizaReactions();
+  // Heat reactions (src/avatar/heat.ts): your own switch, and your stage.
+  const heatReactions = useHeatReactions();
+  const localHeat = useHeatStage(LOCAL_HEAT);
   const seiza = useSeizaEndurance(posture?.name === SEIZA_GESTURE_NAME && seizaReactions);
   // Off also means others never see this avatar doze: tell the room, on
   // every (re)connection, since a new connection starts without the flag.
   useEffect(() => {
     if (selfId) setCalm(!seizaReactions);
   }, [selfId, seizaReactions, setCalm]);
+  useEffect(() => {
+    if (selfId) setHeatCalm(!heatReactions);
+  }, [selfId, heatReactions, setHeatCalm]);
   const [seizaView, setSeizaViewState] = useState<SeizaTimerView>(loadSeizaTimerView);
   const setSeizaView = useCallback((view: SeizaTimerView) => {
     setSeizaViewState(view);
@@ -1557,6 +1567,8 @@ export default function App() {
               findPath={navMesh.findPath}
             />
             {/* Room modes an editor switched on (src/addons/). */}
+            {/* Heat reactions: sweat, panting, and a slower walk after a hot one. */}
+            <HeatLayer selfId={selfId} players={players} getSelfPosition={getSelfPosition} />
             <AddonScene worldState={worldState} selfId={selfId} players={players} getSelfPosition={getSelfPosition} editMode={editMode} selfSeated={!!posture || !!seat} />
             {world.portals && <Portals config={world.portals} builtin={world.environment !== "model"} />}
             {/* Picking things up and throwing balls (edit/Grab.tsx). */}
@@ -1617,7 +1629,8 @@ export default function App() {
               posture={posture}
               speakingLevel={media.localSpeakingLevel}
               layerWeightsRef={localLayerWeightsRef}
-              expression={enduranceExpression(seiza.phase)}
+              expression={enduranceExpression(seiza.phase) ?? (heatReactions ? heatExpression(localHeat) : undefined)}
+              pant={heatReactions && localHeat >= 2 ? (localHeat === 3 ? 1 : 0.6) : 0}
               doze={seiza.phase === "dozing"}
               tremble={numbLegs ? 0.6 : enduranceTremble(seiza.phase)}
             />
@@ -1794,6 +1807,18 @@ export default function App() {
                     </small>
                   </span>
                 </label>
+                <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
+                  <input type="checkbox" checked={heatReactions} onChange={(e) => setHeatReactions(e.target.checked)} style={{ marginTop: 2, accentColor: "#ff9a5a" }} />
+                  <span style={{ display: "grid", gap: 2 }}>
+                    <span>{L("Heat reactions", "暑さのリアクション")}</span>
+                    <small style={{ opacity: 0.6, lineHeight: 1.4 }}>
+                      {L(
+                        `A long walk in the heat makes your avatar sweat, pant, frown, and slow down, as on a real street; shade and rest cool it. It follows the sky's time of day: the heat index here is ${Math.round(currentHeatIndex())} °C now (${L(...HEAT_LEVEL_LABELS[heatLevel(currentHeatIndex())])}). Turn off to stay fresh; you still see everyone else's.`,
+                        `暑い中を長く歩くと、本物の街のように汗をかき、息が上がり、顔をしかめ、歩みが遅くなります。日陰や休憩で回復します。空の時刻に合わせて変わり、いまの暑さ指数は${Math.round(currentHeatIndex())} °C(${L(...HEAT_LEVEL_LABELS[heatLevel(currentHeatIndex())])})です。オフにすると涼しいままです。ほかの人のリアクションは見えます。`
+                      )}
+                    </small>
+                  </span>
+                </label>
               </div>
             )}
             </div>
@@ -1915,6 +1940,7 @@ export default function App() {
           which hid every world card until the drawer was opened. */}
       <WorldOverlay />
       <AddonOverlay worldState={worldState} touch={showTouchControls} />
+      <HeatChip />
       {world.portals && <PortalCard config={world.portals} inXr={xrSessionActive} />}
       {openImageId && objects[openImageId]?.kind === "image" && <ImageViewer object={objects[openImageId]} onClose={closeImage} />}
       {/* Someone is talking but the browser still holds audio back (the

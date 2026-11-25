@@ -5,6 +5,7 @@ import { activeSeason, SEASONS, type Season } from "./seasons";
 import {
   moonPhase,
   moonPosition,
+  ambientTemperature,
   philippineTime,
   scheduledWeather,
   SITES,
@@ -94,6 +95,9 @@ export const skyState = {
   /** Simulated Philippine time, for anything that wants to show it. */
   dayOfYear: 1,
   hour: 18,
+  /** The air temperature the sky's site has at its hour and weather, °C
+   *  (null until SkyClock runs): what the heat index starts from. */
+  temperature: null as number | null,
 };
 
 /** How long a change of season takes to blend in, in real seconds. */
@@ -287,6 +291,7 @@ export class SkyClock {
     skyState.weatherState = this.weather;
     skyState.dayOfYear = dayOfYear;
     skyState.hour = hour;
+    skyState.temperature = ambientTemperature(hour, this.site, this.weather.tempOffset);
     advanceSeason(this.previewSeason ?? activeSeason(this.config.seasons === true, this.roomSettings, date), realMs);
   }
 }

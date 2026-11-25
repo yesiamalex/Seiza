@@ -328,6 +328,20 @@ guarantee yet.
   only thing sent is a `calm` flag on your player. Add `?seizaSpeed=30` to
   the URL to run the clock 30 times faster for demos
   (`src/avatar/seizaEndurance.ts`).
+- **Heat reactions.** A long walk in the heat tells, as on a real street,
+  so a virtual urbanity walk can be set beside a real one. The heat index
+  comes from the sky's own temperature and humidity at its time of day
+  (PAGASA's levels: Caution from 27 °C, Extreme caution from 33, Danger
+  from 42), or Manila's at the real hour in a world with a fixed sky.
+  Walking (or pedalling) builds a heat load, about a minute to the worst at
+  a 42 °C heat index, two at 35; shade (under a roof, or ground a world
+  marks with `addShade`) slows it to a third, and rest or a cooler hour
+  brings it down. As it builds, your avatar sweats, then pants, then
+  frowns and walks up to 40% slower. A chip at the top shows the heat
+  index and your load once it starts to build. "Heat reactions" in the
+  Avatar menu turns it off for your own avatar, for everyone; the only
+  thing sent is a `heatCalm` flag. Every client works out the rest from
+  how people move (`src/avatar/heat.ts`).
 - **Solid furniture.** Benches, desks, the reception counter, lockers, posts,
   planters, and the pond's rocks all block movement, and the tatami platform
   is a real step up. The third-person camera stays inside the building

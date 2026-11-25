@@ -395,6 +395,8 @@ export interface AvatarAnimatorProps {
    *  dozing, and a shake through the upper body, 0 to 1, as the legs give
    *  out. Layered over the pose like headPitch, so the posture holds. */
   doze?: boolean;
+  /** Heat reactions (heat.ts): quick, shallow breaths after a hot walk, 0 to 1. */
+  pant?: number;
   tremble?: number;
   /** Update every Nth frame instead of every frame (see RemotePlayers'
    *  detail planner): for avatars far away or out of view. Time still
@@ -453,6 +455,7 @@ export function AvatarAnimator({
   headPitch = 0,
   layerWeightsRef,
   doze = false,
+  pant = 0,
   tremble = 0,
   updateEvery,
 }: AvatarAnimatorProps) {
@@ -460,7 +463,9 @@ export function AvatarAnimator({
   dozeRef.current = doze;
   const trembleRef = useRef(tremble);
   trembleRef.current = tremble;
-  const moodRef = useRef({ doze: 0, tremble: 0, time: 0 });
+  const pantRef = useRef(pant);
+  pantRef.current = pant;
+  const moodRef = useRef({ doze: 0, tremble: 0, pant: 0, time: 0 });
   /** How much of the upper body gestures hold this frame (pass 1 to 2). */
   const gestureTakeoverRef = useRef(0);
   const additiveBases = useRef(new Map<string, AdditiveBase>());
@@ -1072,7 +1077,8 @@ export function AvatarAnimator({
     // a bow put the chin through the chest.
     mood.doze = approach(mood.doze, dozeRef.current ? 1 - gestureTakeoverRef.current : 0, 1.5, delta);
     mood.tremble = approach(mood.tremble, trembleRef.current, 3, delta);
-    if (mood.doze > 0.01 || mood.tremble > 0.01) {
+    mood.pant = approach(mood.pant, pantRef.current, 1.5, delta);
+    if (mood.doze > 0.01 || mood.tremble > 0.01 || mood.pant > 0.01) {
       const neck = vrm.humanoid.getNormalizedBoneNode("neck");
       const head = vrm.humanoid.getNormalizedBoneNode("head");
       const spine = vrm.humanoid.getNormalizedBoneNode("spine");
@@ -1084,6 +1090,15 @@ export function AvatarAnimator({
         // Positive x bows a VRM's head forward, the opposite of headPitch.
         if (neck) neck.rotation.x += droop * 0.4;
         if (head) head.rotation.x += droop * 0.6;
+      }
+      if (mood.pant > 0.01) {
+        // Panting: the chest heaving a little over twice a second, the head
+        // riding it, a touch behind.
+        const a = mood.pant * 0.045;
+        const w = mood.time * 14;
+        if (chest) chest.rotation.x -= a * Math.sin(w);
+        if (spine) spine.rotation.x += a * 0.4 * Math.sin(w);
+        if (head) head.rotation.x += a * 0.7 * Math.sin(w - 0.6);
       }
       if (mood.tremble > 0.01) {
         // Two incommensurate frequencies per axis read as a shiver rather
