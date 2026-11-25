@@ -94,7 +94,7 @@ import { useMediaQuery, useWantsTouchControls } from "./ui/useMediaQuery";
 import { saveProfile, type StoredAvatarChoice } from "./profile/profileStore";
 import { AVATAR_DESIGN_PRESETS } from "./avatar/designer/avatarSpec";
 import { deliverWorldMessage, unwrapWorldMessage, WorldExtension, WorldOverlay, wrapWorldMessage } from "./worlds/WorldExtension";
-import { AddonBarButtons, AddonOverlay, AddonScene, addonHandsBusy, addonHoldsClicks, connectAddonBus, LOCAL_AVATAR, RoomModes, setAddonAvatar, useAddonRooted, useAddonXrSections } from "./addons";
+import { AddonBarButtons, AddonOverlay, AddonScene, addonHandsBusy, addonHoldsClicks, connectAddonBus, ridingNow, useAddonRideScale, LOCAL_AVATAR, RoomModes, setAddonAvatar, useAddonRooted, useAddonXrSections } from "./addons";
 import { PortalCard, Portals } from "./worlds/Portals";
 import { BAR_LABEL_CLASS, barButtonActiveStyle, barButtonStyle, inputStyle, panelStyle, pillButtonStyle, primaryButtonStyle } from "./ui/styles";
 import { CloseIcon, LockIcon, PersonIcon, VrHeadsetIcon } from "./ui/icons";
@@ -153,6 +153,8 @@ const DEV_SPAWN = (() => {
   return { point: [parts[0], parts[1], parts[2]] as [number, number, number], yaw: parts[3] ?? 0 };
 })();
 
+/** A position that never changes, for an animator that shouldn't walk. */
+const STILL: [number, number, number] = [0, 0, 0];
 const OBJECT_COLORS = ["#c94f4f", "#4f8fc9", "#4fc97e", "#c9a94f", "#9a4fc9"];
 /** The designer presets' names in Japanese, for the headset menu. */
 const DESIGN_PRESET_JA: Record<string, string> = { businessman: "ビジネスマン", businesswoman: "ビジネスウーマン", casual: "カジュアル", student: "学生", creative: "クリエイティブ" };
@@ -1277,6 +1279,8 @@ export default function App() {
   const addonXrSections = useAddonXrSections(worldState, { allowed: (canEditWorld || isAdmin) && connected, setWorldState });
   // At a drum pad, keys, or a kit, which stand on the floor: no walking off.
   const rooted = useAddonRooted(worldState);
+  // On a ride: how much faster than walking the thumbstick goes.
+  const rideScale = useAddonRideScale(worldState);
   // How a headset player moves, turns, and feels things (src/xr/controls.ts).
   const xrControls = useXrControls();
 
@@ -1568,6 +1572,7 @@ export default function App() {
           </group>
           <PlayerRig
             rooted={rooted}
+            rideScale={rideScale}
             spawnPoint={DEV_SPAWN?.point ?? [world.spawnPoint.x, world.spawnPoint.y, world.spawnPoint.z]}
             spawnRotationY={DEV_SPAWN?.yaw ?? world.spawnRotationY}
             positionRef={positionRef}
@@ -1604,7 +1609,8 @@ export default function App() {
             <VrmAvatar url={joined.localUrl ?? joined.url} onLoaded={setLocalVrm} />
             <AvatarAnimator
               vrm={localVrm}
-              getPosition={() => positionRef.current}
+              // Riding, the legs pedal or stand on the board: no walk.
+              getPosition={() => (ridingNow(null) ? STILL : positionRef.current)}
               gesture={localGesture?.gesture ?? null}
               gestureSeq={localGesture?.seq ?? 0}
               onGestureEnd={endGesture}

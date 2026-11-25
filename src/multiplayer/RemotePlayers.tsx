@@ -18,6 +18,10 @@ import type { PlayerState } from "./types";
 import { RemoteMotion } from "./remoteMotion";
 import { viewerPosition } from "../xr/viewer";
 import { setAddonAvatar } from "../addons/avatars";
+import { ridingNow } from "../addons";
+
+/** A position that never changes, for an animator that shouldn't walk. */
+const STILL: [number, number, number] = [0, 0, 0];
 
 /** The viewer's eyes in the world (see viewerPosition). */
 const scratchEye = new THREE.Vector3();
@@ -258,7 +262,8 @@ function RemotePlayerAvatar({
       <AvatarAnimator
         vrm={vrm}
         updateEvery={updateEvery}
-        getPosition={() => groupRef.current?.position ?? new THREE.Vector3()}
+        // Riding, the legs pedal or stand on the board: no walk.
+        getPosition={() => (ridingNow(player.id) ? STILL : (groupRef.current?.position ?? STILL))}
         gesture={gesture}
         gestureSeq={seq}
         posture={posture}

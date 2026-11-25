@@ -1139,6 +1139,16 @@ adds its own coloured button to the bar while it is on.
     can see it coming: Spectro shimmers, Havoc throbs slow and deep, Aero
     ebbs and flows, Electro crackles on and off, Fusion flickers, and
     Glacio holds a cold, slow pulse.
+- **ExerSeiza** (green): get on a bike (a Japanese mamachari with a basket
+  and a bell), a skateboard, or a moped. You go faster than walking, slower
+  uphill and a little faster down, and your avatar pedals, stands on the
+  board, or sits on the moped, with the wheels turning. B rings the bell
+  (or the moped's horn); on a phone, a Bell button shows while you ride. In
+  VR, hold the right trigger to ride on where you face, let go to stop, and
+  press A for the bell. The panel shows speed, distance, climb, and the
+  slope. Rides are kept on your device. Real equipment plugs in through
+  SportSeiza (`src/addons/sport/`): a connected smart trainer moves you at
+  its speed and is told the slope every second.
 - **Band** (violet): pick a drum pad, a drum kit, a taiko, keys, a
   kulintang, an acoustic guitar, a lead guitar, a bass, a shaker, or a
   light stick.

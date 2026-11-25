@@ -5,7 +5,7 @@ import { BAR_LABEL_CLASS, barButtonStyle, panelStyle, pillButtonStyle, popoverSt
 import { L } from "../i18n/lang";
 
 /** Each mode's own colour, so its button reads as the mode's, not Seiza's. */
-export const MODE_ACCENTS = { fantasy: "#ff6b81", band: "#b48cff" } as const;
+export const MODE_ACCENTS = { fantasy: "#ff6b81", band: "#b48cff", exer: "#5fd39a" } as const;
 
 const tint = (hex: string, alpha: number) => {
   const n = parseInt(hex.slice(1), 16);

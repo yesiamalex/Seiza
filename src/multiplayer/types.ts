@@ -379,7 +379,7 @@ export type ServerMessage =
  * holds `true` at its key, so the switch is the same shared setting worlds
  * already use, and its events only pass the room server while it is on.
  */
-export const ADDON_MODES = ["fantasy", "band"] as const;
+export const ADDON_MODES = ["fantasy", "band", "exer"] as const;
 export type AddonMode = (typeof ADDON_MODES)[number];
 export const addonModeKey = (mode: AddonMode) => `mode.${mode}`;
 /** Largest add-on event, as JSON. A swing or a note is a few dozen bytes. */

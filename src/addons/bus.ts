@@ -9,7 +9,7 @@ import { MAX_ADDON_EVENT_CHARS, type AddonMode } from "../multiplayer/types";
 export type AddonEvent = Record<string, unknown>;
 type Handler = (from: string, data: AddonEvent) => void;
 
-const handlers: Record<AddonMode, Set<Handler>> = { fantasy: new Set(), band: new Set() };
+const handlers: Record<AddonMode, Set<Handler>> = { fantasy: new Set(), band: new Set(), exer: new Set() };
 let sender: ((mode: AddonMode, data: AddonEvent) => void) | null = null;
 
 /** App's side: where outgoing events go (the room socket), or null. */

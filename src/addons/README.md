@@ -33,6 +33,13 @@ band/        Instruments (synthesized: pad, kit, taiko, keys, kulintang
              shaker; single strings picked from a chord), one or two
              light sticks, touch play in VR; how each instrument's player
              grooves (moves.ts).
+exer/        ExerSeiza: a bike with a basket and a bell, a skateboard, a
+             moped. Each rider's ride under them, their pose on it, the
+             slope ahead slowing them, and in VR the right trigger to
+             ride on and A for the bell (vehicles.ts, ride.ts).
+sport/       SportSeiza: the contract for real equipment (a smart bike or
+             trainer, an IoT bridge) to drive a ride and take the slope
+             back, and where Strava goes (on the server). See its README.
 
 Both modes pose an avatar through the overlay VR tracking uses, shared
 (`sharedOverlay` in ../xr/body/bodyIk.ts), so nothing one leaves on the

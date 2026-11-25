@@ -12,6 +12,12 @@ import { useStore } from "./store";
 import type { XrHudSection } from "../xr/hud/hudPanel";
 import { band, setInstrument, setLightColor, setPair, tapped } from "./band/band";
 import { MODE_ACCENTS, ModeSwitch } from "./ui";
+import { ExerLayer } from "./exer/ExerLayer";
+import { ExerButton, ExerStatus } from "./exer/ExerHud";
+import { ride, ridingNow, ringBell, setVehicle } from "./exer/ride";
+import { VEHICLE_LABELS, VEHICLE_SPECS, VEHICLES } from "./exer/vehicles";
+
+export { ridingNow };
 
 /**
  * Room modes: add-ons an editor or admin switches on for the whole room
@@ -25,21 +31,36 @@ export { LOCAL_AVATAR, setAddonAvatar } from "./avatars";
 type WorldState = Record<string, WorldStateValue>;
 const on = (worldState: WorldState, mode: AddonMode) => worldState[addonModeKey(mode)] === true;
 
-// One mode at a time in your hands: picking a weapon puts any instrument
-// away, and picking an instrument puts the weapon away, so nobody fights
-// with a guitar on or strums with a sword drawn.
+// One thing in your hands at a time: a weapon, an instrument, or a ride's
+// handlebars. Taking up one puts the others away, so nobody fights with a
+// guitar on, strums with a sword drawn, or rides with either.
 {
   let weapon = fantasy.get().weapon;
   let instrument = band.get().instrument;
+  let vehicle = ride.get().vehicle;
   fantasy.subscribe(() => {
     const next = fantasy.get().weapon;
-    if (next && next !== weapon && band.get().instrument) setInstrument(null);
+    if (next && next !== weapon) {
+      if (band.get().instrument) setInstrument(null);
+      if (ride.get().vehicle) setVehicle(null);
+    }
     weapon = next;
   });
   band.subscribe(() => {
     const next = band.get().instrument;
-    if (next && next !== instrument && fantasy.get().weapon) setWeapon(null);
+    if (next && next !== instrument) {
+      if (fantasy.get().weapon) setWeapon(null);
+      if (ride.get().vehicle) setVehicle(null);
+    }
     instrument = next;
+  });
+  ride.subscribe(() => {
+    const next = ride.get().vehicle;
+    if (next && next !== vehicle) {
+      if (fantasy.get().weapon) setWeapon(null);
+      if (band.get().instrument) setInstrument(null);
+    }
+    vehicle = next;
   });
 }
 
@@ -60,6 +81,7 @@ export function AddonScene({
     <>
       {on(worldState, "fantasy") && <FantasyLayer {...props} />}
       {on(worldState, "band") && <BandLayer selfId={props.selfId} players={props.players} editMode={props.editMode} selfSeated={props.selfSeated} />}
+      {on(worldState, "exer") && <ExerLayer selfId={props.selfId} players={props.players} getSelfPosition={props.getSelfPosition} selfSeated={props.selfSeated} />}
     </>
   );
 }
@@ -68,12 +90,14 @@ export function AddonScene({
 export function AddonBarButtons({ worldState }: { worldState: WorldState }) {
   const fantasyOn = on(worldState, "fantasy");
   const bandOn = on(worldState, "band");
-  if (!fantasyOn && !bandOn) return null;
+  const exerOn = on(worldState, "exer");
+  if (!fantasyOn && !bandOn && !exerOn) return null;
   return (
     <>
       <div className="seiza-bar-divider" aria-hidden />
       {fantasyOn && <FantasyButton />}
       {bandOn && <BandButton />}
+      {exerOn && <ExerButton />}
     </>
   );
 }
@@ -84,6 +108,7 @@ export function AddonOverlay({ worldState, touch }: { worldState: WorldState; to
     <>
       {on(worldState, "fantasy") && <FantasyStatus touch={touch} />}
       {on(worldState, "band") && <BandStage />}
+      {on(worldState, "exer") && <ExerStatus touch={touch} />}
     </>
   );
 }
@@ -110,6 +135,14 @@ export function RoomModes({ worldState, setWorldState, disabled }: { worldState:
         disabled={disabled}
         onChange={(value) => setWorldState(addonModeKey("band"), value)}
       />
+      <ModeSwitch
+        label={L("ExerSeiza", "ExerSeiza")}
+        description={L("Everyone gets a Ride button: a bike with a basket and a bell, a skateboard, or a moped, on a screen or in VR. Slopes slow you down.", "全員に「乗る」ボタンが出ます:かごとベルつきの自転車、スケボー、原付。画面でもVRでも。坂では遅くなります。")}
+        on={on(worldState, "exer")}
+        accent={MODE_ACCENTS.exer}
+        disabled={disabled}
+        onChange={(value) => setWorldState(addonModeKey("exer"), value)}
+      />
     </div>
   );
 }
@@ -121,8 +154,14 @@ export function useAddonRooted(worldState: WorldState) {
   return on(worldState, "band") && isStand(instrument);
 }
 
+/** On a ride: how many times walking pace the thumbstick goes (PlayerRig). */
+export function useAddonRideScale(worldState: WorldState) {
+  const { vehicle } = useStore(ride);
+  return on(worldState, "exer") && vehicle ? VEHICLE_SPECS[vehicle].speed : 1;
+}
+
 /** A weapon drawn or an instrument out: the hands are full (edit/Grab.tsx). */
-export const addonHandsBusy = () => fantasy.get().weapon !== null || band.get().instrument !== null;
+export const addonHandsBusy = () => fantasy.get().weapon !== null || band.get().instrument !== null || ride.get().vehicle !== null;
 
 /** Whether a click belongs to a room mode (an attack, or a note on an
  *  instrument) rather than being a walk across the floor. */
@@ -160,6 +199,8 @@ export function useAddonXrSections(worldState: WorldState, switches?: XrModeSwit
   const sections: XrHudSection[] = [];
   const fantasyOn = on(worldState, "fantasy");
   const bandOn = on(worldState, "band");
+  const exerOn = on(worldState, "exer");
+  const rider = useStore(ride);
   if (switches?.allowed) {
     const toggle = (mode: AddonMode, now: boolean) => () => switches.setWorldState(addonModeKey(mode), !now);
     sections.push({
@@ -171,9 +212,10 @@ export function useAddonXrSections(worldState: WorldState, switches?: XrModeSwit
       choices: [
         { id: "fantasy", label: L("Fantasy", "ファンタジー"), active: fantasyOn, onPress: toggle("fantasy", fantasyOn) },
         { id: "band", label: L("Band", "バンド"), active: bandOn, onPress: toggle("band", bandOn) },
+        { id: "exer", label: "ExerSeiza", active: exerOn, onPress: toggle("exer", exerOn) },
       ],
     });
-  } else if (!fantasyOn && !bandOn) {
+  } else if (!fantasyOn && !bandOn && !exerOn) {
     sections.push({
       id: "modes",
       tab: "play",
@@ -241,6 +283,22 @@ export function useAddonXrSections(worldState: WorldState, switches?: XrModeSwit
         ],
       });
     }
+  }
+  if (exerOn) {
+    const bell = rider.vehicle ? VEHICLE_SPECS[rider.vehicle].bell : null;
+    sections.push({
+      id: "exer",
+      title: L("ExerSeiza: ride", "ExerSeiza:乗る"),
+      note: rider.vehicle
+        ? L(`Hold the right trigger to ride, let go to stop. A: ${bell === "horn" ? "horn" : "bell"}. ${(rider.speed * 3.6).toFixed(0)} km/h, ${Math.round(rider.distance)} m.`, `右トリガーで進み、離すと止まります。A:${bell === "horn" ? "クラクション" : "ベル"}。${(rider.speed * 3.6).toFixed(0)} km/h、${Math.round(rider.distance)} m。`)
+        : L("Get on a ride.", "乗りものを選んでください。"),
+      columns: 4,
+      choices: [
+        { id: "none", label: L("On foot", "徒歩"), active: rider.vehicle === null, onPress: () => setVehicle(null) },
+        ...VEHICLES.map((v) => ({ id: v, label: L(...VEHICLE_LABELS[v]), active: rider.vehicle === v, onPress: () => setVehicle(v) })),
+        ...(bell ? [{ id: "bell", label: bell === "horn" ? L("Horn", "クラクション") : L("Bell", "ベル"), active: false, onPress: ringBell }] : []),
+      ],
+    });
   }
   // All on the Play page of the headset menu.
   return sections.map((s) => ({ tab: "play", ...s }));

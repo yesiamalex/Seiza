@@ -7,6 +7,7 @@ import { isGizmoDragging } from "../edit/gizmoState";
 import { readXrHead } from "../xr/body/xrPose";
 import { turningOptions, useXrControls } from "../xr/controls";
 import { Teleport } from "../xr/Teleport";
+import { drive } from "./drive";
 import { selfViewStore } from "../xr/body/selfViewStore";
 import { takeSelfPush } from "./selfPush";
 import {
@@ -195,6 +196,8 @@ interface PlayerRigProps {
    *  jumping, and the thumbstick do nothing, and the body keeps facing it
    *  in first person, wherever they look; putting it away frees them. */
   rooted?: boolean;
+  /** Riding (src/addons/exer): the thumbstick goes this many times walking pace. */
+  rideScale?: number;
   /** Eye height for a held floor posture, or null when the posture is seated. */
   postureEyeHeight?: number | null;
   onStandUp?: () => void;
@@ -270,6 +273,7 @@ export function PlayerRig({
   sitAnchor = null,
   postureHeld = false,
   rooted = false,
+  rideScale = 1,
   postureEyeHeight = null,
   onStandUp,
   warpTargetRef,
@@ -610,7 +614,7 @@ export function PlayerRig({
   // smoothly or in snaps, as the player chose in the headset menu. Turning
   // stays at an instrument: you can always turn to face it.
   const controls = useXrControls();
-  useXRControllerLocomotion(xrOriginRef, rooted || controls.moving === "teleport" ? false : { speed: MOVE_SPEED * 0.6 }, turningOptions(controls.turning));
+  useXRControllerLocomotion(xrOriginRef, rooted || controls.moving === "teleport" ? false : { speed: MOVE_SPEED * 0.6 * rideScale }, turningOptions(controls.turning));
 
   // Scratch vectors for the XR branch, reused rather than allocated 72
   // times a second (90Hz headsets are the ones that can least afford it).
@@ -1096,7 +1100,12 @@ export function PlayerRig({
       heading.copy(move).normalize();
       // Crouching wins over running: holding both should not sprint.
       const speedScale = crouchingRef.current ? CROUCH_MULTIPLIER : running ? RUN_MULTIPLIER : 1;
-      vcam.position.addScaledVector(heading, MOVE_SPEED * speedScale * delta);
+      // On a ride (src/addons/exer), drive.scale is its speed and the slope's.
+      vcam.position.addScaledVector(heading, MOVE_SPEED * speedScale * drive.scale * delta);
+    } else if (drive.cruise > 0 && !rootedRef.current) {
+      // A smart trainer's speed rolls the rider on where they look.
+      heading.copy(forward);
+      vcam.position.addScaledVector(forward, drive.cruise * delta);
     } else if (moveTargetRef.current) {
       const target = moveTargetRef.current;
       const toTarget = new THREE.Vector3(target.x - vcam.position.x, 0, target.z - vcam.position.z);
@@ -1106,7 +1115,7 @@ export function PlayerRig({
         moveTargetRef.current = movePathRef?.current?.shift() ?? null;
       } else {
         heading.copy(toTarget).normalize();
-        vcam.position.addScaledVector(heading, MOVE_SPEED * delta);
+        vcam.position.addScaledVector(heading, MOVE_SPEED * drive.scale * delta);
       }
     }
     // Gravity/jump — applied every frame so landing is a clean clamp back to
