@@ -3,7 +3,7 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import { createStore } from "../store";
 import { oneOf, sendAddonEvent, type AddonEvent } from "../bus";
 import { hasProfanity } from "../../moderation/profanity";
-import { noiseHit, toneHit, voice } from "../sound";
+import { noiseHit, voice, type Voice } from "../sound";
 
 /**
  * Pets: a dog (aso), a cat (pusa), or a capybara that follows you. Each is
@@ -201,19 +201,110 @@ export function disposePets() {
   geometries.clear();
 }
 
-/** A happy sound, by kind: a bark, a meow, a capybara's chirps. */
+/**
+ * A voice as an animal's is made: a buzzing source (the vocal folds) at a
+ * pitch that moves, through resonances (formants) that move as the mouth
+ * does, a breath of noise with it, and a quick swell and fall. `at` is a
+ * list of [seconds, value] points, eased between.
+ */
+type Curve = [number, number][];
+function call(v: Voice, o: { delay: number; length: number; gain: number; pitch: Curve; formants: { f: Curve; q: number; gain: number }[]; breath?: number; grit?: number; flutter?: number }) {
+  const { ctx } = v;
+  const t = v.t + o.delay;
+  const ramp = (param: AudioParam, curve: Curve) => {
+    param.setValueAtTime(curve[0][1], t + curve[0][0]);
+    for (const [at, value] of curve.slice(1)) param.linearRampToValueAtTime(value, t + at);
+  };
+  const source = ctx.createOscillator();
+  source.type = "sawtooth";
+  ramp(source.frequency, o.pitch);
+  const env = ctx.createGain();
+  env.gain.setValueAtTime(0.0001, t);
+  env.gain.exponentialRampToValueAtTime(o.gain, t + Math.min(0.03, o.length * 0.15));
+  env.gain.setValueAtTime(o.gain, t + o.length * 0.6);
+  env.gain.exponentialRampToValueAtTime(0.0001, t + o.length);
+  let into: AudioNode = env;
+  if (o.grit) {
+    const grit = ctx.createWaveShaper();
+    const curve = new Float32Array(256);
+    for (let i = 0; i < 256; i++) curve[i] = Math.tanh(((i / 128 - 1) * (1 + o.grit * 6)));
+    grit.curve = curve;
+    grit.connect(env);
+    into = grit;
+  }
+  if (o.flutter) {
+    // A purr-like flutter on the level (a capybara's).
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = o.flutter;
+    const depth = ctx.createGain();
+    depth.gain.value = o.gain * 0.5;
+    lfo.connect(depth).connect(env.gain);
+    lfo.start(t);
+    lfo.stop(t + o.length + 0.05);
+  }
+  for (const formant of o.formants) {
+    const band = ctx.createBiquadFilter();
+    band.type = "bandpass";
+    band.Q.value = formant.q;
+    ramp(band.frequency, formant.f);
+    const level = ctx.createGain();
+    level.gain.value = formant.gain;
+    source.connect(band).connect(level).connect(into);
+  }
+  env.connect(v.out);
+  source.start(t);
+  source.stop(t + o.length + 0.05);
+  if (o.breath) noiseHit(v, { frequency: 2400, duration: o.length * 0.8, gain: o.breath, q: 0.6, delay: o.delay });
+}
+
+/** A happy sound, by kind: two barks, a meow, a capybara's soft chirps. */
 export function petSound(kind: Pet, distance?: number) {
-  const v = voice(0.7, distance, 25, 2);
+  const v = voice(0.8, distance, 25, 2.5);
   if (!v) return;
-  if (kind === "dog")
-    for (const delay of [0, 0.2]) {
-      noiseHit(v, { frequency: 900, duration: 0.09, gain: 0.22, delay, q: 1.5 });
-      toneHit(v, { frequency: 430, sweepTo: 300, duration: 0.11, gain: 0.1, type: "square", delay });
-    }
-  else if (kind === "cat") {
-    toneHit(v, { frequency: 620, sweepTo: 900, duration: 0.2, gain: 0.1, type: "triangle" });
-    toneHit(v, { frequency: 900, sweepTo: 520, duration: 0.32, gain: 0.1, type: "triangle", delay: 0.16 });
-  } else for (const delay of [0, 0.12, 0.24]) toneHit(v, { frequency: 1150, sweepTo: 920, duration: 0.07, gain: 0.07, type: "sine", delay });
+  if (kind === "dog") {
+    // Ruff, ruff: a jump up in pitch and down, a growl in it, the second lower.
+    for (const [delay, lift] of [
+      [0, 1],
+      [0.24, 0.9],
+    ])
+      call(v, {
+        delay,
+        length: 0.17,
+        gain: 0.5,
+        pitch: [[0, 260 * lift], [0.04, 430 * lift], [0.17, 230 * lift]],
+        formants: [
+          { f: [[0, 650], [0.05, 900], [0.17, 600]], q: 4, gain: 1 },
+          { f: [[0, 1500], [0.05, 1900], [0.17, 1400]], q: 5, gain: 0.6 },
+        ],
+        breath: 0.08,
+        grit: 0.5,
+      });
+  } else if (kind === "cat") {
+    // Mi-a-ow: closed and nasal, opening up as the pitch rises, closing as it falls.
+    call(v, {
+      delay: 0,
+      length: 0.62,
+      gain: 0.32,
+      pitch: [[0, 520], [0.2, 780], [0.45, 640], [0.62, 470]],
+      formants: [
+        { f: [[0, 380], [0.2, 900], [0.45, 760], [0.62, 520]], q: 6, gain: 1 },
+        { f: [[0, 1250], [0.2, 1850], [0.45, 1500], [0.62, 1050]], q: 7, gain: 0.7 },
+        { f: [[0, 2600], [0.62, 2400]], q: 8, gain: 0.25 },
+      ],
+      breath: 0.03,
+    });
+  } else {
+    // A capybara's contentment: soft, high whistling chirps over a flutter.
+    for (const delay of [0, 0.15, 0.3])
+      call(v, {
+        delay,
+        length: 0.12,
+        gain: 0.2,
+        pitch: [[0, 1050], [0.04, 1250], [0.12, 980]],
+        formants: [{ f: [[0, 1300], [0.12, 1150]], q: 3, gain: 1 }],
+        flutter: 32,
+      });
+  }
 }
 
 // --- this visitor's pet, and everyone else's ------------------------------------------

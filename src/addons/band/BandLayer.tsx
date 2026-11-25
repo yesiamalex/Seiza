@@ -769,7 +769,7 @@ const zoneAlongViolin = (note: number) => VIOLIN_NUT + 0.03 + (Math.min(VIOLIN_Z
 export function violinPose(hands: Hands, rig: BodyRig, violin: THREE.Object3D, note: Note, now: number) {
   const age = note ? now - note.at : 9;
   const playing = age < 1.2;
-  onViolin(rig, violin, zoneAlongViolin(note?.n ?? 0), -0.02, violinA);
+  onViolin(rig, violin, zoneAlongViolin((note?.n ?? 0) % 12), -0.02, violinA);
   set(hands.left, [violinA[0], violinA[1] - 0.02, violinA[2] + 0.04], [0, 1, 0.2], [0.9, 0.1, -0.2], 0.6);
   // The bow on the strings by the bridge: the hand out to the right along
   // it, the stick pointing from the hand through the contact, so it lies

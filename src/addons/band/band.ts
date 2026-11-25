@@ -175,6 +175,8 @@ export function validNote(instrument: Instrument, note: number) {
     const p = unpick(note)!;
     return pickedMidi(instrument, p.chord, p.string) !== null;
   }
+  // A violin note can be raised a semitone (VIOLIN_SHARP and up).
+  if (instrument === "violin") return note >= 0 && note < noteCount(instrument) * 2;
   return note >= 0 && note < noteCount(instrument);
 }
 

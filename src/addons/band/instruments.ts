@@ -89,6 +89,10 @@ export const TAIKO_PADS: Pad[] = [
 /** The violin: G major from its lowest string, G3, up to D5. A note rings
  *  while it's bowed (held), like a key; two can ring at once, a double stop. */
 export const VIOLIN = [55, 57, 59, 60, 62, 64, 66, 67, 69, 71, 72, 74];
+/** A violin note a semitone up (Shift): notes 12 to 23 are the twelve
+ *  raised, so every sharp and the F natural are there too. */
+export const VIOLIN_SHARP = 12;
+export const violinMidi = (note: number) => (note >= VIOLIN_SHARP ? (VIOLIN[note - VIOLIN_SHARP] ?? 54) + 1 : (VIOLIN[note] ?? 55));
 
 /** The shaker: a shake on the beat, and a softer one between. */
 export const SHAKER_PADS: Pad[] = [
@@ -539,7 +543,7 @@ export function holdViolin(midi: number, distance?: number): () => void {
 
 /** A held note for an instrument that holds them (keys, violin). */
 export function holdNote(instrument: Instrument, note: number, distance?: number): () => void {
-  if (instrument === "violin") return holdViolin(VIOLIN[note] ?? 55, distance);
+  if (instrument === "violin") return holdViolin(violinMidi(note), distance);
   return holdKey(note, distance);
 }
 /** Whether an instrument's notes are held down, not struck. */
@@ -843,7 +847,7 @@ export function playNote(instrument: Instrument, note: number, distance?: number
   else if (instrument === "kulintang") playGong(note, distance);
   else if (instrument === "taiko") playTaiko(note, distance);
   else if (instrument === "shaker") playShaker(note, distance);
-  else if (instrument === "violin") setTimeout(holdViolin(VIOLIN[note] ?? 55, distance), 700);
+  else if (instrument === "violin") setTimeout(holdViolin(violinMidi(note), distance), 700);
 }
 
 /** How many notes an instrument has (keys excepted, which go by MIDI). */

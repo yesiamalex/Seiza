@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import type { VRM } from "@pixiv/three-vrm";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { GLTFLoader, type GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
@@ -35,8 +36,8 @@ const REST_AFTER = 3;
 const PAT_REACH = 0.28;
 /** How near a pet has to be for the Pat prompt, metres. */
 const PAT_NEAR = 1.8;
-/** How long a pat takes, seconds. */
-const PAT_TIME = 1.3;
+/** How long a pat takes, seconds: a few slow strokes, not a tap. */
+const PAT_TIME = 2.8;
 /** An uploaded pet's height at size 1, metres. */
 const MODEL_HEIGHT = 0.55;
 
@@ -60,8 +61,11 @@ interface Follower {
   phase: number;
   rest: number;
   still: number;
-  /** Time left of a happy hop. */
+  /** Time left of a happy hop, and of being patted (it stays to enjoy it). */
   hop: number;
+  petted: number;
+  /** Whoever's patting it (their avatar's key). */
+  patBy: string | null;
   trail: THREE.Vector3[];
   ownerAt: THREE.Vector3 | null;
 }
@@ -80,6 +84,27 @@ const feet = new THREE.Vector3();
 const cam = new THREE.Vector3();
 const box = new THREE.Box3();
 const size = new THREE.Vector3();
+
+const v3 = new THREE.Vector3();
+const patQ = new THREE.Quaternion();
+
+/** Where a pet stands to be patted: where it already is round its patter
+ *  if that's in front or to the side (within 100° of ahead), at a hand's
+ *  reach (0.45 to 0.7 m); from behind, round to the nearer side. */
+function patSpot(patter: VRM, f: { pos: THREE.Vector3; look: PetLook }, out: THREE.Vector3) {
+  const at = patter.scene.getWorldPosition(v3);
+  (patter.scene.parent ?? patter.scene).getWorldQuaternion(patQ);
+  const fx = -2 * (patQ.x * patQ.z + patQ.w * patQ.y);
+  const fz = -(1 - 2 * (patQ.x * patQ.x + patQ.y * patQ.y));
+  const forward = Math.atan2(fx, fz);
+  const dx = f.pos.x - at.x;
+  const dz = f.pos.z - at.z;
+  const bearing = Math.atan2(Math.sin(Math.atan2(dx, dz) - forward), Math.cos(Math.atan2(dx, dz) - forward));
+  const limit = (100 * Math.PI) / 180;
+  const b = forward + Math.max(-limit, Math.min(limit, bearing));
+  const reach = Math.max(0.45, Math.min(0.7, Math.hypot(dx, dz))) * Math.max(1, f.look.size);
+  out.set(at.x + Math.sin(b) * reach, at.y, at.z + Math.cos(b) * reach);
+}
 
 /** The point `behind` metres back along the trail from its newest end. */
 function alongTrail(trail: THREE.Vector3[], behind: number, out: THREE.Vector3) {
@@ -177,6 +202,8 @@ export function PetLayer({ selfId, players, selfSeated }: { selfId: string | nul
         const f = followers.get(key);
         if (!f) return;
         f.hop = 0.5;
+        f.petted = PAT_TIME;
+        f.patBy = by === "" || by === selfIdRef.current ? LOCAL_AVATAR : by;
         petSound(f.look.kind, camera.getWorldPosition(cam).distanceTo(f.pos));
         pats.set(by === "" || by === selfIdRef.current ? LOCAL_AVATAR : by, { pet: key, t: 0 });
       }),
@@ -243,7 +270,7 @@ export function PetLayer({ selfId, players, selfSeated }: { selfId: string | nul
       seen.add(key);
       vrm.scene.getWorldPosition(owner);
       if (!f) {
-        f = { look, built: null, custom: null, root: null, pos: owner.clone().add(new THREE.Vector3(0.6, 0, 0.6)), yaw: 0, y: owner.y, speed: 0, phase: 0, rest: 0, still: 0, hop: 0, trail: [owner.clone()], ownerAt: null };
+        f = { look, built: null, custom: null, root: null, pos: owner.clone().add(new THREE.Vector3(0.6, 0, 0.6)), yaw: 0, y: owner.y, speed: 0, phase: 0, rest: 0, still: 0, hop: 0, trail: [owner.clone()], ownerAt: null, petted: 0, patBy: null };
         followers.set(key, f);
         embody(f);
       }
@@ -259,8 +286,12 @@ export function PetLayer({ selfId, players, selfSeated }: { selfId: string | nul
       const ownerMoved = f.ownerAt ? f.ownerAt.distanceTo(owner) / Math.max(dt, 1e-3) : 0;
       f.ownerAt = (f.ownerAt ?? new THREE.Vector3()).copy(owner);
       f.still = ownerMoved < 0.1 ? f.still + dt : 0;
-      // Where to be, and getting there.
+      // Where to be, and getting there: behind its owner on their trail, or,
+      // being patted, in front of whoever's patting or beside them (never
+      // behind them), a hand's reach away.
       alongTrail(f.trail, BEHIND * look.size, toward);
+      const patter = f.petted > 0 && f.patBy ? getAddonAvatar(f.patBy) : null;
+      if (patter) patSpot(patter, f, toward);
       const dx = toward.x - f.pos.x;
       const dz = toward.z - f.pos.z;
       const gap = Math.hypot(dx, dz);
@@ -268,6 +299,7 @@ export function PetLayer({ selfId, players, selfSeated }: { selfId: string | nul
         f.pos.copy(toward);
         f.y = owner.y;
       }
+      f.petted = Math.max(0, f.petted - dt);
       const want = gap < 0.15 ? 0 : Math.min(s.speed, gap * 3);
       f.speed += (want - f.speed) * (1 - Math.exp(-6 * dt));
       if (gap > 1e-3 && f.speed > 0.01) {
@@ -276,8 +308,9 @@ export function PetLayer({ selfId, players, selfSeated }: { selfId: string | nul
         f.pos.z += (dz / gap) * step;
         f.phase = (f.phase + step / (s.stride * look.size)) % 1;
       }
-      // Faces where it goes, or its owner when still.
-      const look2 = f.speed > 0.2 ? Math.atan2(-dx, -dz) : Math.atan2(-(owner.x - f.pos.x), -(owner.z - f.pos.z));
+      // Faces where it goes, or, still, whoever's patting it or its owner.
+      const faceAt = patter ? patter.scene.getWorldPosition(v3) : owner;
+      const look2 = f.speed > 0.2 ? Math.atan2(-dx, -dz) : Math.atan2(-(faceAt.x - f.pos.x), -(faceAt.z - f.pos.z));
       f.yaw += angleTo(f.yaw, look2) * (1 - Math.exp(-(f.speed > 0.2 ? 8 : 3) * dt));
       // On the floor under it (unless that's another storey: then its owner's).
       const swimming = swimmingAt(f.pos.x, f.pos.z);
@@ -286,7 +319,7 @@ export function PetLayer({ selfId, players, selfSeated }: { selfId: string | nul
       if (swimming) floor = SHORE.seaY - (s.legs + s.height * 0.55) * look.size;
       f.y += (floor - f.y) * (1 - Math.exp(-10 * dt));
       // Resting: when its owner sits, or has stood still a while.
-      const resting = !swimming && f.speed < 0.2 && (seated || f.still > REST_AFTER);
+      const resting = !swimming && f.speed < 0.2 && (seated || f.still > REST_AFTER || f.petted > 0);
       f.rest += ((resting ? 1 : 0) - f.rest) * (1 - Math.exp(-4 * dt));
       f.hop = Math.max(0, f.hop - dt);
       if (!f.root) return;
@@ -325,9 +358,12 @@ export function PetLayer({ selfId, players, selfSeated }: { selfId: string | nul
       // The head turns toward its owner, and nods as it trots.
       const toOwner = angleTo(f.yaw, Math.atan2(-(owner.x - f.pos.x), -(owner.z - f.pos.z)));
       b[HEAD].rotation.y += (THREE.MathUtils.clamp(toOwner, -0.7, 0.7) - b[HEAD].rotation.y) * (1 - Math.exp(-4 * dt));
-      b[HEAD].rotation.x = Math.sin(f.phase * Math.PI * 4) * 0.06 * Math.min(1, f.speed) - (lie ? 0 : 0.35 * r);
+      // Patted, it lifts its head into the hand and leans it side to side.
+      const enjoy = Math.min(1, f.petted / 0.4, (PAT_TIME - f.petted) / 0.4);
+      b[HEAD].rotation.x = Math.sin(f.phase * Math.PI * 4) * 0.06 * Math.min(1, f.speed) - (lie ? 0 : 0.35 * r) * (1 - enjoy) - 0.25 * enjoy;
+      b[HEAD].rotation.z = 0.22 * Math.sin(t * 2.2) * enjoy;
       // A dog wags (more when glad), a cat's tail sways.
-      const glad = f.hop > 0 ? 1 : 0.35;
+      const glad = f.hop > 0 || f.petted > 0 ? 1 : 0.35;
       b[TAIL].rotation.y = look.kind === "dog" ? Math.sin(t * 11) * 0.5 * glad : look.kind === "cat" ? Math.sin(t * 1.4) * 0.35 : 0;
       b[TAIL].rotation.x = look.kind === "cat" ? -0.5 : 0;
     };
@@ -372,10 +408,16 @@ export function PetLayer({ selfId, players, selfSeated }: { selfId: string | nul
       if (sample !== null && performance.now() - sample.receivedAt < TRACKING_STALE_MS) continue;
       const rig = rigFor(vrm);
       if (!rig) continue;
-      const weight = Math.sin((p.t / PAT_TIME) * Math.PI);
+      // In, a few slow strokes, and out: never a jab.
+      const weight = Math.max(0, Math.min(1, p.t / 0.4, (PAT_TIME - p.t) / 0.4));
       const eye = feetAndEye(rig, feet);
       if (f.built) f.built.bones[HEAD].getWorldPosition(headAt);
       else headAt.copy(f.root.position).setY(f.root.position.y + MODEL_HEIGHT * f.look.size * 0.85);
+      // A stroke from the top of its head back toward its neck, about once a second.
+      const along = 0.5 - 0.5 * Math.cos(p.t * 5.2);
+      headAt.x += Math.sin(f.yaw) * (0.03 + 0.14 * along) * f.look.size;
+      headAt.z += Math.cos(f.yaw) * (0.03 + 0.14 * along) * f.look.size;
+      headAt.y -= 0.03 * along * f.look.size;
       // Into the patter's own frame (x right, y up, z back), in eye heights.
       const yaw = (vrm.scene.parent ?? vrm.scene).getWorldQuaternion(new THREE.Quaternion());
       const local = headAt.clone().sub(feet).applyQuaternion(yaw.invert()).divideScalar(eye);
@@ -384,10 +426,12 @@ export function PetLayer({ selfId, players, selfSeated }: { selfId: string | nul
       if (reach > 0.55) local.multiplyScalar(0.55 / reach).setY(headAt.y - feet.y > 0 ? (headAt.y - feet.y) / eye : 0.2);
       const overlay = sharedOverlay(vrm, overlayFrame.current);
       const body = newBodyPose();
+      // The chest turns toward a pet at your side, as you'd turn to reach it.
+      body.twist = THREE.MathUtils.clamp(Math.atan2(local.x, -local.z), -0.7, 0.7) * weight;
       body.lean = 0.5 * weight;
       body.drop = Math.max(0, 0.55 - local.y) * 0.5 * weight;
       poseBody(rig, overlay, body, weight, weight);
-      const target: HandTarget = { pos: [local.x, local.y + 0.06 + 0.03 * Math.sin(p.t * 14), local.z], blade: [0, 0, -1], fingers: [0, -0.6, -1], curl: 0.15 };
+      const target: HandTarget = { pos: [local.x, local.y + 0.045, local.z], blade: [0, 0, -1], fingers: [0, -0.6, -1], curl: 0.15 };
       poseHands(rig, overlay, toTrackedHand("right", target, newTrackedHand()), null, weight);
     }
 

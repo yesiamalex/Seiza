@@ -4,7 +4,7 @@ import { panelStyle, pillButtonStyle } from "../../ui/styles";
 import { useStore } from "../store";
 import { Choices, Hint, MODE_ACCENTS, ModeButton, MusicIcon } from "../ui";
 import { band, fret, pick, play, release, setInstrument, setLightColor, setPair, setPlaying, setSlap, setWaving } from "./band";
-import { holds, INSTRUMENT_LABELS, INSTRUMENTS, isStand, isWorn, KEY_LAYOUT, KEYS_BASE, LIGHT_COLORS, noteName, PAD_COLUMNS, PADS, PICK_KEYS, pickedMidi, STRINGS, type Instrument } from "./instruments";
+import { holds, INSTRUMENT_LABELS, INSTRUMENTS, isStand, isWorn, KEY_LAYOUT, KEYS_BASE, LIGHT_COLORS, noteName, PAD_COLUMNS, PADS, PICK_KEYS, pickedMidi, STRINGS, VIOLIN_SHARP, type Instrument } from "./instruments";
 
 const ACCENT = MODE_ACCENTS.band;
 const NONE = "none" as const;
@@ -194,6 +194,8 @@ export function BandStage() {
       e.preventDefault();
       e.stopImmediatePropagation();
       if (e.repeat) return;
+      // Shift raises a violin note a semitone: its sharps, and F natural.
+      if (instrument === "violin" && e.shiftKey) note += VIOLIN_SHARP;
       if (holds(instrument)) {
         pressed.set(key, note);
         press(note);

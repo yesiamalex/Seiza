@@ -9,7 +9,7 @@ import { cancelSelfPush, pushSelf, takeSelfPush } from "../player/selfPush";
 import { elementPulse, ELEMENTS, isBladed, WEAPON_SPECS, WEAPONS } from "./fantasy/weapons";
 import { comboReached, record, tally } from "./fantasy/record";
 import { NoteGate, parseBandEvent, validNote } from "./band/band";
-import { GONGS, INSTRUMENTS, isStand, KEY_LAYOUT, KIT, pickedMidi, pickNote, TAIKO, unpick } from "./band/instruments";
+import { GONGS, INSTRUMENTS, isStand, KEY_LAYOUT, KIT, pickedMidi, pickNote, STRINGS, TAIKO, unpick, VIOLIN_SHARP, violinMidi } from "./band/instruments";
 import { deskPose, GONGS_AT, KIT_PIECES_AT, kitPose, malletPose, newHands, shakerPose, stickPose, TAIKO_AT, type Hands } from "./band/BandLayer";
 import { FantasyEffects } from "./fantasy/effects";
 import { PoseOverlay, sharedOverlay } from "../xr/body/bodyIk";
@@ -236,6 +236,14 @@ describe("band events", () => {
     // A key held down, and let go.
     expect(parseBandEvent({ k: "n", n: 64, h: 1 })).toEqual({ k: "n", note: 64, hold: true });
     expect(parseBandEvent({ k: "n", n: 40, s: 1 })).toEqual({ k: "n", note: 40, hold: false, slap: true });
+    // Every chord and pick, on every worn instrument, is a real note.
+    for (const instrument of ["guitar", "electric", "bass"] as const)
+      for (let chord = 0; chord < (instrument === "electric" ? 6 : 12); chord++)
+        for (let string = 0; string < STRINGS[instrument]; string++) expect(pickedMidi(instrument, chord, string)).toBeGreaterThan(20);
+    // The violin's raised notes: F natural is E raised, and they're valid to send.
+    expect(violinMidi(5 + VIOLIN_SHARP)).toBe(65);
+    expect(validNote("violin", 23)).toBe(true);
+    expect(validNote("violin", 24)).toBe(false);
     expect(parseBandEvent({ k: "f", n: 64 })).toEqual({ k: "f", note: 64 });
     expect(parseBandEvent({ k: "f", n: "E" })).toBeNull();
   });
@@ -684,7 +692,8 @@ describe("the violin", () => {
     expect(holds("violin")).toBe(true);
     expect(holds("guitar")).toBe(false);
     expect(validNote("violin", VIOLIN.length - 1)).toBe(true);
-    expect(validNote("violin", VIOLIN.length)).toBe(false);
+    // Twelve more above them, each raised a semitone (Shift).
+    expect(validNote("violin", VIOLIN.length * 2)).toBe(false);
     expect(atOnce("violin")).toBe(2);
   });
 });
