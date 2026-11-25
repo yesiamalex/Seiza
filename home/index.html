@@ -55,6 +55,9 @@
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
   @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  /* Past the hero the night lightens as you go down, to dawn at the foot
+     (the script sets --down, 0 to 1, from the scroll). */
+  .night { position: fixed; inset: 0; z-index: -1; pointer-events: none; background: linear-gradient(180deg, transparent 30%, rgba(75, 42, 102, calc(var(--down, 0) * 0.55)) 75%, rgba(232, 130, 63, calc(var(--down, 0) * 0.35)) 100%); }
   body {
     margin: 0;
     color: var(--ink);
@@ -93,9 +96,28 @@
   .button.small { padding: 8px 14px; font-size: 14px; }
 
   /* --- the hero: the name, what it means, and a look through the window --- */
-  header.hero { position: relative; overflow: hidden; background: linear-gradient(180deg, var(--night) 0%, #171a4a 45%, #2f2152 78%, var(--night) 100%); }
+  /* The hero's sky is the rooms' sky right now: it follows Manila's hour
+     (the script sets data-phase), as the worlds do. */
+  html { --sky-a: #0b1029; --sky-b: #171a4a; --sky-c: #2f2152; --stars: 1; }
+  html[data-phase="dawn"] { --sky-a: #1a2350; --sky-b: #6a4a8a; --sky-c: #f08a6a; --stars: 0.45; }
+  html[data-phase="morning"] { --sky-a: #2a5a9a; --sky-b: #5d8fcf; --sky-c: #f2c98a; --stars: 0.08; }
+  html[data-phase="midday"] { --sky-a: #2d6ab8; --sky-b: #5b96d8; --sky-c: #a9cdea; --stars: 0; }
+  html[data-phase="afternoon"] { --sky-a: #2b5fa6; --sky-b: #5a86c6; --sky-c: #f0b878; --stars: 0.05; }
+  html[data-phase="dusk"] { --sky-a: #141a46; --sky-b: #4b2a66; --sky-c: #e8823f; --stars: 0.6; }
+  header.hero { position: relative; overflow: hidden; min-height: min(860px, 100svh); display: grid; align-content: center; background: linear-gradient(180deg, var(--sky-a) 0%, var(--sky-b) 52%, var(--sky-c) 92%, var(--night) 100%); transition: background 1.2s ease; }
+  header.hero::after { content: ""; position: absolute; inset: auto 0 0 0; height: 120px; background: linear-gradient(180deg, transparent, var(--night)); pointer-events: none; }
+  #sky { opacity: var(--stars); transition: opacity 1.2s ease; }
+  /* 正座 and 星座 down the right, as on a poster: the page's one bold thing. */
+  /* 正座 and 星座 down the right, as on a poster: the page's one bold thing. */
+  .poster { display: flex; gap: 0.08em; writing-mode: vertical-rl; font: 800 clamp(84px, 8.4vw, 150px)/1 var(--display); letter-spacing: 0.03em; pointer-events: none; user-select: none; align-self: center; }
+  .poster span { background: linear-gradient(180deg, #fff1cf 0%, var(--lantern) 40%, var(--dawn) 100%); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 6px 24px rgba(11, 16, 41, 0.35)); }
+  .poster span:last-child { opacity: 0.82; }
+  /* By day, against a blue sky: white to pale gold, like clouds lit low. */
+  html[data-phase="morning"] .poster span, html[data-phase="midday"] .poster span, html[data-phase="afternoon"] .poster span { background-image: linear-gradient(180deg, #ffffff 0%, #fff1cf 55%, #ffd6a0 100%); filter: drop-shadow(0 6px 18px rgba(11, 16, 41, 0.45)); }
+  html[data-phase="morning"] .hero, html[data-phase="midday"] .hero, html[data-phase="afternoon"] .hero { text-shadow: 0 1px 14px rgba(11, 16, 41, 0.45); }
+  @media (max-width: 1100px) { .poster { display: none; } }
   #sky { position: absolute; inset: 0; width: 100%; height: 100%; }
-  .hero .stage { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 48px; align-items: center; padding: 64px 0 40px; }
+  .hero .stage { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.95fr) auto; gap: 44px; align-items: center; padding: 64px 0 40px; }
   @media (max-width: 900px) { .hero .stage { grid-template-columns: 1fr; gap: 36px; padding: 48px 0 56px; } }
   h1 { font: 800 clamp(64px, 11vw, 132px)/0.92 var(--display); margin: 0; letter-spacing: -0.01em; }
   .meaning { display: flex; gap: 28px; margin: 18px 0 26px; padding: 0; list-style: none; }
@@ -110,6 +132,23 @@
   .window img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 4px; border: 1px solid var(--line); box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45); background: var(--deep); }
   .window figcaption { margin-top: 10px; font-size: 14px; color: var(--faint); }
   .hero > .wrap:last-child { position: relative; }
+  /* The worlds as one constellation: each a star in its colour, joined. */
+  .constellation { position: relative; margin: 0 0 28px; border-radius: 6px; background: radial-gradient(90% 120% at 30% 0%, rgba(75, 42, 102, 0.45), transparent 70%), rgba(18, 26, 61, 0.55); border: 1px solid var(--line); overflow: hidden; }
+  .constellation svg { display: block; width: 100%; height: auto; }
+  .constellation .link { stroke: rgba(242, 184, 75, 0.35); stroke-width: 1; }
+  .constellation a { cursor: pointer; }
+  .constellation a .halo { opacity: 0.35; transition: opacity 200ms, r 200ms; }
+  .constellation a:hover .halo, .constellation a:focus-visible .halo { opacity: 0.9; }
+  .constellation a text { font: 700 15px var(--text); fill: var(--ink); paint-order: stroke; stroke: rgba(11, 16, 41, 0.85); stroke-width: 4px; }
+  .constellation a:hover text { fill: #fff; }
+  @media (max-width: 640px) { .constellation a text { font-size: 22px; } }
+  /* The one entrance: the hero's constellation drawing itself in. */
+  @keyframes draw-in { from { stroke-dashoffset: var(--len); } }
+  .poster span { animation: rise 1.4s cubic-bezier(.2, .7, .2, 1) both; }
+  .poster span:last-child { animation-delay: 160ms; }
+  @keyframes rise { from { opacity: 0; transform: translateY(24px); } }
+  @media (prefers-reduced-motion: reduce) { .poster span { animation: none; } }
+
   .facts { margin: 0; padding: 18px 0; font-size: 15px; color: var(--muted); border-top: 1px solid var(--line); position: relative; }
   .facts strong { color: var(--ink); }
 
@@ -224,6 +263,7 @@
   </div>
 </nav>
 
+<div class="night" aria-hidden="true"></div>
 <header class="hero" id="top">
   <canvas id="sky" aria-hidden="true"></canvas>
   <div class="wrap stage">
@@ -245,6 +285,7 @@
       <img src="media/hero.gif" width="720" height="405" alt="In Seiza's hall, avatars wave, bow on the tatami, kneel in seiza and doze, and clap and cheer." fetchpriority="high">
       <figcaption>The hall, where a bow can turn into a nap if you kneel long enough. The pink-haired avatar is a fan-made VRM by <a href="https://hub.vroid.com/en/users/42324143">@wawari_w</a>, shown from the maintainer's own copy; it isn't part of Seiza.</figcaption>
     </figure>
+    <div class="poster" aria-hidden="true" lang="ja"><span>正座</span><span>星座</span></div>
   </div>
   <div class="wrap">
     <p class="facts"><strong><!--WORLD_COUNT--> worlds</strong> open now, on a phone, a laptop, or a headset, in English or <span lang="ja">日本語</span>, with no account to make before you join.</p>
@@ -292,6 +333,7 @@
   <section id="worlds" aria-labelledby="worlds-title">
     <h2 id="worlds-title">The worlds</h2>
     <div class="intro"><p>Each is its own room, open now. Portals in every one lead to the rest.</p></div>
+    <figure class="constellation" id="constellation" hidden><svg viewBox="0 0 1000 420" role="group" aria-label="The worlds, as one constellation"></svg></figure>
     <div class="worlds" id="world-list">
 <!--WORLDS-->
     </div>
@@ -345,11 +387,55 @@
     const phase = [...PHASES].reverse().find(([from]) => h >= from) ?? PHASES[PHASES.length - 1];
     const time = `${String(h).padStart(2, "0")}:${String(now.getUTCMinutes()).padStart(2, "0")}`;
     skyNow.textContent = `${time} in Manila, ${phase[1]} in the rooms`;
+    document.documentElement.dataset.phase = phase[1];
     skyNow.style.setProperty("--phase", phase[2]);
     skyNow.hidden = false;
   };
   showSky();
   setInterval(showSky, 30e3);
+
+  // The night lightening toward dawn as the page goes down.
+  let downQueued = false;
+  const setDown = () => {
+    downQueued = false;
+    const room = document.documentElement.scrollHeight - innerHeight;
+    document.documentElement.style.setProperty("--down", room > 0 ? (scrollY / room).toFixed(3) : "0");
+  };
+  addEventListener("scroll", () => { if (!downQueued) { downQueued = true; requestAnimationFrame(setDown); } }, { passive: true });
+  setDown();
+
+  // The worlds as one constellation: a star each, in its colour, along a
+  // shape like a kite with a tail, each a link to its world.
+  {
+    const figure = document.getElementById("constellation");
+    const svg = figure.querySelector("svg");
+    const cards = [...document.querySelectorAll("#world-list a.world")];
+    const SHAPE = [[90, 300], [210, 170], [360, 230], [470, 90], [600, 180], [560, 330], [720, 290], [840, 160], [930, 260], [780, 380], [300, 370], [140, 120]];
+    const ns = "http://www.w3.org/2000/svg";
+    const el = (name, attrs) => { const e = document.createElementNS(ns, name); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); return e; };
+    const points = cards.slice(0, SHAPE.length).map((card, i) => ({ card, x: SHAPE[i][0], y: SHAPE[i][1] }));
+    if (points.length > 1) {
+      for (let i = 1; i < points.length; i++) {
+        const a = points[i - 1], b = points[i];
+        const len = Math.hypot(b.x - a.x, b.y - a.y);
+        svg.append(el("line", { class: "link", x1: a.x, y1: a.y, x2: b.x, y2: b.y, "stroke-dasharray": len, style: `--len: ${len}; animation: draw-in 900ms ${200 + i * 140}ms ease both` }));
+      }
+      for (const { card, x, y } of points) {
+        const c = getComputedStyle(card).getPropertyValue("--c").trim() || "#f2b84b";
+        const name = card.querySelector("h3")?.textContent ?? "";
+        const link = el("a", { href: card.getAttribute("href") });
+        link.append(el("title", {}));
+        link.lastChild.textContent = card.getAttribute("aria-label") ?? name;
+        link.append(el("circle", { class: "halo", cx: x, cy: y, r: 16, fill: c }), el("circle", { cx: x, cy: y, r: 5, fill: "#fff" }), el("circle", { cx: x, cy: y, r: 3, fill: c }));
+        const label = el("text", x > 760 ? { x: x - 14, y: y - 12, "text-anchor": "end" } : { x: x + 14, y: y - 12 });
+        label.textContent = name;
+        link.append(label);
+        svg.append(link);
+      }
+      figure.hidden = false;
+    }
+    if (still) svg.querySelectorAll(".link").forEach((l) => (l.style.animation = "none"));
+  }
 
   // The bar marks the section in view.
   const links = new Map([...document.querySelectorAll('nav a[href^="#"]')].map((a) => [a.getAttribute("href").slice(1), a]));
