@@ -19,20 +19,37 @@ import type { PortalConfig } from "../config/worldConfig";
  * of it, and it's in view, into a small texture, once a frame even in a
  * headset (both eyes share it). Out of range it keeps its last picture.
  *
+ * Behind the people is the room itself, but a still of it: a small cube
+ * snapshot taken from the mirror (ENV_SIZE a face, one face a frame over
+ * six frames, so no frame pays for all of it) as you come near, and again
+ * every ENV_REFRESH seconds while you're there. People are left out of the
+ * still, since they are drawn live over it. The world is never drawn for
+ * the mirror frame by frame.
+ *
  * In first person your own head is hidden from your camera (SelfView, so
  * you don't see the inside of it). The mirror shows it for its own pass.
  */
 export const MIRROR = { width: 0.9, height: 1.7, foot: 0.12 };
 const MIRROR_RANGE = 7;
-const FLAT_SIZE = 384;
-const XR_SIZE = 256;
+const FLAT_SIZE = 768;
+const XR_SIZE = 512;
+/** The room's still behind the people: pixels a cube face, and how often
+ *  it's taken again while you're near, seconds. */
+const ENV_SIZE = 256;
+const ENV_REFRESH = 60;
+const ENV_RANGE = MIRROR_RANGE + 3;
 
 /** The layer a mirror sees: people, what they hold, and the lights. */
 export const MIRROR_LAYER = 3;
 const BACKDROP = new THREE.Color("#c3ccd4");
 
 /** Marks an avatar (or anything) to show in mirrors, with all it holds. */
+const marked = new Set<THREE.Object3D>();
+/** Every mirror's own objects, hidden while any mirror takes its still. */
+const mirrorParts = new Set<THREE.Object3D>();
+
 export function markForMirrors(root: THREE.Object3D) {
+  marked.add(root);
   root.userData.inMirrors = true;
   root.traverse((o) => o.layers.enable(MIRROR_LAYER));
 }
@@ -51,15 +68,56 @@ function scanForMirrors(scene: THREE.Object3D) {
   });
 }
 
+const envAt = new THREE.Vector3();
+const envNear = new THREE.Vector3();
+const envDir = new THREE.Vector3();
+
 const frameMaterial = () => new THREE.MeshStandardMaterial({ color: "#6b4a2f", roughness: 0.55, metalness: 0.05 });
 
+/** The room as the mirror sees it, without people or mirrors, into one
+ *  face of the cube a call. */
+function captureFace(gl: THREE.WebGLRenderer, scene: THREE.Scene, cube: THREE.CubeCamera, face: number) {
+  if (cube.coordinateSystem !== gl.coordinateSystem) {
+    cube.coordinateSystem = gl.coordinateSystem;
+    cube.updateCoordinateSystem();
+  }
+  const hidden: THREE.Object3D[] = [];
+  const hide = (o: THREE.Object3D) => {
+    if (o.visible) {
+      o.visible = false;
+      hidden.push(o);
+    }
+  };
+  for (const o of marked) {
+    if (!o.parent) marked.delete(o);
+    else hide(o);
+  }
+  for (const o of mirrorParts) hide(o);
+  const target = gl.getRenderTarget();
+  const targetFace = gl.getActiveCubeFace();
+  const targetMip = gl.getActiveMipmapLevel();
+  const xr = gl.xr.enabled;
+  const shadows = gl.shadowMap.autoUpdate;
+  gl.xr.enabled = false;
+  gl.shadowMap.autoUpdate = false;
+  gl.setRenderTarget(cube.renderTarget, face);
+  gl.render(scene, cube.children[face] as THREE.Camera);
+  gl.setRenderTarget(target, targetFace, targetMip);
+  gl.xr.enabled = xr;
+  gl.shadowMap.autoUpdate = shadows;
+  for (const o of hidden) o.visible = true;
+}
+
 export function Mirror() {
-  const { gl } = useThree();
+  const { gl, scene, camera } = useThree();
   const presenting = useXrPresenting(gl);
   const tick = useRef(0);
-  useFrame(() => {
-    tick.current++;
-  });
+  // The room's still: taking it a face a frame (face 0 to 5), or idle (-1).
+  const env = useMemo(() => {
+    const target = new THREE.WebGLCubeRenderTarget(ENV_SIZE, { generateMipmaps: false });
+    return { target, cube: new THREE.CubeCamera(0.1, 600, target), face: -1, at: -Infinity, ready: false };
+  }, []);
+  useEffect(() => () => env.target.dispose(), [env]);
 
   const { reflector, frame } = useMemo(() => {
     const size = presenting ? XR_SIZE : FLAT_SIZE;
@@ -79,6 +137,8 @@ export function Mirror() {
     const near = new THREE.Vector3();
     const at = new THREE.Vector3();
     reflector.onBeforeRender = (renderer, scene, camera, geometry, material, group) => {
+      // Not into another mirror's still.
+      if (!reflector.visible) return;
       // Once a frame: the second eye uses what the first saw.
       if (renderedAt === tick.current) return;
       reflector.getWorldPosition(at);
@@ -89,7 +149,7 @@ export function Mirror() {
       if (head) head.scale.setScalar(1);
       scanForMirrors(scene);
       const background = scene.background;
-      scene.background = BACKDROP;
+      scene.background = env.ready ? env.target.texture : BACKDROP;
       render.call(reflector, renderer, scene, camera, geometry, material, group);
       scene.background = background;
       if (head) {
@@ -127,13 +187,47 @@ export function Mirror() {
     floor.layers.set(MIRROR_LAYER);
     const frame = new THREE.Group();
     frame.add(floor);
+    frame.userData.floor = floor;
+    floor.visible = !env.ready;
     for (const g of parts) {
       const mesh = new THREE.Mesh(g, frameMaterial());
       mesh.castShadow = true;
       frame.add(mesh);
     }
     return { reflector, frame };
-  }, [presenting]);
+  }, [presenting, env]);
+
+  useEffect(() => {
+    mirrorParts.add(reflector);
+    mirrorParts.add(frame);
+    return () => {
+      mirrorParts.delete(reflector);
+      mirrorParts.delete(frame);
+    };
+  }, [reflector, frame]);
+
+  useFrame((state) => {
+    tick.current++;
+    const now = state.clock.elapsedTime;
+    if (env.face < 0) {
+      if (now - env.at < ENV_REFRESH) return;
+      reflector.getWorldPosition(envAt);
+      if (camera.getWorldPosition(envNear).distanceTo(envAt) > ENV_RANGE) return;
+      // From just in front of the glass, what it faces.
+      reflector.getWorldDirection(envDir);
+      env.cube.position.copy(envAt).addScaledVector(envDir, 0.08);
+      env.cube.updateMatrixWorld(true);
+      env.face = 0;
+    }
+    captureFace(gl, scene, env.cube, env.face);
+    if (++env.face === 6) {
+      env.face = -1;
+      env.at = now;
+      env.ready = true;
+      // The room's own floor is in the still now.
+      (frame.userData.floor as THREE.Object3D).visible = false;
+    }
+  });
 
   useEffect(
     () => () => {
