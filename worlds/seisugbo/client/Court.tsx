@@ -14,7 +14,7 @@ import { addBacking, dims, Labels, Picture, Pins, type LabelPlacement, type Plac
 import { GROUP_COLORS, PIECE_BY_ID, PIECES, type Group } from "./collection";
 import { groupBlurb, TITLE } from "./info";
 import { Builder, canvasTexture, Clickable, FONT, lampNeed, noRaycast, paint, useDrawDistance, useNight, washed, type Vec3 } from "./kit";
-import { COURT, COURT_CENTRE, Y } from "./plan";
+import { COURT, COURT_BENCH, COURT_CENTRE, Y } from "./plan";
 import { openPiece } from "./viewer";
 import { L, useLang } from "../../../src/i18n/lang";
 import { wrapLines } from "../../../src/ui/wrapLines";
@@ -146,7 +146,7 @@ function buildCourt(hung: Hung[], posters: Hung[]) {
   for (const z of [pb.z - pb.w / 2 + 0.3, pb.z + pb.w / 2 - 0.3]) b.box([0.08, pb.y - pb.h / 2 - Y, 0.08], [pb.x + 0.03, Y + (pb.y - pb.h / 2 - Y) / 2, z], "#4a3a2c");
   for (const h of posters) addBacking(b, h.place, "board");
   // A long concrete bench along the south side, for the audience.
-  b.box([9.5, 0.45, 0.5], [13, Y + 0.225, COURT.z0 + 0.7], "#b9b3a6");
+  b.box([COURT_BENCH.length, COURT_BENCH.height, 0.5], [COURT_BENCH.x, Y + COURT_BENCH.height / 2, COURT_BENCH.z], "#b9b3a6");
   return { painted: b.build(), roof: roof.build(), lamps: lamps.build(), lines: lines.build() };
 }
 
@@ -376,6 +376,6 @@ export function courtObstacles(): Obstacle[] {
     list.push(o(SIGN_X, line.z, 0.06, 0.06));
   }
   list.push(o(POSTER_BOARD.x + 0.03, POSTER_BOARD.z, 0.08, POSTER_BOARD.w / 2 + 0.08));
-  list.push(o(13, COURT.z0 + 0.7, 4.75, 0.25));
+  list.push(o(COURT_BENCH.x, COURT_BENCH.z, COURT_BENCH.length / 2, 0.25));
   return list;
 }

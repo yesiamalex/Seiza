@@ -12,7 +12,8 @@
 //   (Xr.tsx);
 // - Tala, the guide (guide.ts), who knows the forum, its Urbanity Walk,
 //   and how this world was made (knowledge.ts).
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
+import { SeatPad } from "../../../src/scene/SeatPad";
 import { createBrain } from "../../../src/guides/brain";
 import { Guide } from "../../../src/guides/Guide";
 import { GuideHud } from "../../../src/guides/GuideHud";
@@ -25,6 +26,7 @@ import { findPath, TALA, TALA_AVATAR, TALA_FACES, TALA_ROUTE } from "./guide";
 import { SeisugboHud } from "./Hud";
 import { cardTitle, seisugboKnowledge, TOUR_IDS } from "./knowledge";
 import { Lane, laneObstacles } from "./Lane";
+import { seisugboSeats } from "./plan";
 import { openPiece } from "./viewer";
 import { XrViewer } from "./Xr";
 
@@ -44,7 +46,8 @@ function Hud() {
   );
 }
 
-export function Scene({ warp, getSelfPosition }: WorldSceneProps) {
+export function Scene({ warp, getSelfPosition, sit, occupiedSeatId }: WorldSceneProps) {
+  const seats = useMemo(seisugboSeats, []);
   useEffect(() => {
     registerGuides([{ id: "tala", name: TALA.name, brain: createBrain(seisugboKnowledge(), TALA) }]);
     showWorldOverlay(<Hud />);
@@ -68,6 +71,7 @@ export function Scene({ warp, getSelfPosition }: WorldSceneProps) {
       <Court />
       <Boards />
       <XrViewer />
+      {sit && seats.map((seat) => <SeatPad key={seat.id} seat={seat} onSit={sit} occupied={occupiedSeatId === seat.id} />)}
       <Guide id="tala" name={TALA.name} avatarUrl={TALA_AVATAR} stops={TALA_ROUTE} faceAt={TALA_FACES} speed={0.9} pathsOnPatrol getSelfPosition={getSelfPosition} findPath={findPath} />
     </>
   );

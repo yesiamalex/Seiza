@@ -12,7 +12,7 @@
 //      z 42 │                  │    │   └──────────────┘   │
 //      z 38 └────────────── garden steps ──────────────────┘
 //          x −24             x 0     x 6          x 20   x 24
-import { FIELD_Y } from "../../../src/scene/layout";
+import { FIELD_Y, SEAT_HEIGHT, type Seat } from "../../../src/scene/layout";
 
 export const Y = FIELD_Y;
 
@@ -112,4 +112,47 @@ export function seeded(seed: number) {
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+}
+
+// --- seats ---------------------------------------------------------------------------
+
+/** The court's audience bench: a long concrete one along its south side. */
+export const COURT_BENCH = { x: 13, z: COURT.z0 + 0.7, length: 9.5, height: 0.45 };
+/** The tambayan bench in front of the sari-sari store, under its window. */
+export const STORE_BENCH = { x: (STORE.x0 + STORE.x1) / 2 - 0.3, z: STORE.front + 0.85, length: 1.8, height: 0.48 };
+/** The lane's monobloc chairs: where, which way (their backs toward -z
+ *  turned by this yaw), and their colour. */
+export const CHAIRS: [number, number, number, string][] = [
+  [9.6, 61.1, 2.6, "#f2f0ea"],
+  [10.4, 61.2, 3.5, "#d23b31"],
+];
+
+/** Everywhere in Seisugbo to sit: along the court's bench, watching the
+ *  court; on the store's bench, watching the lane; on the two chairs. */
+export function seisugboSeats(): Seat[] {
+  const seats: Seat[] = [];
+  // Facing +z (north) is a yaw of π.
+  for (let i = 0; i < 6; i++)
+    seats.push({
+      id: `seisugbo-court-${i}`,
+      position: [COURT_BENCH.x + (i - 2.5) * 1.5, Y + COURT_BENCH.height - SEAT_HEIGHT, COURT_BENCH.z + 0.05],
+      rotationY: Math.PI,
+      label: "Court bench",
+    });
+  for (const side of [-1, 1])
+    seats.push({
+      id: `seisugbo-store-${side > 0 ? "r" : "l"}`,
+      position: [STORE_BENCH.x + side * 0.45, Y + STORE_BENCH.height - SEAT_HEIGHT, STORE_BENCH.z + 0.04],
+      rotationY: Math.PI,
+      label: "Tambayan bench",
+    });
+  CHAIRS.forEach(([x, z, yaw], i) =>
+    seats.push({
+      id: `seisugbo-chair-${i}`,
+      position: [x + Math.sin(yaw) * 0.03, Y + 0.465 - SEAT_HEIGHT, z + Math.cos(yaw) * 0.03],
+      rotationY: yaw + Math.PI,
+      label: "Chair",
+    })
+  );
+  return seats;
 }

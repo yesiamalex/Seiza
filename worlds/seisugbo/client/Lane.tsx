@@ -19,7 +19,7 @@ import { addBacking, dims, Labels, Picture, type LabelPlacement, type Placement 
 import { PIECE_BY_ID } from "./collection";
 import { TITLE } from "./info";
 import { Builder, canvasTexture, Clickable, FONT, noRaycast, lampNeed, ON_TOP, paint, useDrawDistance, useNight, washed, type Vec3 } from "./kit";
-import { ARCH_X, BAMBOO, HOUSES, LANE, LANE_CENTRE, PALMS, PATH, POLES, RACK, seeded, STORE, TOUR, TOUR_Z, Y, type House } from "./plan";
+import { ARCH_X, BAMBOO, CHAIRS, HOUSES, LANE, LANE_CENTRE, PALMS, PATH, POLES, RACK, seeded, STORE, STORE_BENCH, TOUR, TOUR_Z, Y, type House } from "./plan";
 import { openPiece } from "./viewer";
 
 const GROUND_FLOOR = 2.7;
@@ -172,8 +172,8 @@ function addStore(b: Builder, glass: Builder, cloth: Builder, rand: () => number
   b.box([ow + 0.6, 0.04, 0.9], [ox, Y + 2.62, front + 0.42], "#c8402f", [-0.22, 0, 0]);
   // Door at the side, and a bench out front: the tambayan, where people sit.
   b.box([0.9, 2.1, 0.06], [x1 - 0.55, Y + 1.05, front + 0.03], "#3a2a20");
-  b.box([1.8, 0.06, 0.38], [ox, Y + 0.45, front + 0.85], "#a87b4c");
-  for (const sx of [-0.8, 0.8]) b.box([0.06, 0.44, 0.34], [ox + sx, Y + 0.22, front + 0.85], "#7a5634");
+  b.box([STORE_BENCH.length, 0.06, 0.38], [STORE_BENCH.x, Y + 0.45, STORE_BENCH.z], "#a87b4c");
+  for (const sx of [-0.8, 0.8]) b.box([0.06, 0.44, 0.34], [STORE_BENCH.x + sx, Y + 0.22, STORE_BENCH.z], "#7a5634");
   // Roof.
   b.box([w + 0.5, 0.05, depth + 0.6], [cx, Y + 3.05, cz + 0.1], "#9a5a3a", [-0.1, 0, 0]);
 }
@@ -345,10 +345,7 @@ function buildLane(): LaneGeometry {
     b.cylinder(0.3, 0.3, 0.85, [x, Y + 0.425, z], "#2f63b5", undefined, 12);
     b.cylinder(0.31, 0.31, 0.04, [x, Y + 0.86, z], "#244f91", undefined, 12);
   }
-  for (const [x, z, yaw, color] of [
-    [9.6, 61.1, 2.6, "#f2f0ea"],
-    [10.4, 61.2, 3.5, "#d23b31"],
-  ] as [number, number, number, string][]) {
+  for (const [x, z, yaw, color] of CHAIRS) {
     const q = new THREE.Euler(0, yaw, 0);
     const at = (dx: number, dy: number, dz: number): Vec3 => {
       const v = new THREE.Vector3(dx, dy, dz).applyEuler(q);

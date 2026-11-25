@@ -77,7 +77,7 @@ export function Scene({ warp, getSelfPosition, findPath, canEdit, connected, roo
     <>
       <Panels />
       <Station canEdit={canEdit} connected={connected} roomSky={roomSky} setRoomSky={setRoomSky} worldState={worldState} setWorldState={setWorldState} />
-      <Futures worldState={worldState} setWorldState={setWorldState} canEdit={canEdit} connected={connected} />
+      <Futures worldState={worldState} setWorldState={setWorldState} canEdit={canEdit} connected={connected} sit={sit} occupiedSeatId={occupiedSeatId} />
       <Lifts warp={warp} worldState={worldState} setWorldState={setWorldState} />
       <RoomLights worldState={worldState} />
       <ConferenceHalls sit={sit} occupiedSeatId={occupiedSeatId} />

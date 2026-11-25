@@ -19,6 +19,8 @@ import { L, useLang } from "../../../src/i18n/lang";
 import { Clickable, FONT, mergedGeometry, roundRect, standard, useCanvasTexture, wrapText, type BoxSpec, type CylinderSpec } from "../../seizora/client/kit";
 import { openCard, type CardKey } from "./cards";
 import { addShade } from "../../../src/avatar/heat";
+import { SEAT_HEIGHT, type Seat } from "../../../src/scene/layout";
+import { SeatPad } from "../../../src/scene/SeatPad";
 import {
   BED,
   bedPositions,
@@ -980,9 +982,25 @@ export interface FuturesProps {
   setWorldState: (key: string, value: WorldStateValue) => void;
   canEdit: boolean;
   connected: boolean;
+  sit?: (seat: Seat) => void;
+  occupiedSeatId?: string | null;
 }
 
-export function Futures({ worldState, setWorldState, canEdit, connected }: FuturesProps) {
+/** The learning hut's bench, along its back wall facing the garden: three
+ *  places, at the table. Getting up, you step down its front steps. */
+export function hutSeats(): Seat[] {
+  const [hx, hz] = GARDEN_SPOTS.hut;
+  return [-1, 0, 1].map((i) => ({
+    id: `seinag-hut-${i + 1}`,
+    position: g3(hx + i * 1.0, 0.945 - SEAT_HEIGHT, hz - 0.88),
+    rotationY: Math.PI,
+    label: "Learning hut",
+    exit: [GARDEN.x + hx + i * 0.4, GARDEN.z + hz + 2.4],
+  }));
+}
+
+export function Futures({ worldState, setWorldState, canEdit, connected, sit, occupiedSeatId }: FuturesProps) {
+  const seats = useMemo(hutSeats, []);
   useLang();
   const on = (layer: Layer) => layerOn(worldState, layer);
   const enabled = canEdit && connected;
@@ -1010,6 +1028,7 @@ export function Futures({ worldState, setWorldState, canEdit, connected }: Futur
       {on("garden") && (
         <>
           <Garden />
+          {sit && seats.map((seat) => <SeatPad key={seat.id} seat={seat} onSit={sit} occupied={occupiedSeatId === seat.id} />)}
           <InfoBoard info={GARDEN_INFO} position={gate} rotationY={-Math.PI / 2} />
         </>
       )}
