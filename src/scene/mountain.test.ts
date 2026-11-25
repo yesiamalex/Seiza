@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { clampToRooms, floorHeightAt, OUTER_GROUND_Y, setMountain, SUMMIT_BENCHES } from "./layout";
-import { MAKILING_SUMMIT_M, mountainHeight, realAltitude, SUMMIT, TRAIL_FROM } from "./mountainShape";
+import { clampToRooms, floorHeightAt, OUTER_GROUND_Y, setMountain, SUMMIT_BENCHES, type Ground } from "./layout";
+import { MountainGround } from "./mountainGround";
+import { MAKILING_SUMMIT_M, mountainHeight, placeMountain, realAltitude, SUMMIT, TRAIL_FROM } from "./mountainShape";
 
 describe("Mt. Makiling", () => {
   afterEach(() => setMountain(true));
@@ -32,5 +33,53 @@ describe("Mt. Makiling", () => {
     const top = new THREE.Vector3(SUMMIT[0], 0, SUMMIT[1]);
     clampToRooms(top);
     expect(Math.hypot(top.x - SUMMIT[0], top.z - SUMMIT[1])).toBeGreaterThan(5);
+  });
+});
+
+describe("Mt. Makiling in a model world", () => {
+  // A lawn like SeiOU's: flat at 0.2, walkable up to z 202.
+  const lawn = (): Ground => {
+    const at = { x: 0, z: 0 };
+    const clamp = (p: THREE.Vector3) => {
+      p.z = Math.min(202, p.z);
+      at.x = p.x;
+      at.z = p.z;
+      return 0.2;
+    };
+    return { constrain: clamp, floorAt: () => 0.2, isWalkable: (_x, z) => z <= 202, place: (x, _y, z) => clamp(new THREE.Vector3(x, 0, z)) };
+  };
+  afterEach(() => placeMountain());
+
+  it("walks off the lawn's edge up the trail, and back down onto the lawn", () => {
+    placeMountain({ x: -55, z: 252.9, y: 0.2 });
+    const g = new MountainGround(lawn());
+    const p = new THREE.Vector3(TRAIL_FROM[0], 0, 200);
+    expect(g.constrain(p)).toBeCloseTo(0.2);
+    // Step by step up the trail to the summit.
+    let y = 0;
+    for (let z = 200.5; z <= SUMMIT[1]; z += 0.5) {
+      p.set(SUMMIT[0], 0, z);
+      y = g.constrain(p);
+      expect(p.z).toBeCloseTo(z);
+    }
+    expect(y).toBeGreaterThan(5);
+    expect(y).toBeCloseTo(0.2 + mountainHeight(p.x, p.z));
+    // And back down onto the lawn.
+    for (let z = SUMMIT[1]; z >= 199; z -= 0.5) {
+      p.set(SUMMIT[0], 0, z);
+      y = g.constrain(p);
+    }
+    expect(y).toBeCloseTo(0.2);
+    p.set(SUMMIT[0], 0, 150);
+    g.constrain(p);
+    expect(p.z).toBeLessThanOrEqual(202);
+  });
+
+  it("puts the meadow's mountain back where it was", () => {
+    const before = [...SUMMIT];
+    placeMountain({ x: 500, z: 500 });
+    expect(SUMMIT[0]).not.toBeCloseTo(before[0]);
+    placeMountain();
+    expect(SUMMIT).toEqual(before);
   });
 });

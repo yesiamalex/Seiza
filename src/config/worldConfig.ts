@@ -35,8 +35,11 @@ export interface WorldConfig {
    *  it usually stands, and false removes it. Built-in grounds only. */
   meadowTree?: boolean | { x: number; z: number };
   /** Mt. Makiling beyond the meadow's far end, walkable to its summit
-   *  (src/scene/mountainShape.ts). On unless false. */
-  mountain?: boolean;
+   *  (src/scene/mountainShape.ts). On unless false. A model world has it
+   *  only if this gives where: its centre and the height of its foot,
+   *  metres, the trail up from its north side (-z), which should overlap
+   *  the world's walkable ground by a few metres. */
+  mountain?: boolean | { x: number; z: number; y?: number };
   /**
    * What the world is made of. "builtin" (the default): Seiza's own hall,
    * classroom, garden, and meadow, with `sceneUrl` layered over them.

@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { addShade } from "../avatar/heat";
 import { skyState } from "../sky/skyState";
-import { MAKILING_SUMMIT_M, MOUNTAIN, MOUNTAIN_SCALE, mountainHeight, nearTrail, SUMMIT } from "./mountainShape";
-import { OUTER_GROUND_Y, setMountain } from "./layout";
+import { MAKILING_SUMMIT_M, MOUNTAIN, MOUNTAIN_SCALE, mountainHeight, nearTrail, placeMountain, SUMMIT } from "./mountainShape";
+import { BENCH_LENGTH, SEAT_HEIGHT, seatAt, setGroundWrap, setMountain, type BenchPlacement, type Seat } from "./layout";
+import { MountainGround } from "./mountainGround";
 import { MeadowTree } from "./Seasons";
+import { SeatPad } from "./SeatPad";
 
 /**
  * Mt. Makiling, drawn for next to nothing: the ground one mesh (a 64 × 64
@@ -18,9 +20,7 @@ const GRID = 64;
 const FOREST = 220;
 /** The summit's clearing: no forest within this far, metres. */
 const CLEARING = 7;
-const SUMMIT_TREE: [number, number] = [SUMMIT[0] + 3.4, SUMMIT[1] + 1.6];
-
-const floorAt = (x: number, z: number) => OUTER_GROUND_Y + mountainHeight(x, z);
+const floorAt = (x: number, z: number) => MOUNTAIN.y + mountainHeight(x, z);
 
 function random(seed: number) {
   let a = seed >>> 0;
@@ -47,7 +47,7 @@ function buildGround() {
     const z = p.getZ(i) + MOUNTAIN.z;
     const h = mountainHeight(x, z);
     // Sunk a touch below the floor, so it never pokes over the walk.
-    p.setY(i, OUTER_GROUND_Y + h - 0.03);
+    p.setY(i, MOUNTAIN.y + h - 0.03);
     const t = h / peak;
     c.copy(low).lerp(forest, Math.min(1, t * 3)).lerp(high, Math.max(0, (t - 0.8) / 0.2));
     if (h > 0.05 && nearTrail(x, z, 1.1)) c.copy(trail);
@@ -141,12 +141,13 @@ export function Mountain() {
   const cloth = useRef<THREE.Mesh>(null);
   const summitY = floorAt(SUMMIT[0], SUMMIT[1]);
   const markerAt: [number, number] = [SUMMIT[0] - 2.6, SUMMIT[1] + 0.6];
+  const SUMMIT_TREE = useMemo<[number, number]>(() => [SUMMIT[0] + 3.4, SUMMIT[1] + 1.6], []);
 
   useEffect(() => {
     setMountain(true);
     // Shade under the summit tree, for heat reactions.
     return addShade((x, z) => Math.hypot(x - SUMMIT_TREE[0], z - SUMMIT_TREE[1]) < 3.6);
-  }, []);
+  }, [SUMMIT_TREE]);
   useEffect(
     () => () => {
       ground.dispose();
@@ -201,5 +202,69 @@ export function Mountain() {
         <meshBasicMaterial color="#000000" transparent opacity={0.18} depthWrite={false} />
       </mesh>
     </group>
+  );
+}
+
+/** The summit's two benches, a little below it, facing back down the trail. */
+function summitBenches(): BenchPlacement[] {
+  return [-1.5, 1.5].map((dx) => {
+    const x = SUMMIT[0] + dx;
+    const z = SUMMIT[1] - 3.2;
+    return { position: [x, floorAt(x, z), z], rotationY: 0 };
+  });
+}
+
+/**
+ * Mt. Makiling in a model world (world.json `mountain: {x, z, y}`): put
+ * where the world says, its ground joined to the world's navmesh
+ * (mountainGround.ts), with the summit's benches to sit on. The built-in
+ * worlds draw theirs with the garden's (BaseEnvironment, layout.ts's seats).
+ */
+export function ModelMountain({ at, onSit, occupiedSeatId }: { at: { x: number; z: number; y?: number }; onSit?: (seat: Seat) => void; occupiedSeatId?: string | null }) {
+  // Placed before anything below is built from it.
+  useState(() => placeMountain(at));
+  useEffect(() => {
+    placeMountain(at);
+    setGroundWrap((inner) => new MountainGround(inner));
+    return () => {
+      setGroundWrap(null);
+      placeMountain();
+    };
+  }, [at]);
+  const benches = useMemo(summitBenches, [at]);
+  const seats = useMemo<Seat[]>(
+    () =>
+      benches.flatMap((bench, i) =>
+        [-1, 1].map((side) => {
+          const x = bench.position[0] + side * BENCH_LENGTH * 0.25;
+          const s = seatAt(x, bench.position[2], bench.rotationY);
+          return { id: `summit-bench-${i}-${side > 0 ? "r" : "l"}`, position: [s[0], bench.position[1], s[2]] as [number, number, number], rotationY: bench.rotationY, label: "Summit bench" };
+        })
+      ),
+    [benches]
+  );
+  return (
+    <>
+      <Mountain key={`${at.x},${at.z}`} />
+      {benches.map((b, i) => (
+        <group key={i} position={b.position} rotation={[0, b.rotationY, 0]} userData={{ navIgnore: true }}>
+          <mesh position={[0, SEAT_HEIGHT, 0]} castShadow receiveShadow>
+            <boxGeometry args={[BENCH_LENGTH, 0.11, 0.54]} />
+            <meshStandardMaterial color="#8a5c3c" roughness={0.8} />
+          </mesh>
+          <mesh position={[0, SEAT_HEIGHT + 0.32, 0.24]} rotation={[0.12, 0, 0]} castShadow>
+            <boxGeometry args={[BENCH_LENGTH, 0.46, 0.09]} />
+            <meshStandardMaterial color="#8a5c3c" roughness={0.8} />
+          </mesh>
+          {[-1, 1].map((side) => (
+            <mesh key={side} position={[side * (BENCH_LENGTH / 2 - 0.18), SEAT_HEIGHT / 2, 0]} castShadow>
+              <boxGeometry args={[0.13, SEAT_HEIGHT, 0.5]} />
+              <meshStandardMaterial color="#4a4743" roughness={0.6} />
+            </mesh>
+          ))}
+        </group>
+      ))}
+      {onSit && seats.map((seat) => <SeatPad key={seat.id} seat={seat} onSit={onSit} occupied={occupiedSeatId === seat.id} />)}
+    </>
   );
 }

@@ -7,6 +7,7 @@
   "navMeshUrl": "/worlds/seiou/models/campus.navmesh",
   "sky": { "cycle": "realtime", "site": "manila", "weather": "auto", "vibrance": 1.35 },
   "viewDistance": 700,
+  "mountain": { "x": -55, "z": 252.9, "y": 0.2 },
   "spawnPoint": { "x": 66, "y": 0.2, "z": 0 },
   "spawnRotationY": -1.5708,
   "defaultAvatarUrl": "",

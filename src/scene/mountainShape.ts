@@ -13,9 +13,13 @@ import makiling from "./makiling.json";
 const N = makiling.size;
 const HEIGHTS = makiling.heights;
 
-/** Its footprint on the ground: centre and width, metres. North of the
- *  meadow and west of its middle, clear of the beach and the sea. */
-export const MOUNTAIN = { x: -30, z: 134, size: 110 };
+/** Where it stands by default: past the meadow's far end and west of its
+ *  middle, clear of the beach and the sea, its foot on the outer ground
+ *  (layout.ts's OUTER_GROUND_Y). */
+const MEADOW_PLACE = { x: -30, z: 134, y: -0.06 };
+/** Its footprint: centre, the height of its foot, and width, metres. A
+ *  model world puts it elsewhere (placeMountain). */
+export const MOUNTAIN = { ...MEADOW_PLACE, size: 110 };
 /** World metres per real metre: about 1 to 67. */
 export const MOUNTAIN_SCALE = MOUNTAIN.size / makiling.spanMeters;
 /** The real summit's height above sea level, metres. */
@@ -45,17 +49,33 @@ export function realAltitude(x: number, z: number): number {
 /** Within the mountain's round footprint, plus a margin (trees, hills). */
 export const onMountain = (x: number, z: number, margin = 0) => Math.hypot(x - MOUNTAIN.x, z - MOUNTAIN.z) < MOUNTAIN.size * 0.5 + margin;
 
-/** The summit: the highest point of the grid, in world x and z. */
-export const SUMMIT: [number, number] = (() => {
+/** The summit: the highest point of the grid, from the mountain's centre. */
+const PEAK: [number, number] = (() => {
   let best = 0;
   for (let k = 1; k < HEIGHTS.length; k++) if (HEIGHTS[k] > HEIGHTS[best]) best = k;
   const i = best % N;
   const j = Math.floor(best / N);
-  return [MOUNTAIN.x + (i / (N - 1) - 0.5) * MOUNTAIN.size, MOUNTAIN.z + (j / (N - 1) - 0.5) * MOUNTAIN.size];
+  return [(i / (N - 1) - 0.5) * MOUNTAIN.size, (j / (N - 1) - 0.5) * MOUNTAIN.size];
 })();
+/** The summit in world x and z. */
+export const SUMMIT: [number, number] = [MOUNTAIN.x + PEAK[0], MOUNTAIN.z + PEAK[1]];
 
-/** The trail: straight up from the meadow's far end to the summit. */
+/** The trail: straight up from its north foot (toward the meadow, or the
+ *  campus) to the summit. */
 export const TRAIL_FROM: [number, number] = [SUMMIT[0], MOUNTAIN.z - MOUNTAIN.size * 0.5 + 2];
+
+/** Moves the mountain (a model world's world.json `mountain`), or back to
+ *  the meadow's with none. Everything here follows; the meadow's own floor
+ *  plan (layout.ts) keeps its place, since only built-in worlds use it. */
+export function placeMountain(at?: { x: number; z: number; y?: number }): void {
+  MOUNTAIN.x = at ? at.x : MEADOW_PLACE.x;
+  MOUNTAIN.z = at ? at.z : MEADOW_PLACE.z;
+  MOUNTAIN.y = at ? (at.y ?? 0) : MEADOW_PLACE.y;
+  SUMMIT[0] = MOUNTAIN.x + PEAK[0];
+  SUMMIT[1] = MOUNTAIN.z + PEAK[1];
+  TRAIL_FROM[0] = SUMMIT[0];
+  TRAIL_FROM[1] = MOUNTAIN.z - MOUNTAIN.size * 0.5 + 2;
+}
 export function nearTrail(x: number, z: number, width = 1.4): boolean {
   const [ax, az] = TRAIL_FROM;
   const [bx, bz] = SUMMIT;
