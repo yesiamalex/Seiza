@@ -1167,7 +1167,9 @@ adds its own coloured button to the bar while it is on.
   uphill and a little faster down, and your avatar pedals, stands on the
   board, or sits on the moped, with the wheels turning. Getting on, off,
   or onto another ride eases: the old ride shrinks away as the rider steps
-  off it, and the new one grows in under them. B rings the bell, or sounds
+  off it, and the new one grows in under them. Speed builds and fades too, a bike
+  answering the pedals quickly, a moped's motor winding up, a board rolling
+  on, and the brake stops it much sooner. B rings the bell, or sounds
   the moped's horn for as long as it's held; on a phone, a Bell (or Horn)
   button shows while you ride, held the same way. In VR, hold the right
   trigger to ride on where you face (let go to coast to a stop), squeeze the

@@ -27,12 +27,15 @@ export interface VehicleSpec {
   wheel: number;
   /** Has a bell (or a horn) to ring. */
   bell: "bell" | "horn" | null;
+  /** How quickly it gets up to speed and slows again, per second: a bike
+   *  answers the pedals, a moped's motor winds up, a board rolls on. */
+  ease: number;
 }
 
 export const VEHICLE_SPECS: Record<Vehicle, VehicleSpec> = {
-  bike: { speed: 1.9, slope: 3, wheel: 0.33, bell: "bell" },
-  skateboard: { speed: 1.5, slope: 3.5, wheel: 0.03, bell: null },
-  moped: { speed: 3, slope: 1, wheel: 0.22, bell: "horn" },
+  bike: { speed: 1.9, slope: 3, wheel: 0.33, bell: "bell", ease: 2.6 },
+  skateboard: { speed: 1.5, slope: 3.5, wheel: 0.03, bell: null, ease: 1.4 },
+  moped: { speed: 3, slope: 1, wheel: 0.22, bell: "horn", ease: 1.8 },
 };
 
 /**
@@ -228,7 +231,9 @@ export function riderPose(kind: Vehicle, phase: number, out: BodyPose): BodyPose
     out.lean = 0.32;
     out.drop = 0.03;
     out.shiftZ = 0.11;
-    const pedal = (p: number): [number, number, number] => [0, -0.06 + 0.07 * Math.sin(p), 0.12 + 0.07 * Math.cos(p)];
+    // Over the top and forward, down and back: a forward stroke as the phase
+    // (the distance ridden) grows. Offsets are [right, back, lift].
+    const pedal = (p: number): [number, number, number] => [0, -0.06 - 0.07 * Math.sin(p), 0.12 + 0.07 * Math.cos(p)];
     out.left = [-0.05, ...pedal(phase).slice(1)] as [number, number, number];
     out.right = [0.05, ...pedal(phase + Math.PI).slice(1)] as [number, number, number];
   } else if (kind === "moped") {

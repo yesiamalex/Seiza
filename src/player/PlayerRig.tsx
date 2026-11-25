@@ -94,6 +94,12 @@ const XR_FLOOR_EASE_RATE = 8;
 /** How far a seated VR player has to drive before it counts as standing
  *  up, rather than as drift or a snap turn. */
 const XR_SEAT_RELEASE_DISTANCE = 0.25;
+const wantVelocity = new THREE.Vector3();
+/** How far a seated VR player's head can wander from the seat (leaning,
+ *  looking round) before it counts as standing up and walking off for real.
+ *  Without it, getting up out of a real chair left the avatar sitting in
+ *  the virtual one, headless, for you to see. */
+const XR_SEAT_LEAVE_DISTANCE = 0.7;
 /** How far from the playspace origin a headset can plausibly be. Bigger
  *  than any real room, small enough to catch a stale desktop camera pose
  *  in the first frames of a session. */
@@ -630,6 +636,7 @@ export function PlayerRig({
   const xrQuaternion = useRef(new THREE.Quaternion()).current;
   const xrSeatOrigin = useRef(new THREE.Vector3()).current;
   const xrWasSeatedRef = useRef(false);
+  const velocityRef = useRef(new THREE.Vector3());
   const xrBodyYawRef = useRef(0);
   const xrTurningRef = useRef(false);
 
@@ -786,7 +793,13 @@ export function PlayerRig({
         // Pushing the stick is how you stand up, exactly as moving is on
         // desktop — there is no HUD in a headset to find a button on.
         const moved = Math.hypot(origin.position.x - xrSeatOrigin.x, origin.position.z - xrSeatOrigin.z);
-        if (xrWasSeatedRef.current && moved > XR_SEAT_RELEASE_DISTANCE) {
+        // Or by getting up and walking away, in the room you're really in.
+        const headBehind = xrSeat.pose === "lie" ? LYING_HEAD_BEHIND : 0;
+        const wandered = Math.hypot(
+          xrCorrected.x - (xrSeat.position[0] + Math.sin(xrSeat.rotationY) * headBehind),
+          xrCorrected.z - (xrSeat.position[2] + Math.cos(xrSeat.rotationY) * headBehind)
+        );
+        if (xrWasSeatedRef.current && (moved > XR_SEAT_RELEASE_DISTANCE || wandered > XR_SEAT_LEAVE_DISTANCE)) {
           onStandUpRef.current?.();
         } else {
           if (!xrWasSeatedRef.current) {
@@ -1101,16 +1114,17 @@ export function PlayerRig({
     }
 
     const heading = new THREE.Vector3();
+    const want = wantVelocity.set(0, 0, 0);
     if (move.lengthSq() > 0) {
       heading.copy(move).normalize();
       // Crouching wins over running: holding both should not sprint.
       const speedScale = crouchingRef.current ? CROUCH_MULTIPLIER : running ? RUN_MULTIPLIER : 1;
       // On a ride (src/addons/exer), drive.scale is its speed and the slope's.
-      vcam.position.addScaledVector(heading, MOVE_SPEED * speedScale * drive.scale * drive.heat * drive.swim * delta);
+      want.copy(heading).multiplyScalar(MOVE_SPEED * speedScale * drive.scale * drive.heat * drive.swim);
     } else if (drive.cruise > 0 && !rootedRef.current) {
       // A smart trainer's speed rolls the rider on where they look.
       heading.copy(forward);
-      vcam.position.addScaledVector(forward, drive.cruise * delta);
+      want.copy(forward).multiplyScalar(drive.cruise);
     } else if (moveTargetRef.current) {
       const target = moveTargetRef.current;
       const toTarget = new THREE.Vector3(target.x - vcam.position.x, 0, target.z - vcam.position.z);
@@ -1120,9 +1134,15 @@ export function PlayerRig({
         moveTargetRef.current = movePathRef?.current?.shift() ?? null;
       } else {
         heading.copy(toTarget).normalize();
-        vcam.position.addScaledVector(heading, MOVE_SPEED * drive.scale * drive.heat * drive.swim * delta);
+        want.copy(heading).multiplyScalar(MOVE_SPEED * drive.scale * drive.heat * drive.swim);
       }
     }
+    // On a ride, speed builds and fades (drive.ease); on foot it's at once.
+    const velocity = velocityRef.current;
+    if (drive.ease > 0) velocity.lerp(want, 1 - Math.exp(-drive.ease * delta));
+    else velocity.copy(want);
+    if (velocity.lengthSq() < 1e-4) velocity.set(0, 0, 0);
+    vcam.position.addScaledVector(velocity, delta);
     // Gravity/jump — applied every frame so landing is a clean clamp back to
     // eye height rather than separate ground detection. The ground is not
     // always y=0: the tatami platform is a step up, and a model world's

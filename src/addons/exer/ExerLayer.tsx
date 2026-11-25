@@ -74,7 +74,7 @@ export function ExerLayer({ selfId, players, getSelfPosition, selfSeated }: { se
   selfRef.current = getSelfPosition;
   const seatedRef = useRef(selfSeated);
   seatedRef.current = selfSeated;
-  const local = useRef({ last: null as [number, number, number] | null, heading: new THREE.Vector3(0, 0, -1), aWas: false, sentGradientAt: 0, storeAt: 0, speed: 0, gradient: 0, distance: 0, climb: 0, vehicle: null as Vehicle | null, braking: false, bWas: false });
+  const local = useRef({ last: null as [number, number, number] | null, heading: new THREE.Vector3(0, 0, -1), aWas: false, sentGradientAt: 0, storeAt: 0, speed: 0, gradient: 0, distance: 0, climb: 0, vehicle: null as Vehicle | null, braking: false, bWas: false, vrSpeed: 0 });
 
   useEffect(() => sendAddonEvent("exer", { k: "hi" }), []);
   useEffect(
@@ -149,6 +149,7 @@ export function ExerLayer({ selfId, players, getSelfPosition, selfSeated }: { se
       const ahead = floorHeightAt(at[0] + l.heading.x * SLOPE_AHEAD, at[2] + l.heading.z * SLOPE_AHEAD);
       l.gradient += ((ahead - here) / SLOPE_AHEAD - l.gradient) * (1 - Math.exp(-3 * dt));
       drive.scale = VEHICLE_SPECS[me.vehicle].speed * slopeFactor(me.vehicle, l.gradient);
+      drive.ease = VEHICLE_SPECS[me.vehicle].ease;
       // A smart trainer (SportSeiza) sets the speed itself, and hears the slope.
       const reading = latestReading();
       drive.cruise = reading?.speed ?? 0;
@@ -201,7 +202,12 @@ export function ExerLayer({ selfId, players, getSelfPosition, selfSeated }: { se
       const braking = brake > 0.5;
       if (braking && !l.braking) buzz(gl, "left", 0.25, 40);
       l.braking = braking;
-      const speed = braking ? 0 : drive.cruise > 0 ? drive.cruise : trigger > 0.5 ? WALK * drive.scale : 0;
+      // Speed builds while the trigger's held and fades when it's let go
+      // (the brake stops much sooner), as on a screen (PlayerRig).
+      const want = braking ? 0 : drive.cruise > 0 ? drive.cruise : trigger > 0.5 ? WALK * drive.scale : 0;
+      l.vrSpeed += (want - l.vrSpeed) * (1 - Math.exp(-(braking ? drive.ease * 4 : drive.ease) * dt));
+      if (l.vrSpeed < 0.02) l.vrSpeed = 0;
+      const speed = l.vrSpeed;
       if (speed > 0 && world && origin && !seatedRef.current) {
         // Along where you face, level; the walls still have their say
         // (PlayerRig corrects the head against them every frame).

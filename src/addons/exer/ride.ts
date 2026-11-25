@@ -45,6 +45,7 @@ export function setVehicle(vehicle: Vehicle | null) {
   ride.set((s) => ({ ...s, vehicle, speed: 0, gradient: 0, distance: 0, climb: 0, startedAt: Date.now() }));
   if (!vehicle) {
     drive.scale = 1;
+    drive.ease = 0;
     drive.cruise = 0;
   }
   announceRide();
@@ -195,6 +196,7 @@ export function resetRide() {
   remoteRiders.clear();
   drive.scale = 1;
   drive.cruise = 0;
+  drive.ease = 0;
 }
 
 /** Riding now: a rider's legs pedal or stand on the board, so their
