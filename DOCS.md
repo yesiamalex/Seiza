@@ -1180,6 +1180,16 @@ adds its own coloured button to the bar while it is on.
   slope. Rides are kept on your device. Real equipment plugs in through
   SportSeiza (`src/addons/sport/`): a connected smart trainer moves you at
   its speed and is told the slope every second.
+- **Pets** (orange): pick a dog (aso), a cat (pusa), or a capybara. It
+  follows you along the way you walked (round corners, not through walls),
+  about a metre behind, trotting to catch up and appearing beside you after
+  a warp. It sits when you sit or stand still a while (a capybara lies
+  down), swims at the beach, turns its head to you, and a dog wags. Pat it
+  with the Pat button, or in VR by putting a hand on any pet's head: it
+  hops and barks, meows, or chirps, for the room to hear. Each pet is one
+  skinned mesh built in code with a seven-bone skeleton (body, head, four
+  legs, tail): one draw call, nothing downloaded. The room hears only which
+  pet you have, and pats; everyone works out the following themselves.
 - **Band** (violet): pick a drum pad, a drum kit, a taiko, keys, a
   kulintang, an acoustic guitar, a lead guitar, a bass, a violin, a shaker,
   or a light stick. The violin rests on your left shoulder with a bow in

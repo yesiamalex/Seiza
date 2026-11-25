@@ -1880,7 +1880,7 @@ export default function App() {
               : null
           }
         />
-        <AddonBarButtons worldState={worldState} />
+        <AddonBarButtons worldState={worldState} selfId={selfId} />
         <div className="seiza-bar-divider" aria-hidden />
         <ChatPanel
           open={chatOpen}

@@ -16,6 +16,9 @@ import { ExerLayer } from "./exer/ExerLayer";
 import { ExerButton, ExerStatus } from "./exer/ExerHud";
 import { ride, ridingNow, ringBell, setVehicle } from "./exer/ride";
 import { VEHICLE_LABELS, VEHICLE_SPECS, VEHICLES } from "./exer/vehicles";
+import { PetLayer } from "./pet/PetLayer";
+import { PetButton } from "./pet/PetHud";
+import { PET_LABELS, PETS, pet, setPet } from "./pet/pets";
 
 export { ridingNow };
 
@@ -82,22 +85,25 @@ export function AddonScene({
       {on(worldState, "fantasy") && <FantasyLayer {...props} />}
       {on(worldState, "band") && <BandLayer selfId={props.selfId} players={props.players} editMode={props.editMode} selfSeated={props.selfSeated} />}
       {on(worldState, "exer") && <ExerLayer selfId={props.selfId} players={props.players} getSelfPosition={props.getSelfPosition} selfSeated={props.selfSeated} />}
+      {on(worldState, "pet") && <PetLayer selfId={props.selfId} players={props.players} selfSeated={props.selfSeated} />}
     </>
   );
 }
 
 /** In the control bar: one coloured button per mode that's on. */
-export function AddonBarButtons({ worldState }: { worldState: WorldState }) {
+export function AddonBarButtons({ worldState, selfId = null }: { worldState: WorldState; selfId?: string | null }) {
   const fantasyOn = on(worldState, "fantasy");
   const bandOn = on(worldState, "band");
   const exerOn = on(worldState, "exer");
-  if (!fantasyOn && !bandOn && !exerOn) return null;
+  const petOn = on(worldState, "pet");
+  if (!fantasyOn && !bandOn && !exerOn && !petOn) return null;
   return (
     <>
       <div className="seiza-bar-divider" aria-hidden />
       {fantasyOn && <FantasyButton />}
       {bandOn && <BandButton />}
       {exerOn && <ExerButton />}
+      {petOn && <PetButton selfId={selfId} />}
     </>
   );
 }
@@ -142,6 +148,14 @@ export function RoomModes({ worldState, setWorldState, disabled }: { worldState:
         accent={MODE_ACCENTS.exer}
         disabled={disabled}
         onChange={(value) => setWorldState(addonModeKey("exer"), value)}
+      />
+      <ModeSwitch
+        label={L("Pets", "ペット")}
+        description={L("Everyone gets a Pet button: a dog, a cat, or a capybara that follows them, sits, swims, and can be patted.", "全員にペットボタンが出ます:ついてきて、座り、泳ぎ、なでられる犬・猫・カピバラ。")}
+        on={on(worldState, "pet")}
+        accent={MODE_ACCENTS.pet}
+        disabled={disabled}
+        onChange={(value) => setWorldState(addonModeKey("pet"), value)}
       />
     </div>
   );
@@ -200,7 +214,9 @@ export function useAddonXrSections(worldState: WorldState, switches?: XrModeSwit
   const fantasyOn = on(worldState, "fantasy");
   const bandOn = on(worldState, "band");
   const exerOn = on(worldState, "exer");
+  const petOn = on(worldState, "pet");
   const rider = useStore(ride);
+  const owner = useStore(pet);
   if (switches?.allowed) {
     const toggle = (mode: AddonMode, now: boolean) => () => switches.setWorldState(addonModeKey(mode), !now);
     sections.push({
@@ -213,9 +229,10 @@ export function useAddonXrSections(worldState: WorldState, switches?: XrModeSwit
         { id: "fantasy", label: L("Fantasy", "ファンタジー"), active: fantasyOn, onPress: toggle("fantasy", fantasyOn) },
         { id: "band", label: L("Band", "バンド"), active: bandOn, onPress: toggle("band", bandOn) },
         { id: "exer", label: "ExerSeiza", active: exerOn, onPress: toggle("exer", exerOn) },
+        { id: "pet", label: L("Pets", "ペット"), active: petOn, onPress: toggle("pet", petOn) },
       ],
     });
-  } else if (!fantasyOn && !bandOn && !exerOn) {
+  } else if (!fantasyOn && !bandOn && !exerOn && !petOn) {
     sections.push({
       id: "modes",
       tab: "play",
@@ -300,6 +317,17 @@ export function useAddonXrSections(worldState: WorldState, switches?: XrModeSwit
       ],
     });
   }
+  if (petOn)
+    sections.push({
+      id: "pet",
+      title: L("Pets", "ペット"),
+      note: L("Put a hand on a pet's head to pat it.", "手をペットの頭に置くとなでられます。"),
+      columns: 4,
+      choices: [
+        { id: "none", label: L("None", "なし"), active: owner.kind === null, onPress: () => setPet(null) },
+        ...PETS.map((p) => ({ id: p, label: L(...PET_LABELS[p]), active: owner.kind === p, onPress: () => setPet(p) })),
+      ],
+    });
   // All on the Play page of the headset menu.
   return sections.map((s) => ({ tab: "play", ...s }));
 }

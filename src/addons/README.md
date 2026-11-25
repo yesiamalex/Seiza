@@ -37,6 +37,9 @@ exer/        ExerSeiza: a bike with a basket and a bell, a skateboard, a
              moped. Each rider's ride under them, their pose on it, the
              slope ahead slowing them, and in VR the right trigger to
              ride on and A for the bell (vehicles.ts, ride.ts).
+pet/         Pets: a dog, a cat, or a capybara, one skinned mesh each built
+             in code (pets.ts), following its owner's trail, sitting,
+             swimming, and patted (PetLayer.tsx).
 sport/       SportSeiza: the contract for real equipment (a smart bike or
              trainer, an IoT bridge) to drive a ride and take the slope
              back, and where Strava goes (on the server). See its README.
