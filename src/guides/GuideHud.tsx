@@ -1,5 +1,5 @@
 /**
- * Talking to a world's guides on a flat screen or a phone: an "Ask …"
+ * Talking to a world's guides on a flat screen or a phone: a "Talk to …"
  * button per guide, and the chat with whoever is open. Each answer can
  * offer to open a card (if the world has cards), to walk you there (the
  * guide leads the way), or to take you there at once. A world mounts this
@@ -7,6 +7,11 @@
  */
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { panelStyle, pillButtonStyle } from "../ui/styles";
+import { useMediaQuery } from "../ui/useMediaQuery";
+import { TOUCH_CONTROLS_CLEARANCE_CSS } from "../player/touchControlsMetrics";
+
+/** From under the top bar down to just above the touch controls. */
+const CLEAR_OF_CONTROLS = `calc(100dvh - 64px - ${TOUCH_CONTROLS_CLEARANCE_CSS} - env(safe-area-inset-bottom, 0px))`;
 import { L, useLang } from "../i18n/lang";
 import { ask, goTo, lead, MAX_QUESTION, openGuide, useGuides, type Message } from "./store";
 
@@ -20,21 +25,46 @@ export interface GuideHudProps {
 
 export function GuideHud({ onOpenCard, cardTitle, tagline }: GuideHudProps) {
   useLang();
-  tagline ??= L("Answers only from this world, offline", "このワールドのことだけ、オフラインで答えます");
+  tagline ??= L("Knows this world well, and talks offline", "このワールドにくわしく、オフラインで話せます");
   const { guides, open, threads } = useGuides();
   const guide = guides.find((g) => g.id === open);
+  // On a touch screen the joystick and buttons fill the bottom: nothing here
+  // may reach them. And a town of guides is one button that opens a list,
+  // not a column of them down the screen.
+  const touch = useMediaQuery("(pointer: coarse)");
+  const [listing, setListing] = useState(false);
+  const many = guides.length > 2;
+  const room = touch ? CLEAR_OF_CONTROLS : "calc(100dvh - 64px - 120px)";
   return (
     <>
       {!guide && guides.length > 0 && (
-        <div style={{ position: "fixed", top: 64, left: 16, zIndex: 30, display: "flex", flexDirection: "column", gap: 6, pointerEvents: "auto" }}>
-          {guides.map((g) => (
-            <button key={g.id} type="button" onClick={() => openGuide(g.id)} style={askButton} aria-label={L(`Ask ${g.name}, a guide`, `ガイドの${g.name}に質問`)}>
-              <span aria-hidden>💬</span> {L(`Ask ${g.name}`, `${g.name}に質問`)}
+        <div style={{ position: "fixed", top: 64, left: 16, zIndex: 30, display: "flex", flexDirection: "column", gap: 6, pointerEvents: "auto", maxWidth: "calc(100vw - 32px)" }}>
+          {many && (
+            <button type="button" onClick={() => setListing((v) => !v)} style={askButton} aria-expanded={listing} aria-label={L("Talk to someone here", "ここの人と話す")}>
+              <span aria-hidden>💬</span> {L(`Talk to… (${guides.length})`, `話しかける…(${guides.length}人)`)}
             </button>
-          ))}
+          )}
+          {(!many || listing) && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: room, overflowY: "auto", paddingRight: 2 }}>
+              {guides.map((g) => (
+                <button
+                  key={g.id}
+                  type="button"
+                  onClick={() => {
+                    setListing(false);
+                    openGuide(g.id);
+                  }}
+                  style={askButton}
+                  aria-label={L(`Talk to ${g.name}, a guide`, `ガイドの${g.name}と話す`)}
+                >
+                  <span aria-hidden>💬</span> {L(`Talk to ${g.name}`, `${g.name}と話す`)}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
-      {guide && <Chat guideId={guide.id} name={guide.name} messages={threads[guide.id] ?? []} tagline={tagline} onOpenCard={onOpenCard} cardTitle={cardTitle} />}
+      {guide && <Chat guideId={guide.id} name={guide.name} messages={threads[guide.id] ?? []} tagline={tagline} onOpenCard={onOpenCard} cardTitle={cardTitle} touch={touch} />}
     </>
   );
 }
@@ -49,7 +79,9 @@ function Chat({
   tagline,
   onOpenCard,
   cardTitle,
+  touch = false,
 }: {
+  touch?: boolean;
   guideId: string;
   name: string;
   messages: Message[];
@@ -82,7 +114,8 @@ function Chat({
         top: 64,
         left: 16,
         width: "min(380px, calc(100vw - 32px))",
-        maxHeight: "min(560px, calc(100vh - 180px))",
+        // Clear of the touch controls on a phone.
+        maxHeight: touch ? `min(560px, ${CLEAR_OF_CONTROLS})` : "min(560px, calc(100vh - 180px))",
         display: "flex",
         flexDirection: "column",
         padding: 0,
@@ -165,7 +198,7 @@ function Chat({
           value={text}
           maxLength={MAX_QUESTION}
           onChange={(event) => setText(event.target.value)}
-          placeholder={L(`Ask ${name}…`, `${name}に質問…`)}
+          placeholder={L(`Say something to ${name}…`, `${name}に話しかける…`)}
           aria-label={L("Your question", "あなたの質問")}
           style={{ flex: 1, minWidth: 0, borderRadius: 999, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(0,0,0,0.25)", color: "inherit", padding: "8px 12px", font: "inherit" }}
         />

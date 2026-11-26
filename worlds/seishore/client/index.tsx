@@ -56,7 +56,7 @@ function Hud() {
   const c = useCaption();
   return (
     <>
-      <GuideHud tagline={L("Seishore · answers in English and Japanese", "Seishore · 日本語と英語で答えます")} />
+      <GuideHud tagline={L("Seishore · talks in English and Japanese", "Seishore · 日本語と英語で話せます")} />
       <ShopMenu />
       {c && (
         <div role="status" style={{ position: "fixed", left: "50%", bottom: 120, transform: "translateX(-50%)", zIndex: 30, padding: "10px 18px", borderRadius: 14, background: "rgba(16,18,24,0.78)", color: "#fff", textAlign: "center", fontFamily: "system-ui, 'Hiragino Sans', 'Noto Sans CJK JP', sans-serif", maxWidth: "calc(100vw - 32px)", pointerEvents: "none" }}>
