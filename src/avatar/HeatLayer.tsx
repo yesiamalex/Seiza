@@ -14,6 +14,7 @@ import { TRACKING_STALE_MS } from "../xr/body/trackingWire";
 import { newBodyPose, poseBody } from "../addons/body";
 import { disposeTree, feetAndEye, holdInHand, newTrackedHand, poseHands, rigFor, toTrackedHand, type HandTarget } from "../addons/rig";
 import { setFaceCue, type FaceCue } from "./useFacialExpressions";
+import { noiseHit, toneHit, voice } from "../addons/sound";
 import { currentHeatIndex, drinkers, faintPhase, forgetHeat, heatLoad, heatReactionsOn, heatSpeed, heatStage, inDeclaredShade, LOCAL_HEAT, setFaint, setHeat, stepHeat, takeCool } from "./heat";
 
 /**
@@ -213,6 +214,8 @@ function drinkPhases(t: number) {
   };
 }
 
+const earAt = new THREE.Vector3();
+const mouthAt = new THREE.Vector3();
 const dv = new THREE.Vector3();
 const dq = new THREE.Quaternion();
 const dBlade = new THREE.Vector3();
@@ -271,6 +274,26 @@ interface Bottle {
   detach: () => void;
 }
 
+/** How many gulps a drink has had (its sounds, once each), by drinker. */
+const gulped = new Map<string, number>();
+
+/** A gulp: the throat's low knock and a little glug of water behind it. */
+function gulpSound(distance: number) {
+  const v = voice(0.55, distance, 10, 0.6);
+  if (!v) return;
+  toneHit(v, { frequency: 170 + Math.random() * 30, sweepTo: 95, duration: 0.11, gain: 0.32, type: "sine" });
+  noiseHit(v, { frequency: 520 + Math.random() * 120, sweepTo: 260, duration: 0.09, gain: 0.08, q: 4, delay: 0.03 });
+  toneHit(v, { frequency: 300, sweepTo: 520, duration: 0.05, gain: 0.05, type: "sine", delay: 0.07 });
+}
+
+/** The "ahh" after: a breath out, softly voiced, falling. */
+function ahhSound(distance: number) {
+  const v = voice(0.5, distance, 10, 1.2);
+  if (!v) return;
+  noiseHit(v, { frequency: 900, sweepTo: 500, duration: 0.7, gain: 0.07, q: 1.2, attack: 0.06 });
+  toneHit(v, { frequency: 210, sweepTo: 160, duration: 0.6, gain: 0.035, type: "triangle", attack: 0.08 });
+}
+
 /**
  * Anyone drinking water (heat.ts's drinkers: you, from the heat chip's
  * button, or anyone in the room): a bottle in the right hand, raised to
@@ -312,12 +335,22 @@ export function DrinkLayer() {
       const vrm = getAddonAvatar(key);
       if (t > DRINK_TIME || !vrm) {
         drinkers.delete(key);
+        gulped.delete(key);
         setFaceCue(vrm, "drink", null);
         putAway(key);
         continue;
       }
       const { raise } = drinkPhases(t);
       setFaceCue(vrm, "drink", t < 0.5 ? null : t < 2.6 ? DRINKING_FACE : t < DRINK_TIME - 0.4 ? RELIEVED_FACE : null);
+      // A gulp with each swallow while it's tipped up, and the "ahh".
+      const swallows = t > 1.15 && t < 2.35 ? Math.floor((t - 1.15) / 0.38) + 1 : t >= 2.35 ? 99 : 0;
+      const heard = gulped.get(key) ?? 0;
+      if (swallows > heard) {
+        const at = state.camera.getWorldPosition(earAt).distanceTo(vrm.scene.getWorldPosition(mouthAt));
+        if (swallows < 99) gulpSound(at);
+        else if (t > 2.95) ahhSound(at);
+        if (swallows < 99 || t > 2.95) gulped.set(key, swallows);
+      }
 
       let b = bottles.get(key);
       if (b && b.vrm !== vrm) {
