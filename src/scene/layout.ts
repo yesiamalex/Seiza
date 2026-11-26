@@ -1183,3 +1183,51 @@ export function ceilingHeightAt(x: number, z: number): number {
   if (onGrounds(x, z)) return Infinity;
   return WALL_HEIGHT - 0.5;
 }
+
+// --- walls between voices --------------------------------------------------------------
+
+/**
+ * Which room a sound is in, for walls between a voice and you: the
+ * classroom, the corridor, the hall (the tatami's room), or outside; or a
+ * world's own room (Seishore's konbini, café, restaurant), which a world
+ * names with setWorldSoundZones. A world of its own model has no walls
+ * known here, so everything in it is "open".
+ */
+let worldSoundZone: ((x: number, z: number) => string | null) | null = null;
+export function setWorldSoundZones(zoneAt: ((x: number, z: number) => string | null) | null): void {
+  worldSoundZone = zoneAt;
+}
+
+export function soundZoneAt(x: number, z: number): string {
+  if (ground) return "open";
+  const own = worldSoundZone?.(x, z);
+  if (own) return own;
+  if (contains(CLASSROOM, x, z)) return "classroom";
+  if (contains(CORRIDOR, x, z)) return "corridor";
+  if (contains(HALL, x, z)) return "hall";
+  return "outside";
+}
+
+/** The building's rooms in a line, each opening onto the next. */
+const BUILDING = ["classroom", "corridor", "hall", "outside"];
+
+/**
+ * How many openings a voice passes through from one room to another: 0 in
+ * the same room, 1 from the next room (through its doorway), 2 or more
+ * round corners and through walls. A world's own room opens onto outside.
+ */
+export function wallsBetween(a: string, b: string): number {
+  if (a === b || a === "open" || b === "open") return 0;
+  const step = (zone: string): [string, number] => (BUILDING.includes(zone) ? [zone, 0] : ["outside", 1]);
+  const [ra, ea] = step(a);
+  const [rb, eb] = step(b);
+  return ea + eb + Math.abs(BUILDING.indexOf(ra) - BUILDING.indexOf(rb));
+}
+
+/** How a voice through walls sounds: its volume (times) and the highest
+ *  frequency left (walls keep the low hum of a voice and take its edges). */
+export function throughWalls(walls: number): { volume: number; cutoff: number } {
+  if (walls <= 0) return { volume: 1, cutoff: 20000 };
+  if (walls === 1) return { volume: 0.6, cutoff: 2200 };
+  return { volume: 0.3, cutoff: 700 };
+}

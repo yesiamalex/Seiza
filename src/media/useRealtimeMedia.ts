@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { soundZoneAt, throughWalls, wallsBetween } from "../scene/layout";
 import {
   BUSY_BACKOFF_MS,
   hasAnyMedia,
@@ -166,6 +167,11 @@ interface RemoteAudio {
   element: HTMLAudioElement;
   gain: GainNode;
   analyser: AnalyserNode;
+  /** Walls between: a low-pass (wide open in the same room, where it's
+   *  inaudible) and their own volume, after the level meter, so lip sync
+   *  reads the voice as it is. */
+  muffle: BiquadFilterNode;
+  walls: GainNode;
 }
 
 interface Peer {
@@ -483,6 +489,8 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
     try {
       audio.gain.disconnect();
       audio.analyser.disconnect();
+      audio.muffle.disconnect();
+      audio.walls.disconnect();
     } catch {
       // Already torn down.
     }
@@ -500,7 +508,13 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
       gain.gain.value = 0;
       const analyser = context.createAnalyser();
       analyser.fftSize = 256;
-      context.createMediaStreamSource(stream).connect(gain).connect(analyser).connect(voiceOutput(context));
+      // Butterworth (no bump at the corner), open to 20 kHz until a wall's between.
+      const muffle = context.createBiquadFilter();
+      muffle.type = "lowpass";
+      muffle.Q.value = Math.SQRT1_2;
+      muffle.frequency.value = 20000;
+      const walls = context.createGain();
+      context.createMediaStreamSource(stream).connect(gain).connect(analyser).connect(muffle).connect(walls).connect(voiceOutput(context));
       // The element is what keeps the stream flowing in Chrome, but it must
       // stay muted or the audio plays twice: once flat through the element
       // and once spatialised through the graph above.
@@ -509,7 +523,7 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
       element.muted = true;
       element.autoplay = true;
       void element.play().catch(() => {});
-      peer.audio.set(stream.id, { element, gain, analyser });
+      peer.audio.set(stream.id, { element, gain, analyser, muffle, walls });
     },
     [ensureAudioContext]
   );
@@ -1017,6 +1031,7 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
       }
 
       const levels: Record<string, number> = {};
+      const localZone = soundZoneAt(localPosition[0], localPosition[2]);
       for (const [peerId, peer] of peersRef.current.entries()) {
         const player = playersRef.current[peerId];
         if (player) {
@@ -1024,8 +1039,14 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
           // On the megaphone, heard wherever you are.
           const near = voiceVolume(player.position[0] - localPosition[0], player.position[2] - localPosition[2]);
           const volume = isPlayerBlocked(peerId) ? 0 : player.media?.megaphone ? Math.max(near, MEGAPHONE_VOLUME) : near;
+          // Walls between you (layout.ts): quieter and muffled from the next
+          // room, more so further. The megaphone carries through them.
+          const wall = player.media?.megaphone ? throughWalls(0) : throughWalls(wallsBetween(soundZoneAt(player.position[0], player.position[2]), localZone));
           for (const audio of peer.audio.values()) {
-            audio.gain.gain.setTargetAtTime(volume, audio.gain.context.currentTime, 0.1);
+            const now = audio.gain.context.currentTime;
+            audio.gain.gain.setTargetAtTime(volume, now, 0.1);
+            audio.walls.gain.setTargetAtTime(wall.volume, now, 0.25);
+            audio.muffle.frequency.setTargetAtTime(wall.cutoff, now, 0.25);
           }
         }
         // Speaking means their microphone, not the audio from a shared tab.

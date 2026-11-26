@@ -14,7 +14,7 @@ import { Guide } from "../../../src/guides/Guide";
 import { GuideHud } from "../../../src/guides/GuideHud";
 import { hush, speak } from "../../../src/guides/speech";
 import { openGuide, registerGuides, setGuideWarp } from "../../../src/guides/store";
-import { floorHeightAt, setTreeClearings, setWorldCeilings, setWorldFloors, setWorldObstacles } from "../../../src/scene/layout";
+import { floorHeightAt, setTreeClearings, setWorldCeilings, setWorldFloors, setWorldObstacles, setWorldSoundZones } from "../../../src/scene/layout";
 import { SeatPad } from "../../../src/scene/SeatPad";
 import { skyState } from "../../../src/sky/skyState";
 import { L, useLang } from "../../../src/i18n/lang";
@@ -194,6 +194,8 @@ export function Scene({ warp, getSelfPosition, sit, occupiedSeatId, playGesture,
     registerGuides(people.map((p) => ({ id: p.id, name: p.name, brain: createBrain(seishoreKnowledge(), p.persona) })));
     showWorldOverlay(<Hud />);
     setWorldCeilings(seishoreCeilings());
+    // Voices from inside a shop are muffled outside it, and the other way.
+    setWorldSoundZones(roomAt);
     // The town's collision now; the bus and train add theirs when they come (Transit).
     setWorldObstacles(seishoreObstacles());
     // No trees on the road, the railway, or the temple's grounds.
@@ -205,6 +207,7 @@ export function Scene({ warp, getSelfPosition, sit, occupiedSeatId, playGesture,
       registerGuides(null);
       showWorldOverlay(null);
       setWorldCeilings([]);
+      setWorldSoundZones(null);
       setWorldFloors([]);
     };
   }, [people]);
