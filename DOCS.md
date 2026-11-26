@@ -1007,6 +1007,7 @@ integrate with one. If you build a server-side integration later:
 | Hold a pose | Hold its number key | Press and hold its button |
 | Move tool (editing) | `G` or **Move** | **Move** |
 | Rotate tool (editing) | `R` or **Rotate** | **Rotate** |
+| Resize tool (editing) | `Shift+S` or **Resize** | **Resize**, or the **Size** slider |
 
 Notes:
 
@@ -1026,8 +1027,13 @@ Notes:
   server caps a room at 300 objects and 10 edits a second per person, and
   an editor password or admin key limits who can place anything.
 - In the edit panel, everything that acts on a selected object (**Move**,
-  **Rotate**, **Snap to floor**, **Deselect**, and **Delete**) is grouped at
-  the top.
+  **Rotate**, **Resize**, **Snap to floor**, **Deselect**, and **Delete**) is
+  grouped at the top.
+- **Resizing** any placed object, an uploaded model included: **Resize**
+  (`Shift+S`) puts handles on it to drag, and the **Size** slider, its − and +
+  steps, and **1×** set it exactly. It's always resized evenly, never
+  squashed, from 5% to 2,000% of the size it was placed at; the room server
+  keeps the size, and everyone sees it change.
 
 ### The control bar
 

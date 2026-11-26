@@ -75,7 +75,7 @@ import { getLang, L, setLang, useLang } from "./i18n/lang";
 import { LangToggle } from "./i18n/LangToggle";
 import { gestureLabel } from "./i18n/gestureLabels";
 import { PresentSourceChooser } from "./media/PresentSourceChooser";
-import { WorldObjects } from "./edit/WorldObjects";
+import { type TransformMode, WorldObjects } from "./edit/WorldObjects";
 import { EditToolbar } from "./edit/EditToolbar";
 import { TextEditorDialog } from "./edit/TextEditorDialog";
 import { GesturePanel } from "./interactions/GesturePanel";
@@ -238,7 +238,7 @@ export default function App() {
     typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches ? "third" : "first"
   );
   const [chatOpen, setChatOpen] = useState(false);
-  const [transformMode, setTransformMode] = useState<"translate" | "rotate">("translate");
+  const [transformMode, setTransformMode] = useState<TransformMode>("translate");
   // Read by the key handler, which is bound once and must not be rebound
   // every time Edit Mode flips.
   const editModeRef = useRef(false);
@@ -379,6 +379,7 @@ export default function App() {
     setHeatCalm,
     setObjectText,
     setObjectLink,
+    scaleObject,
     presentOnObject,
     setMedia,
     connected,
@@ -753,6 +754,11 @@ export default function App() {
         }
         if (event.code === "KeyR") {
           setTransformMode("rotate");
+          return;
+        }
+        // Shift+S, since S alone walks backward.
+        if (event.code === "KeyS" && event.shiftKey) {
+          setTransformMode("scale");
           return;
         }
       }
@@ -1719,6 +1725,7 @@ export default function App() {
             transformMode={transformMode}
             onSelect={setSelectedObjectId}
             onMove={moveObject}
+            onScale={scaleObject}
             onEditText={handleEditText}
             onPresentToggle={(object) => void presentOn(object)}
             onOpenImage={openImage}
@@ -1990,6 +1997,8 @@ export default function App() {
           onDeleteSelected={handleDeleteSelected}
           selectedImage={selectedObjectId && objects[selectedObjectId]?.kind === "image" ? objects[selectedObjectId] : null}
           onSetLink={setObjectLink}
+          selectedScale={selectedObjectId ? (objects[selectedObjectId]?.scale ?? null) : null}
+          onScaleSelected={(scale) => selectedObjectId && scaleObject(selectedObjectId, scale)}
           editorPasswordRequired={editGateProps.editorPasswordRequired}
           isEditor={editGateProps.isEditor}
           editorAuthPending={editGateProps.editorAuthPending}

@@ -3,7 +3,7 @@ import { TransformControls, useGLTF } from "@react-three/drei";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
-import { isTextObjectKind, type WorldObject } from "../multiplayer/types";
+import { OBJECT_SCALE_RANGE, isTextObjectKind, type WorldObject } from "../multiplayer/types";
 import { placedBedSeat, placedChairSeat, type Seat } from "../scene/layout";
 import { Bed } from "../scene/Bed";
 import { Chair } from "../scene/Chair";
@@ -18,6 +18,9 @@ import { setGizmoDragging } from "./gizmoState";
 import { lightZoneAt, nightNeed, roomLights, signWashTexture } from "../scene/roomLights";
 import { viewerPosition } from "../xr/viewer";
 
+/** What the gizmo does: move, turn, or resize (always evenly, every way at once). */
+export type TransformMode = "translate" | "rotate" | "scale";
+
 /** The viewer's eyes in the world (see viewerPosition). */
 const scratchEye = new THREE.Vector3();
 
@@ -25,9 +28,11 @@ interface WorldObjectsProps {
   objects: Record<string, WorldObject>;
   editMode: boolean;
   selectedId: string | null;
-  transformMode: "translate" | "rotate";
+  transformMode: TransformMode;
   onSelect: (id: string) => void;
   onMove: (id: string, position: [number, number, number], rotationY: number) => void;
+  /** Resize it: the new scale, when a Resize drag ends. */
+  onScale?: (id: string, scale: number) => void;
   /** Click a board or a note to write on it. */
   onEditText?: (object: WorldObject) => void;
   /** Click a screen to start presenting on it, or to stop. */
@@ -52,6 +57,7 @@ export function WorldObjects({
   transformMode,
   onSelect,
   onMove,
+  onScale,
   onEditText,
   onPresentToggle,
   onOpenImage,
@@ -69,6 +75,7 @@ export function WorldObjects({
           selected={obj.id === selectedId}
           onSelect={onSelect}
           onMove={onMove}
+          onScale={onScale}
           transformMode={transformMode}
           onEditText={onEditText}
           onOpenImage={onOpenImage}
@@ -86,9 +93,11 @@ interface PlacedObjectProps {
   object: WorldObject;
   editMode: boolean;
   selected: boolean;
-  transformMode: "translate" | "rotate";
+  transformMode: TransformMode;
   onSelect: (id: string) => void;
   onMove: (id: string, position: [number, number, number], rotationY: number) => void;
+  /** Resize it: the new scale, when a Resize drag ends. */
+  onScale?: (id: string, scale: number) => void;
   onEditText?: (object: WorldObject) => void;
   onPresentToggle?: (object: WorldObject) => void;
   onOpenImage?: (object: WorldObject) => void;
@@ -103,6 +112,7 @@ function PlacedObject({
   selected,
   onSelect,
   onMove,
+  onScale,
   transformMode,
   onEditText,
   onPresentToggle,
@@ -171,7 +181,23 @@ function PlacedObject({
   const handleChangeEnd = () => {
     const group = groupRef.current;
     if (!group) return;
+    if (transformMode === "scale") {
+      const scale = THREE.MathUtils.clamp(group.scale.x, OBJECT_SCALE_RANGE.min, OBJECT_SCALE_RANGE.max);
+      group.scale.setScalar(scale);
+      if (Math.abs(scale - object.scale) > 1e-4) onScale?.(object.id, scale);
+      return;
+    }
     onMove(object.id, [group.position.x, group.position.y, group.position.z], group.rotation.y);
+  };
+  // Resizing evenly: whichever handle is dragged, every axis follows it, so
+  // a model is made bigger or smaller, never squashed.
+  const evenScale = () => {
+    const group = groupRef.current;
+    if (!group || transformMode !== "scale") return;
+    const { x, y, z } = group.scale;
+    const base = object.scale;
+    const pick = [x, y, z].reduce((a, c) => (Math.abs(c - base) > Math.abs(a - base) ? c : a), base);
+    group.scale.setScalar(THREE.MathUtils.clamp(pick, OBJECT_SCALE_RANGE.min, OBJECT_SCALE_RANGE.max));
   };
 
   // Yaw first, then tilt, which is how placing something flat on a desk and
@@ -231,6 +257,7 @@ function PlacedObject({
         <TransformControls
           object={groupRef.current}
           mode={transformMode}
+          onObjectChange={evenScale}
           // Reported so PlayerRig can tell a gizmo drag from a
           // look-around drag — see gizmoState.ts.
           onMouseDown={() => setGizmoDragging(true)}

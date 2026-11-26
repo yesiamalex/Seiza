@@ -78,6 +78,8 @@ export interface MultiplayerState {
   setObjectText: (id: string, text: string) => void;
   /** Sets an image's link ("" removes it). Editors only. */
   setObjectLink: (id: string, link: string) => void;
+  /** Resize a placed object (Edit Mode): 1 is the size it was placed at. */
+  scaleObject: (id: string, scale: number) => void;
   /** Claim a screen to present on, or hand it back. */
   presentOnObject: (id: string, active: boolean, source?: PresentSource) => void;
   /** Publish which of our live streams is which (see PlayerMedia). */
@@ -265,6 +267,7 @@ export function useRoomSocket(
   const setHeatCalm = useCallback((calm: boolean) => send({ type: "setHeatCalm", calm }), [send]);
   const setObjectText = useCallback((id: string, text: string) => send({ type: "objectSetText", id, text }), [send]);
   const setObjectLink = useCallback((id: string, link: string) => send({ type: "objectSetLink", id, link }), [send]);
+  const scaleObject = useCallback((id: string, scale: number) => send({ type: "objectScale", id, scale }), [send]);
   const presentOnObject = useCallback(
     (id: string, active: boolean, source?: PresentSource) => send({ type: "objectPresent", id, active, source }),
     [send]
@@ -622,6 +625,7 @@ export function useRoomSocket(
     setHeatCalm,
     setObjectText,
     setObjectLink,
+    scaleObject,
     presentOnObject,
     setMedia,
     connected: connectionState === "connected",

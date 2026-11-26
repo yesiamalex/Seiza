@@ -2,6 +2,7 @@ import { DurableObject } from "cloudflare:workers";
 import { FILTER_KEYS, filterOn, hasProfanity, maskProfanity } from "../src/moderation/profanity";
 import { RoomStats } from "./stats";
 import {
+  OBJECT_SCALE_RANGE,
   ADDON_MODES,
   addonModeKey,
   MAX_ADDON_EVENT_CHARS,
@@ -692,6 +693,19 @@ export class SeizaRoom extends DurableObject<Env> {
         this.broadcast({ type: "objectRemoved", id: message.id });
         break;
       }
+      case "objectScale": {
+        // Resizing is an edit, as moving is.
+        if (this.editingRequiresAuth() && !attachment.isEditor) return;
+        if (!this.allow(attachment.connId, "edit", EDIT_RATE)) return;
+        const object = this.objects.get(message.id);
+        if (!object) return;
+        if (typeof message.scale !== "number" || !Number.isFinite(message.scale)) return;
+        object.scale = Math.min(OBJECT_SCALE_RANGE.max, Math.max(OBJECT_SCALE_RANGE.min, message.scale));
+        this.persistObjects();
+        // Everyone, the sender too: a placed object's size lives only in synced state.
+        this.broadcast({ type: "objectUpdated", object });
+        break;
+      }
       case "objectSetLink": {
         // A link sends visitors somewhere else, so it's an edit: only
         // editors (or admins) where the deployment has a password, like
@@ -1327,7 +1341,7 @@ function validateNewObject(input: unknown): Omit<WorldObject, "id" | "ownerId"> 
   if (typeof obj.rotationY !== "number" || !Number.isFinite(obj.rotationY)) return null;
 
   if (typeof obj.scale !== "number" || !Number.isFinite(obj.scale)) return null;
-  const scale = Math.min(20, Math.max(0.05, obj.scale));
+  const scale = Math.min(OBJECT_SCALE_RANGE.max, Math.max(OBJECT_SCALE_RANGE.min, obj.scale));
 
   let modelUrl: string | undefined;
   if (kind === "model") {

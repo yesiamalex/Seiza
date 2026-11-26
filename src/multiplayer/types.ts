@@ -63,6 +63,10 @@ export function isTextObjectKind(kind: string): boolean {
  *  server's own cap (MAX_URL_LENGTH in worker/room.ts). */
 export const MAX_OBJECT_SRC_LENGTH = 2048;
 
+/** How small and how big a placed object may be made (its scale), as the
+ *  room server clamps it. */
+export const OBJECT_SCALE_RANGE = { min: 0.05, max: 20 } as const;
+
 export interface WorldObject {
   id: string;
   kind: WorldObjectKind;
@@ -187,6 +191,8 @@ export type ClientMessage =
   | { type: "objectSetText"; id: string; text: string }
   /** Sets (or, with "", removes) an image object's link. Editors only. */
   | { type: "objectSetLink"; id: string; link: string }
+  /** Resize a placed object (editors only): how big, 1 as placed. */
+  | { type: "objectScale"; id: string; scale: number }
   // Claims a screen to present on, or gives it back up. Only the presenter
   // can release their own screen; leaving the room releases it too.
   // `source` picks which of the presenter's own streams feeds the

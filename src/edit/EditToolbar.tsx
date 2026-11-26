@@ -1,3 +1,5 @@
+import type { TransformMode } from "./WorldObjects";
+import { OBJECT_SCALE_RANGE } from "../multiplayer/types";
 import { useEffect, useState, type ReactNode } from "react";
 import type { WorldObject } from "../multiplayer/types";
 import { optimizeVrmAvatar } from "../avatar/optimizeVrm";
@@ -24,8 +26,11 @@ interface EditToolbarProps {
   /** `pitch` tilts what's placed; a note is a board laid flat. */
   onSpawn: (kind: WorldObject["kind"], modelUrl?: string, pitch?: number) => void;
   selectedId: string | null;
-  transformMode: "translate" | "rotate";
-  onTransformModeChange: (mode: "translate" | "rotate") => void;
+  transformMode: TransformMode;
+  onTransformModeChange: (mode: TransformMode) => void;
+  /** The selected object's size (1 as placed), and a way to set it. */
+  selectedScale?: number | null;
+  onScaleSelected?: (scale: number) => void;
   onSnapToFloor: () => void;
   onDeselect: () => void;
   onDeleteSelected: () => void;
@@ -84,6 +89,8 @@ export function EditToolbar({
   transformMode,
   onTransformModeChange,
   onSnapToFloor,
+  selectedScale,
+  onScaleSelected,
   onDeselect,
   selectedImage,
   onSetLink,
@@ -379,10 +386,18 @@ export function EditToolbar({
                 >
                   {L("Rotate", "回転")}
                 </button>
+                <button
+                  style={transformMode === "scale" ? pillButtonActiveStyle : pillButtonStyle}
+                  onClick={() => onTransformModeChange("scale")}
+                  title={L("Drag the handles to make it bigger or smaller", "ハンドルをドラッグして大きさを変える")}
+                >
+                  {L("Resize", "大きさ")}
+                </button>
                 <button style={pillButtonStyle} onClick={onSnapToFloor}>
                   {L("Snap to floor", "床に合わせる")}
                 </button>
               </div>
+              {selectedScale != null && onScaleSelected && <SizeControl key={selectedId} scale={selectedScale} connected={connected} onScale={onScaleSelected} />}
               {selectedImage && onSetLink && <ImageLinkField key={selectedImage.id} image={selectedImage} connected={connected} onSetLink={onSetLink} />}
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 <button style={pillButtonStyle} onClick={onDeselect}>
@@ -702,5 +717,51 @@ function ImageLinkField({ image, connected, onSetLink }: { image: WorldObject; c
       </div>
       {!valid && <small style={{ color: "#ff8a80" }}>{L("Use a full https:// address.", "https:// から始まる完全なアドレスを入力してください。")}</small>}
     </form>
+  );
+}
+
+/**
+ * The selected object's size: a slider (spread evenly from very small to
+ * very big, so both ends are as easy to reach), smaller and bigger steps,
+ * and back to as placed. Sent when you let go, not on every step of a drag.
+ */
+function SizeControl({ scale, connected, onScale }: { scale: number; connected: boolean; onScale: (scale: number) => void }) {
+  const [draft, setDraft] = useState(scale);
+  useEffect(() => setDraft(scale), [scale]);
+  const lo = Math.log(OBJECT_SCALE_RANGE.min);
+  const hi = Math.log(OBJECT_SCALE_RANGE.max);
+  const clamp = (v: number) => Math.min(OBJECT_SCALE_RANGE.max, Math.max(OBJECT_SCALE_RANGE.min, v));
+  const set = (v: number) => {
+    const next = clamp(Math.round(v * 1000) / 1000);
+    setDraft(next);
+    onScale(next);
+  };
+  const percent = Math.round(draft * 100);
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+      <span style={{ fontSize: 12, opacity: 0.85, minWidth: 34 }}>{L("Size", "大きさ")}</span>
+      <button style={pillButtonStyle} disabled={!connected} onClick={() => set(draft / 1.1)} aria-label={L("Smaller", "小さく")}>
+        −
+      </button>
+      <input
+        type="range"
+        min={0}
+        max={1000}
+        value={Math.round(((Math.log(draft) - lo) / (hi - lo)) * 1000)}
+        disabled={!connected}
+        aria-label={L("Size", "大きさ")}
+        style={{ flex: "1 1 90px", minWidth: 90 }}
+        onChange={(e) => setDraft(clamp(Math.exp(lo + (Number(e.target.value) / 1000) * (hi - lo))))}
+        onPointerUp={() => set(draft)}
+        onKeyUp={() => set(draft)}
+      />
+      <button style={pillButtonStyle} disabled={!connected} onClick={() => set(draft * 1.1)} aria-label={L("Bigger", "大きく")}>
+        +
+      </button>
+      <span style={{ fontSize: 12, minWidth: 44, textAlign: "right" }}>{percent}%</span>
+      <button style={pillButtonStyle} disabled={!connected || Math.abs(draft - 1) < 1e-3} onClick={() => set(1)}>
+        {L("1×", "等倍")}
+      </button>
+    </div>
   );
 }

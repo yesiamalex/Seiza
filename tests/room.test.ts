@@ -460,6 +460,27 @@ describe.skipIf(!built)("room server", () => {
     a.socket.close();
   });
 
+  it("resizes a placed object for everyone, within its limits, and ignores a bad size", async () => {
+    const room = freshRoom();
+    const a = await client(room, "A", ["batch"]);
+    const b = await client(room, "B", ["batch"]);
+    a.send({ type: "objectAdd", object: { kind: "box", color: "#ffffff", position: [0, 0, 0], rotationY: 0, scale: 1 } as never });
+    const added = await until(() => a.received.find((m) => m.type === "objectAdded"));
+    const id = added.type === "objectAdded" ? added.object.id : "";
+    a.send({ type: "objectScale", id, scale: Number.NaN });
+    a.send({ type: "objectScale", id, scale: 2.5 });
+    const seen = await until(() => b.received.find((m) => m.type === "objectUpdated"));
+    expect(seen.type === "objectUpdated" && seen.object.scale).toBe(2.5);
+    a.send({ type: "objectScale", id, scale: 500 });
+    await until(() => (b.received.filter((m) => m.type === "objectUpdated").length === 2 ? true : undefined));
+    const big = b.received.filter((m) => m.type === "objectUpdated")[1];
+    expect(big.type === "objectUpdated" && big.object.scale).toBe(20);
+    await sleep(200);
+    expect(b.received.filter((m) => m.type === "objectUpdated")).toHaveLength(2);
+    a.socket.close();
+    b.socket.close();
+  });
+
   it("strips direction overrides and control characters from chat and names", async () => {
     const room = freshRoom();
     const a = await client(room, "A‮gnp.exe", ["batch"]);
