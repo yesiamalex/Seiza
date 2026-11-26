@@ -16,6 +16,7 @@ import { unlockAudio } from "../media/audioContext";
 import { warmAvatar, warmWorld } from "../loading/warm";
 import { L, useLang } from "../i18n/lang";
 import { LangToggle } from "../i18n/LangToggle";
+import { GraphicsToggle } from "./GraphicsToggle";
 
 export interface JoinedIdentity extends AvatarSelection {
   displayName: string;
@@ -163,7 +164,10 @@ export function JoinScreen({ world, onJoin }: JoinScreenProps) {
       <div aria-hidden style={{ position: "absolute", inset: 0, backgroundImage: STAR_DOTS_FAR, opacity: 0.9, pointerEvents: "none" }} />
       <div aria-hidden style={{ position: "absolute", inset: 0, backgroundImage: STAR_DOTS_NEAR, pointerEvents: "none" }} />
 
-      <LangToggle style={{ position: "absolute", top: 16, right: 16, zIndex: 2 }} />
+      <div style={{ position: "absolute", top: 16, right: 16, zIndex: 2, display: "flex", gap: 8 }}>
+        <GraphicsToggle />
+        <LangToggle />
+      </div>
       <form onSubmit={handleSubmit} className="seiza-join-form seiza-rise-in">
         <div className="seiza-join-col">
           <div>

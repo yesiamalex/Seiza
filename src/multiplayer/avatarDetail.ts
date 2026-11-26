@@ -10,6 +10,11 @@
  *   and at that size it's a hairline); past 20 m the hair and clothes
  *   physics too, and the pose is worked out every other frame (30 a second
  *   at 60: still smooth, at a distance where a step is a few pixels).
+ * - **In a headset**, which draws everything twice (an eye each) in 14 ms
+ *   at 72 Hz, a crowd starts at 5 and the tiers come closer (XR_TIERS):
+ *   the outline goes past 5 m, where on a Quest 2's screen it's a pixel,
+ *   and the physics past 12 m (`tight`). Low graphics on a phone
+ *   (scene/graphics.ts) uses the same. Nothing else changes.
  * - **Out of view:** worked out every 6th frame, so it's in step when you
  *   turn round. Whether it's drawn is three.js's own frustum culling, frame
  *   by frame (VrmAvatar gives it a generous bounding sphere), so nothing on
@@ -29,6 +34,12 @@ export const CROWD_TIERS: [number, number, boolean, boolean][] = [
   [20, 2, false, false],
   [10, 1, true, false],
 ];
+/** In a headset: a crowd sooner, and the same steps nearer. */
+export const XR_CROWD_SIZE = 4;
+export const XR_TIERS: [number, number, boolean, boolean][] = [
+  [12, 2, false, false],
+  [5, 1, true, false],
+];
 /** Far, in a busy room: every 2nd frame (the remote players' planner). */
 export const FAR_DISTANCE = CROWD_TIERS[0][0];
 export const FAR_EVERY = CROWD_TIERS[0][1];
@@ -42,15 +53,15 @@ export interface AvatarDetail {
   outlines: boolean;
 }
 
-export function avatarDetail(avatar: { inView: boolean; distance: number; crowd: number }): AvatarDetail {
+export function avatarDetail(avatar: { inView: boolean; distance: number; crowd: number; tight?: boolean }): AvatarDetail {
   if (!avatar.inView) return { every: OFFSCREEN_EVERY, springs: false, outlines: true };
-  if (avatar.crowd > CROWD_SIZE) {
-    for (const [beyond, every, springs, outlines] of CROWD_TIERS) if (avatar.distance > beyond) return { every, springs, outlines };
+  if (avatar.crowd > (avatar.tight ? XR_CROWD_SIZE : CROWD_SIZE)) {
+    for (const [beyond, every, springs, outlines] of avatar.tight ? XR_TIERS : CROWD_TIERS) if (avatar.distance > beyond) return { every, springs, outlines };
   }
   return { every: 1, springs: true, outlines: true };
 }
 
 /** How often a remote avatar's animation updates (RemotePlayers' planner). */
-export function avatarUpdateEvery(avatar: { inView: boolean; distance: number; remoteCount: number }): number {
-  return avatarDetail({ inView: avatar.inView, distance: avatar.distance, crowd: avatar.remoteCount }).every;
+export function avatarUpdateEvery(avatar: { inView: boolean; distance: number; remoteCount: number; tight?: boolean }): number {
+  return avatarDetail({ inView: avatar.inView, distance: avatar.distance, crowd: avatar.remoteCount, tight: avatar.tight }).every;
 }

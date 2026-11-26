@@ -367,14 +367,23 @@ export function Arrival({ ready, worldId, worldName, avatarUrl, onDone }: { read
             VRMUtils.deepDispose(loaded.vrm.scene);
             return;
           }
-          self = loaded;
-          scene.add(loaded.vrm.scene);
+          // Its shaders built off to the side first (in parallel where the
+          // GPU can), so it appearing isn't one long frame.
+          const show = () => {
+            if (cancelled) return;
+            self = loaded;
+            scene.add(loaded.vrm.scene);
+          };
+          renderer.compileAsync(loaded.vrm.scene, camera, scene).then(show, show);
         })
         .catch(() => {});
     }, AVATAR_AFTER_MS);
 
-    const start = performance.now();
-    let last = start;
+    // Its own clock, not the wall's: the world loading behind this screen
+    // can hold a frame up, and a held-up frame should slow the scene a
+    // moment, not jump it ahead (that jump is what reads as a stutter).
+    let last = performance.now();
+    let clock = 0;
     let readyAt: number | null = null;
     let gone = false;
     let frame = 0;
@@ -383,16 +392,17 @@ export function Arrival({ ready, worldId, worldName, avatarUrl, onDone }: { read
     const loop = () => {
       frame = requestAnimationFrame(loop);
       const now = performance.now();
-      const dt = Math.min(0.05, (now - last) / 1000);
+      const dt = Math.min(1 / 30, (now - last) / 1000);
       last = now;
-      const t = (now - start) / 1000;
-      if (readyAt === null && readyRef.current && t > MIN_SECONDS) readyAt = now;
+      clock += dt;
+      const t = clock;
+      if (readyAt === null && readyRef.current && t > MIN_SECONDS) readyAt = t;
       // A tap once ready: straight to the last step.
       if (readyAt !== null && skipRef.current) {
-        readyAt = Math.min(readyAt, now - (SUMMON_SECONDS * 0.8 + STAND_SECONDS + TURN_SECONDS + WALK_SECONDS * 0.6) * 1000);
+        readyAt = Math.min(readyAt, t - (SUMMON_SECONDS * 0.8 + STAND_SECONDS + TURN_SECONDS + WALK_SECONDS * 0.6));
         skipRef.current = false;
       }
-      const after = readyAt === null ? -1 : (now - readyAt) / 1000;
+      const after = readyAt === null ? -1 : t - readyAt;
       const summon = smooth(after / SUMMON_SECONDS);
       const riseAt = SUMMON_SECONDS * 0.8;
       const turnAt = riseAt + STAND_SECONDS;

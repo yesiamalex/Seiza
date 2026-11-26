@@ -13,6 +13,7 @@ import { ChatBubble } from "../chat/ChatBubble";
 import { CameraBadge } from "../media/CameraBadge";
 import { NameTag } from "./NameTag";
 import { avatarUpdateEvery } from "./avatarDetail";
+import { isLowGraphics } from "../scene/graphics";
 import { isPlayerHidden } from "./playerFilter";
 import type { PlayerState } from "./types";
 import { RemoteMotion } from "./remoteMotion";
@@ -103,6 +104,7 @@ export function RemotePlayers({ players, selfId, speakingLevels, lastMessages, g
         inView: frustum.current.intersectsSphere(sphere.current),
         distance: sphere.current.center.distanceTo(eye),
         remoteCount: remotes.length,
+        tight: gl.xr.isPresenting || isLowGraphics(),
       });
       if (every > 1) detail.set(player.id, every);
     }

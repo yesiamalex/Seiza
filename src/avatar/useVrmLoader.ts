@@ -3,6 +3,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { VRMLoaderPlugin, VRMUtils, type VRM } from "@pixiv/three-vrm";
 import { buildDesignerVrm } from "./designer/buildDesignerVrm";
 import { decodeAvatarSpec, isDesignerAvatarUrl } from "./designer/avatarSpec";
+import { isLowGraphics, shrinkTextures } from "../scene/graphics";
 
 export interface VrmLoadState {
   vrm: VRM | null;
@@ -65,6 +66,9 @@ export function useVrmLoader(url: string | null): VrmLoadState {
         // memory and per-frame skinning cost on typical VRoid exports.
         VRMUtils.removeUnnecessaryVertices(gltf.scene);
         VRMUtils.combineSkeletons(gltf.scene);
+        // Low graphics (older phones): its textures to 1024 px, a quarter of
+        // the GPU memory of 2048 px ones, so a room full of avatars fits.
+        if (isLowGraphics()) shrinkTextures(vrm.scene);
         // Skinned meshes keep their rest-pose bounding box, so an animated
         // limb can be culled while still on screen. Avatars are few; never cull.
         vrm.scene.traverse((object) => {

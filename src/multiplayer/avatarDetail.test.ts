@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { avatarDetail, avatarUpdateEvery, CROWD_SIZE, FAR_DISTANCE, FAR_EVERY, OFFSCREEN_EVERY } from "./avatarDetail";
+import { avatarDetail, avatarUpdateEvery, CROWD_SIZE, FAR_DISTANCE, FAR_EVERY, OFFSCREEN_EVERY, XR_CROWD_SIZE } from "./avatarDetail";
 
 describe("avatarUpdateEvery", () => {
   it("updates every frame when in view in a small room, however far", () => {
@@ -26,5 +26,15 @@ describe("avatarDetail", () => {
     const at = (distance: number) => avatarDetail({ inView: true, distance, crowd: CROWD_SIZE + 10 });
     expect(at(15)).toEqual({ every: 1, springs: true, outlines: false });
     expect(at(25)).toEqual({ every: 2, springs: false, outlines: false });
+  });
+
+  it("in a headset, steps down sooner and nearer, and never on a flat screen", () => {
+    const xr = (distance: number, crowd = XR_CROWD_SIZE + 1) => avatarDetail({ inView: true, distance, crowd, tight: true });
+    expect(xr(3)).toEqual({ every: 1, springs: true, outlines: true });
+    expect(xr(8)).toEqual({ every: 1, springs: true, outlines: false });
+    expect(xr(15)).toEqual({ every: 2, springs: false, outlines: false });
+    // A small room in a headset is still in full; the same room on a screen too.
+    expect(xr(15, XR_CROWD_SIZE)).toEqual({ every: 1, springs: true, outlines: true });
+    expect(avatarDetail({ inView: true, distance: 8, crowd: XR_CROWD_SIZE + 1 })).toEqual({ every: 1, springs: true, outlines: true });
   });
 });
