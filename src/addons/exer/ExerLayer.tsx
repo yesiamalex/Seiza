@@ -21,7 +21,7 @@ import { setFaceCue, type FaceCue } from "../../avatar/useFacialExpressions";
 const TRICK_FACE: FaceCue = { happy: 0.8, surprised: 0.3 };
 const SKID_FACE: FaceCue = { surprised: 0.6 };
 const FAST_FACE: FaceCue = { happy: 0.45 };
-import { announceRide, getOffBehind, myPassenger, nearRide, parseExerEvent, passenger, passengers, playBell, releaseBell, remoteRiders, resetRide, ride, ringBell, setVehicle, startEngine, startHorn, type Engine } from "./ride";
+import { announceRide, getOffBehind, myPassenger, nearRide, parseExerEvent, passenger, passengers, playBell, releaseBell, remoteRiders, resetRide, ride, rideHitSound, ringBell, setVehicle, startEngine, startHorn, startRoll, type Engine } from "./ride";
 import { SEAT_HEIGHT } from "../../scene/layout";
 import { skyState } from "../../sky/skyState";
 import { buildVehicle, gripTarget, RIDE_EYE, riderPose, slopeFactor, TRICKS, VEHICLE_SPECS, type RideMotion, type Vehicle } from "./vehicles";
@@ -39,6 +39,10 @@ const B_BUTTON = 5;
 const SWAP = 0.3;
 /** A moped's engine is heard within this far, metres. */
 const ENGINE_RANGE = 28;
+/** A bike's or a board's wheels, within this far. */
+const ROLL_RANGE = 18;
+/** A board clicks over a crack in the paving about this often, metres. */
+const CRACK_EVERY = 1.6;
 const ease = (g: number) => g * g * (3 - 2 * g);
 
 interface Holder {
@@ -52,6 +56,14 @@ interface Holder {
   lamp: THREE.SpotLight | null;
   engine: Engine | null;
   engineAt: number;
+  /** A bike's or a board's wheels rolling (startRoll), and when last set. */
+  roll: Engine | null;
+  rollAt: number;
+  /** Off the ground last frame, and since when (seconds), for the pop and the landing. */
+  wasAir: boolean;
+  airSince: number;
+  /** Metres rolled since the last crack in the paving (a board's). */
+  rolled: number;
   /** How the ride is going (vehicles.ts's RideMotion), for the body. */
   motion: RideMotion;
   yaw: number | null;
@@ -323,7 +335,7 @@ export function ExerLayer({ selfId, players, getSelfPosition, selfSeated }: { se
         h = undefined;
       }
       if (!h) {
-        h = { vrm, overlay: sharedOverlay(vrm, frame), vehicle: null, grow: 0, base: 1, beam: null, lamp: null, engine: null, engineAt: 0, motion: { t: 0, speed: 0, turn: 0, air: 0, aloft: 0, stopped: 0, backing: 0, backPhase: 0 }, yaw: null, trick: 0, trickT: 0, skidAt: 0, prop: null, wheels: [], detach: () => {}, weight: 0, phase: 0, last: null, speed: 0, body: newBodyPose(), hands: { right: target(), left: target() }, tracked: { right: newTrackedHand(), left: newTrackedHand() } };
+        h = { vrm, overlay: sharedOverlay(vrm, frame), vehicle: null, grow: 0, base: 1, beam: null, lamp: null, engine: null, engineAt: 0, roll: null, rollAt: 0, wasAir: false, airSince: 0, rolled: 0, motion: { t: 0, speed: 0, turn: 0, air: 0, aloft: 0, stopped: 0, backing: 0, backPhase: 0 }, yaw: null, trick: 0, trickT: 0, skidAt: 0, prop: null, wheels: [], detach: () => {}, weight: 0, phase: 0, last: null, speed: 0, body: newBodyPose(), hands: { right: target(), left: target() }, tracked: { right: newTrackedHand(), left: newTrackedHand() } };
         holders.set(key, h);
       }
       h.overlay = sharedOverlay(vrm, frame);
@@ -372,6 +384,18 @@ export function ExerLayer({ selfId, players, getSelfPosition, selfSeated }: { se
         h.engine.stop();
         h.engine = null;
       }
+      // A bike's or a board's wheels on the ground, nearby.
+      const rolls = h.vehicle === "bike" || h.vehicle === "skateboard";
+      if (rolls && distance < ROLL_RANGE) {
+        h.roll ??= startRoll(h.vehicle as "bike" | "skateboard");
+        if (h.roll && frame - h.rollAt > 0.08) {
+          h.rollAt = frame;
+          h.roll.set(h.speed, h.wasAir ? 0 : shown * (1 - distance / ROLL_RANGE));
+        }
+      } else if (h.roll) {
+        h.roll.stop();
+        h.roll = null;
+      }
       // How far it went, for the wheels and the pedals.
       const p = vrm.scene.getWorldPosition(v2);
       const mx = h.last ? p.x - h.last.x : 0;
@@ -414,6 +438,24 @@ export function ExerLayer({ selfId, players, getSelfPosition, selfSeated }: { se
       const airborne = p.y - floorHeightAt(p.x, p.z) > 0.15;
       if (airborne) m.air += dt;
       else m.air = 0;
+      // Leaving the ground and coming down: a board's pop and landing, a bike's thump.
+      if (h.vehicle && h.vehicle !== "moped" && airborne !== h.wasAir) {
+        const heard = distance < ROLL_RANGE + 6 ? distance : undefined;
+        if (heard !== undefined) {
+          if (airborne && h.vehicle === "skateboard") rideHitSound("skateboard", "pop", 1, heard);
+          else if (!airborne && frame - h.airSince > 0.12) rideHitSound(h.vehicle, "land", (frame - h.airSince) / 0.6, heard);
+        }
+        h.airSince = frame;
+      }
+      h.wasAir = airborne;
+      // A board over the paving's cracks, now and then.
+      if (h.vehicle === "skateboard" && !airborne && h.speed > 1) {
+        h.rolled += h.speed * dt;
+        if (h.rolled > CRACK_EVERY) {
+          h.rolled = 0;
+          if (distance < ROLL_RANGE) rideHitSound("skateboard", "crack", 1, distance);
+        }
+      }
       // Eased, so the body goes into a tuck or puts a foot down gradually.
       m.aloft! += ((airborne ? 1 : 0) - m.aloft!) * (1 - Math.exp(-7 * dt));
       m.stopped! += ((h.speed < 0.3 ? 1 : 0) - m.stopped!) * (1 - Math.exp(-4 * dt));
@@ -487,4 +529,6 @@ function release(h: Holder) {
   dropProp(h);
   h.engine?.stop();
   h.engine = null;
+  h.roll?.stop();
+  h.roll = null;
 }

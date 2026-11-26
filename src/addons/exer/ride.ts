@@ -1,6 +1,6 @@
 import { createStore } from "../store";
 import { oneOf, sendAddonEvent, type AddonEvent } from "../bus";
-import { noiseHit, toneHit, voice } from "../sound";
+import { noiseBuffer, noiseHit, toneHit, voice } from "../sound";
 import { sfxOutput } from "../../audio/sfx";
 import { drive } from "../../player/drive";
 import { logRide } from "../sport/strava";
@@ -197,6 +197,125 @@ export function startEngine(): Engine | null {
       }, 400);
     },
   };
+}
+
+/**
+ * Wheels on the ground, as long as they roll. A bike: the tyres' hiss on
+ * the road and its low hum, and the chain's soft whir while the pedals go
+ * round, pulsing with them. A skateboard: the hard wheels' rumble, rougher
+ * the faster, and a little grit. One looped noise through a few filters,
+ * each part's level set by the speed; nothing while it's in the air (set a
+ * level of 0).
+ */
+export function startRoll(kind: "bike" | "skateboard"): Engine | null {
+  const output = sfxOutput();
+  if (!output || output.ctx.state !== "running") return null;
+  const { ctx } = output;
+  const source = ctx.createBufferSource();
+  source.buffer = noiseBuffer(ctx);
+  source.loop = true;
+  const out = ctx.createGain();
+  out.gain.value = 0;
+  out.connect(output.out);
+  const band = (type: BiquadFilterType, frequency: number, q: number, gain: number) => {
+    const f = ctx.createBiquadFilter();
+    f.type = type;
+    f.frequency.value = frequency;
+    f.Q.value = q;
+    const g = ctx.createGain();
+    g.gain.value = gain;
+    source.connect(f).connect(g).connect(out);
+    return { f, g };
+  };
+  const nodes: AudioScheduledSourceNode[] = [source];
+  let set: (speed: number, level: number) => void;
+  if (kind === "bike") {
+    const hiss = band("bandpass", 1400, 0.7, 0.5);
+    const hum = band("lowpass", 180, 0.8, 0.9);
+    const chain = band("bandpass", 3600, 4, 0);
+    // The chain pulses with the pedal strokes: two a turn of the cranks.
+    const stroke = ctx.createOscillator();
+    stroke.frequency.value = 2;
+    const strokeDepth = ctx.createGain();
+    strokeDepth.gain.value = 0;
+    stroke.connect(strokeDepth).connect(chain.g.gain);
+    nodes.push(stroke);
+    set = (speed, level) => {
+      const t = ctx.currentTime;
+      const go = Math.min(1, speed / 6);
+      hiss.f.frequency.setTargetAtTime(900 + 1200 * go, t, 0.2);
+      hum.f.frequency.setTargetAtTime(120 + 160 * go, t, 0.2);
+      // A crank turn every 4.4 m (vehicles.ts): two pulses a turn.
+      stroke.frequency.setTargetAtTime(Math.max(0.5, (speed / 4.4) * 2), t, 0.2);
+      chain.g.gain.setTargetAtTime(speed > 0.5 ? 0.12 : 0, t, 0.2);
+      strokeDepth.gain.setTargetAtTime(speed > 0.5 ? 0.1 : 0, t, 0.2);
+      out.gain.setTargetAtTime(level * Math.min(1, speed / 1.2) * (0.05 + 0.07 * go), t, 0.12);
+    };
+  } else {
+    const rumble = band("lowpass", 320, 1.2, 1);
+    const wheels = band("bandpass", 850, 1.5, 0.45);
+    const grit = band("highpass", 4200, 0.7, 0.08);
+    // Roughness: the rumble's level wobbling, as the ground goes by.
+    const wobble = ctx.createOscillator();
+    wobble.frequency.value = 9;
+    const wobbleDepth = ctx.createGain();
+    wobbleDepth.gain.value = 0.25;
+    wobble.connect(wobbleDepth).connect(rumble.g.gain);
+    nodes.push(wobble);
+    set = (speed, level) => {
+      const t = ctx.currentTime;
+      const go = Math.min(1, speed / 7);
+      rumble.f.frequency.setTargetAtTime(240 + 260 * go, t, 0.2);
+      wheels.f.frequency.setTargetAtTime(650 + 600 * go, t, 0.2);
+      wobble.frequency.setTargetAtTime(6 + 14 * go, t, 0.2);
+      grit.g.gain.setTargetAtTime(0.04 + 0.1 * go, t, 0.2);
+      out.gain.setTargetAtTime(level * Math.min(1, speed / 0.8) * (0.08 + 0.1 * go), t, 0.06);
+    };
+  }
+  for (const n of nodes) n.start();
+  return {
+    set,
+    stop() {
+      out.gain.setTargetAtTime(0, ctx.currentTime, 0.05);
+      setTimeout(() => {
+        for (const n of nodes) n.stop();
+        out.disconnect();
+      }, 400);
+    },
+  };
+}
+
+/**
+ * A ride leaving the ground and coming back to it. A skateboard's jump:
+ * the pop, the tail snapping on the ground and the wood knocking; its
+ * landing, four wheels slapping down and the deck's clack, harder after
+ * longer in the air. A bike landing: the tyres' thump and a rattle.
+ * And a board rolling over a crack in the paving: a small click.
+ */
+export function rideHitSound(kind: Vehicle, hit: "pop" | "land" | "crack", strength: number, distance?: number) {
+  const v = voice(0.8, distance, 24, 1);
+  if (!v) return;
+  const s = Math.min(1, Math.max(0.3, strength));
+  if (kind === "skateboard") {
+    if (hit === "pop") {
+      noiseHit(v, { frequency: 2600, duration: 0.035, gain: 0.3, q: 2 });
+      toneHit(v, { frequency: 260, sweepTo: 180, duration: 0.07, gain: 0.22, type: "triangle" });
+    } else if (hit === "land") {
+      noiseHit(v, { frequency: 1500, duration: 0.05, gain: 0.32 * s, q: 1.4 });
+      toneHit(v, { frequency: 120, sweepTo: 70, duration: 0.12, gain: 0.3 * s, type: "sine" });
+      noiseHit(v, { frequency: 3000, duration: 0.03, gain: 0.12 * s, q: 3, delay: 0.035 });
+    } else {
+      noiseHit(v, { frequency: 1900, duration: 0.025, gain: 0.07, q: 2.5 });
+      noiseHit(v, { frequency: 1700, duration: 0.025, gain: 0.05, q: 2.5, delay: 0.09 });
+    }
+    return;
+  }
+  if (hit === "land") {
+    toneHit(v, { frequency: 95, sweepTo: 55, duration: 0.14, gain: 0.3 * s, type: "sine" });
+    noiseHit(v, { frequency: 700, duration: 0.08, gain: 0.12 * s, q: 1 });
+    // The rattle: the chain and the mudguards.
+    for (let i = 0; i < 3; i++) noiseHit(v, { frequency: 3800, duration: 0.02, gain: 0.05 * s, q: 5, delay: 0.04 + i * 0.045 });
+  }
 }
 
 /** A Japanese mamachari's dome bell, chirin chirin: two quick strikes, high
