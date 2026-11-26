@@ -70,6 +70,20 @@ const WALK_SECONDS = 2.0;
 const AVATAR_AFTER_MS = 700;
 const SEIZA_URL = BUILTIN_GESTURES.find((g) => g.name === "seiza")?.url ?? null;
 const FADE_SECONDS = 0.7;
+/** The night sky without WebGL: a few stars and the glow of the horizon. */
+const FLAT_SKY = [
+  "radial-gradient(1.5px 1.5px at 12% 18%, #fff 50%, transparent 51%)",
+  "radial-gradient(1px 1px at 27% 42%, #dfe6ff 50%, transparent 51%)",
+  "radial-gradient(1.5px 1.5px at 41% 12%, #fff 50%, transparent 51%)",
+  "radial-gradient(1px 1px at 58% 30%, #dfe6ff 50%, transparent 51%)",
+  "radial-gradient(2px 2px at 66% 16%, #fff6dc 50%, transparent 51%)",
+  "radial-gradient(1px 1px at 79% 38%, #fff 50%, transparent 51%)",
+  "radial-gradient(1.5px 1.5px at 88% 22%, #dfe6ff 50%, transparent 51%)",
+  "radial-gradient(1px 1px at 8% 52%, #fff 50%, transparent 51%)",
+  "radial-gradient(1px 1px at 47% 56%, #dfe6ff 50%, transparent 51%)",
+  "radial-gradient(1.5px 1.5px at 93% 58%, #fff 50%, transparent 51%)",
+  "radial-gradient(120% 60% at 50% 110%, #1d2b4a 0%, #0b0f20 60%)",
+].join(", ");
 
 const TIPS: [string, string][] = [
   ["Click a seat to sit; click the floor twice to walk there.", "席をクリックで座れます。床をダブルクリックでそこへ歩きます。"],
@@ -203,6 +217,31 @@ export function Arrival({ ready, worldId, worldName, avatarUrl, onDone }: { read
   const skipRef = useRef(false);
   const [fading, setFading] = useState(false);
   const [breath, setBreath] = useState<"in" | "out">("in");
+  // Without its 3D view (no second WebGL context to be had, or the browser
+  // took it back while the world loaded behind it): stars drawn in CSS, and
+  // in once the world's ready. Before, that left a blank screen, and with no
+  // view to finish the walk, one that never went away.
+  const [flat, setFlat] = useState(false);
+  const goneRef = useRef(false);
+  const finish = () => {
+    if (goneRef.current) return;
+    goneRef.current = true;
+    setFading(true);
+    window.setTimeout(() => doneRef.current(), FADE_SECONDS * 1000);
+  };
+  const finishRef = useRef(finish);
+  finishRef.current = finish;
+  useEffect(() => {
+    if (!flat || !ready) return;
+    const timer = window.setTimeout(() => finishRef.current(), 1200);
+    return () => window.clearTimeout(timer);
+  }, [flat, ready]);
+  // And whatever happens, in at most 12 s after the world's ready.
+  useEffect(() => {
+    if (!ready) return;
+    const timer = window.setTimeout(() => finishRef.current(), 12_000);
+    return () => window.clearTimeout(timer);
+  }, [ready]);
   const [tip] = useState(() => TIPS[Math.floor(Math.random() * TIPS.length)]);
   const { loaded, total } = useProgress();
   const color = worldColor(worldId);
@@ -228,9 +267,16 @@ export function Arrival({ ready, worldId, worldName, avatarUrl, onDone }: { read
     try {
       renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "low-power" });
     } catch {
-      // No second context to be had: the plain dark screen does the job.
+      // No second context to be had: the stars in CSS do the job.
+      setFlat(true);
       return;
     }
+    let lost = false;
+    const onLost = () => {
+      lost = true;
+      setFlat(true);
+    };
+    renderer.domElement.addEventListener("webglcontextlost", onLost);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     el.appendChild(renderer.domElement);
@@ -384,6 +430,8 @@ export function Arrival({ ready, worldId, worldName, avatarUrl, onDone }: { read
     // moment, not jump it ahead (that jump is what reads as a stutter).
     let last = performance.now();
     let clock = 0;
+    // The usual frame, lately: a device that is simply slow runs in real time.
+    let usual = 1 / 60;
     let readyAt: number | null = null;
     let gone = false;
     let frame = 0;
@@ -392,8 +440,11 @@ export function Arrival({ ready, worldId, worldName, avatarUrl, onDone }: { read
     const loop = () => {
       frame = requestAnimationFrame(loop);
       const now = performance.now();
-      const dt = Math.min(1 / 30, (now - last) / 1000);
+      const real = Math.min(0.25, (now - last) / 1000);
       last = now;
+      // A frame much longer than lately is a hitch: count it as a usual one.
+      const dt = Math.min(real, Math.max(1 / 30, usual * 1.6), 0.1);
+      usual += (Math.min(real, 0.1) - usual) * 0.1;
       clock += dt;
       const t = clock;
       if (readyAt === null && readyRef.current && t > MIN_SECONDS) readyAt = t;
@@ -475,11 +526,10 @@ export function Arrival({ ready, worldId, worldName, avatarUrl, onDone }: { read
       for (let i = 0; i < flies; i++) fp.setXYZ(i, flyBase[i * 3] + 0.3 * Math.sin(t * 0.7 + i), flyBase[i * 3 + 1] + 0.2 * Math.sin(t * 1.1 + i * 1.7), flyBase[i * 3 + 2] + 0.3 * Math.cos(t * 0.6 + i * 0.5));
       fp.needsUpdate = true;
       renderer.toneMappingExposure = 1 + 2.5 * walk * walk;
-      renderer.render(scene, camera);
+      if (!lost) renderer.render(scene, camera);
       if ((walk >= 0.8 || (still && summon >= 1)) && !gone) {
         gone = true;
-        setFading(true);
-        window.setTimeout(() => doneRef.current(), FADE_SECONDS * 1000);
+        finishRef.current();
       }
     };
     loop();
@@ -492,6 +542,7 @@ export function Arrival({ ready, worldId, worldName, avatarUrl, onDone }: { read
         VRMUtils.deepDispose(self.vrm.scene);
       }
       window.removeEventListener("resize", resize);
+      renderer.domElement.removeEventListener("webglcontextlost", onLost);
       tufts.dispose();
       for (const d of disposables) d.dispose();
       renderer.dispose();
@@ -509,7 +560,7 @@ export function Arrival({ ready, worldId, worldName, avatarUrl, onDone }: { read
       role="status"
       aria-label={L(`Entering ${worldName}`, `${worldName}へ移動中`)}
       // The flash: the portal's own colour, fading out to the world.
-      style={{ position: "fixed", inset: 0, zIndex: 80, background: fading ? color : "#0b0f20", opacity: fading ? 0 : 1, transition: `opacity ${FADE_SECONDS}s ease, background ${FADE_SECONDS / 2}s ease`, pointerEvents: fading ? "none" : "auto", overflow: "hidden" }}
+      style={{ position: "fixed", inset: 0, zIndex: 80, background: fading ? color : flat ? FLAT_SKY : "#0b0f20", opacity: fading ? 0 : 1, transition: `opacity ${FADE_SECONDS}s ease, background ${FADE_SECONDS / 2}s ease`, pointerEvents: fading ? "none" : "auto", overflow: "hidden" }}
     >
       <div style={{ position: "absolute", zIndex: 1, left: 0, right: 0, bottom: 34, display: "grid", justifyItems: "center", gap: 8, color: "#fff", fontFamily: "system-ui, sans-serif", textShadow: "0 1px 6px rgba(0,0,0,0.7)", pointerEvents: "none", padding: "0 16px", textAlign: "center", opacity: fading ? 0 : 1, transition: "opacity 300ms" }}>
         <span style={{ fontSize: 14, opacity: 0.85, letterSpacing: 1, transition: "opacity 600ms" }}>{ready ? L("Tap to go in", "タップで入る") : breath === "in" ? L("Breathe in…", "吸って…") : L("…and out", "…吐いて")}</span>

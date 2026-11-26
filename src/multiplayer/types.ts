@@ -193,6 +193,9 @@ export type ClientMessage =
   | { type: "objectSetLink"; id: string; link: string }
   /** Resize a placed object (editors only): how big, 1 as placed. */
   | { type: "objectScale"; id: string; scale: number }
+  /** Swap a placed model's file for another (editors only): its optimized
+   *  copy, uploaded as a new asset. Where it is and how big stay put. */
+  | { type: "objectSetModel"; id: string; modelUrl: string }
   // Claims a screen to present on, or gives it back up. Only the presenter
   // can release their own screen; leaving the room releases it too.
   // `source` picks which of the presenter's own streams feeds the

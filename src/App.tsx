@@ -386,6 +386,7 @@ export default function App() {
     setHeatCalm,
     setObjectText,
     setObjectLink,
+    setObjectModel,
     scaleObject,
     presentOnObject,
     setMedia,
@@ -2007,6 +2008,8 @@ export default function App() {
           onDeleteSelected={handleDeleteSelected}
           selectedImage={selectedObjectId && objects[selectedObjectId]?.kind === "image" ? objects[selectedObjectId] : null}
           onSetLink={setObjectLink}
+          selectedModel={selectedObjectId && objects[selectedObjectId]?.kind === "model" ? objects[selectedObjectId] : null}
+          onReplaceModel={setObjectModel}
           selectedScale={selectedObjectId ? (objects[selectedObjectId]?.scale ?? null) : null}
           onScaleSelected={(scale) => selectedObjectId && scaleObject(selectedObjectId, scale)}
           editorPasswordRequired={editGateProps.editorPasswordRequired}

@@ -708,6 +708,20 @@ export class SeizaRoom extends DurableObject<Env> {
         this.broadcast({ type: "objectUpdated", object });
         break;
       }
+      case "objectSetModel": {
+        // A model's file, swapped for its optimized copy: an edit, checked
+        // like a model being placed.
+        if (this.editingRequiresAuth() && !attachment.isEditor) return;
+        if (!this.allow(attachment.connId, "edit", EDIT_RATE)) return;
+        const object = this.objects.get(message.id);
+        if (!object || object.kind !== "model") return;
+        const modelUrl = sanitizeAssetUrl(message.modelUrl, { allowEmpty: false });
+        if (!modelUrl) return;
+        object.modelUrl = modelUrl;
+        this.persistObjects();
+        this.broadcast({ type: "objectUpdated", object });
+        break;
+      }
       case "objectSetLink": {
         // A link sends visitors somewhere else, so it's an edit: only
         // editors (or admins) where the deployment has a password, like

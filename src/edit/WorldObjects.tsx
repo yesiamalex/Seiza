@@ -1,5 +1,6 @@
 import { Component, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { TransformControls, useGLTF } from "@react-three/drei";
+import { mergeStaticMeshes } from "./modelTools";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
@@ -677,11 +678,16 @@ function ModelGeometry({ url }: { url: string }) {
 }
 
 function LoadedModel({ url }: { url: string }) {
-  const { scene } = useGLTF(url);
+  const { scene, animations } = useGLTF(url);
   // useGLTF hands every user of a URL the same scene, and one object can
   // only be in one place: a model placed twice showed once. Each placement
   // gets its own copy (skeletons and all, for a placed avatar); the
   // geometry and textures stay shared, so a copy costs little memory.
-  const copy = useMemo(() => cloneSkinned(scene), [scene]);
+  // A static model's meshes that share a material are merged first (once
+  // per model, modelTools.ts): it looks the same and draws in far fewer calls.
+  const copy = useMemo(() => {
+    mergeStaticMeshes(scene, animations);
+    return cloneSkinned(scene);
+  }, [scene, animations]);
   return <primitive object={copy} />;
 }

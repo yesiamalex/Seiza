@@ -3,6 +3,7 @@ import { OBJECT_SCALE_RANGE } from "../multiplayer/types";
 import { useEffect, useState, type ReactNode } from "react";
 import type { WorldObject } from "../multiplayer/types";
 import { optimizeVrmAvatar } from "../avatar/optimizeVrm";
+import { MODEL_TRIANGLE_BUDGET, modelStats, type ModelStats } from "./modelTools";
 import { compressImage } from "./compressImage";
 import { editAuthHeaders } from "./editAuth";
 import { SkyControls } from "./SkyControls";
@@ -37,6 +38,9 @@ interface EditToolbarProps {
   /** The selected object, when it's a picture: its link can be set here. */
   selectedImage?: WorldObject | null;
   onSetLink?: (id: string, link: string) => void;
+  /** The selected object, when it's a model: it can be checked and optimized. */
+  selectedModel?: WorldObject | null;
+  onReplaceModel?: (id: string, modelUrl: string) => void;
   /** Whether this deployment has a shared editor password configured at
    *  all (worker/room.ts's SEIZA_EDITOR_PASSWORD) — if not, editing is
    *  open and none of the auth props below matter. */
@@ -91,6 +95,8 @@ export function EditToolbar({
   onSnapToFloor,
   selectedScale,
   onScaleSelected,
+  selectedModel,
+  onReplaceModel,
   onDeselect,
   selectedImage,
   onSetLink,
@@ -122,6 +128,9 @@ export function EditToolbar({
   const [assetUploading, setAssetUploading] = useState(false);
   const [assetMessage, setAssetMessage] = useState<string | null>(null);
   const [optimizeAsset, setOptimizeAsset] = useState(true);
+  // The last model's cost (triangles, meshes), uploaded or checked.
+  const [modelCost, setModelCost] = useState<ModelStats | null>(null);
+  const [modelBusy, setModelBusy] = useState(false);
   const needsAuth = editorPasswordRequired && !isEditor;
 
   useEffect(() => {
@@ -157,7 +166,8 @@ export function EditToolbar({
       throw new Error(L("That model is over 60MB. Choose a smaller export.", "モデルが60MBを超えています。もっと小さく書き出してください。"));
     }
     let body: Blob = file;
-    if (optimizeAsset && extension === "glb" && file.size > 8 * 1024 * 1024) {
+    // Its textures shrunk (from 2 MB up: below that there's little to save).
+    if (optimizeAsset && extension === "glb" && file.size > 2 * 1024 * 1024) {
       const result = await optimizeVrmAvatar(file);
       body = result.blob;
       if (!result.applied) setAssetMessage(result.reason ?? L("Optimization was skipped; uploading the original.", "最適化をスキップし、元のファイルをアップロードします。"));
@@ -165,17 +175,55 @@ export function EditToolbar({
     if (body.size > 24 * 1024 * 1024) {
       throw new Error(L("This model is over the 24MB deployment limit, even after optimization.", "最適化してもモデルが24MBの上限を超えています。"));
     }
+    if (extension === "glb") setModelCost(await modelStats(await body.arrayBuffer()));
+    return sendAsset(body, file.name);
+  }
+
+  /** Uploads a model's bytes as a new asset. */
+  async function sendAsset(body: Blob, name: string): Promise<{ id: string; url: string; name: string }> {
     const response = await fetch("/api/assets", {
       method: "POST",
       body,
       headers: {
-        "x-seiza-asset-name": file.name,
+        "x-seiza-asset-name": name,
         ...editAuthHeaders(),
       },
     });
     const result = (await response.json().catch(() => ({}))) as { id?: string; url?: string; name?: string; error?: string };
     if (!response.ok || !result.id || !result.url) throw new Error(result.error ?? `${L("Upload failed", "アップロードに失敗しました")} (${response.status}).`);
-    return { id: result.id, url: result.url, name: result.name ?? file.name };
+    return { id: result.id, url: result.url, name: result.name ?? name };
+  }
+
+  /**
+   * A model already in the world: what it costs to draw, and, if its
+   * textures can be smaller, an optimized copy uploaded in its place
+   * (where it stands and how big stay put; the old file is left as it was).
+   */
+  async function checkSelectedModel(model: WorldObject) {
+    if (!model.modelUrl || !onReplaceModel) return;
+    setModelBusy(true);
+    setAssetMessage(L("Checking the model…", "モデルを確認しています…"));
+    try {
+      const response = await fetch(model.modelUrl);
+      if (!response.ok) throw new Error(`${response.status}`);
+      const blob = await response.blob();
+      const name = decodeURIComponent(model.modelUrl.split("/").pop()?.split("?")[0] || "model.glb");
+      const stats = await modelStats(await blob.arrayBuffer());
+      setModelCost(stats);
+      const result = await optimizeVrmAvatar(new File([blob], name.endsWith(".glb") ? name : `${name}.glb`));
+      if (!result.applied) {
+        setAssetMessage(result.reason ?? L("Nothing to optimize in this model.", "このモデルには最適化できる所がありません。"));
+        return;
+      }
+      const asset = await sendAsset(result.blob, name);
+      onReplaceModel(model.id, asset.url);
+      const mb = (n: number) => (n / 1024 / 1024).toFixed(1);
+      setAssetMessage(L(`Optimized: ${mb(result.originalBytes)} MB to ${mb(result.optimizedBytes)} MB, and swapped in.`, `最適化しました:${mb(result.originalBytes)} MB から ${mb(result.optimizedBytes)} MB にして差し替えました。`));
+    } catch {
+      setAssetMessage(L("Couldn't read this model to check it (it may be on another site).", "このモデルを読み込めませんでした(別のサイトにあるのかもしれません)。"));
+    } finally {
+      setModelBusy(false);
+    }
   }
 
   async function uploadAsset(file: File) {
@@ -399,6 +447,17 @@ export function EditToolbar({
               </div>
               {selectedScale != null && onScaleSelected && <SizeControl key={selectedId} scale={selectedScale} connected={connected} onScale={onScaleSelected} />}
               {selectedImage && onSetLink && <ImageLinkField key={selectedImage.id} image={selectedImage} connected={connected} onSetLink={onSetLink} />}
+              {selectedModel && onReplaceModel && (
+                <button
+                  style={pillButtonStyle}
+                  disabled={modelBusy || !connected}
+                  onClick={() => void checkSelectedModel(selectedModel)}
+                  title={L("How heavy it is to draw; and if its textures can be smaller, an optimized copy swapped in", "描画の重さを調べ、テクスチャを小さくできれば最適化したものに差し替えます")}
+                >
+                  {modelBusy ? L("Checking…", "確認中…") : L("Check and optimize this model", "このモデルを確認・最適化")}
+                </button>
+              )}
+              {modelCost && <ModelCost stats={modelCost} />}
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 <button style={pillButtonStyle} onClick={onDeselect}>
                   {L("Deselect", "選択解除")}
@@ -725,6 +784,19 @@ function ImageLinkField({ image, connected, onSetLink }: { image: WorldObject; c
  * very big, so both ends are as easy to reach), smaller and bigger steps,
  * and back to as placed. Sent when you let go, not on every step of a drag.
  */
+/** A model's cost to draw: its triangles (and whether that's heavy), its meshes. */
+function ModelCost({ stats }: { stats: ModelStats }) {
+  const heavy = stats.triangles > MODEL_TRIANGLE_BUDGET;
+  return (
+    <small style={{ opacity: 0.9, color: heavy ? "#ffb36b" : undefined }}>
+      {L(
+        `${stats.triangles.toLocaleString()} triangles in ${stats.meshes} meshes, ${stats.materials} materials.${heavy ? " That's heavy: everyone near it draws all of it every frame. A lighter export (fewer polygons) would help most." : ""}`,
+        `三角形 ${stats.triangles.toLocaleString()}、メッシュ ${stats.meshes}、マテリアル ${stats.materials}。${heavy ? "重いモデルです。近くの全員が毎フレーム全部を描きます。ポリゴンを減らして書き出すと一番効きます。" : ""}`
+      )}
+    </small>
+  );
+}
+
 function SizeControl({ scale, connected, onScale }: { scale: number; connected: boolean; onScale: (scale: number) => void }) {
   const [draft, setDraft] = useState(scale);
   useEffect(() => setDraft(scale), [scale]);
