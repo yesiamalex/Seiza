@@ -112,6 +112,8 @@ const vertexShader = /* glsl */ `
   varying vec3 vWorld;
   varying vec3 vNormal;
   varying float vDepth;
+  varying float vCrest;
+  varying float vHeight;
   ${COAST_GLSL}
   #include <fog_pars_vertex>
 
@@ -131,6 +133,17 @@ const vertexShader = /* glsl */ `
     float s3 = dot(d3, p.xz) * k.z + uTime * w.z;
     h = a.x * sin(s1) + a.y * sin(s2) + a.z * sin(s3);
     g = a.x * k.x * cos(s1) * d1 + a.y * k.y * cos(s2) * d2 + a.z * k.z * cos(s3) * d3;
+    // The swell coming in: a crest every eight seconds or so rolling toward
+    // the shore, peaked rather than round, rising as the water shoals and
+    // breaking over the shallows, then gone into the swash.
+    float sw = 0.42 * d + 0.785 * uTime + 0.6 * sin(p.z * 0.045);
+    float base = 0.5 + 0.5 * sin(sw);
+    float rise = smoothstep(${(BEACH_TO_WATER + 26).toFixed(1)}, ${(BEACH_TO_WATER + 5).toFixed(1)}, d) * smoothstep(${(BEACH_TO_WATER + 0.4).toFixed(1)}, ${(BEACH_TO_WATER + 3).toFixed(1)}, d);
+    float swellAmp = (0.05 + 1.1 * uWave) * rise;
+    h += swellAmp * pow(base, 2.5);
+    g.x += swellAmp * 2.5 * pow(base, 1.5) * 0.5 * cos(sw) * 0.42;
+    vCrest = pow(base, 7.0) * rise * smoothstep(${(BEACH_TO_WATER + 16).toFixed(1)}, ${(BEACH_TO_WATER + 6).toFixed(1)}, d) * (0.4 + 2.0 * uWave);
+    vHeight = h;
     // The swash: the water by the shore rising and falling, so the
     // waterline runs up the sand and back.
     h += 0.055 * sin(uTime * 0.55 + p.z * 0.03) * (1.0 - smoothstep(${BEACH_TO_WATER.toFixed(1)}, ${(BEACH_TO_WATER + 8).toFixed(1)}, d));
@@ -146,6 +159,7 @@ const vertexShader = /* glsl */ `
 
 const fragmentShader = /* glsl */ `
   uniform float uTime;
+  uniform float uWave;
   uniform float uCloud;
   uniform float uNight;
   uniform float uRain;
@@ -158,17 +172,40 @@ const fragmentShader = /* glsl */ `
   varying vec3 vWorld;
   varying vec3 vNormal;
   varying float vDepth;
+  varying float vCrest;
+  varying float vHeight;
   #include <fog_pars_fragment>
 
   float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  float vnoise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
+  }
 
   void main() {
     vec3 n = normalize(vNormal);
     vec3 v = normalize(cameraPosition - vWorld);
+    float calm = 1.0 - 0.7 * uRain;
+    // Ripples on the swell, two sizes drifting different ways: what makes
+    // the light break up into glitter. Faded with distance, where they'd shimmer.
+    vec2 q1 = vWorld.xz * 1.3 + vec2(uTime * 0.25, uTime * 0.17);
+    vec2 q2 = vWorld.xz * 3.7 - vec2(uTime * 0.4, -uTime * 0.3);
+    float r0 = vnoise(q1), s0 = vnoise(q2);
+    vec3 dn = vec3((r0 - vnoise(q1 + vec2(0.15, 0.0))) * 0.9 + (s0 - vnoise(q2 + vec2(0.15, 0.0))) * 0.5, 0.0, (r0 - vnoise(q1 + vec2(0.0, 0.15))) * 0.9 + (s0 - vnoise(q2 + vec2(0.0, 0.15))) * 0.5);
+    float near = 1.0 - smoothstep(18.0, 70.0, distance(cameraPosition, vWorld));
+    n = normalize(n + dn * (0.35 + 0.5 * uWave) * near * calm);
     // Shallow by the shore, deep further out; greyer under cloud.
     vec3 deep = mix(vec3(0.012, 0.09, 0.16), vec3(0.06, 0.08, 0.09), uCloud * 0.7);
     vec3 shallow = mix(vec3(0.05, 0.32, 0.30), vec3(0.12, 0.16, 0.15), uCloud * 0.6);
     vec3 color = mix(shallow, deep, smoothstep(0.02, 0.45, vDepth));
+    // Clear in the shallowest: the sand showing through.
+    vec3 sandBelow = vec3(0.62, 0.55, 0.42) * mix(1.0, 0.25, uCloud * 0.5);
+    color = mix(sandBelow, color, smoothstep(0.0, 0.16, vDepth) * 0.85 + 0.15);
+    // Light through the face of a wave as it stands up: a brighter green-blue.
+    float through = clamp(vCrest * 1.4 + max(0.0, vHeight) * 1.6, 0.0, 1.0);
+    color += vec3(0.04, 0.26, 0.22) * through * (0.5 + 0.5 * uSunVisible) * mix(1.0, 0.15, uNight);
     // The sky in it, at a glancing angle.
     float fresnel = pow(1.0 - max(dot(n, v), 0.0), 4.0);
     // Not too much: from the meadow you see the sea at a glancing angle,
@@ -178,7 +215,6 @@ const fragmentShader = /* glsl */ `
     color *= mix(1.0, 0.18, uNight);
     // Glints: the sun's, or by night the moon's, with sparkles in it.
     vec3 r = reflect(-v, n);
-    float calm = 1.0 - 0.7 * uRain;
     float sun = max(dot(r, uSunDirection), 0.0);
     float moon = max(dot(r, uMoonDirection), 0.0);
     float sparkleCell = hash(floor(vWorld.xz * 2.5) + floor(uTime * 7.0));
@@ -186,10 +222,15 @@ const fragmentShader = /* glsl */ `
     float glint = (pow(sun, 260.0) * 2.5 + pow(sun, 30.0) * sparkle * 1.6) * uSunVisible * calm;
     glint += (pow(moon, 300.0) * 1.2 + pow(moon, 40.0) * sparkle * 0.6) * uMoonVisible * uNight * calm;
     color += vec3(1.0, 0.95, 0.85) * glint;
-    // Foam where the water runs thin over the sand, and on high crests.
-    float foam = 1.0 - smoothstep(0.0, 0.025, vDepth);
-    foam *= 0.55 + 0.45 * sin(vWorld.z * 1.7 + uTime * 0.8) * sin(vWorld.x * 2.3 - uTime * 0.5);
-    color = mix(color, vec3(0.85, 0.88, 0.9) * mix(1.0, 0.12, uNight), clamp(foam, 0.0, 1.0) * 0.6);
+    // Foam: lacy where the water runs thin over the sand, and white on the
+    // crests as they break.
+    float lace = vnoise(vWorld.xz * 2.2 + vec2(uTime * 0.3, 0.0)) * 0.6 + vnoise(vWorld.xz * 5.5 - uTime * 0.2) * 0.4;
+    // Patchy, thickest right at the edge, the patches drifting as the swash runs.
+    float edge = 1.0 - smoothstep(0.0, 0.022, vDepth);
+    float shoreFoam = edge * smoothstep(0.52, 0.8, lace + 0.12 * sin(uTime * 0.55 + vWorld.z * 0.03) + 0.25 * edge * edge);
+    float capFoam = smoothstep(0.3, 0.9, vCrest) * smoothstep(0.3, 0.7, lace + vCrest * 0.35);
+    float foam = clamp(max(shoreFoam, capFoam), 0.0, 1.0);
+    color = mix(color, vec3(0.88, 0.91, 0.93) * mix(1.0, 0.12, uNight), foam * 0.7);
     color += vec3(0.75, 0.8, 1.0) * uFlash * 0.35;
     gl_FragColor = vec4(color, 1.0);
     #include <tonemapping_fragment>

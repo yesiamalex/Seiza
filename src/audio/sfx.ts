@@ -727,6 +727,52 @@ export function setSeaAmbience(level: number, wind: number) {
   }
   const t = a.ctx.currentTime;
   const rough = Math.min(1, Math.max(0, wind / 20));
-  surf.gain.gain.setTargetAtTime(level * (0.07 + 0.05 * rough), t, 0.5);
-  surf.hiss.gain.setTargetAtTime(level * (0.012 + 0.03 * rough), t, 0.5);
+  surf.gain.gain.setTargetAtTime(level * (0.05 + 0.04 * rough), t, 0.5);
+  surf.hiss.gain.setTargetAtTime(level * (0.01 + 0.025 * rough), t, 0.5);
+  // Each wave breaking, as the sea's shader breaks them (one every eight
+  // seconds or so, a little irregular): a crash that swells and falls,
+  // then the wash running up the sand, hissing, and back.
+  if (level > 0.02 && t > nextBreak - 0.05) {
+    if (nextBreak < t - 1) nextBreak = t + 0.2;
+    scheduleBreak(a.ctx, a.out, nextBreak, level * (0.7 + 0.6 * rough));
+    nextBreak += 7 + Math.random() * 2.5;
+  }
+}
+
+let nextBreak = 0;
+function scheduleBreak(ctx: AudioContext, out: AudioNode, at: number, level: number) {
+  const source = ctx.createBufferSource();
+  source.buffer = seaNoise(ctx);
+  // A different stretch of the noise each time, so no two breaks match.
+  const offset = Math.random() * 3;
+  const crash = ctx.createBiquadFilter();
+  crash.type = "bandpass";
+  crash.Q.value = 0.6;
+  crash.frequency.setValueAtTime(1400, at);
+  crash.frequency.exponentialRampToValueAtTime(420, at + 2.2);
+  const crashGain = ctx.createGain();
+  crashGain.gain.setValueAtTime(0.0001, at);
+  crashGain.gain.exponentialRampToValueAtTime(0.11 * level, at + 0.45);
+  crashGain.gain.exponentialRampToValueAtTime(0.0001, at + 2.6);
+  const wash = ctx.createBiquadFilter();
+  wash.type = "highpass";
+  wash.frequency.value = 2400;
+  const washGain = ctx.createGain();
+  washGain.gain.setValueAtTime(0.0001, at + 0.8);
+  washGain.gain.exponentialRampToValueAtTime(0.03 * level, at + 1.6);
+  washGain.gain.exponentialRampToValueAtTime(0.0001, at + 4.6);
+  source.connect(crash).connect(crashGain).connect(out);
+  source.connect(wash).connect(washGain).connect(out);
+  source.start(at, offset);
+  source.stop(at + 5);
+}
+
+let seaNoiseBuffer: AudioBuffer | null = null;
+/** White noise for the breaks (the steady surf has its own, browner). */
+function seaNoise(ctx: AudioContext) {
+  if (seaNoiseBuffer && seaNoiseBuffer.sampleRate === ctx.sampleRate) return seaNoiseBuffer;
+  seaNoiseBuffer = ctx.createBuffer(1, ctx.sampleRate * 8, ctx.sampleRate);
+  const data = seaNoiseBuffer.getChannelData(0);
+  for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+  return seaNoiseBuffer;
 }
