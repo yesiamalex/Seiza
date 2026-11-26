@@ -3,15 +3,28 @@ import * as THREE from "three";
 import { useProgress } from "@react-three/drei";
 import { L, useLang } from "../i18n/lang";
 import { swirl } from "../worlds/Portals";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { VRMLoaderPlugin, VRMUtils, type VRM } from "@pixiv/three-vrm";
+import { createVRMAnimationClip } from "@pixiv/three-vrm-animation";
+import { loadVrmAnimation } from "../avatar/AvatarAnimator";
+import { BUILTIN_GESTURES, LOCOMOTION_CLIPS } from "../avatar/builtinMotions.generated";
+import { decodeAvatarSpec, isDesignerAvatarUrl } from "../avatar/designer/avatarSpec";
+import { buildDesignerVrm } from "../avatar/designer/buildDesignerVrm";
 
 /**
- * Arriving in a world: you kneel in seiza on a dark meadow at night and
- * breathe, slowly, while the world loads. Overhead, a line at a breath,
+ * Arriving in a world: your avatar kneels in seiza on a dark meadow at
+ * night, facing you, and you breathe, slowly, while the world loads. Overhead, a line at a breath,
  * the world's own constellation draws itself in the stars (seiza is also
  * the word for a constellation). When the world is ready its stars come
  * down, gather in front of you, and open into a portal in the world's
- * colour, as Seiza's portals between worlds look; you stand, step
- * through, a flash of its colour, and you're there.
+ * colour, as Seiza's portals between worlds look; your avatar stands,
+ * turns, and walks through it, you following, a flash of its colour, and
+ * you're there. (Until your avatar has loaded, or if it can't, the walk
+ * is yours alone, toward the ring.)
+ *
+ * Your avatar comes from the browser's cache (the join screen fetched it)
+ * and is built a moment into the first breath, so the brief work of
+ * decoding it falls in the quiet part, not in the walk.
  *
  * Sitting still suits a wait of any length (a walk would have to slow
  * down not to arrive early), and the breathing gives it a rhythm. Its own
@@ -39,8 +52,8 @@ const WORLD_COLORS: Record<string, string> = {
 /** Where the portal opens, in front of where you kneel. */
 const PORTAL_Z = -5.5;
 const PORTAL_Y = 1.75;
-const KNEEL_EYE = 0.92;
-const STAND_EYE = 1.62;
+/** Where the camera watches from: a little behind and above your avatar. */
+const VIEW = { y: 1.2, z: 3.6 };
 /** One breath: in, then a longer out. */
 const BREATH_IN = 4;
 const BREATH_OUT = 5;
@@ -48,8 +61,14 @@ const BREATH_OUT = 5;
 const MIN_SECONDS = 2.2;
 /** After ready: the stars coming down into the ring, standing, the steps through. */
 const SUMMON_SECONDS = 1.1;
-const STAND_SECONDS = 0.55;
-const WALK_SECONDS = 1.15;
+/** Getting up out of seiza (its clip, played back), and turning to the portal. */
+const STAND_SECONDS = 1.1;
+const TURN_SECONDS = 0.5;
+/** Walking to the ring, and through it. */
+const WALK_SECONDS = 2.0;
+/** A moment into the first breath, the avatar is built. */
+const AVATAR_AFTER_MS = 700;
+const SEIZA_URL = BUILTIN_GESTURES.find((g) => g.name === "seiza")?.url ?? null;
 const FADE_SECONDS = 0.7;
 
 const TIPS: [string, string][] = [
@@ -85,7 +104,7 @@ export function constellation(id: string): { stars: THREE.Vector3[]; lines: [num
   const stars: THREE.Vector3[] = [];
   for (let i = 0; i < 7; i++) {
     const az = -0.7 + (i / 6) * 1.4 + (rand() - 0.5) * 0.22;
-    const el = 0.38 + rand() * 0.4;
+    const el = 0.28 + rand() * 0.3;
     stars.push(new THREE.Vector3(Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el)).multiplyScalar(70));
   }
   const lines: [number, number][] = [];
@@ -133,7 +152,48 @@ const smooth = (x: number) => {
   return c * c * (3 - 2 * c);
 };
 
-export function Arrival({ ready, worldId, worldName, onDone }: { ready: boolean; worldId: string; worldName: string; onDone: () => void }) {
+interface Self {
+  vrm: VRM;
+  mixer: THREE.AnimationMixer;
+  seiza: THREE.AnimationAction | null;
+  walk: THREE.AnimationAction | null;
+  rising: boolean;
+  walking: boolean;
+}
+
+/** Your avatar, for the arrival: built from its spec, or decoded from the
+ *  file the join screen already fetched; and its seiza and walk. */
+async function loadSelf(url: string): Promise<Self | null> {
+  let vrm: VRM | null = null;
+  if (isDesignerAvatarUrl(url)) {
+    const spec = decodeAvatarSpec(url);
+    if (spec) vrm = buildDesignerVrm(spec);
+  } else {
+    const loader = new GLTFLoader();
+    loader.register((parser) => new VRMLoaderPlugin(parser));
+    const gltf = await loader.loadAsync(url);
+    vrm = (gltf.userData.vrm as VRM | undefined) ?? null;
+    if (vrm) {
+      VRMUtils.removeUnnecessaryVertices(gltf.scene);
+      VRMUtils.combineSkeletons(gltf.scene);
+    }
+  }
+  if (!vrm) return null;
+  vrm.scene.traverse((o) => (o.frustumCulled = false));
+  const mixer = new THREE.AnimationMixer(vrm.scene);
+  const [seizaAnim, walkAnim] = await Promise.all([SEIZA_URL ? loadVrmAnimation(SEIZA_URL).catch(() => null) : null, loadVrmAnimation(LOCOMOTION_CLIPS.walk).catch(() => null)]);
+  const seiza = seizaAnim ? mixer.clipAction(createVRMAnimationClip(seizaAnim, vrm)) : null;
+  if (seiza) {
+    // Down into seiza, then held there.
+    seiza.setLoop(THREE.LoopOnce, 1);
+    seiza.clampWhenFinished = true;
+    seiza.play();
+  }
+  const walk = walkAnim ? mixer.clipAction(createVRMAnimationClip(walkAnim, vrm)) : null;
+  return { vrm, mixer, seiza, walk, rising: false, walking: false };
+}
+
+export function Arrival({ ready, worldId, worldName, avatarUrl, onDone }: { ready: boolean; worldId: string; worldName: string; avatarUrl?: string | null; onDone: () => void }) {
   useLang();
   const host = useRef<HTMLDivElement>(null);
   const readyRef = useRef(ready);
@@ -191,6 +251,10 @@ export function Arrival({ ready, worldId, worldName, onDone }: { ready: boolean;
     keep(dome.material as THREE.Material);
     scene.add(dome);
     scene.add(new THREE.HemisphereLight("#5a6aa8", "#0a0c14", 0.6));
+    // Moonlight on your avatar, from behind the camera.
+    const moon = new THREE.DirectionalLight("#c9d4ff", 0.9);
+    moon.position.set(1.5, 4, 6);
+    scene.add(moon);
     const portalLight = new THREE.PointLight(tint, 0, 12, 1.6);
     portalLight.position.set(0, 1.4, PORTAL_Z + 0.8);
     scene.add(portalLight);
@@ -292,6 +356,23 @@ export function Arrival({ ready, worldId, worldName, onDone }: { ready: boolean;
     resize();
     window.addEventListener("resize", resize);
 
+    let self: Self | null = null;
+    let cancelled = false;
+    const avatarTimer = window.setTimeout(() => {
+      if (!avatarUrl) return;
+      loadSelf(avatarUrl)
+        .then((loaded) => {
+          if (!loaded) return;
+          if (cancelled) {
+            VRMUtils.deepDispose(loaded.vrm.scene);
+            return;
+          }
+          self = loaded;
+          scene.add(loaded.vrm.scene);
+        })
+        .catch(() => {});
+    }, AVATAR_AFTER_MS);
+
     const start = performance.now();
     let last = start;
     let readyAt: number | null = null;
@@ -308,30 +389,57 @@ export function Arrival({ ready, worldId, worldName, onDone }: { ready: boolean;
       if (readyAt === null && readyRef.current && t > MIN_SECONDS) readyAt = now;
       // A tap once ready: straight to the last step.
       if (readyAt !== null && skipRef.current) {
-        readyAt = Math.min(readyAt, now - (SUMMON_SECONDS + STAND_SECONDS + WALK_SECONDS * 0.6) * 1000);
+        readyAt = Math.min(readyAt, now - (SUMMON_SECONDS * 0.8 + STAND_SECONDS + TURN_SECONDS + WALK_SECONDS * 0.6) * 1000);
         skipRef.current = false;
       }
       const after = readyAt === null ? -1 : (now - readyAt) / 1000;
       const summon = smooth(after / SUMMON_SECONDS);
-      const stand = smooth((after - SUMMON_SECONDS * 0.8) / STAND_SECONDS);
-      const walk = smooth((after - SUMMON_SECONDS * 0.8 - STAND_SECONDS * 0.6) / WALK_SECONDS);
+      const riseAt = SUMMON_SECONDS * 0.8;
+      const turnAt = riseAt + STAND_SECONDS;
+      const walkAt = turnAt + TURN_SECONDS * 0.6;
+      const turn = smooth((after - turnAt) / TURN_SECONDS);
+      const walk = Math.max(0, Math.min(1, (after - walkAt) / WALK_SECONDS));
 
       // Breathing: the view rises a little on the in-breath, settles on the out.
       const inBreath = t % breathLength < BREATH_IN;
       const phase = inBreath ? (t % breathLength) / BREATH_IN : 1 - ((t % breathLength) - BREATH_IN) / BREATH_OUT;
-      const lift = still ? 0 : 0.035 * smooth(phase) * (1 - stand);
+      const lift = still ? 0 : 0.02 * smooth(phase) * (1 - walk);
       const now2: "in" | "out" = inBreath ? "in" : "out";
       if (now2 !== breathing) {
         breathing = now2;
         setBreath(now2);
       }
-      const eye = KNEEL_EYE + (STAND_EYE - KNEEL_EYE) * stand + lift;
-      // Up to the ring, the swirl filling the view, never past it.
-      const z = 0.6 - (still ? 0 : walk * (0.6 - PORTAL_Z - 0.35));
-      camera.position.set(0, eye, z);
-      // Looking up at the stars while you breathe, down to the portal as it opens.
+      // Your avatar: kneeling, facing you; once the portal's open, up out
+      // of seiza, a turn, and the walk to the ring and into it.
+      const walkTo = PORTAL_Z + 0.3;
+      if (self) {
+        const a = self;
+        if (after >= riseAt && !a.rising && a.seiza) {
+          a.rising = true;
+          a.seiza.paused = false;
+          a.seiza.timeScale = -a.seiza.getClip().duration / STAND_SECONDS;
+          a.seiza.time = a.seiza.getClip().duration;
+          a.seiza.setLoop(THREE.LoopOnce, 1);
+          a.seiza.play();
+        }
+        if (after >= turnAt && !a.walking && a.walk) {
+          a.walking = true;
+          a.walk.reset().play();
+          a.walk.timeScale = 1.5;
+          a.walk.fadeIn(0.3);
+          a.seiza?.fadeOut(0.3);
+        }
+        a.vrm.scene.rotation.y = Math.PI * turn;
+        a.vrm.scene.position.z = still ? 0 : smooth(walk) * walkTo;
+        a.mixer.update(dt);
+        a.vrm.update(dt);
+      }
+      // Watching from behind and above it, following it in.
+      const follow = still ? 0 : smooth(walk);
+      const z = VIEW.z + follow * (walkTo - VIEW.z + 1.6);
+      camera.position.set(0.05 * Math.sin(t * 0.4), VIEW.y + lift, z);
       const gaze = 1 - summon;
-      camera.lookAt(0, eye + 2.2 * gaze + (PORTAL_Y - eye) * (1 - gaze) * 0.9, z - 6);
+      camera.lookAt(0, 1.0 + 0.9 * gaze + (PORTAL_Y - 1.0) * (1 - gaze) * 0.9, z - 7);
 
       // The constellation: a line every breath and a bit, all drawn by the
       // time the stars come down.
@@ -354,7 +462,7 @@ export function Arrival({ ready, worldId, worldName, onDone }: { ready: boolean;
       fp.needsUpdate = true;
       renderer.toneMappingExposure = 1 + 2.5 * walk * walk;
       renderer.render(scene, camera);
-      if ((walk >= 0.75 || (still && summon >= 1)) && !gone) {
+      if ((walk >= 0.8 || (still && summon >= 1)) && !gone) {
         gone = true;
         setFading(true);
         window.setTimeout(() => doneRef.current(), FADE_SECONDS * 1000);
@@ -363,6 +471,12 @@ export function Arrival({ ready, worldId, worldName, onDone }: { ready: boolean;
     loop();
     return () => {
       cancelAnimationFrame(frame);
+      cancelled = true;
+      window.clearTimeout(avatarTimer);
+      if (self) {
+        scene.remove(self.vrm.scene);
+        VRMUtils.deepDispose(self.vrm.scene);
+      }
       window.removeEventListener("resize", resize);
       tufts.dispose();
       for (const d of disposables) d.dispose();
@@ -370,6 +484,8 @@ export function Arrival({ ready, worldId, worldName, onDone }: { ready: boolean;
       renderer.forceContextLoss();
       renderer.domElement.remove();
     };
+    // The avatar is read once, at the start.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [worldId, color]);
 
   const share = total > 0 ? Math.min(1, loaded / total) : 0;
