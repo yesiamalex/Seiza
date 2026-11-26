@@ -2159,6 +2159,48 @@ built-in world. If you design worlds for Seiza and want them to run well on
 phones, follow the built-in world's approach: simple shapes, a few shared
 materials, textures drawn in code, and detail where people look.
 
+### Arriving: loading behind a meditation
+
+Pressing Join on the join screen starts the world loading, but most of
+the work starts earlier: while the join screen is up, `src/loading/warm.ts`
+fetches the world's own code, its model and walking mesh, and the avatar
+you've picked. Pressing Join shows the arrival (`src/loading/Arrival.tsx`):
+your avatar kneels in seiza on a meadow at night, facing you, and breathes
+while the world's constellation draws itself overhead. When the world is
+ready, its stars come down into a portal in the world's colour, and your
+avatar stands, turns, and walks through it. A tap or a key skips the ending.
+
+"Ready" (`src/loading/WarmUp.tsx`) means nothing is still loading (drei's
+progress, which every glTF loader reports to), the world's own code has
+arrived, your avatar is built, and every material's shaders have compiled
+(`compileAsync`), so the first frames after the arrival don't stall. The
+arrival has its own small renderer, so it keeps its pace while the world's
+renderer works; it builds your avatar from the browser's cache a moment
+into the first breath, when a brief pause doesn't show. Worlds can help by
+spreading their own work out: Seishore adds its townspeople one at a time
+over a few seconds rather than all in one frame. With reduced motion, the
+arrival stays still and fades.
+
+### What a world's code can add
+
+Beyond its scene, a world's code (`worlds/<id>/client/index.tsx`) can use
+these hooks in `src/scene/layout.ts` and elsewhere, as Seishore does:
+
+- **Collision and seats:** `setWorldObstacles(...)` (it may call it again as
+  things move: a bus, a train) and seats drawn with `SeatPad`. A seat with
+  `moving: true` is one whose position the world changes every frame, so
+  sitting in it rides along.
+- **Rooms you walk into:** `setWorldCeilings(...)` gives the camera a
+  ceiling there, and counts as shade for heat reactions.
+- **Its own ground:** `setWorldFloors(...)` sets the floor's height over a
+  rectangle (a level railway bed, a ramp up to it).
+- **Faces:** `setFaceCue(vrm, from, face)` (`src/avatar/useFacialExpressions.ts`).
+- **People:** guides (`src/guides/Guide.tsx`) with a `role` for their name
+  tag, `chatter` lines shown in a bubble in Japanese with English under it,
+  and `speak` to say them aloud (`src/guides/speech.ts`, the browser's own
+  voices). A knowledge base with `bilingual: true` shows every answer in
+  both languages.
+
 ### Effects are math, not extra rendering
 
 - **Sky and stars** are one shader on one sphere. Each star is calculated per
