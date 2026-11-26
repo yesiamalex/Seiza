@@ -1,0 +1,27 @@
+<!--
+  Seishore's mark: a wave rolling in under a star, on Seiza's own
+  twilight-into-starfield (the same gradient stops as public/favicon.svg),
+  so the worlds read as one family in a row of tabs. build.mjs copies this
+  over dist/favicon.svg in Seishore's build only.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Seishore">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#070c26"/>
+      <stop offset="42%" stop-color="#1b1546"/>
+      <stop offset="72%" stop-color="#4b2a66"/>
+      <stop offset="92%" stop-color="#a85570"/>
+      <stop offset="100%" stop-color="#ff9e7a"/>
+    </linearGradient>
+    <clipPath id="frame">
+      <rect width="64" height="64" rx="15"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#frame)">
+    <rect width="64" height="64" fill="url(#sky)"/>
+    <path d="M32 10 l2.4 6.2 6.6 0.4 -5.1 4.2 1.7 6.4 -5.6 -3.6 -5.6 3.6 1.7 -6.4 -5.1 -4.2 6.6 -0.4z" fill="#ffe7b0"/>
+    <path d="M0 46 C10 38 18 38 24 44 C28 48 34 48 38 42 C42 36 52 34 64 40 V64 H0z" fill="#2f8fb0"/>
+    <path d="M0 52 C12 46 22 48 30 52 C38 56 50 54 64 48 V64 H0z" fill="#1d5f86"/>
+    <path d="M24 44 C28 48 34 48 38 42" fill="none" stroke="#e8f6ff" stroke-width="2.2" stroke-linecap="round"/>
+  </g>
+</svg>

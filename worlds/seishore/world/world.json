@@ -1,0 +1,54 @@
+{
+  "id": "seishore",
+  "displayName": "Seishore",
+  "displayNameJa": "Seishore(セイショア)",
+  "theme": "japanese",
+  "sky": {
+    "cycle": "realtime",
+    "site": "shonan",
+    "weather": "auto",
+    "seasons": true
+  },
+  "meadowTree": false,
+  "spawnPoint": {
+    "x": -5.6,
+    "y": -0.6,
+    "z": 55
+  },
+  "spawnRotationY": -1.5708,
+  "defaultAvatarUrl": "",
+  "maxOccupants": 16,
+  "voiceEnabled": true,
+  "editingEnabled": true,
+  "allowAvatarUpload": true,
+  "defaultAvatars": [
+    {
+      "label": "Fumiriya",
+      "url": "/avatars/vroid/sakurada-fumiriya.vrm",
+      "author": "pixiv Inc. (VRoid Studio sample)",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/"
+    },
+    {
+      "label": "Shino",
+      "url": "/avatars/vroid/sendagaya-shino.vrm",
+      "author": "pixiv Inc. (VRoid Studio sample)",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/"
+    },
+    {
+      "label": "Sample (F)",
+      "url": "/avatars/vroid/sample-female.vrm",
+      "author": "pixiv Inc. (VRoid Studio sample)",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/"
+    },
+    {
+      "label": "Sample (M)",
+      "url": "/avatars/vroid/sample-male.vrm",
+      "author": "pixiv Inc. (VRoid Studio sample)",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/"
+    }
+  ]
+}

@@ -2,8 +2,17 @@
   "id": "default",
   "displayName": "Seiza — Default World",
   "displayNameJa": "Seiza — デフォルトワールド",
-  "sky": { "cycle": "realtime", "site": "manila", "weather": "auto", "seasons": true },
-  "spawnPoint": { "x": -13.03, "y": -0.6, "z": 58.35 },
+  "sky": {
+    "cycle": "realtime",
+    "site": "manila",
+    "weather": "auto",
+    "seasons": true
+  },
+  "spawnPoint": {
+    "x": -13.03,
+    "y": -0.6,
+    "z": 58.35
+  },
   "spawnRotationY": -1.4,
   "defaultAvatarUrl": "",
   "maxOccupants": 16,
@@ -11,10 +20,34 @@
   "editingEnabled": true,
   "allowAvatarUpload": true,
   "defaultAvatars": [
-    { "label": "Fumiriya", "url": "/avatars/vroid/sakurada-fumiriya.vrm", "author": "pixiv Inc. (VRoid Studio sample)", "license": "CC0 1.0", "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/" },
-    { "label": "Shino", "url": "/avatars/vroid/sendagaya-shino.vrm", "author": "pixiv Inc. (VRoid Studio sample)", "license": "CC0 1.0", "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/" },
-    { "label": "Sample (F)", "url": "/avatars/vroid/sample-female.vrm", "author": "pixiv Inc. (VRoid Studio sample)", "license": "CC0 1.0", "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/" },
-    { "label": "Sample (M)", "url": "/avatars/vroid/sample-male.vrm", "author": "pixiv Inc. (VRoid Studio sample)", "license": "CC0 1.0", "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/" }
+    {
+      "label": "Fumiriya",
+      "url": "/avatars/vroid/sakurada-fumiriya.vrm",
+      "author": "pixiv Inc. (VRoid Studio sample)",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/"
+    },
+    {
+      "label": "Shino",
+      "url": "/avatars/vroid/sendagaya-shino.vrm",
+      "author": "pixiv Inc. (VRoid Studio sample)",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/"
+    },
+    {
+      "label": "Sample (F)",
+      "url": "/avatars/vroid/sample-female.vrm",
+      "author": "pixiv Inc. (VRoid Studio sample)",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/"
+    },
+    {
+      "label": "Sample (M)",
+      "url": "/avatars/vroid/sample-male.vrm",
+      "author": "pixiv Inc. (VRoid Studio sample)",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/"
+    }
   ],
   "portals": {
     "urlPattern": "https://{id}.seiza.cc",
@@ -87,6 +120,14 @@
         "color": "#5fc4e8",
         "blurb": "UP Open University's Immersive Science Communication Open Laboratory, as a lab you can walk through.",
         "blurbJa": "フィリピン大学オープン大学の没入型サイエンスコミュニケーション・オープンラボを、歩いてめぐれる空間に。"
+      },
+      {
+        "id": "seishore",
+        "label": "Seishore",
+        "labelJa": "Seishore",
+        "color": "#ff9e7a",
+        "blurb": "A Japanese seaside town after Kamakura's Yuigahama: a konbini, a little coastal train, and townspeople who talk in Japanese and English.",
+        "blurbJa": "鎌倉・由比ヶ浜をモデルにした海辺の町。コンビニ、海沿いの小さな電車、日本語と英語で話す町の人たち。"
       }
     ]
   },
@@ -94,31 +135,51 @@
   "defaultObjects": [
     {
       "kind": "text",
-      "position": [11.55, 2.1, 9],
+      "position": [
+        11.55,
+        2.1,
+        9
+      ],
       "rotationY": -1.5708,
       "text": "Welcome\n- Click a chair or bench to sit down\n- Press 1-9 and 0 for gestures\n- Click this board to change what it says"
     },
     {
       "kind": "screen",
-      "position": [-11.5, 2.2, 7],
+      "position": [
+        -11.5,
+        2.2,
+        7
+      ],
       "rotationY": 1.5708
     },
     {
       "kind": "screen",
-      "position": [4.3, 2, -23.55],
+      "position": [
+        4.3,
+        2,
+        -23.55
+      ],
       "rotationY": 0,
       "scale": 0.9
     },
     {
       "kind": "text",
-      "position": [-3.6, 0.78, -19.8],
+      "position": [
+        -3.6,
+        0.78,
+        -19.8
+      ],
       "rotationY": 0,
       "pitch": -1.5708,
       "text": "Today\n- Write here"
     },
     {
       "kind": "text",
-      "position": [3.6, 0.78, -19.8],
+      "position": [
+        3.6,
+        0.78,
+        -19.8
+      ],
       "rotationY": 0,
       "pitch": -1.5708,
       "text": ""

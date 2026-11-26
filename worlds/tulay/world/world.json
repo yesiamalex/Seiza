@@ -121,6 +121,14 @@
         "blurb": "Where the family began: the hall, the classroom, the garden, and the beach, through Japan's seasons.",
         "blurbJa": "すべての始まり。ホール、教室、庭、浜辺を日本の四季とともに。",
         "url": "https://seiza.cc"
+      },
+      {
+        "id": "seishore",
+        "label": "Seishore",
+        "labelJa": "Seishore",
+        "color": "#ff9e7a",
+        "blurb": "A Japanese seaside town after Kamakura's Yuigahama: a konbini, a little coastal train, and townspeople who talk in Japanese and English.",
+        "blurbJa": "鎌倉・由比ヶ浜をモデルにした海辺の町。コンビニ、海沿いの小さな電車、日本語と英語で話す町の人たち。"
       }
     ]
   },

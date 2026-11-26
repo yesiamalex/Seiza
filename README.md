@@ -217,7 +217,11 @@ thing, after first copying the repository into your GitHub account.
   [SeiOU](worlds/seiou/README.md), a walkable digital twin of UP Open
   University's campus, with two guides, and
   [Seinag](worlds/seinag/README.md), the same campus with hypothetical
-  rooftop solar, running live
+  rooftop solar, running live, and
+  [Seishore](worlds/seishore/README.md), a Japanese seaside town after
+  Kamakura's Yuigahama, with a konbini, a café and a family restaurant you
+  walk into, a coastal train and a bus you ride, a shrine and a temple, and
+  townspeople who talk in Japanese and English
 - Hosting somewhere other than Cloudflare: [SELF-HOSTING.md](SELF-HOSTING.md)
 - What's protected, and a checklist for deployers: [SECURITY.md](SECURITY.md)
 

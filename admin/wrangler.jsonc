@@ -21,7 +21,7 @@
     "ACCESS_TEAM": "",
     "ACCESS_AUD": "",
     // The worlds to read, each with the address its counts are asked at.
-    "SEIZA_WORLDS": "[{\"id\":\"default\",\"name\":\"Seiza\",\"url\":\"https://seiza.cc\"},{\"id\":\"seizora\",\"name\":\"Seizora\",\"url\":\"https://seizora.seiza.cc\"},{\"id\":\"seizorai\",\"name\":\"Seizorai\",\"url\":\"https://seizorai.seiza.cc\"},{\"id\":\"seilaya\",\"name\":\"Seilaya\",\"url\":\"https://seilaya.seiza.cc\"},{\"id\":\"seisugbo\",\"name\":\"Seisugbo\",\"url\":\"https://seisugbo.seiza.cc\"},{\"id\":\"seiou\",\"name\":\"SeiOU\",\"url\":\"https://seiou.seiza.cc\"},{\"id\":\"seinag\",\"name\":\"Seinag\",\"url\":\"https://seinag.seiza.cc\"},{\"id\":\"tulay\",\"name\":\"Tulay\",\"url\":\"https://tulay.seiza.cc\"},{\"id\":\"iscolab\",\"name\":\"ISCOLab\",\"url\":\"https://iscolab.seiza.cc\"}]"
+    "SEIZA_WORLDS": "[{\"id\":\"default\",\"name\":\"Seiza\",\"url\":\"https://seiza.cc\"},{\"id\":\"seizora\",\"name\":\"Seizora\",\"url\":\"https://seizora.seiza.cc\"},{\"id\":\"seizorai\",\"name\":\"Seizorai\",\"url\":\"https://seizorai.seiza.cc\"},{\"id\":\"seilaya\",\"name\":\"Seilaya\",\"url\":\"https://seilaya.seiza.cc\"},{\"id\":\"seisugbo\",\"name\":\"Seisugbo\",\"url\":\"https://seisugbo.seiza.cc\"},{\"id\":\"seiou\",\"name\":\"SeiOU\",\"url\":\"https://seiou.seiza.cc\"},{\"id\":\"seinag\",\"name\":\"Seinag\",\"url\":\"https://seinag.seiza.cc\"},{\"id\":\"tulay\",\"name\":\"Tulay\",\"url\":\"https://tulay.seiza.cc\"},{\"id\":\"iscolab\",\"name\":\"ISCOLab\",\"url\":\"https://iscolab.seiza.cc\"},{\"id\":\"seishore\",\"name\":\"Seishore\",\"url\":\"https://seishore.seiza.cc\"}]"
   }
   // And one secret: npx wrangler secret put SEIZA_STATS_TOKEN (the same one
   // every world has).
