@@ -1752,6 +1752,8 @@ export default function App() {
           worldId={currentWorld.id === "default" ? "default" : currentWorld.id}
           avatarUrl={joined.localUrl ?? joined.url}
           worldName={L(currentWorld.displayName, currentWorld.displayNameJa ?? currentWorld.displayName).split(" — ")[0]}
+          nameEn={currentWorld.displayName.split(" — ")[0]}
+          nameJa={(currentWorld.displayNameJa ?? currentWorld.displayName).split(" — ")[0]}
           onDone={() => setArrived(true)}
         />
       )}
