@@ -1032,9 +1032,20 @@ export function useRealtimeMedia({ selfId, players, sendSignal }: UseRealtimeMed
         const micId = player?.media?.mic;
         const mic = micId ? peer.audio.get(micId) : undefined;
         const analysers = mic ? [mic] : Array.from(peer.audio.values());
-        levels[peerId] = analysers.reduce((loudest, audio) => Math.max(loudest, rmsLevel(audio.analyser)), 0);
+        // So an unchanged room stays unchanged: a new object every tick
+        // re-rendered the whole app (and every avatar in it) five times a
+        // second whenever anyone was in voice. Room tone below what lip
+        // sync shows (0.045) and the speaking light's 0.05 is 0, and the
+        // rest in hundredths, which nothing shows the difference of. Only
+        // the level that's read; the audio itself is untouched.
+        const level = analysers.reduce((loudest, audio) => Math.max(loudest, rmsLevel(audio.analyser)), 0);
+        levels[peerId] = level < 0.045 ? 0 : Math.round(level * 100) / 100;
       }
-      setSpeakingLevels(levels);
+      setSpeakingLevels((previous) => {
+        const ids = Object.keys(levels);
+        if (ids.length === Object.keys(previous).length && ids.every((id) => previous[id] === levels[id])) return previous;
+        return levels;
+      });
     },
     []
   );
