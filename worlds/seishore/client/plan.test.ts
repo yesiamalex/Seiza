@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import world from "../world/world.json";
 import { facingVector, type Obstacle } from "../../../src/scene/layout";
-import { ARRIVE, EDGES, NODES, seishoreObstacles, seishoreSeats } from "./plan";
+import { ARRIVE, EDGES, FENCE, NODES, PLATFORM, seishoreObstacles, seishoreSeats, STATIONS } from "./plan";
+import { CARS, TRAIN_DOORS } from "./cabins";
 import { PEOPLE } from "./people";
 import { seishoreKnowledge } from "./knowledge";
 
@@ -27,6 +28,23 @@ describe("Seishore's plan", () => {
     const [fx, fz] = facingVector(world.spawnRotationY);
     expect(fx).toBeGreaterThan(0.99);
     expect(Math.abs(fz)).toBeLessThan(0.05);
+  });
+
+  it("lets you walk the platform to every door of a train standing there", () => {
+    // Between the fence and a standing train's side, a body 0.8 m across
+    // has only the middle of the platform: nothing may stand there between
+    // the way on and any door.
+    const x = (PLATFORM.x0 + PLATFORM.x1) / 2;
+    STATIONS.forEach((st) => {
+      const mid = (st.z0 + st.z1) / 2;
+      const on = st.id === "kaigan" ? st.z0 + 0.3 : (FENCE.gaps[1][0] + FENCE.gaps[1][1]) / 2;
+      for (const { cz } of CARS)
+        for (const dz of TRAIN_DOORS) {
+          const door = mid + cz + dz;
+          const step = door > on ? 0.1 : -0.1;
+          for (let z = on; Math.abs(z - door) > 0.1; z += step) expect(blocked(x, z, 0.35), `${st.id}: z ${z.toFixed(1)} to the door at ${door.toFixed(1)}`).toBe(false);
+        }
+    });
   });
 
   it("gives every seat its own id, clear of the benches' own collision", () => {

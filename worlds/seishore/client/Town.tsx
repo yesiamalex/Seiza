@@ -11,6 +11,7 @@ import { PooledLight } from "../../../src/scene/LightPool";
 import { roomLights } from "../../../src/scene/roomLights";
 import { floorHeightAt, OUTER_GROUND_Y } from "../../../src/scene/layout";
 import { skyState } from "../../../src/sky/skyState";
+import { RoutedBuilder, surfaceMaterial } from "./surfaces";
 import { Builder, canvasTexture, Clickable, FONT, lampNeed, noRaycast, ON_TOP, paint, useDrawDistance, useNight, washed, type Vec3 } from "../../seisugbo/client/kit";
 import {
   BOATS,
@@ -31,7 +32,7 @@ import {
   TEMPLE,
   TEMPLE_OFFERING,
   TRACK,
-  VIEW_BENCH,
+  SHELTER_Z,
   WALL,
   BUS_STOP,
   CAFE,
@@ -167,7 +168,8 @@ function addHouse(h: Building, b: Builder, glass: Builder, roofs: Builder) {
   const w = h.x1 - h.x0;
   const d = h.depth;
   const top = Y + STOREY + (h.floors === 2 ? UPPER : 0);
-  b.box([w + 0.04, 0.28, d + 0.04], [xc, Y + 0.14, zc], "#97958d");
+  // Its stone base; not in a house you walk into, where it stood over the floor.
+  if (!h.door) b.box([w + 0.04, 0.28, d + 0.04], [xc, Y + 0.14, zc], "#97958d");
   if (!h.door) b.box([w, STOREY, d], [xc, Y + STOREY / 2, zc], h.wood ? WOOD_DARK : h.wall);
   if (h.floors === 2) b.box([w, UPPER, d], [xc, Y + STOREY + UPPER / 2, zc], h.wall);
   roof(roofs, h.x0, h.x1, z0, z1, top, h.roof, h.wall);
@@ -462,14 +464,14 @@ function addRailway(b: Builder, roofs: Builder, marks: Builder) {
     for (let z = a; z <= c; z += 2) b.box([0.06, 1.1, 0.06], [FENCE.x, G + 0.55, z], "#6b7f6a");
     for (const y of [0.45, 1.05]) b.box([0.04, 0.05, c - a], [FENCE.x, G + y, (a + c) / 2], "#6b7f6a");
   }
-  for (const st of STATIONS) {
+  STATIONS.forEach((st, i) => {
     const len = st.z1 - st.z0;
     const mid = (st.z0 + st.z1) / 2;
     // The platform: concrete, its yellow tactile line along the edge.
     b.box([PLATFORM.x1 - PLATFORM.x0, 0.06, len], [(PLATFORM.x0 + PLATFORM.x1) / 2, G + 0.03, mid], "#c9c5bc");
     marks.plane(0.25, len, [PLATFORM.x1 - 0.3, G + 0.065, mid], "#f2c42e", [-Math.PI / 2, 0, 0]);
-    // The shelter: two posts, a roof, the bench under it.
-    const sz = mid + 2.2;
+    // The shelter: two posts, a roof, the bench under it, at the platform's far end.
+    const sz = SHELTER_Z[i];
     for (const dz of [-1.4, 1.4]) b.box([0.08, 2.5, 0.08], [PLATFORM.x0 + 0.15, G + 1.25, sz + dz], "#7d7f82");
     roofs.box([1.1, 0.06, 3.4], [PLATFORM.x0 + 0.45, G + 2.55, sz], "#3f4652", [0, 0, -0.12]);
     b.box([0.42, 0.06, 1.7], [PLATFORM.x0 + 0.3, G + 0.45, sz], WOOD);
@@ -477,7 +479,7 @@ function addRailway(b: Builder, roofs: Builder, marks: Builder) {
     for (const dz of [-0.7, 0.7]) b.box([0.38, 0.44, 0.06], [PLATFORM.x0 + 0.3, G + 0.22, sz + dz], "#7d7f82");
     // The station sign's two legs (the sign itself is drawn with its words).
     for (const dz of [-0.75, 0.75]) b.box([0.06, 1.9, 0.06], [PLATFORM.x0 + 0.25, G + 0.95, mid - 2.5 + dz], "#7d7f82");
-  }
+  });
 }
 
 /** The temple, Seikai-ji: a roofed gate, the bronze incense burner, the main
@@ -669,12 +671,36 @@ function pole(b: Builder, x: number, z: number, base: number, lampToward: [numbe
 }
 
 function buildTown() {
-  const b = new Builder();
+  // Parts with a surface to them (surfaces.ts), sorted out by their colour:
+  // wood grain and plaster outside, and inside the floors, the booths, the
+  // wooden furniture.
+  const grain = new Builder();
+  const plaster = new Builder();
+  const grainIn = new Builder();
+  const vinylIn = new Builder();
+  const tileIn = new Builder();
+  const plankIn = new Builder();
+  const plasterIn = new Builder();
+  const walls = new Set(BUILDINGS.map((h) => h.wall.toLowerCase()));
+  const b = new RoutedBuilder(new Map([...[WOOD, WOOD_DARK].map((c): [string, Builder] => [c.toLowerCase(), grain]), ...[...walls].map((c): [string, Builder] => [c, plaster])]));
   const roofs = new Builder();
   const glass = new Builder();
   const cloth = new Builder();
   const wires = new Builder();
-  const inside = new Builder();
+  const inside = new RoutedBuilder(
+    new Map<string, Builder>([
+      // The café's chairs, counter, tables and shelves; the restaurant's
+      // booths; the konbini's tiles; the café's and restaurant's floorboards.
+      ["#8a6545", grainIn],
+      ["#7a5636", grainIn],
+      ["#c49a6c", grainIn],
+      ["#3a2c22", grainIn],
+      ["#b5473a", vinylIn],
+      ["#e8e9e6", tileIn],
+      ["#9a7452", plankIn],
+      ["#d9d2c4", plankIn],
+    ])
+  );
   const lit = new Builder();
   const panes = new Builder();
   const marks = new Builder();
@@ -696,11 +722,6 @@ function buildTown() {
   }
   addRailway(b, roofs, marks);
   addTemple(b, roofs);
-  // The bench at the top of the street, looking out over the crossing to the sea.
-  const vy = floorHeightAt(VIEW_BENCH.x, VIEW_BENCH.z);
-  b.box([0.42, 0.06, 1.7], [VIEW_BENCH.x, vy + 0.45, VIEW_BENCH.z], WOOD);
-  b.box([0.06, 0.38, 1.7], [VIEW_BENCH.x - 0.2, vy + 0.68, VIEW_BENCH.z], WOOD);
-  for (const dz of [-0.7, 0.7]) b.box([0.38, 0.44, 0.06], [VIEW_BENCH.x, vy + 0.22, VIEW_BENCH.z + dz], "#4d5054");
   bicycle(b, 9.4, LANE.z1 - 0.45, 0.04, "#c8402f");
   bicycle(b, 8.9, LANE.z0 - 0.0 + 0.45, -0.02, "#e8e8e4");
 
@@ -818,6 +839,13 @@ function buildTown() {
     cloth: cloth.build(),
     wires: wires.build(),
     inside: inside.build(),
+    grain: grain.build(),
+    plaster: plaster.build(),
+    grainIn: grainIn.build(),
+    vinylIn: vinylIn.build(),
+    tileIn: tileIn.build(),
+    plankIn: plankIn.build(),
+    plasterIn: plasterIn.build(),
     lit: lit.build(),
     panes: panes.build(),
     marks: marks.build(),
@@ -1100,6 +1128,13 @@ export function Town({ onVending, onShrine, onTemple, onOmikuji }: TownActions) 
       torii: paint(),
       marks: paint({ ...ON_TOP }),
       inside: new THREE.MeshBasicMaterial({ vertexColors: true }),
+      grain: surfaceMaterial("grain", true),
+      plaster: surfaceMaterial("plaster", true),
+      grainIn: surfaceMaterial("grain", false),
+      vinylIn: surfaceMaterial("vinyl", false),
+      tileIn: surfaceMaterial("tile", false),
+      plankIn: surfaceMaterial("plank", false),
+      plasterIn: surfaceMaterial("plaster", false),
       lit: new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }),
       panes: new THREE.MeshLambertMaterial({ color: "#cfe6ee", transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide }),
       glass: new THREE.MeshLambertMaterial({ color: "#2e3a44", emissive: new THREE.Color("#000") }),
@@ -1158,6 +1193,13 @@ export function Town({ onVending, onShrine, onTemple, onOmikuji }: TownActions) 
       <mesh geometry={geometry.cloth} material={m.cloth} raycast={noRaycast} userData={{ navIgnore: true }} />
       <mesh geometry={geometry.wires} material={m.wires} raycast={noRaycast} userData={{ navIgnore: true }} />
       <mesh geometry={geometry.inside} material={m.inside} />
+      <mesh geometry={geometry.grain} material={m.grain} castShadow receiveShadow />
+      <mesh geometry={geometry.plaster} material={m.plaster} castShadow receiveShadow />
+      <mesh geometry={geometry.grainIn} material={m.grainIn} />
+      <mesh geometry={geometry.vinylIn} material={m.vinylIn} />
+      <mesh geometry={geometry.tileIn} material={m.tileIn} />
+      <mesh geometry={geometry.plankIn} material={m.plankIn} />
+      <mesh geometry={geometry.plasterIn} material={m.plasterIn} />
       <mesh geometry={geometry.lit} material={m.lit} raycast={noRaycast} userData={{ navIgnore: true }} />
       <mesh geometry={geometry.panes} material={m.panes} raycast={noRaycast} userData={{ navIgnore: true }} />
       <mesh geometry={geometry.marks} material={m.marks} raycast={noRaycast} userData={{ navIgnore: true }} />

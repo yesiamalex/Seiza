@@ -180,11 +180,14 @@ export const TEMPLE_PRAY: [number, number] = [TEMPLE.hallX + 2.95, TEMPLE.z];
 /** The café's bench in front of it, the A-frame board beside. */
 export const CAFE_BENCH = { x: (CAFE.x0 + CAFE.x1) / 2 - 1.0, z: LANE.z0 + 0.32 };
 export const CAFE_BOARD = { x: CAFE.x0 + 0.6, z: LANE.z0 + 0.55 };
-/** A bench at the south end of Seishore-Kaigan's platform, by the crossing,
- *  looking out over the line and the coast road to the sea: where people
- *  wait to see the train. Up on the railway's own level (down beside the
- *  konbini, the strip's retaining wall stood in front of its knees). */
-export const VIEW_BENCH = { x: 22.1, z: 58.3 };
+/**
+ * Each station's shelter and its bench: at the end of the platform away
+ * from where you come onto it, past the last door. The platform is under a
+ * metre wide, so a bench anywhere you walk would stand between you and the
+ * train's doors (Kaigan is reached from the crossing, at its south end;
+ * Yamanomae from the temple's side, near its middle).
+ */
+export const SHELTER_Z = STATIONS.map((s) => (s.id === "kaigan" ? s.z1 - 1.5 : s.z0 + 1.5));
 /** Where visitors arrive (world.json's spawnPoint): the street's west end, facing the sea. */
 export const ARRIVE: [number, number] = [-5.6, LANE_Z];
 
@@ -243,9 +246,8 @@ export function allSeats(): Seat[] {
     seats.push({ id: `seishore-diner-${i}-n`, position: [x, Y + BENCH_SEAT - SEAT_HEIGHT, z + 0.62], rotationY: FACING.nz, label: "Table" });
   });
   // The stations' benches, under their shelters, facing the track.
-  for (const s of STATIONS) pair(`station-${s.id}`, `${s.name} station`, PLATFORM.x0 + 0.3, (s.z0 + s.z1) / 2 + 2.2, "z", FACING.px, BENCH_SEAT + up);
+  STATIONS.forEach((s, i) => pair(`station-${s.id}`, `${s.name} station`, PLATFORM.x0 + 0.3, SHELTER_Z[i], "z", FACING.px, BENCH_SEAT + up));
   pair("temple", "Temple bench", TEMPLE.burnerX + 0.4, TEMPLE.z + 3.2, "x", FACING.nz, BENCH_SEAT + floorHeightAt(TEMPLE.burnerX + 0.4, TEMPLE.z + 3.2) - Y);
-  pair("view", "Bench by the crossing", VIEW_BENCH.x, VIEW_BENCH.z, "z", FACING.px, BENCH_SEAT + floorHeightAt(VIEW_BENCH.x, VIEW_BENCH.z) - Y);
   return seats;
 }
 /** The seats visitors can take. */
@@ -295,7 +297,6 @@ export function seishoreObstacles(): Obstacle[] {
   for (const [x, z] of POLES) list.push(o(x - 0.16, x + 0.16, z - 0.16, z + 0.16));
   list.push(o(MIRROR_AT[0] - 0.08, MIRROR_AT[0] + 0.08, MIRROR_AT[1] - 0.08, MIRROR_AT[1] + 0.08));
   list.push(o(CAFE_BENCH.x - 0.9, CAFE_BENCH.x + 0.9, LANE.z0, CAFE_BENCH.z + 0.2));
-  list.push(o(VIEW_BENCH.x - 0.2, VIEW_BENCH.x + 0.2, VIEW_BENCH.z - 0.9, VIEW_BENCH.z + 0.9));
   list.push(o(CAFE_BOARD.x - 0.3, CAFE_BOARD.x + 0.3, CAFE_BOARD.z - 0.25, CAFE_BOARD.z + 0.25));
   // The sea wall, in its pieces between the gaps, and the promenade's things.
   const cuts = [ROAD.z0, ...SEAWALL.gaps.flatMap((g) => [g - SEAWALL.gap / 2, g + SEAWALL.gap / 2]), ROAD.z1];
@@ -307,7 +308,7 @@ export function seishoreObstacles(): Obstacle[] {
   // The railway's fence, and the stations' benches.
   const fenceCuts = [TRACK.z0, ...FENCE.gaps.flat(), TRACK.z1];
   for (let i = 0; i < fenceCuts.length; i += 2) list.push(o(FENCE.x - 0.05, FENCE.x + 0.05, fenceCuts[i], fenceCuts[i + 1]));
-  for (const s of STATIONS) list.push(o(PLATFORM.x0 + 0.1, PLATFORM.x0 + 0.5, (s.z0 + s.z1) / 2 + 1.3, (s.z0 + s.z1) / 2 + 3.1));
+  for (const z of SHELTER_Z) list.push(o(PLATFORM.x0 + 0.1, PLATFORM.x0 + 0.5, z - 0.85, z + 0.85));
   // The shrine.
   for (const dx of [-1.25, 1.25]) list.push(o(SHRINE.x + dx - 0.18, SHRINE.x + dx + 0.18, SHRINE.toriiZ - 0.18, SHRINE.toriiZ + 0.18));
   list.push(o(SHRINE.x - 1.1, SHRINE.x + 1.1, SHRINE.hokoraZ - 0.9, SHRINE.hokoraZ + 1.0));

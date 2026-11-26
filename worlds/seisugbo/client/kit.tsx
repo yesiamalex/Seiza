@@ -103,7 +103,8 @@ export class Builder {
     for (const p of this.parts) {
       if (p.attributes.uv === undefined) p.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(p.attributes.position.count * 2), 2));
     }
-    const merged = mergeGeometries(this.parts, false) ?? new THREE.BufferGeometry();
+    // Nothing in it (a part of the world that has none of these): an empty geometry.
+    const merged = (this.parts.length ? mergeGeometries(this.parts, false) : null) ?? new THREE.BufferGeometry();
     for (const p of this.parts) p.dispose();
     this.parts = [];
     merged.computeBoundingSphere();

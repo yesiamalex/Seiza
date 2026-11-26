@@ -197,23 +197,31 @@ function SeatSpot({ ride, sit }: { ride: RideSeat; sit?: (seat: Seat) => void })
   }, [hover]);
   if (!sit) return null;
   return (
-    <mesh
-      position={[ride.cabin.x, ride.cabin.y + 0.6, ride.cabin.z]}
-      visible={hover}
-      userData={{ navIgnore: true }}
-      onPointerOver={(e) => {
-        e.stopPropagation();
-        setHover(true);
-      }}
-      onPointerOut={() => setHover(false)}
-      onClick={(e) => {
-        e.stopPropagation();
-        sit(ride.seat);
-      }}
-    >
-      <boxGeometry args={[0.5, 0.75, 0.5]} />
-      <meshBasicMaterial color="#7fd3e6" transparent opacity={0.35} depthWrite={false} />
-    </mesh>
+    <group position={[ride.cabin.x, ride.cabin.y, ride.cabin.z]}>
+      {/* The click target: a box round the seat, easy to hit from any side, never drawn. */}
+      <mesh
+        position={[0, 0.6, 0]}
+        visible={false}
+        userData={{ navIgnore: true }}
+        onPointerOver={(e) => {
+          e.stopPropagation();
+          setHover(true);
+        }}
+        onPointerOut={() => setHover(false)}
+        onClick={(e) => {
+          e.stopPropagation();
+          sit(ride.seat);
+        }}
+      >
+        <boxGeometry args={[0.5, 0.75, 0.5]} />
+        <meshBasicMaterial />
+      </mesh>
+      {/* What shows: the round pad every seat in Seiza has (SeatPad.tsx), on the cushion. */}
+      <mesh position={[0, 0.45 + 0.06, 0]} rotation={[-Math.PI / 2, 0, 0]} visible={hover} raycast={noRaycast} userData={{ navIgnore: true }}>
+        <circleGeometry args={[0.28, 24]} />
+        <meshBasicMaterial color="#ffd9a0" transparent opacity={0.55} depthWrite={false} />
+      </mesh>
+    </group>
   );
 }
 
