@@ -27,6 +27,6 @@
   "keep_vars": true,
   "vars": {
     "SEIZA_WORLD_ID": "seisugbo",
-    "SEIZA_MAX_OCCUPANTS": "16"
+    "SEIZA_MAX_OCCUPANTS": "40"
   }
 }
