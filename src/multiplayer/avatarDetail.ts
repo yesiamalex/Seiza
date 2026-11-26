@@ -1,41 +1,39 @@
 /**
  * How much of an avatar to work on, by where it is: in view or not, and how
- * far away, in a room of how many avatars. What matters in a crowd is the
- * avatars you can't really see. Nobody near you changes at all.
+ * far away, in a room of how many avatars. Every avatar is always drawn and
+ * always moves; what changes far off in a crowd is only what can't be seen
+ * at that distance.
  *
- * - **Out of view, not close by:** not drawn (and not skinned on the GPU).
- *   Avatars near you stay drawn even out of view, because a mirror or the
- *   edge of the screen may still show them.
- * - **In a crowd** (more than CROWD_SIZE avatars), by distance: near ones
- *   in full; further out the outline pass goes (MToon draws each avatar a
- *   second time for it, which is lost at a distance anyway), then the hair
- *   physics, and the pose is worked out less often.
+ * - **In view, near** (or in a small room): everything, every frame.
+ * - **In a crowd** (more than CROWD_SIZE avatars), by distance: past 10 m
+ *   the outline pass goes (MToon draws each avatar a second time for it,
+ *   and at that size it's a hairline); past 20 m the hair and clothes
+ *   physics too, and the pose is worked out every other frame (30 a second
+ *   at 60: still smooth, at a distance where a step is a few pixels).
+ * - **Out of view:** worked out every 6th frame, so it's in step when you
+ *   turn round. Whether it's drawn is three.js's own frustum culling, frame
+ *   by frame (VrmAvatar gives it a generous bounding sphere), so nothing on
+ *   screen is ever skipped, in a mirror either.
  *
  * Animation time always advances in full (AvatarAnimator's updateEvery), so
- * a far-off wave or seiza doze stays on time; only how often the pose is
- * recomputed changes.
+ * a far-off wave or seiza doze stays on time.
  */
 
 /** Out of view: every 6th frame, enough to catch up smoothly on return. */
 export const OFFSCREEN_EVERY = 6;
-/** Within this, an avatar out of view is still drawn (mirrors, the screen's edge). */
-export const DRAWN_NEAR = 8;
 /** At or below this many avatars, distance never lowers the detail, so a
  *  small class renders exactly as before. */
 export const CROWD_SIZE = 8;
 /** Distance tiers in a crowd: [beyond, update every, hair physics, outlines]. */
 export const CROWD_TIERS: [number, number, boolean, boolean][] = [
-  [35, 4, false, false],
-  [20, 3, false, false],
-  [10, 2, true, false],
+  [20, 2, false, false],
+  [10, 1, true, false],
 ];
-/** Kept for the remote players' planner: far, in a busy room, every 2nd frame. */
-export const FAR_DISTANCE = CROWD_TIERS[2][0];
-export const FAR_EVERY = CROWD_TIERS[2][1];
+/** Far, in a busy room: every 2nd frame (the remote players' planner). */
+export const FAR_DISTANCE = CROWD_TIERS[0][0];
+export const FAR_EVERY = CROWD_TIERS[0][1];
 
 export interface AvatarDetail {
-  /** Draw it at all. */
-  drawn: boolean;
   /** Work out its pose every this many frames. */
   every: number;
   /** Run its hair and clothes physics (spring bones). */
@@ -45,11 +43,11 @@ export interface AvatarDetail {
 }
 
 export function avatarDetail(avatar: { inView: boolean; distance: number; crowd: number }): AvatarDetail {
-  if (!avatar.inView) return { drawn: avatar.distance < DRAWN_NEAR, every: OFFSCREEN_EVERY, springs: false, outlines: false };
+  if (!avatar.inView) return { every: OFFSCREEN_EVERY, springs: false, outlines: true };
   if (avatar.crowd > CROWD_SIZE) {
-    for (const [beyond, every, springs, outlines] of CROWD_TIERS) if (avatar.distance > beyond) return { drawn: true, every, springs, outlines };
+    for (const [beyond, every, springs, outlines] of CROWD_TIERS) if (avatar.distance > beyond) return { every, springs, outlines };
   }
-  return { drawn: true, every: 1, springs: true, outlines: true };
+  return { every: 1, springs: true, outlines: true };
 }
 
 /** How often a remote avatar's animation updates (RemotePlayers' planner). */

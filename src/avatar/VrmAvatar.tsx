@@ -27,7 +27,12 @@ const crowd = new Set<object>();
 const LOD_CHECK = 0.25;
 /** An avatar's size for the view test: a sphere round its middle. */
 const BODY_RADIUS = 1.1;
-const FULL: AvatarDetail = { drawn: true, every: 1, springs: true, outlines: true };
+const FULL: AvatarDetail = { every: 1, springs: true, outlines: true };
+/** For three.js's own frustum culling of an avatar's skinned meshes: a
+ *  sphere round its middle, big enough for any pose (arms out, a kick,
+ *  lying down), so it's skipped only when it's really off screen. */
+const CULL_CENTRE = new THREE.Vector3(0, 1.0, 0);
+const CULL_RADIUS = 2.2;
 const scratchFrustum = new THREE.Frustum();
 const scratchMatrix = new THREE.Matrix4();
 const scratchSphere = new THREE.Sphere();
@@ -122,11 +127,33 @@ export function VrmAvatar({ url, position = [0, 0, 0], rotationY = 0, onLoaded, 
   useEffect(() => {
     const d = detail.current;
     d.outlines = vrm ? outlinesOf(vrm) : [];
+    // Culled frame by frame by three.js when it's off screen, with a sphere
+    // generous enough that no pose is ever clipped (the loader turns culling
+    // off, because a skinned mesh's own bounds are its rest pose). Your own
+    // avatar and previews stay as they are.
+    if (vrm && lod) {
+      // In each mesh's own space, measured from the avatar's root, so a
+      // model whose meshes sit under scaled or moved nodes still gets a
+      // sphere round the whole body.
+      vrm.scene.updateMatrixWorld(true);
+      const rootInverse = new THREE.Matrix4().copy(vrm.scene.matrixWorld).invert();
+      const relative = new THREE.Matrix4();
+      vrm.scene.traverse((node) => {
+        const mesh = node as THREE.SkinnedMesh;
+        if (!mesh.isSkinnedMesh) return;
+        relative.multiplyMatrices(rootInverse, mesh.matrixWorld);
+        const scale = relative.getMaxScaleOnAxis();
+        if (!Number.isFinite(scale) || scale <= 0) return;
+        const centre = CULL_CENTRE.clone().applyMatrix4(relative.clone().invert());
+        mesh.boundingSphere = new THREE.Sphere(centre, CULL_RADIUS / scale);
+        mesh.frustumCulled = true;
+      });
+    }
     d.outlinesShown = true;
     d.springsOn = true;
     d.now = FULL;
     d.checked = Infinity;
-  }, [vrm]);
+  }, [vrm, lod]);
 
   useEffect(() => {
     // Once per model: lets long hair collide with the hips and thighs, not
@@ -158,7 +185,6 @@ export function VrmAvatar({ url, position = [0, 0, 0], rotationY = 0, onLoaded, 
       scratchSphere.radius = BODY_RADIUS;
       view.getWorldPosition(scratchEye);
       d.now = avatarDetail({ inView: scratchFrustum.intersectsSphere(scratchSphere), distance: scratchSphere.center.distanceTo(scratchEye), crowd: crowd.size });
-      if (root.current) root.current.visible = d.now.drawn;
       if (d.now.outlines !== d.outlinesShown) {
         d.outlinesShown = d.now.outlines;
         for (const m of d.outlines) m.visible = d.now.outlines;
