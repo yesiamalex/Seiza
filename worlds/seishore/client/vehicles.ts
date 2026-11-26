@@ -25,7 +25,9 @@ export interface Pose {
 type Leg =
   | { kind: "wait"; seconds: number; x: number; z: number; heading: number; stop?: string }
   | { kind: "move"; seconds: number; from: [number, number]; to: [number, number]; heading: number }
-  | { kind: "turn"; seconds: number; from: [number, number]; to: [number, number]; heading0: number; heading1: number; bulge: number };
+  /** A U-turn: half an ellipse from one lane to the other (`phi` from `phi0`
+   *  to `phi1`), its middle at (x, z), `across` wide and `ahead` deep. */
+  | { kind: "turn"; seconds: number; x: number; z: number; across: number; ahead: number; phi0: number; phi1: number };
 
 const smooth = (u: number) => u * u * (3 - 2 * u);
 const DOOR_SECONDS = 1.6;
@@ -53,14 +55,16 @@ function timeline(legs: Leg[]) {
         const speed = (length / leg.seconds) * 6 * u * (1 - u);
         return { x: leg.from[0] + (leg.to[0] - leg.from[0]) * s, z: leg.from[1] + (leg.to[1] - leg.from[1]) * s, heading: leg.heading, speed, stop: null, doors: 0, departsIn: 0 };
       }
-      // A U-turn: across from one lane to the other, swinging forward a little as it goes round.
-      const s = smooth(u);
-      const forward = Math.cos(leg.heading0) * leg.bulge * Math.sin(Math.PI * u);
+      // Round the arc at an even pace, facing the way it goes.
+      const phi = leg.phi0 + (leg.phi1 - leg.phi0) * u;
+      const dir = Math.sign(leg.phi1 - leg.phi0);
+      const dx = -leg.across * Math.sin(phi) * dir;
+      const dz = leg.ahead * Math.cos(phi) * dir;
       return {
-        x: leg.from[0] + (leg.to[0] - leg.from[0]) * s,
-        z: leg.from[1] + (leg.to[1] - leg.from[1]) * s + forward,
-        heading: leg.heading0 + (leg.heading1 - leg.heading0) * s,
-        speed: 2.5,
+        x: leg.x + leg.across * Math.cos(phi),
+        z: leg.z + leg.ahead * Math.sin(phi),
+        heading: Math.atan2(dx, dz),
+        speed: (Math.PI * (leg.across + leg.ahead)) / 2 / leg.seconds,
         stop: null,
         doors: 0,
         departsIn: 0,
@@ -115,9 +119,11 @@ export const busAt = timeline([
   { kind: "move", seconds: 10, from: [BUS_LANES.north, BUS_SOUTH], to: [BUS_LANES.north, BUS_HALT], heading: 0 },
   { kind: "wait", seconds: 24, x: BUS_LANES.north, z: BUS_HALT, heading: 0, stop: "kaigan-dori" },
   { kind: "move", seconds: 16, from: [BUS_LANES.north, BUS_HALT], to: [BUS_LANES.north, BUS_NORTH], heading: 0 },
-  { kind: "turn", seconds: 7, from: [BUS_LANES.north, BUS_NORTH], to: [BUS_LANES.south, BUS_NORTH], heading0: 0, heading1: Math.PI, bulge: 4 },
+  // At the north end: from the sea's lane, round to the right (Japan keeps left), into the town's.
+  { kind: "turn", seconds: 7, x: (BUS_LANES.north + BUS_LANES.south) / 2, z: BUS_NORTH, across: (BUS_LANES.north - BUS_LANES.south) / 2, ahead: 4, phi0: 0, phi1: Math.PI },
   { kind: "move", seconds: 22, from: [BUS_LANES.south, BUS_NORTH], to: [BUS_LANES.south, BUS_SOUTH], heading: Math.PI },
-  { kind: "turn", seconds: 7, from: [BUS_LANES.south, BUS_SOUTH], to: [BUS_LANES.north, BUS_SOUTH], heading0: Math.PI, heading1: Math.PI * 2, bulge: 4 },
+  // At the south end: round to the right again, back into the sea's lane.
+  { kind: "turn", seconds: 7, x: (BUS_LANES.north + BUS_LANES.south) / 2, z: BUS_SOUTH, across: (BUS_LANES.north - BUS_LANES.south) / 2, ahead: 4, phi0: Math.PI, phi1: Math.PI * 2 },
 ]);
 
 /** The timetable's clock: seconds, the same in every browser (as their clocks are). */

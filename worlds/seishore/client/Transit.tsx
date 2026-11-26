@@ -98,8 +98,7 @@ function SeatSpot({ ride, sit, y }: { ride: RideSeat; sit?: (seat: Seat) => void
   if (!sit) return null;
   return (
     <mesh
-      position={[ride.local[0], y, ride.local[2]]}
-      rotation={[-Math.PI / 2, 0, 0]}
+      position={[ride.local[0], y + 0.15, ride.local[2]]}
       visible={hover}
       userData={{ navIgnore: true }}
       onPointerOver={(e) => {
@@ -112,8 +111,8 @@ function SeatSpot({ ride, sit, y }: { ride: RideSeat; sit?: (seat: Seat) => void
         sit(ride.seat);
       }}
     >
-      <circleGeometry args={[0.24, 16]} />
-      <meshBasicMaterial color="#7fd3e6" transparent opacity={0.6} depthWrite={false} />
+      <boxGeometry args={[0.5, 0.75, 0.5]} />
+      <meshBasicMaterial color="#7fd3e6" transparent opacity={0.35} depthWrite={false} />
     </mesh>
   );
 }
@@ -481,6 +480,13 @@ export function Transit({ sit, fixed }: { sit?: (seat: Seat) => void; fixed: Obs
         ...fixed,
         { x: TRACK.x, z: t.z, halfX: CAR.width / 2, halfZ: TRAIN_LENGTH / 2, rotationY: 0 },
         { x: b.x, z: b.z, halfX: BUS.width / 2, halfZ: BUS.length / 2, rotationY: b.heading },
+        // The crossing's barriers, while they're down.
+        ...(crossingOn(now)
+          ? [
+              { x: TRACK.bed0 - 0.1, z: (CROSSING.z0 + CROSSING.z1) / 2, halfX: 0.08, halfZ: (CROSSING.z1 - CROSSING.z0) / 2 + 0.1, rotationY: 0 },
+              { x: TRACK.bed1 - 0.03, z: (CROSSING.z0 + CROSSING.z1) / 2, halfX: 0.08, halfZ: (CROSSING.z1 - CROSSING.z0) / 2 + 0.1, rotationY: 0 },
+            ]
+          : []),
       ]);
     }
     // Their engines, near enough to hear.

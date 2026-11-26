@@ -317,6 +317,15 @@ export function seishoreObstacles(): Obstacle[] {
   return list;
 }
 
+/** Ground the treeline and the mountain's forest keep off: the coast road
+ *  and the railway, end to end, and the temple's grounds. */
+export function seishoreClearings(): Rect[] {
+  return [
+    { minX: 20.5, maxX: 33, minZ: TRACK.z0 - 5, maxZ: TRACK.z1 + 2 },
+    { minX: TEMPLE.hallX - 6, maxX: STRIP.x0, minZ: TEMPLE.z - 7, maxZ: TEMPLE.z + 7 },
+  ];
+}
+
 /** The rooms you walk into, under their roofs: the camera's ceiling, and shade. */
 export function seishoreCeilings(): { rect: Rect; height: number }[] {
   return BUILDINGS.filter((b) => b.door).map((b) => {

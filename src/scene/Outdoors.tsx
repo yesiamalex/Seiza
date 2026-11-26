@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useSyncExternalStore, useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { seasonWeight, skyState } from "../sky/skyState";
 import { SEASONS, type Season } from "../sky/seasons";
-import { coastX, FIELD, POND_CENTER, POND_WATER_RADIUS, setTreeObstacles, type Obstacle } from "./layout";
+import { coastX, FIELD, getTreeClearingsVersion, inTreeClearing, onTreeClearings, POND_CENTER, POND_WATER_RADIUS, setTreeObstacles, type Obstacle } from "./layout";
 import { onMountain } from "./mountainShape";
 import { buildMeadowGeometry } from "./meadow";
 import { getWorldTheme } from "./materials";
@@ -362,6 +362,7 @@ export function Outdoors() {
   useEffect(() => () => ground?.dispose(), [ground]);
   useEffect(() => () => snow?.dispose(), [snow]);
 
+  const clearings = useSyncExternalStore(onTreeClearings, getTreeClearingsVersion, getTreeClearingsVersion);
   // One instanced draw call for every tree, and another for the hills.
   const { trees, treeColors, hills, treeCount, hillCount, trunks } = useMemo(() => {
     const random = mulberry32(1337);
@@ -397,8 +398,10 @@ export function Outdoors() {
         position.x > coastX(position.z) - 5 ||
         // nor on Mt. Makiling, which has its own forest (Mountain.tsx).
         onMountain(position.x, position.z, 4) ||
-        // nor on the way from the meadow down to the beach.
-        (position.x > FIELD.maxX - 2 && position.z > FIELD.minZ && position.z < FIELD.maxZ)
+        // nor on the way from the meadow down to the beach,
+        (position.x > FIELD.maxX - 2 && position.z > FIELD.minZ && position.z < FIELD.maxZ) ||
+        // nor anywhere the world keeps clear (a road, a railway).
+        inTreeClearing(position.x, position.z, 2)
       ) {
         // Draw the rest of this tree's randoms anyway, so every other tree
         // stays exactly where it was.
@@ -432,7 +435,9 @@ export function Outdoors() {
     }
 
     return { trees, treeColors, hills, treeCount: trees.length / 16, hillCount: hills.length / 16, trunks };
-  }, []);
+    // Rebuilt when a world clears ground of trees.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clearings]);
   useEffect(() => {
     setTreeObstacles(trunks);
     return () => setTreeObstacles([]);

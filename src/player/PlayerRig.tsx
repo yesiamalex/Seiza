@@ -15,6 +15,7 @@ import {
   ceilingHeightAt,
   clampToRooms,
   constrainWalker,
+  takePlatformCarry,
   floorHeightAt,
   viewFloorAt,
   getGround,
@@ -95,6 +96,8 @@ const XR_FLOOR_EASE_RATE = 8;
 /** How far a seated VR player has to drive before it counts as standing
  *  up, rather than as drift or a snap turn. */
 const XR_SEAT_RELEASE_DISTANCE = 0.25;
+/** Up, for turning the view with a vehicle that turns. */
+const WORLD_UP = new THREE.Vector3(0, 1, 0);
 const wantVelocity = new THREE.Vector3();
 /** How fast a ride is pushed backward with the feet, m/s. */
 const BACK_UP_SPEED = 0.6;
@@ -769,6 +772,15 @@ export function PlayerRig({
       // moved, so a physical step into a wall is resolved by sliding the
       // world instead — which is the usual WebXR compromise, and better
       // than letting someone stand inside a bench.
+      // Standing in a moving bus or train: the playspace goes with it (not
+      // turned with it, which in a headset is a fast way to feel ill).
+      const xrCarried = takePlatformCarry(xrHead.x, xrHead.z);
+      if (xrCarried) {
+        origin.position.x += xrCarried.x - xrHead.x;
+        origin.position.z += xrCarried.z - xrHead.z;
+        xrHead.x = xrCarried.x;
+        xrHead.z = xrCarried.z;
+      }
       xrDesired.set(xrHead.x, 0, xrHead.z);
       // Sanity guard for the frames around session start, where the
       // camera's world matrix can still hold the desktop camera's pose.
@@ -1189,6 +1201,17 @@ export function PlayerRig({
     if (drive.ease > 0) velocity.lerp(want, 1 - Math.exp(-(braking && rolling ? drive.ease * 4 : drive.ease) * delta));
     else velocity.copy(want);
     if (velocity.lengthSq() < 1e-4) velocity.set(0, 0, 0);
+    // Standing in something that moves (a bus, a train, layout.ts's
+    // takePlatformCarry): carried along with it, turning as it turns.
+    const carried = takePlatformCarry(vcam.position.x, vcam.position.z);
+    if (carried) {
+      vcam.position.x = carried.x;
+      vcam.position.z = carried.z;
+      if (carried.turn) {
+        vcam.rotateOnWorldAxis(WORLD_UP, carried.turn);
+        avatarYawRef.current += carried.turn;
+      }
+    }
     vcam.position.addScaledVector(velocity, delta);
     // Gravity/jump — applied every frame so landing is a clean clamp back to
     // eye height rather than separate ground detection. The ground is not

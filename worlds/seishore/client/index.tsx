@@ -14,7 +14,7 @@ import { Guide } from "../../../src/guides/Guide";
 import { GuideHud } from "../../../src/guides/GuideHud";
 import { hush, speak } from "../../../src/guides/speech";
 import { openGuide, registerGuides, setGuideWarp } from "../../../src/guides/store";
-import { floorHeightAt, setWorldCeilings, setWorldFloors, setWorldObstacles } from "../../../src/scene/layout";
+import { floorHeightAt, setTreeClearings, setWorldCeilings, setWorldFloors, setWorldObstacles } from "../../../src/scene/layout";
 import { SeatPad } from "../../../src/scene/SeatPad";
 import { drinkWater } from "../../../src/avatar/heat";
 import { skyState } from "../../../src/sky/skyState";
@@ -38,6 +38,7 @@ import {
   roomAt,
   SHRINE,
   seishoreCeilings,
+  seishoreClearings,
   seishoreFloors,
   seishoreObstacles,
   seishoreSeats,
@@ -219,8 +220,11 @@ export function Scene({ warp, getSelfPosition, sit, occupiedSeatId, playGesture,
     setWorldCeilings(seishoreCeilings());
     // The town's collision now; the bus and train add theirs when they come (Transit).
     setWorldObstacles(seishoreObstacles());
+    // No trees on the road, the railway, or the temple's grounds.
+    setTreeClearings(seishoreClearings());
     return () => {
       setWorldObstacles([]);
+      setTreeClearings([]);
       openGuide(null);
       registerGuides(null);
       showWorldOverlay(null);

@@ -247,6 +247,24 @@ export const GROUNDS: Rect[] = [
 ];
 const onGrounds = (x: number, z: number) => !contains(OUTDOOR, x, z) && GROUNDS.some((r) => contains(r, x, z));
 
+/** Where a world keeps trees off (a road, a railway, a temple's grounds):
+ *  the treeline (Outdoors.tsx) and the mountain's forest (Mountain.tsx)
+ *  leave these clear, and redraw when they change. */
+let treeClearings: Rect[] = [];
+let treeClearingsVersion = 0;
+const treeClearingListeners = new Set<() => void>();
+export function setTreeClearings(next: Rect[]): void {
+  treeClearings = next;
+  treeClearingsVersion++;
+  treeClearingListeners.forEach((l) => l());
+}
+export const inTreeClearing = (x: number, z: number, margin = 0) => treeClearings.some((r) => contains(inset(r, -margin), x, z));
+export function onTreeClearings(listener: () => void): () => void {
+  treeClearingListeners.add(listener);
+  return () => treeClearingListeners.delete(listener);
+}
+export const getTreeClearingsVersion = () => treeClearingsVersion;
+
 /** The treeline's trees near enough to walk to, as trunks (Outdoors.tsx sets them). */
 let treeObstacles: Obstacle[] = [];
 export function setTreeObstacles(next: Obstacle[]): void {
@@ -1039,12 +1057,34 @@ export function meadowHeight(x: number, z: number): number {
   return THREE.MathUtils.lerp(OUTER_GROUND_Y, FIELD_Y, t * t * (3 - 2 * t));
 }
 
+/**
+ * Something moving you can stand in (a bus, a train): where a point standing
+ * in it was carried to this frame, and how far it turned, so a passenger
+ * standing in the aisle travels with it as people do. A world sets it each
+ * frame with a new stamp; the player takes each stamp once.
+ */
+export type PlatformCarry = (x: number, z: number) => { x: number; z: number; turn: number } | null;
+let platform: { carry: PlatformCarry; stamp: number } | null = null;
+let platformTaken = -1;
+export function setPlatformCarry(carry: PlatformCarry | null, stamp = 0): void {
+  platform = carry ? { carry, stamp } : null;
+}
+/** This frame's carry for a point, once per frame (the player calls it). */
+export function takePlatformCarry(x: number, z: number): { x: number; z: number; turn: number } | null {
+  if (!platform || platform.stamp === platformTaken) return null;
+  platformTaken = platform.stamp;
+  return platform.carry(x, z);
+}
+
 /** A world's own ground (a railway's flat bed, a ramp up to it): its
  *  height over a rectangle, fixed or as a function of where. Built-in
  *  worlds only; the first that holds a point wins. */
 export interface WorldFloor {
   rect: Rect;
   height: number | ((x: number, z: number) => number);
+  /** A finer test than the rectangle, for a shape that isn't one (a bus,
+   *  turned on the road): the floor is only where this says. */
+  holds?: (x: number, z: number) => boolean;
 }
 let worldFloors: WorldFloor[] = [];
 export function setWorldFloors(next: WorldFloor[]): void {
@@ -1053,7 +1093,7 @@ export function setWorldFloors(next: WorldFloor[]): void {
 
 export function floorHeightAt(x: number, z: number): number {
   if (ground) return ground.floorAt(x, z);
-  for (const w of worldFloors) if (contains(w.rect, x, z)) return typeof w.height === "number" ? w.height : w.height(x, z);
+  for (const w of worldFloors) if (contains(w.rect, x, z) && (!w.holds || w.holds(x, z))) return typeof w.height === "number" ? w.height : w.height(x, z);
   if (contains(TATAMI, x, z)) return TATAMI.height;
   // The steps walk as an even slope from the deck to the meadow, which
   // their noses sit on, so going down them is smooth rather than a jolt

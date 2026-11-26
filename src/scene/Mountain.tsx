@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { addShade } from "../avatar/heat";
 import { skyState } from "../sky/skyState";
 import { MAKILING_SUMMIT_M, MOUNTAIN, MOUNTAIN_SCALE, mountainHeight, nearTrail, placeMountain, SUMMIT } from "./mountainShape";
-import { BENCH_LENGTH, SEAT_HEIGHT, setGroundWrap, setMountain, summitBenches, summitSeats, type Seat } from "./layout";
+import { getTreeClearingsVersion, inTreeClearing, onTreeClearings, BENCH_LENGTH, SEAT_HEIGHT, setGroundWrap, setMountain, summitBenches, summitSeats, type Seat } from "./layout";
 import { MountainGround } from "./mountainGround";
 import { MeadowTree } from "./Seasons";
 import { SeatPad } from "./SeatPad";
@@ -70,7 +70,7 @@ function buildForest() {
     const x = MOUNTAIN.x + (rand() - 0.5) * MOUNTAIN.size * 0.9;
     const z = MOUNTAIN.z + (rand() - 0.5) * MOUNTAIN.size * 0.9;
     const h = mountainHeight(x, z);
-    if (h < 0.6 || nearTrail(x, z, 2.6) || Math.hypot(x - SUMMIT[0], z - SUMMIT[1]) < CLEARING) continue;
+    if (h < 0.6 || nearTrail(x, z, 2.6) || Math.hypot(x - SUMMIT[0], z - SUMMIT[1]) < CLEARING || inTreeClearing(x, z, 2)) continue;
     const size = 1.6 + rand() * 1.4;
     m.compose(new THREE.Vector3(x, floorAt(x, z) - 0.1, z), q, new THREE.Vector3(size * 0.45, size * 1.6, size * 0.45));
     mesh.setMatrixAt(n++, m);
@@ -135,7 +135,10 @@ function markerTexture() {
 export function Mountain() {
   const ground = useMemo(buildGround, []);
   const groundMaterial = useMemo(() => new THREE.MeshLambertMaterial({ vertexColors: true }), []);
-  const forest = useMemo(buildForest, []);
+  const clearings = useSyncExternalStore(onTreeClearings, getTreeClearingsVersion, getTreeClearingsVersion);
+  // Rebuilt when a world clears ground of trees (a temple's grounds).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const forest = useMemo(buildForest, [clearings]);
   const flagMap = useMemo(() => (typeof document === "undefined" ? null : flagTexture()), []);
   const markerMap = useMemo(() => (typeof document === "undefined" ? null : markerTexture()), []);
   const cloth = useRef<THREE.Mesh>(null);
