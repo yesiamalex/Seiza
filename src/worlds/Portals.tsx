@@ -43,7 +43,8 @@ function openPortal(world: PortalWorld | null) {
 
 // --- in the world ---------------------------------------------------------------------------
 
-function swirl(): THREE.CanvasTexture {
+/** The swirl inside a portal: soft, white, tinted by its material (the arrival uses it too). */
+export function swirl(): THREE.CanvasTexture {
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = 256;
   const ctx = canvas.getContext("2d")!;

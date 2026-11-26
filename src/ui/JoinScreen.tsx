@@ -13,6 +13,7 @@ import { AvatarChooser, avatarUrlForChoice, initialAvatarChoice, type AvatarSele
 import { ACCENT_COLOR, inputStyle, primaryButtonStyle } from "./styles";
 import { Credit } from "./Credit";
 import { unlockAudio } from "../media/audioContext";
+import { warmAvatar, warmWorld } from "../loading/warm";
 import { L, useLang } from "../i18n/lang";
 import { LangToggle } from "../i18n/LangToggle";
 
@@ -60,10 +61,13 @@ export function JoinScreen({ world, onJoin }: JoinScreenProps) {
   const [loaded, setLoaded] = useState(false);
   const [returning, setReturning] = useState(false);
   const [displayName, setDisplayName] = useState(() => `guest-${Math.random().toString(36).slice(2, 7)}`);
+  // While you choose, the world and your avatar are already on their way.
+  useEffect(() => warmWorld(world), [world]);
   const [selection, setSelection] = useState<AvatarSelection>(() => {
     const choice = initialAvatarChoice(world);
     return { choice, url: avatarUrlForChoice(choice), localUrl: null };
   });
+  useEffect(() => warmAvatar(selection.url), [selection.url]);
   const [remember, setRemember] = useState(true);
   const [stagedPreview, setStagedPreview] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);

@@ -88,6 +88,8 @@ import { ControlsGuide, hasSeenControlsGuide } from "./ui/ControlsGuide";
 import { TopCenterCluster } from "./ui/TopCenterCluster";
 import { hasMoved, NETWORK_TICK_MS, shouldSendState, shouldStepAway, type SentState } from "./multiplayer/presence";
 import { JoinScreen, type JoinedIdentity } from "./ui/JoinScreen";
+import { Arrival } from "./loading/Arrival";
+import { WarmUp } from "./loading/WarmUp";
 import { CameraViewToggle } from "./ui/CameraViewToggle";
 import { AvatarChooser, avatarUrlForChoice } from "./ui/AvatarChooser";
 import { useMediaQuery, useWantsTouchControls } from "./ui/useMediaQuery";
@@ -205,6 +207,10 @@ export default function App() {
   const [world, setWorld] = useState<WorldConfig | null>(null);
   const [worldError, setWorldError] = useState<Error | null>(null);
   const [joined, setJoined] = useState<JoinedIdentity | null>(null);
+  // Arriving: through a portal (src/loading/Arrival.tsx) until the world is
+  // ready to be seen (WarmUp), then gone.
+  const [worldShown, setWorldShown] = useState(false);
+  const [arrived, setArrived] = useState(false);
   const [localVrm, setLocalVrm] = useState<VRM | null>(null);
   const [localGesture, setLocalGesture] = useState<{ gesture: GestureDefinition; seq: number } | null>(null);
   const localGestureRef = useRef<{ gesture: GestureDefinition; seq: number } | null>(null);
@@ -1567,6 +1573,7 @@ export default function App() {
         }}
       >
         <XR store={xrStore}>
+          {!worldShown && <WarmUp worldId={world.id} avatarReady={!!localVrm} onReady={() => setWorldShown(true)} />}
           {/* A room-level environment uploaded through the editor wins
               over the deployment's static world.json sceneUrl. The group
               wrapper is what the navmesh is generated from. */}
@@ -1721,6 +1728,14 @@ export default function App() {
           />
         </XR>
       </Canvas>
+      {!arrived && (
+        <Arrival
+          ready={worldShown}
+          worldId={currentWorld.id === "default" ? "default" : currentWorld.id}
+          worldName={L(currentWorld.displayName, currentWorld.displayNameJa ?? currentWorld.displayName).split(" — ")[0]}
+          onDone={() => setArrived(true)}
+        />
+      )}
 
       {pendingPresentScreen && (
         <PresentSourceChooser

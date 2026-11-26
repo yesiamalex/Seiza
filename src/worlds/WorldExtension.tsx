@@ -71,16 +71,35 @@ export interface WorldModule {
 
 // Every world's client code, each as its own chunk loaded on demand.
 const worldModules = import.meta.glob<WorldModule>("../../worlds/*/client/index.tsx");
+const loading = new Map<string, Promise<WorldModule | null>>();
+const settled = new Set<string>();
+
+/** Fetches a world's own code (once), so entering finds it already here
+ *  (src/loading/warm.ts starts it on the join screen). Null if it has none. */
+export function preloadWorldModule(worldId: string): Promise<WorldModule | null> {
+  let p = loading.get(worldId);
+  if (!p) {
+    const load = worldModules[`../../worlds/${worldId}/client/index.tsx`];
+    p = load ? load() : Promise.resolve(null);
+    p.then(
+      () => settled.add(worldId),
+      () => settled.add(worldId)
+    );
+    loading.set(worldId, p);
+  }
+  return p;
+}
+
+/** Whether a world's own code has arrived (or failed, or there's none): the loading screen waits for it. */
+export const worldModuleSettled = (worldId: string) => settled.has(worldId) || !worldModules[`../../worlds/${worldId}/client/index.tsx`];
 
 /** Renders the running world's own scene code, if it has any. Lives inside
  *  the Canvas. A failure in it is logged and leaves the rest of Seiza alone. */
 export function WorldExtension({ worldId, ...props }: WorldSceneProps & { worldId: string }) {
   const [module, setModule] = useState<WorldModule | null>(null);
   useEffect(() => {
-    const load = worldModules[`../../worlds/${worldId}/client/index.tsx`];
-    if (!load) return;
     let live = true;
-    load()
+    preloadWorldModule(worldId)
       .then((loaded) => live && setModule(loaded))
       .catch((error) => console.warn(`[seiza] Could not load the "${worldId}" world's own code.`, error));
     return () => {
