@@ -27,6 +27,8 @@ export interface JoinedIdentity extends AvatarSelection {
 interface JoinScreenProps {
   world: WorldConfig;
   onJoin: (identity: JoinedIdentity) => void;
+  /** Your name, come with you from another world's train (worlds/handoff.ts). */
+  initialName?: string;
 }
 
 // IndexedDB normally answers in a few milliseconds. If it's blocked or
@@ -57,11 +59,11 @@ const STAR_DOTS_NEAR = [
  * uploaded file, which renders instantly from disk and is silently
  * re-uploaded if the deployment's copy has expired.
  */
-export function JoinScreen({ world, onJoin }: JoinScreenProps) {
+export function JoinScreen({ world, onJoin, initialName }: JoinScreenProps) {
   const lang = useLang();
   const [loaded, setLoaded] = useState(false);
   const [returning, setReturning] = useState(false);
-  const [displayName, setDisplayName] = useState(() => `guest-${Math.random().toString(36).slice(2, 7)}`);
+  const [displayName, setDisplayName] = useState(() => initialName || `guest-${Math.random().toString(36).slice(2, 7)}`);
   // While you choose, the world and your avatar are already on their way.
   useEffect(() => warmWorld(world), [world]);
   const [selection, setSelection] = useState<AvatarSelection>(() => {
@@ -93,7 +95,7 @@ export function JoinScreen({ world, onJoin }: JoinScreenProps) {
         }
         if (choice.kind === "default") choice = initialAvatarChoice(world);
         if (cancelled) return;
-        setDisplayName(profile.displayName || displayName);
+        setDisplayName(initialName || profile.displayName || displayName);
         setSelection({ choice, url: avatarUrlForChoice(choice), localUrl });
         setReturning(true);
       }
@@ -153,8 +155,11 @@ export function JoinScreen({ world, onJoin }: JoinScreenProps) {
           border-radius: 16px; border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 24px 60px rgba(0,0,0,0.5);
         }
         .seiza-join-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+        .seiza-join-pills { position: absolute; top: 16px; right: 16px; z-index: 2; display: flex; gap: 8px; }
         @media (max-width: 720px) {
-          .seiza-join-screen { place-items: start center; }
+          .seiza-join-screen { place-items: start center; align-content: start; gap: 12px; }
+          /* On a phone, a row of their own above the form, not over it. */
+          .seiza-join-pills { position: static; justify-self: end; flex-wrap: wrap; justify-content: flex-end; }
           .seiza-join-form { grid-template-columns: 1fr; padding: 18px; gap: 18px; }
           .seiza-join-title { font-size: 21px !important; }
         }
@@ -164,7 +169,7 @@ export function JoinScreen({ world, onJoin }: JoinScreenProps) {
       <div aria-hidden style={{ position: "absolute", inset: 0, backgroundImage: STAR_DOTS_FAR, opacity: 0.9, pointerEvents: "none" }} />
       <div aria-hidden style={{ position: "absolute", inset: 0, backgroundImage: STAR_DOTS_NEAR, pointerEvents: "none" }} />
 
-      <div style={{ position: "absolute", top: 16, right: 16, zIndex: 2, display: "flex", gap: 8 }}>
+      <div className="seiza-join-pills">
         <GraphicsToggle />
         <LangToggle />
       </div>

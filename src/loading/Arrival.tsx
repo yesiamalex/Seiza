@@ -14,8 +14,8 @@ import { speak } from "../guides/speech";
 
 /**
  * Arriving in a world, by the Shinkanseiza (新幹星座), the train that links
- * the EcoSeiztem's worlds: you kneel in seiza in its carriage at night,
- * facing us, and breathe, slowly, while the world loads. Through the
+ * the EcoSeiztem's worlds: you sit on its long seat at night, facing us,
+ * and breathe, slowly, while the world loads. Through the
  * window behind you the night streams past (near poles fast, the hills
  * slow, the stars slower), and hung still in the sky is the world's own
  * constellation, drawing itself a line at a breath (seiza is also the
@@ -62,11 +62,14 @@ const WALK_SECONDS = 1.5;
 const STEP_OUT_SECONDS = 1.1;
 /** A moment into the first breath, the avatar is built. */
 const AVATAR_AFTER_MS = 700;
-const SEIZA_URL = BUILTIN_GESTURES.find((g) => g.name === "seiza")?.url ?? null;
+const SIT_URL = BUILTIN_GESTURES.find((g) => g.name === "sit")?.url ?? null;
 const FADE_SECONDS = 0.7;
 /** The carriage: its window wall, where you kneel, the door you leave by. */
 const WALL_Z = -1.15;
 const KNEEL: [number, number] = [-0.5, -0.35];
+/** Where you sit on the long seat (its cushion's top is 0.5 m up), and the
+ *  aisle you stand up into. */
+const SEAT = { y: 0.05, z: -0.8 };
 const DOOR_X = 2.4;
 /** The night sky without WebGL: a few stars and the glow of the horizon. */
 const FLAT_SKY = [
@@ -217,7 +220,8 @@ interface Self {
 }
 
 /** Your avatar, for the arrival: built from its spec, or decoded from the
- *  file the join screen already fetched; and its seiza and walk. */
+ *  file the join screen already fetched; and its sitting (held in `seiza`,
+ *  played back to stand) and walk. */
 async function loadSelf(url: string): Promise<Self | null> {
   let vrm: VRM | null = null;
   if (isDesignerAvatarUrl(url)) {
@@ -236,10 +240,10 @@ async function loadSelf(url: string): Promise<Self | null> {
   if (!vrm) return null;
   vrm.scene.traverse((o) => (o.frustumCulled = false));
   const mixer = new THREE.AnimationMixer(vrm.scene);
-  const [seizaAnim, walkAnim] = await Promise.all([SEIZA_URL ? loadVrmAnimation(SEIZA_URL).catch(() => null) : null, loadVrmAnimation(LOCOMOTION_CLIPS.walk).catch(() => null)]);
+  const [seizaAnim, walkAnim] = await Promise.all([SIT_URL ? loadVrmAnimation(SIT_URL).catch(() => null) : null, loadVrmAnimation(LOCOMOTION_CLIPS.walk).catch(() => null)]);
   const seiza = seizaAnim ? mixer.clipAction(createVRMAnimationClip(seizaAnim, vrm)) : null;
   if (seiza) {
-    // Down into seiza, then held there.
+    // Down onto the seat, then held there.
     seiza.setLoop(THREE.LoopOnce, 1);
     seiza.clampWhenFinished = true;
     seiza.play();
@@ -526,7 +530,7 @@ export function Arrival({
       const pane = add(new THREE.PlaneGeometry(o.x1 - o.x0, o.y1 - o.y0), basic("#ffffff", { visible: false }), [(o.x0 + o.x1) / 2, (o.y0 + o.y1) / 2, WALL_Z]);
       pane.userData.tap = "window";
     }
-    const selfTarget = box([0.6, 1.0, 0.6], [KNEEL[0], 0.5, KNEEL[1]], basic("#ffffff", { visible: false }));
+    const selfTarget = box([0.6, 1.1, 0.7], [KNEEL[0], 0.75, SEAT.z + 0.1], basic("#ffffff", { visible: false }));
     selfTarget.userData.tap = "self";
 
     let portrait = false;
@@ -554,7 +558,7 @@ export function Arrival({
             VRMUtils.deepDispose(loaded.vrm.scene);
             return;
           }
-          loaded.vrm.scene.position.set(KNEEL[0], 0, KNEEL[1]);
+          loaded.vrm.scene.position.set(KNEEL[0], SEAT.y, SEAT.z);
           // Its shaders built off to the side first, so it appearing isn't one long frame.
           const show = () => {
             if (cancelled) return;
@@ -694,8 +698,8 @@ export function Arrival({
         setBreath(next);
       }
 
-      // Your avatar: kneeling, facing you; at the station, up out of seiza,
-      // a turn to the door, the walk to it, and out onto the platform.
+      // Your avatar: sitting, facing you; at the station, up off the seat and
+      // forward into the aisle, a turn to the door, the walk, and out.
       const riseAt = RISE_AT;
       const turnAt = riseAt + STAND_SECONDS;
       const walkAt = turnAt + TURN_SECONDS * 0.6;
@@ -725,8 +729,10 @@ export function Arrival({
         const facing = a.vrm.meta.metaVersion === "1" ? Math.PI : 0;
         a.vrm.scene.rotation.y = facing + Math.PI + (Math.PI / 2) * turn + (Math.PI / 2) * smooth((after - outAt) / 0.35);
         if (!still) {
+          const up = smooth((after - riseAt) / STAND_SECONDS);
           a.vrm.scene.position.x = KNEEL[0] + (DOOR_X - KNEEL[0]) * walk;
-          a.vrm.scene.position.z = KNEEL[1] + (WALL_Z - 1.2 - KNEEL[1]) * out;
+          a.vrm.scene.position.y = SEAT.y * (1 - up);
+          a.vrm.scene.position.z = SEAT.z + (KNEEL[1] - SEAT.z) * up + (WALL_Z - 1.2 - KNEEL[1]) * out;
         }
         a.mixer.update(dt);
         // A little bow, when you tap yourself.

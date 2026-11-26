@@ -83,6 +83,10 @@ import { ChatPanel } from "./chat/ChatPanel";
 import { HUD } from "./ui/HUD";
 import { useExclusiveMenu } from "./ui/exclusiveMenu";
 import { FpsCounter } from "./ui/FpsCounter";
+import { GraphicsToggle } from "./ui/GraphicsToggle";
+import { decodeAvatarSpec } from "./avatar/designer/avatarSpec";
+import { takeTraveller } from "./worlds/handoff";
+import { unlockAudio } from "./media/audioContext";
 import { useLowGraphics } from "./scene/graphics";
 import { Toast } from "./ui/Toast";
 import { ControlsGuide, hasSeenControlsGuide } from "./ui/ControlsGuide";
@@ -208,7 +212,26 @@ export default function App() {
   const xrSessionActive = useXrSessionActive();
   const [world, setWorld] = useState<WorldConfig | null>(null);
   const [worldError, setWorldError] = useState<Error | null>(null);
-  const [joined, setJoined] = useState<JoinedIdentity | null>(null);
+  // Off the train from another world (worlds/handoff.ts): with a designer
+  // avatar, straight onto this world's train (its loading screen); with
+  // only a name, the join screen with it filled in.
+  const [traveller] = useState(() => (typeof window === "undefined" ? null : takeTraveller()));
+  const [joined, setJoined] = useState<JoinedIdentity | null>(() => {
+    const spec = traveller?.avatar ? decodeAvatarSpec(traveller.avatar) : null;
+    return traveller && spec ? { displayName: traveller.name, choice: { kind: "designer", spec }, url: traveller.avatar!, localUrl: null, remember: false } : null;
+  });
+  // Arriving that way skips the join screen's button, which is what lets a
+  // page play sound: the first tap or key does it instead.
+  useEffect(() => {
+    if (!traveller?.avatar) return;
+    const unlock = () => unlockAudio();
+    window.addEventListener("pointerdown", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, [traveller]);
   // Arriving: through a portal (src/loading/Arrival.tsx) until the world is
   // ready to be seen (WarmUp), then gone.
   const [worldShown, setWorldShown] = useState(false);
@@ -1353,7 +1376,7 @@ export default function App() {
   if (roomFull) return <CenteredMessage text={L(`This world is currently full (${roomFull} people). Please try again later.`, `このワールドは満員です(${roomFull}人)。しばらくしてからもう一度お試しください。`)} />;
   if (wasKicked) return <CenteredMessage text={L("An admin removed you from this room. Reload the page if you'd like to rejoin.", "管理者によって部屋から退出させられました。もう一度入るにはページを再読み込みしてください。")} />;
   if (passwordRequired) return <RoomPasswordGate onSubmit={joinWithPassword} />;
-  if (!joined) return <JoinScreen world={world} onJoin={setJoined} />;
+  if (!joined) return <JoinScreen world={world} onJoin={setJoined} initialName={traveller?.name} />;
 
   const editingEnabled = world.editingEnabled !== false;
   const voiceVisible = world.voiceEnabled;
@@ -1831,6 +1854,7 @@ export default function App() {
               >
                 ?
               </button>
+              <GraphicsToggle compact style={{ height: 36, flexShrink: 0, pointerEvents: "auto", padding: "0 10px", fontSize: 13 }} />
               <LangToggle style={{ height: 36, flexShrink: 0, pointerEvents: "auto" }} />
             </TopCenterCluster>
             <div style={{ position: "relative", pointerEvents: "auto", flexShrink: 0 }}>
@@ -2040,7 +2064,7 @@ export default function App() {
       <MegaphoneChip players={players} selfId={selfId} self={media.megaphone && media.micEnabled && !media.muted} />
       <HeatChip />
       <FaintOverlay respawn={() => warpTo(wakeSpot(getSelfPosition(), [world.spawnPoint.x, world.spawnPoint.y, world.spawnPoint.z]))} />
-      {world.portals && <PortalCard config={world.portals} inXr={xrSessionActive} />}
+      {world.portals && <PortalCard config={world.portals} inXr={xrSessionActive} traveller={{ name: joined.displayName, avatar: joined.url }} />}
       {openImageId && objects[openImageId]?.kind === "image" && <ImageViewer object={objects[openImageId]} onClose={closeImage} />}
       {/* Someone is talking but the browser still holds audio back (the
           Join click usually unlocks it; see src/media/audioContext.ts). */}

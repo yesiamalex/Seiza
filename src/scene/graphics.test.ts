@@ -11,8 +11,11 @@ describe("lowEndDevice", () => {
   });
   it("picks Low for phones short of memory or cores, never for a desktop", () => {
     const android = "Mozilla/5.0 (Linux; Android 13; SM-A135F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36";
-    expect(lowEndDevice(nav(android, { deviceMemory: 3 }), 2)).toBe(true);
+    expect(lowEndDevice(nav(android, { deviceMemory: 2 }), 2)).toBe(true);
+    expect(lowEndDevice(nav(android, { deviceMemory: 4, hardwareConcurrency: 4 }), 2)).toBe(true);
     expect(lowEndDevice(nav(android, { hardwareConcurrency: 4 }), 2)).toBe(true);
+    // A good phone: 6 GB reports as 4, with 8 cores; and 8 GB.
+    expect(lowEndDevice(nav(android, { deviceMemory: 4, hardwareConcurrency: 8 }), 2.6)).toBe(false);
     expect(lowEndDevice(nav(android, { deviceMemory: 8 }), 2.6)).toBe(false);
     expect(lowEndDevice(nav("Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0", { deviceMemory: 4, hardwareConcurrency: 4 }), 1)).toBe(false);
   });

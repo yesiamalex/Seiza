@@ -59,9 +59,13 @@ export function lowEndDevice(nav: Navigator | undefined = typeof navigator === "
   if (/iPhone|iPod/.test(ua)) return pixelRatio < 2.5;
   const mobile = /Android|Mobile/.test(ua);
   const memory = (nav as Navigator & { deviceMemory?: number }).deviceMemory;
-  if (mobile && memory !== undefined && memory <= 4) return true;
-  if (mobile && (nav.hardwareConcurrency ?? 8) <= 4) return true;
-  return false;
+  if (!mobile) return false;
+  // Chrome reports memory rounded down to a power of two: a 6 GB phone says
+  // 4. So only 2 or less is short of it on its own, or 4 with few cores.
+  const cores = nav.hardwareConcurrency ?? 8;
+  if (memory !== undefined && memory <= 2) return true;
+  if (memory !== undefined && memory <= 4 && cores <= 4) return true;
+  return memory === undefined && cores <= 4;
 }
 
 /** Low graphics now: chosen, or picked by Auto. */

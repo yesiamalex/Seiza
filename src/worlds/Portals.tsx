@@ -20,6 +20,7 @@ import type { PortalConfig, PortalWorld } from "../config/worldConfig";
 import { L, useLang } from "../i18n/lang";
 import { floorHeightAt } from "../scene/layout";
 import { pillButtonStyle } from "../ui/styles";
+import { boardingUrl, type Traveller } from "./handoff";
 
 const FONT = "system-ui, -apple-system, 'Segoe UI', 'Hiragino Sans', 'Noto Sans CJK JP', sans-serif";
 /** The board's size, and how high its middle is. */
@@ -158,7 +159,7 @@ const at = (minutes: number) => new Date(Date.now() + minutes * 60_000).toLocale
  * English as real boards do, the one you picked boarding at the top, and
  * a button to board it (a new tab). Mounted beside the HUD.
  */
-export function PortalCard({ config, inXr }: { config: PortalConfig; inXr: boolean }) {
+export function PortalCard({ config, inXr, traveller = null }: { config: PortalConfig; inXr: boolean; traveller?: Traveller | null }) {
   useLang();
   const world = useSyncExternalStore(
     (l) => {
@@ -183,11 +184,11 @@ export function PortalCard({ config, inXr }: { config: PortalConfig; inXr: boole
   // The one you picked first, then the rest, three minutes apart.
   const rows = [world, ...config.worlds.filter((w) => w.id !== world.id)];
   return (
-    <div role="dialog" aria-label={L(`Departures to ${name}`, `${name}行きの発車案内`)} onClick={close} style={{ position: "fixed", inset: 0, display: "grid", placeItems: "center", padding: 12, pointerEvents: "auto", zIndex: 40, background: "rgba(8,10,16,0.5)" }}>
+    <div role="dialog" aria-label={L(`Departures to ${name}`, `${name}行きの発車案内`)} onClick={close} style={{ position: "fixed", inset: 0, display: "grid", placeItems: "center", padding: "max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom))", pointerEvents: "auto", zIndex: 40, background: "rgba(8,10,16,0.5)", boxSizing: "border-box" }}>
       <style>{`@keyframes seiza-board-blink { 50% { opacity: 0.25 } }`}</style>
       <div
         onClick={(event) => event.stopPropagation()}
-        style={{ width: "min(560px, 100%)", borderRadius: 14, overflow: "hidden", background: "#0b0c10", border: "1px solid #2a2d36", boxShadow: "0 18px 50px rgba(0,0,0,0.5)", color: "#fff", fontFamily: FONT }}
+        style={{ width: "min(560px, 100%)", maxHeight: "calc(100dvh - 24px)", overflowY: "auto", overscrollBehavior: "contain", borderRadius: 14, background: "#0b0c10", border: "1px solid #2a2d36", boxShadow: "0 18px 50px rgba(0,0,0,0.5)", color: "#fff", fontFamily: FONT }}
       >
         {/* The board's head: the line, and the time. */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "#1d2433", borderBottom: `3px solid ${color}` }}>
@@ -199,7 +200,7 @@ export function PortalCard({ config, inXr }: { config: PortalConfig; inXr: boole
         </div>
         {/* The departures, in amber. */}
         <div style={{ padding: "6px 0", fontFamily: MONO, color: LED, textShadow: `0 0 6px ${LED_DIM}` }}>
-          <div style={{ display: "grid", gridTemplateColumns: "56px 64px 1fr 54px", gap: 8, padding: "4px 14px", fontSize: 11, color: LED_DIM }}>
+          <div style={{ display: "grid", gridTemplateColumns: "clamp(44px, 12vw, 56px) clamp(52px, 15vw, 64px) minmax(0, 1fr) 40px", gap: 8, padding: "4px 14px", fontSize: 11, color: LED_DIM }}>
             <span>{ja ? "発車" : "Time"}</span>
             <span>{ja ? "種別" : "Train"}</span>
             <span>{ja ? "行き先" : "For"}</span>
@@ -208,7 +209,7 @@ export function PortalCard({ config, inXr }: { config: PortalConfig; inXr: boole
           {rows.map((w, i) => {
             const mine = i === 0;
             return (
-              <div key={w.id} style={{ display: "grid", gridTemplateColumns: "56px 64px 1fr 54px", gap: 8, alignItems: "center", padding: "7px 14px", fontSize: mine ? 17 : 15, background: mine ? "rgba(255,179,71,0.07)" : undefined, borderTop: "1px solid #1c1e26" }}>
+              <div key={w.id} style={{ display: "grid", gridTemplateColumns: "clamp(44px, 12vw, 56px) clamp(52px, 15vw, 64px) minmax(0, 1fr) 40px", gap: 8, alignItems: "center", padding: "7px 14px", fontSize: mine ? 17 : 15, background: mine ? "rgba(255,179,71,0.07)" : undefined, borderTop: "1px solid #1c1e26" }}>
                 <span>{mine ? at(0) : at(i * 3)}</span>
                 <span style={{ fontSize: 11, color: "#10131a", background: w.color ?? "#8fb3ff", borderRadius: 4, padding: "2px 4px", textAlign: "center", textShadow: "none", fontFamily: FONT, fontWeight: 700 }}>{ja ? "新幹星座" : "SHINKAN"}</span>
                 <span style={{ overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
@@ -240,7 +241,7 @@ export function PortalCard({ config, inXr }: { config: PortalConfig; inXr: boole
               {L("Stay here", "ここに残る")}
             </button>
             {url && !inXr && (
-              <a href={url} target="_blank" rel="noopener noreferrer" onClick={close} style={{ ...pillButtonStyle, textDecoration: "none", fontWeight: 800, background: color, color: "#10131a" }}>
+              <a href={boardingUrl(url, traveller)} target="_blank" rel="noopener noreferrer" onClick={close} style={{ ...pillButtonStyle, textDecoration: "none", fontWeight: 800, background: color, color: "#10131a" }}>
                 {L(`Board for ${name}`, `${name}行きに乗る`)}
               </a>
             )}
