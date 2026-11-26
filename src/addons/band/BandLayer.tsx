@@ -340,10 +340,15 @@ interface WornSpec {
   zones: number;
   /** A solid body (lead guitar, bass) is thinner, with horns. */
   solid: boolean;
+  /** How big the body is beside a guitar's (a ukulele's is small), and how many strings. */
+  size?: number;
+  strings?: number;
 }
 
 const WORN_SPECS: Record<Worn, WornSpec> = {
   guitar: { body: "#c0452c", neck: "#3b2618", guard: "#111111", length: 0.55, zones: CHORDS.length, solid: false },
+  // Koa, the ukulele's wood: small, a short neck, four strings.
+  ukulele: { body: "#b8763a", neck: "#5a3a22", guard: "#1a1210", length: 0.3, zones: CHORDS.length, solid: false, size: 0.62, strings: 4 },
   electric: { body: "#141414", neck: "#4a3020", guard: "#f2f0eb", length: 0.55, zones: ELECTRIC.length, solid: true },
   bass: { body: "#2f5fa8", neck: "#4a3020", guard: "#f2f0eb", length: 0.72, zones: CHORDS.length, solid: true },
 };
@@ -351,11 +356,14 @@ const WORN_SPECS: Record<Worn, WornSpec> = {
 export function buildWorn(kind: Worn) {
   const spec = WORN_SPECS[kind];
   const group = new THREE.Group();
-  const depth = spec.solid ? 0.045 : 0.08;
+  const k = spec.size ?? 1;
+  const depth = spec.solid ? 0.045 : 0.08 * Math.sqrt(k);
   const b = GUITAR_BODY;
+  // Two bouts, the lower bigger; a small body (a ukulele) all in proportion,
+  // its top coming up to where the neck starts.
   const shape = [
-    new THREE.CylinderGeometry(0.16, 0.16, depth, 20).rotateX(Math.PI / 2).scale(1, 1.05, 1).translate(b.x + 0.03, b.y - 0.05, b.z),
-    new THREE.CylinderGeometry(0.12, 0.12, depth, 18).rotateX(Math.PI / 2).translate(b.x - 0.09, b.y + 0.08, b.z),
+    new THREE.CylinderGeometry(0.16 * k, 0.16 * k, depth, 20).rotateX(Math.PI / 2).scale(1, 1.05, 1).translate(b.x + 0.03 * k, b.y - 0.05 * k, b.z),
+    new THREE.CylinderGeometry(0.12 * k, 0.12 * k, depth, 18).rotateX(Math.PI / 2).translate(b.x - 0.09 * k, b.y + 0.08 * k, b.z),
   ];
   if (spec.solid) {
     // The two horns either side of the neck, swept along it.
@@ -365,21 +373,23 @@ export function buildWorn(kind: Worn) {
   }
   group.add(merged(shape, material(spec.body, { roughness: 0.3, metalness: spec.solid ? 0.2 : 0.1 })));
   const neckMid = b.clone().addScaledVector(NECK, NECK_FROM + spec.length / 2);
-  const headAt = b.clone().addScaledVector(NECK, NECK_FROM + spec.length + 0.07);
-  const neck = new THREE.BoxGeometry(kind === "bass" ? 0.055 : 0.05, spec.length, 0.025).rotateZ(NECK_ANGLE).translate(neckMid.x, neckMid.y, neckMid.z - 0.02);
-  const headstock = new THREE.BoxGeometry(0.07, 0.15, 0.022).rotateZ(NECK_ANGLE).translate(headAt.x, headAt.y, headAt.z - 0.02);
+  // A small instrument's neck and headstock are smaller too (not all the way: it still has four strings across).
+  const hk = k < 1 ? 0.5 + k * 0.5 : 1;
+  const headAt = b.clone().addScaledVector(NECK, NECK_FROM + spec.length + 0.07 * hk);
+  const neck = new THREE.BoxGeometry(kind === "bass" ? 0.055 : 0.05 * hk, spec.length, 0.025).rotateZ(NECK_ANGLE).translate(neckMid.x, neckMid.y, neckMid.z - 0.02);
+  const headstock = new THREE.BoxGeometry(0.07 * hk, 0.15 * hk, 0.022).rotateZ(NECK_ANGLE).translate(headAt.x, headAt.y, headAt.z - 0.02);
   group.add(merged([neck, headstock], material(spec.neck)));
   // Frets marking the note zones a tap picks (see zoneOnNeck).
   const frets = Array.from({ length: spec.zones + 1 }, (_, k) => {
     const at = b.clone().addScaledVector(NECK, NECK_FROM + (k / spec.zones) * spec.length);
-    return new THREE.BoxGeometry(0.052, 0.004, 0.004).rotateZ(NECK_ANGLE).translate(at.x, at.y, at.z - 0.034);
+    return new THREE.BoxGeometry(0.052 * hk, 0.004, 0.004).rotateZ(NECK_ANGLE).translate(at.x, at.y, at.z - 0.034);
   });
   group.add(merged(frets, material("#d8d2c4", { metalness: 0.4, roughness: 0.4 })));
   const face = b.z - depth / 2;
   // An acoustic's sound hole; a solid body's long scratchplate under the strings.
   const guard = spec.solid
     ? new THREE.CylinderGeometry(0.06, 0.06, 0.004, 18).rotateX(Math.PI / 2).scale(2, 0.85, 1).rotateZ(NECK_ANGLE + 1.2).translate(b.x + 0.06, b.y - 0.02, face - 0.002)
-    : new THREE.CylinderGeometry(0.045, 0.045, 0.004, 16).rotateX(Math.PI / 2).translate(b.x - 0.05, b.y + 0.02, face - 0.002);
+    : new THREE.CylinderGeometry(0.045 * k, 0.045 * k, 0.004, 16).rotateX(Math.PI / 2).translate(b.x - 0.05 * k, b.y + 0.02 * k, face - 0.002);
   group.add(merged([guard], material(spec.guard, { roughness: 0.4 })));
   if (spec.solid) {
     // Pickups and a bridge, across the strings.
@@ -390,14 +400,14 @@ export function buildWorn(kind: Worn) {
     const hardware = [across(0.075, 0.024, 0.05), across(0.075, 0.024, -0.02), across(0.06, 0.014, -0.1)];
     group.add(merged(hardware, material("#c9ccd1", { metalness: 0.8, roughness: 0.3 })));
   }
-  // The strings, bridge to nut: four on a bass, six on a guitar.
-  const count = kind === "bass" ? 4 : 6;
-  const from = spec.solid ? -0.1 : -0.12;
+  // The strings, bridge to nut: four on a bass or a ukulele, six on a guitar.
+  const count = spec.strings ?? (kind === "bass" ? 4 : 6);
+  const from = spec.solid ? -0.1 : -0.12 * k;
   const to = NECK_FROM + spec.length;
   const mid = b.clone().addScaledVector(NECK, (from + to) / 2);
   const across = new THREE.Vector3(NECK.y, -NECK.x, 0);
   const strings = Array.from({ length: count }, (_, k) => {
-    const at = mid.clone().addScaledVector(across, (k / (count - 1) - 0.5) * 0.036);
+    const at = mid.clone().addScaledVector(across, (k / (count - 1) - 0.5) * 0.036 * hk);
     return new THREE.BoxGeometry(kind === "bass" ? 0.0022 : 0.0014, to - from, 0.0014).rotateZ(NECK_ANGLE).translate(at.x, at.y, b.z - 0.037);
   });
   group.add(merged(strings, material("#e9e4da", { metalness: 0.6, roughness: 0.35 })));
@@ -686,7 +696,7 @@ function guitarPoints(rig: BodyRig, guitar: THREE.Object3D, kind: Worn, note: nu
 
 /** How far a strum sweeps: a guitar's chord the whole way, a lead note or
  *  a bass note just a pick or a pluck. */
-const SWEEP: Record<Worn, number> = { guitar: 0.09, electric: 0.06, bass: 0.035 };
+const SWEEP: Record<Worn, number> = { guitar: 0.09, ukulele: 0.05, electric: 0.06, bass: 0.035 };
 
 export function guitarPose(hands: Hands, rig: BodyRig, guitar: THREE.Object3D, kind: Worn, note: Note, now: number) {
   guitarPoints(rig, guitar, kind, chordOf(note?.n ?? 0));

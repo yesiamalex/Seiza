@@ -2,7 +2,7 @@ import { sfxOutput } from "../../audio/sfx";
 import { noiseHit, toneHit, voice, type Voice } from "../sound";
 import { loadSamples, readySamples, warmSamples } from "../samples";
 
-export const INSTRUMENTS = ["drums", "kit", "taiko", "keys", "kulintang", "guitar", "electric", "bass", "violin", "shaker", "lightstick"] as const;
+export const INSTRUMENTS = ["drums", "kit", "taiko", "keys", "kulintang", "guitar", "ukulele", "electric", "bass", "violin", "shaker", "lightstick"] as const;
 export type Instrument = (typeof INSTRUMENTS)[number];
 
 export const INSTRUMENT_LABELS: Record<Instrument, [string, string]> = {
@@ -12,6 +12,7 @@ export const INSTRUMENT_LABELS: Record<Instrument, [string, string]> = {
   keys: ["Keys", "キーボード"],
   kulintang: ["Kulintang", "クリンタン"],
   guitar: ["Guitar", "ギター"],
+  ukulele: ["Ukulele", "ウクレレ"],
   electric: ["Lead guitar", "エレキギター"],
   bass: ["Bass", "ベース"],
   violin: ["Violin", "バイオリン"],
@@ -20,7 +21,7 @@ export const INSTRUMENT_LABELS: Record<Instrument, [string, string]> = {
 };
 
 /** The instruments worn on the chest, played with a strum and a fret hand. */
-export const WORN = ["guitar", "electric", "bass"] as const;
+export const WORN = ["guitar", "ukulele", "electric", "bass"] as const;
 export type Worn = (typeof WORN)[number];
 export const isWorn = (i: Instrument | null): i is Worn => (WORN as readonly string[]).includes(i ?? "");
 
@@ -132,8 +133,8 @@ export const CHORDS: { name: string; key: string; notes: number[]; root: number 
 
 /**
  * The lead guitar: six power chords for riffs on the home row, and six
- * notes of E minor pentatonic above them for a lead line, which every
- * power chord here sits under.
+ * notes of E minor pentatonic above them for a lead line. Every power
+ * chord here is in E minor, so the lead line fits over any of them.
  */
 export const ELECTRIC: { label: string; key: string; notes: number[] }[] = [
   { label: "E5", key: "A", notes: [40, 47, 52] },
@@ -150,20 +151,44 @@ export const ELECTRIC: { label: string; key: string; notes: number[] }[] = [
   { label: "E'", key: "Y", notes: [76] },
 ];
 
+/**
+ * The ukulele: the guitar's twelve chords, on its same pads so the two play
+ * together, in the ukulele's own shapes on its four strings, tuned G C E A
+ * with the G string high (re-entrant, G4 C4 E4 A4), so a strum starts high,
+ * dips, and rises: its bright, bouncing sound. Each chord's notes are its
+ * strings in that order: C is 0003, G 0232, Am 2000, F 2010, Em 0432, D
+ * 2220, A 2100, E 4442, Dm 2210, Bm 4222, Cmaj7 0002, G7 0212.
+ */
+export const UKULELE: number[][] = [
+  [67, 60, 64, 72],
+  [67, 62, 67, 71],
+  [69, 60, 64, 69],
+  [69, 60, 65, 69],
+  [67, 64, 67, 71],
+  [69, 62, 66, 69],
+  [69, 61, 64, 69],
+  [71, 64, 68, 71],
+  [69, 62, 65, 69],
+  [71, 62, 66, 71],
+  [67, 60, 64, 71],
+  [67, 62, 65, 71],
+];
+
 /** The bass plays each chord's root, an octave and more down: the same
  *  pads as the guitar's, so the two lock together. */
 export const BASS: Pad[] = CHORDS.map((c) => ({ label: c.name, key: c.key }));
 
 /**
  * Single strings, for a melody: the fret hand holds a chord (the last one
- * strummed, or fretted with Shift), and keys 1 to 6 pick its strings, low
- * to high, an octave up past its top string. The bass picks the root, its
- * fifth, the octave, and the fifth above, for the lines bassists walk. A
+ * strummed, or fretted with Shift), and keys 1 to 6 pick its notes, low to
+ * high, each different (past its top string, on up the chord's own notes).
+ * The ukulele picks four, its chord's notes low to high. The bass picks the
+ * root, its fifth, the octave, and the fifth above, for the lines bassists walk. A
  * pick is note PICK_BASE + chord × 6 + string, so it travels as any note
  * does.
  */
 export const PICK_BASE = 20;
-export const STRINGS: Record<Worn, number> = { guitar: 6, electric: 6, bass: 4 };
+export const STRINGS: Record<Worn, number> = { guitar: 6, ukulele: 4, electric: 6, bass: 4 };
 export const PICK_KEYS = ["1", "2", "3", "4", "5", "6"];
 const BASS_PICKS = [0, 7, 12, 19];
 export const pickNote = (chord: number, string: number) => PICK_BASE + chord * 6 + string;
@@ -177,7 +202,9 @@ export const pickable = (instrument: Worn, chord: number) => Number.isInteger(ch
 export function pickedMidi(instrument: Worn, chord: number, string: number): number | null {
   if (!pickable(instrument, chord) || !Number.isInteger(string) || string < 0 || string >= STRINGS[instrument]) return null;
   if (instrument === "bass") return CHORDS[chord].root + BASS_PICKS[string];
-  const notes = instrument === "guitar" ? CHORDS[chord].notes : ELECTRIC[chord].notes;
+  // The ukulele's strings aren't low to high (its G is high), and two of a
+  // chord's can be the same note, so a melody picks its notes sorted, each once.
+  const notes = instrument === "guitar" ? CHORDS[chord].notes : instrument === "ukulele" ? [...new Set(UKULELE[chord])].sort((a, b) => a - b) : ELECTRIC[chord].notes;
   // A chord with fewer notes than strings goes on up: each string past its
   // last note plays the next of the chord's own notes above it. (Going round
   // to its first notes an octave up landed on notes a chord already has,
@@ -200,6 +227,7 @@ export const PADS: Partial<Record<Instrument, Pad[]>> = {
   drums: DRUM_PADS,
   kit: KIT_PIECES,
   guitar: CHORDS.map((c) => ({ label: c.name, key: c.key })),
+  ukulele: CHORDS.map((c) => ({ label: c.name, key: c.key })),
   electric: ELECTRIC,
   bass: BASS,
   kulintang: GONGS.map((midi, i) => ({ label: noteName(midi), key: "ASDFGHJK"[i] })),
@@ -209,7 +237,7 @@ export const PADS: Partial<Record<Instrument, Pad[]>> = {
   violin: VIOLIN.map((midi, i) => ({ label: noteName(midi), key: "ASDFGHQWERTY"[i] })),
 };
 /** How many pads a row, on screen. */
-export const PAD_COLUMNS: Partial<Record<Instrument, number>> = { drums: 4, kit: 5, guitar: 6, electric: 6, bass: 6, kulintang: 8, taiko: 4, shaker: 2, violin: 6 };
+export const PAD_COLUMNS: Partial<Record<Instrument, number>> = { drums: 4, kit: 5, guitar: 6, ukulele: 6, electric: 6, bass: 6, kulintang: 8, taiko: 4, shaker: 2, violin: 6 };
 
 const hz = (midi: number) => 440 * Math.pow(2, (midi - 69) / 12);
 /** Bands carry further than footsteps. */
@@ -561,6 +589,25 @@ function acoustic(notes: number[], distance?: number) {
   noiseHit(v, { frequency: 3500, duration: 0.025, gain: single ? 0.045 : 0.07, q: 1.5 });
 }
 
+/** The ukulele's nylon strings: softer under the finger, a shorter ring. */
+const NYLON: Pluck = { sustain: -0.3, soft: 0.35 };
+
+/** The ukulele: nylon strings over a small box, which has no deep boom, a
+ *  warm lift low in the mids and a little sparkle; a quick strum of four. */
+export function playUkuleleChord(chord: number, distance?: number) {
+  const notes = UKULELE[chord];
+  if (notes) ukulele(notes, distance);
+}
+
+function ukulele(notes: number[], distance?: number) {
+  const v = voice(1, distance, FALLOFF);
+  if (!v) return;
+  const single = notes.length === 1;
+  const body = chain(filter(v.ctx, "highpass", 140, 0.7), filter(v.ctx, "peaking", 420, 1.1, 4), filter(v.ctx, "peaking", 2400, 1, 2), filter(v.ctx, "highshelf", 4500, 0.7, -5), v.out);
+  strum(v, notes, body, single ? 0.8 : 0.55, 0.013, NYLON);
+  noiseHit(v, { frequency: 2600, duration: 0.02, gain: single ? 0.03 : 0.05, q: 1.2 });
+}
+
 const curves = new Map<string, Float32Array>();
 /** A waveshaper's curve: `drive` how hard it's pushed, `lean` how lopsided
  *  (a valve amp's even harmonics); soft at the edges either way. */
@@ -738,6 +785,7 @@ export function playPick(instrument: Worn, note: number, distance?: number, slap
   const midi = pick ? pickedMidi(instrument, pick.chord, pick.string) : null;
   if (midi === null) return;
   if (instrument === "guitar") acoustic([midi], distance);
+  else if (instrument === "ukulele") ukulele([midi], distance);
   else if (instrument === "electric") amped([midi], distance);
   // Slapping, the low strings are thumbed and the high ones popped.
   else if (slap) slapNote(midi, distance, (pick?.string ?? 0) >= 2);
@@ -751,6 +799,7 @@ export function playNote(instrument: Instrument, note: number, distance?: number
   else if (instrument === "kit") playKit(note, distance);
   else if (instrument === "keys") playKey(note, distance);
   else if (instrument === "guitar") playChord(note, distance);
+  else if (instrument === "ukulele") playUkuleleChord(note, distance);
   else if (instrument === "electric") playElectric(note, distance);
   else if (instrument === "bass") playBass(note, distance, slap);
   else if (instrument === "kulintang") playGong(note, distance);
@@ -773,11 +822,12 @@ export function prepareGuitar() {
     pluck(output.ctx, chord.root, { sustain: 0.8, soft: 0.6 });
   }
   for (const e of ELECTRIC) for (const midi of e.notes) pluck(output.ctx, midi, { sustain: e.notes.length === 1 ? 1.2 : 0.4 });
+  for (const chord of UKULELE) for (const midi of chord) pluck(output.ctx, midi, NYLON);
   // And every string a pick can sound, each the way its instrument plucks.
   for (const kind of WORN)
     for (let chord = 0; chord < CHORDS.length; chord++)
       for (let string = 0; string < STRINGS[kind]; string++) {
         const midi = pickedMidi(kind, chord, string);
-        if (midi !== null) pluck(output.ctx, midi, kind === "bass" ? { sustain: 0.8, soft: 0.6 } : kind === "electric" ? { sustain: 1.2 } : {});
+        if (midi !== null) pluck(output.ctx, midi, kind === "bass" ? { sustain: 0.8, soft: 0.6 } : kind === "electric" ? { sustain: 1.2 } : kind === "ukulele" ? NYLON : {});
       }
 }

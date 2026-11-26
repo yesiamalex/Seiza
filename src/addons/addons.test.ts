@@ -9,7 +9,7 @@ import { cancelSelfPush, pushSelf, takeSelfPush } from "../player/selfPush";
 import { elementPulse, ELEMENTS, isBladed, WEAPON_SPECS, WEAPONS } from "./fantasy/weapons";
 import { comboReached, record, tally } from "./fantasy/record";
 import { NoteGate, parseBandEvent, validNote } from "./band/band";
-import { GONGS, INSTRUMENTS, isStand, KEY_LAYOUT, KIT, pickedMidi, pickNote, STRINGS, TAIKO, unpick, VIOLIN_SHARP, violinMidi } from "./band/instruments";
+import { CHORDS, GONGS, INSTRUMENTS, isStand, KEY_LAYOUT, KIT, pickedMidi, pickNote, STRINGS, TAIKO, UKULELE, unpick, VIOLIN_SHARP, violinMidi } from "./band/instruments";
 import { deskPose, GONGS_AT, KIT_PIECES_AT, kitPose, malletPose, newHands, shakerPose, stickPose, TAIKO_AT, type Hands } from "./band/BandLayer";
 import { FantasyEffects } from "./fantasy/effects";
 import { PoseOverlay, sharedOverlay } from "../xr/body/bodyIk";
@@ -397,6 +397,27 @@ describe("the band's instruments", () => {
     deskPose(s, "drums", { n: 5, at: 1.5 }, 1.55, 0, { n: 4, at: 1 });
     expect(s.hitAt.right).toBe(-Infinity);
     expect(s.hitAt.left).toBe(1.5);
+  });
+
+  it("plays the ukulele's chords in real shapes on G C E A (high G), the same chords as the guitar's", () => {
+    const tuning = [67, 60, 64, 69];
+    expect(UKULELE.length).toBe(CHORDS.length);
+    UKULELE.forEach((notes, i) => {
+      const name = CHORDS[i].name;
+      // Four strings, each fretted from 0 to 4 on its own open note.
+      expect(notes.length, name).toBe(4);
+      notes.forEach((n, s) => expect(n - tuning[s], `${name} string ${s}`).toBeGreaterThanOrEqual(0));
+      notes.forEach((n, s) => expect(n - tuning[s], `${name} string ${s}`).toBeLessThanOrEqual(4));
+      // Only the notes of the chord it's named, and its root among them.
+      const chord = new Set(CHORDS[i].notes.map((m) => m % 12));
+      for (const n of notes) expect(chord.has(n % 12), `${name}: ${n}`).toBe(true);
+      expect(notes.some((n) => n % 12 === CHORDS[i].root % 12), name).toBe(true);
+      // Picked, its four notes rise, each different.
+      const picks = [0, 1, 2, 3].map((s) => pickedMidi("ukulele", i, s)!);
+      for (let s = 1; s < 4; s++) expect(picks[s], `${name} pick ${s}`).toBeGreaterThan(picks[s - 1]);
+    });
+    expect(STRINGS.ukulele).toBe(4);
+    expect(pickedMidi("ukulele", 0, 4)).toBeNull();
   });
 
   it("picks single strings from the chord held, and the bass its root, fifth, and octaves", () => {

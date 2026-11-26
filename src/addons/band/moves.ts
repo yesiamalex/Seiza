@@ -109,6 +109,7 @@ export function bandBody(instrument: Instrument, note: { at: number; n?: number 
       out.head = 0.5;
       break;
     case "guitar":
+    case "ukulele":
       // Feet apart, rocking: back on the strum, a nod and a tap of the
       // back foot on the beat.
       out.lean = -0.03 - 0.05 * accent + 0.02 * bob * e;
