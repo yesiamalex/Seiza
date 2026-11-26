@@ -106,6 +106,17 @@
   html[data-phase="dusk"] { --sky-a: #141a46; --sky-b: #4b2a66; --sky-c: #e8823f; --stars: 0.6; }
   header.hero { position: relative; overflow: hidden; min-height: min(860px, 100svh); display: grid; align-content: center; background: linear-gradient(180deg, var(--sky-a) 0%, var(--sky-b) 52%, var(--sky-c) 92%, var(--night) 100%); transition: background 1.2s ease; }
   header.hero::after { content: ""; position: absolute; inset: auto 0 0 0; height: 120px; background: linear-gradient(180deg, transparent, var(--night)); pointer-events: none; }
+  /* The EcoSeiztem, under the name. */
+  .hero .eco { margin: 2px 0 14px; font-size: 15px; letter-spacing: 0.03em; opacity: 0.88; }
+  .hero .eco b { font-weight: 700; }
+  /* The Shinkanseiza, the line between the worlds, running along the
+     bottom of the sky: an SVG train on a CSS loop, no script; it stands
+     still for anyone who'd rather nothing moved. */
+  .shinkan { position: absolute; left: 0; right: 0; bottom: 22px; height: 64px; z-index: 2; pointer-events: none; overflow: hidden; }
+  .shinkan .rail { position: absolute; left: 0; right: 0; bottom: 8px; height: 2px; background: linear-gradient(90deg, transparent, rgba(232, 195, 122, 0.5) 12%, rgba(232, 195, 122, 0.5) 88%, transparent); }
+  .shinkan .train { position: absolute; left: 0; bottom: 10px; width: min(520px, 78vw); height: auto; animation: shinkan-run 18s linear infinite; filter: drop-shadow(0 3px 10px rgba(0, 0, 0, 0.35)); }
+  @keyframes shinkan-run { 0% { transform: translateX(-105%); } 62% { transform: translateX(100vw); } 100% { transform: translateX(100vw); } }
+  @media (prefers-reduced-motion: reduce) { .shinkan .train { animation: none; left: 6%; } }
   #sky { opacity: var(--stars); transition: opacity 1.2s ease; }
   /* 正座 and 星座 down the right, as on a poster: the page's one bold thing. */
   /* 正座 and 星座 down the right, as on a poster: the page's one bold thing. */
@@ -335,6 +346,7 @@
   <div class="wrap stage">
     <div>
       <h1>Seiza</h1>
+      <p class="eco">An <b>EcoSeiztem</b> of worlds, linked by the <b>Shinkanseiza</b> <span lang="ja">新幹星座</span></p>
       <ul class="meaning" aria-label="What the name means">
         <li><b lang="ja">正座</b><span>to kneel, as at a lesson</span></li>
         <li><b lang="ja">星座</b><span>a constellation</span></li>
@@ -355,6 +367,39 @@
   </div>
   <div class="wrap">
     <p class="facts"><strong><!--WORLD_COUNT--> worlds</strong> open now, on a phone, a laptop, or a headset, in English or <span lang="ja">日本語</span>, with no account to make before you join.</p>
+  </div>
+  <div class="shinkan" aria-hidden="true">
+    <div class="rail"></div>
+    <svg class="train" viewBox="0 0 520 52" role="presentation">
+      <defs>
+        <linearGradient id="shinkan-stripe" x1="0" x2="1">
+          <stop offset="0" stop-color="#e07a3f"/><stop offset="0.2" stop-color="#3fb6a8"/><stop offset="0.4" stop-color="#7fa7ff"/>
+          <stop offset="0.6" stop-color="#c8607a"/><stop offset="0.8" stop-color="#ff9e7a"/><stop offset="1" stop-color="#e8c37a"/>
+        </linearGradient>
+      </defs>
+      <g fill="#f4f5f2">
+        <path d="M6,10 H158 V44 H6 C2,44 0,42 0,38 V16 C0,12 2,10 6,10 Z"/>
+        <rect x="163" y="10" width="160" height="34"/>
+        <path d="M328,10 H448 C486,10 510,27 518,40 L518,44 H328 Z"/>
+      </g>
+      <g fill="url(#shinkan-stripe)">
+        <rect x="0" y="33" width="158" height="4"/>
+        <rect x="163" y="33" width="160" height="4"/>
+        <path d="M328,33 H511 L514,37 H328 Z"/>
+      </g>
+      <g fill="#1b2340">
+        <rect x="12" y="16" width="136" height="9" rx="2"/>
+        <rect x="171" y="16" width="144" height="9" rx="2"/>
+        <rect x="336" y="16" width="100" height="9" rx="2"/>
+        <path d="M466,15 C484,17 498,24 506,31 H472 Z"/>
+      </g>
+      <g fill="#c9ccd0"><rect x="158" y="18" width="5" height="22"/><rect x="323" y="18" width="5" height="22"/></g>
+      <text x="243" y="31" text-anchor="middle" font-size="7" font-weight="700" fill="#1b2340" font-family="system-ui, sans-serif" letter-spacing="0.6">新幹星座  SHINKANSEIZA</text>
+      <g fill="#2a2d36">
+        <circle cx="28" cy="46" r="4"/><circle cx="130" cy="46" r="4"/><circle cx="190" cy="46" r="4"/><circle cx="296" cy="46" r="4"/><circle cx="356" cy="46" r="4"/><circle cx="470" cy="46" r="4"/>
+      </g>
+      <circle cx="512" cy="38" r="1.6" fill="#fff3d6"/>
+    </svg>
   </div>
 </header>
 
