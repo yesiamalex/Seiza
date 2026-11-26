@@ -32,6 +32,7 @@ import { GuideXr } from "./GuideXr";
 import { measure, pointAlong, Route, type Point, type RoutePosition, type Stop } from "./route";
 import { guideSays, openGuide, stopLeading, useGuides } from "./store";
 import { L, useLang } from "../i18n/lang";
+import { speak } from "./speech";
 import { viewerPosition } from "../xr/viewer";
 import { keepMirrorClearOf } from "../scene/Mirror";
 
@@ -60,6 +61,10 @@ export interface GuideProps {
   /** Things they say now and then to nobody in particular when you're
    *  near, in a bubble over their head: Japanese, with English under it. */
   chatter?: Chatter[];
+  /** Say the Japanese line aloud too, when you're close (speech.ts). */
+  speak?: boolean;
+  /** Their voice: a little higher or lower (1 is the browser's own). */
+  pitch?: number;
 }
 
 export interface Chatter {
@@ -68,7 +73,7 @@ export interface Chatter {
 }
 
 /** A chatter bubble: the Japanese large, the English beneath. */
-function bubbleTexture(line: Chatter) {
+export function bubbleTexture(line: Chatter) {
   const c = document.createElement("canvas");
   c.width = 512;
   c.height = 132;
@@ -142,7 +147,7 @@ interface Walk {
   kind: "come" | "lead" | "return";
 }
 
-export function Guide({ id, name, avatarUrl, stops, speed = 1, pathsOnPatrol = false, getSelfPosition, findPath, faceAt, role = "guide", chatter }: GuideProps) {
+export function Guide({ id, name, avatarUrl, stops, speed = 1, pathsOnPatrol = false, getSelfPosition, findPath, faceAt, role = "guide", chatter, speak: aloud = false, pitch = 1 }: GuideProps) {
   const bubble = useRef<THREE.Sprite>(null);
   const bubbleMaterial = useMemo(() => new THREE.SpriteMaterial({ depthWrite: false, transparent: true, opacity: 0 }), []);
   const chat = useRef({ next: 3 + Math.random() * 6, shown: -1, line: -1 });
@@ -328,6 +333,7 @@ export function Guide({ id, name, avatarUrl, stops, speed = 1, pathsOnPatrol = f
         bubbleMaterial.map = bubbleTexture(chatter[c.line]);
         bubbleMaterial.needsUpdate = true;
         c.shown = 0;
+        if (aloud && toVisitor < 7) speak(chatter[c.line].ja, "ja-JP", { volume: 1 - toVisitor / 8, pitch });
       }
       if (c.shown >= CHATTER_SHOW || (c.shown >= 0 && talking)) {
         c.shown = -1;

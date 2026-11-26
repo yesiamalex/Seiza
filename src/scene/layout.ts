@@ -1039,8 +1039,21 @@ export function meadowHeight(x: number, z: number): number {
   return THREE.MathUtils.lerp(OUTER_GROUND_Y, FIELD_Y, t * t * (3 - 2 * t));
 }
 
+/** A world's own ground (a railway's flat bed, a ramp up to it): its
+ *  height over a rectangle, fixed or as a function of where. Built-in
+ *  worlds only; the first that holds a point wins. */
+export interface WorldFloor {
+  rect: Rect;
+  height: number | ((x: number, z: number) => number);
+}
+let worldFloors: WorldFloor[] = [];
+export function setWorldFloors(next: WorldFloor[]): void {
+  worldFloors = next;
+}
+
 export function floorHeightAt(x: number, z: number): number {
   if (ground) return ground.floorAt(x, z);
+  for (const w of worldFloors) if (contains(w.rect, x, z)) return typeof w.height === "number" ? w.height : w.height(x, z);
   if (contains(TATAMI, x, z)) return TATAMI.height;
   // The steps walk as an even slope from the deck to the meadow, which
   // their noses sit on, so going down them is smooth rather than a jolt
