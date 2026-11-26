@@ -15,6 +15,7 @@ import { newBodyPose, poseBody } from "../addons/body";
 import { disposeTree, feetAndEye, holdInHand, newTrackedHand, poseHands, rigFor, toTrackedHand, type HandTarget } from "../addons/rig";
 import { setFaceCue, type FaceCue } from "./useFacialExpressions";
 import { noiseHit, toneHit, voice } from "../addons/sound";
+import { CONSUME_SECONDS, consuming, isFood, type Consumable } from "./heat";
 import { currentHeatIndex, drinkers, faintPhase, forgetHeat, heatLoad, heatReactionsOn, heatSpeed, heatStage, inDeclaredShade, LOCAL_HEAT, setFaint, setHeat, stepHeat, takeCool } from "./heat";
 
 /**
@@ -170,10 +171,13 @@ export function HeatLayer({ selfId, players, getSelfPosition }: { selfId: string
 // --- a drink of water, seen -----------------------------------------------------------
 
 /** How long a drink takes, from reaching for the bottle to the last of the sigh. */
-const DRINK_TIME = 4.6;
+const DRINK_TIME = CONSUME_SECONDS;
 const DRINKING_FACE: FaceCue = { blink: 0.85, relaxed: 0.25 };
 /** After it: relief, eyes soft, a small smile. */
 const RELIEVED_FACE: FaceCue = { relaxed: 0.9, happy: 0.3 };
+/** Eating: a happy chew, eyes half shut; after, a pleased smile. */
+const EATING_FACE: FaceCue = { happy: 0.55, blink: 0.3 };
+const PLEASED_FACE: FaceCue = { happy: 0.7, relaxed: 0.3 };
 
 const ease = (x: number) => {
   const c = Math.max(0, Math.min(1, x));
@@ -204,6 +208,89 @@ export function makeBottle(): THREE.Group {
   return group;
 }
 
+/** One prop: its parts as [geometry, colour, y, see-through], drinking end up. */
+function propOf(name: string, parts: [THREE.BufferGeometry, string, number, number?][]): THREE.Group {
+  const group = new THREE.Group();
+  group.name = name;
+  for (const [geometry, colour, y, opacity] of parts) {
+    const material = new THREE.MeshStandardMaterial({ color: colour, roughness: 0.55, metalness: 0, ...(opacity !== undefined ? { transparent: true, opacity, depthWrite: false } : {}) });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.y = y;
+    if (opacity !== undefined) mesh.renderOrder = 2;
+    group.add(mesh);
+  }
+  return group;
+}
+
+/** A triangle of rice (or bread), its point up: a 3-sided cylinder on its side. */
+const triangle = (r: number, thick: number) => new THREE.CylinderGeometry(r, r, thick, 3).rotateX(-Math.PI / 2);
+
+/**
+ * What's in the hand for each thing you can have, and how far its drinking
+ * (or biting) end is from the middle of the grip.
+ */
+export function makeProp(item: Consumable): { prop: THREE.Group; reach: number } {
+  switch (item) {
+    case "tea":
+      return {
+        reach: 0.115,
+        prop: propOf("seiza-tea-bottle", [
+          [new THREE.CylinderGeometry(0.031, 0.031, 0.16, 14), "#e9f3e2", -0.015, 0.45],
+          [new THREE.CylinderGeometry(0.027, 0.028, 0.12, 12), "#b9a54a", -0.03, 0.7],
+          [new THREE.CylinderGeometry(0.0318, 0.0318, 0.06, 14), "#2f7d4a", -0.02],
+          [new THREE.CylinderGeometry(0.013, 0.031, 0.035, 14), "#e9f3e2", 0.082, 0.45],
+          [new THREE.CylinderGeometry(0.0135, 0.0135, 0.02, 12), "#2f7d4a", 0.108],
+        ]),
+      };
+    case "coffeeCan":
+      return {
+        reach: 0.058,
+        prop: propOf("seiza-coffee-can", [
+          [new THREE.CylinderGeometry(0.026, 0.026, 0.105, 16), "#5a3a24", 0],
+          [new THREE.CylinderGeometry(0.0262, 0.0262, 0.02, 16), "#d9b45a", 0.02],
+          [new THREE.CylinderGeometry(0.022, 0.026, 0.008, 16), "#c9ccd0", 0.056],
+        ]),
+      };
+    case "cup":
+      return {
+        reach: 0.052,
+        prop: propOf("seiza-coffee-cup", [
+          [new THREE.CylinderGeometry(0.041, 0.031, 0.1, 16), "#f4f2ec", 0],
+          [new THREE.CylinderGeometry(0.039, 0.035, 0.035, 16), "#9a6a42", -0.005],
+          [new THREE.CylinderGeometry(0.043, 0.043, 0.012, 16), "#ffffff", 0.054],
+        ]),
+      };
+    case "onigiri":
+      return {
+        reach: 0.045,
+        prop: propOf("seiza-onigiri", [
+          [triangle(0.05, 0.03), "#f6f4ee", 0],
+          [new THREE.BoxGeometry(0.05, 0.035, 0.032), "#1f2a22", -0.022],
+        ]),
+      };
+    case "sandwich":
+      return {
+        reach: 0.045,
+        prop: propOf("seiza-sandwich", [
+          [triangle(0.055, 0.03), "#f2dcb0", 0],
+          [triangle(0.05, 0.034), "#f7e27a", -0.004],
+          [triangle(0.049, 0.036), "#7cc46a", -0.008],
+        ]),
+      };
+    case "meal":
+      return {
+        reach: 0.075,
+        prop: propOf("seiza-fork", [
+          [new THREE.BoxGeometry(0.008, 0.13, 0.004), "#c9ccd0", -0.01],
+          [new THREE.BoxGeometry(0.022, 0.03, 0.004), "#c9ccd0", 0.065],
+          [new THREE.SphereGeometry(0.016, 10, 8), "#7a4a2a", 0.082],
+        ]),
+      };
+    default:
+      return { reach: 0.115, prop: makeBottle() };
+  }
+}
+
 /** The arm comes up (0.7 s), the bottle tips (from 0.6 s), and back
  *  down (from 2.3 s); a sigh after (from 2.9 s). Each 0 to 1. */
 function drinkPhases(t: number) {
@@ -223,12 +310,15 @@ const dFingers = new THREE.Vector3();
 const dPalm = new THREE.Vector3();
 
 /** A drink's arm and body, `t` seconds in; `feet` and `eye` from feetAndEye. */
-export function poseDrink(vrm: VRM, rig: BodyRig, overlay: PoseOverlay, t: number, feet: THREE.Vector3, eye: number) {
-  const { raise, tip, sigh } = drinkPhases(t);
+export function poseDrink(vrm: VRM, rig: BodyRig, overlay: PoseOverlay, t: number, feet: THREE.Vector3, eye: number, reach = 0.115, food = false) {
+  const phases = drinkPhases(t);
+  const { raise, sigh } = phases;
+  // Eating: the hand comes to the mouth and the head hardly tips back.
+  const tip = food ? phases.tip * 0.22 : phases.tip;
   if (raise <= 0.001 && sigh <= 0.001) return;
   // The head back as it tips, a small bob with each gulp; leaning back a
   // little; then, in the sigh, the shoulders fall and it settles.
-  const gulp = tip * 0.05 * Math.max(0, Math.sin((t - 1.1) * 7.5));
+  const gulp = food ? phases.tip * 0.025 * Math.max(0, Math.sin((t - 1.1) * 11)) : tip * 0.05 * Math.max(0, Math.sin((t - 1.1) * 7.5));
   const body = newBodyPose();
   body.nod = -0.24 * tip - gulp + 0.12 * sigh;
   body.lean = -0.06 * tip + 0.07 * sigh;
@@ -258,7 +348,7 @@ export function poseDrink(vrm: VRM, rig: BodyRig, overlay: PoseOverlay, t: numbe
   // holdInHand puts it), so the wrist goes that far back from it.
   const knuckle = vrm.humanoid.getNormalizedBoneNode("rightMiddleProximal");
   const hand = (knuckle ? knuckle.position.length() : 0.08) * m;
-  const cap = 0.115 * m;
+  const cap = reach * m;
   const target: HandTarget = {
     pos: [0, 1, 2].map((a) => mouth[a] - blade.getComponent(a) * cap - fingers.getComponent(a) * hand * 0.55 - palm.getComponent(a) * hand * 0.32) as [number, number, number],
     blade: [blade.x, blade.y, blade.z],
@@ -271,7 +361,24 @@ export function poseDrink(vrm: VRM, rig: BodyRig, overlay: PoseOverlay, t: numbe
 interface Bottle {
   vrm: VRM;
   prop: THREE.Group;
+  item: Consumable;
+  reach: number;
   detach: () => void;
+}
+
+/** A bite: a soft crunch and the chew. */
+function biteSound(distance: number) {
+  const v = voice(0.5, distance, 8, 0.5);
+  if (!v) return;
+  noiseHit(v, { frequency: 2200 + Math.random() * 600, sweepTo: 1200, duration: 0.07, gain: 0.07, q: 1.4 });
+  noiseHit(v, { frequency: 700, duration: 0.09, gain: 0.05, q: 2, delay: 0.12 });
+}
+
+/** "Mm!": a short hum, up at its end. */
+function mmSound(distance: number) {
+  const v = voice(0.5, distance, 10, 0.8);
+  if (!v) return;
+  toneHit(v, { frequency: 230, sweepTo: 300, duration: 0.35, gain: 0.04, type: "triangle", attack: 0.05 });
 }
 
 /** How many gulps a drink has had (its sounds, once each), by drinker. */
@@ -335,31 +442,34 @@ export function DrinkLayer() {
       const vrm = getAddonAvatar(key);
       if (t > DRINK_TIME || !vrm) {
         drinkers.delete(key);
+        consuming.delete(key);
         gulped.delete(key);
         setFaceCue(vrm, "drink", null);
         putAway(key);
         continue;
       }
       const { raise } = drinkPhases(t);
-      setFaceCue(vrm, "drink", t < 0.5 ? null : t < 2.6 ? DRINKING_FACE : t < DRINK_TIME - 0.4 ? RELIEVED_FACE : null);
+      const item = consuming.get(key) ?? "water";
+      const food = isFood(item);
+      setFaceCue(vrm, "drink", t < 0.5 ? null : t < 2.6 ? (food ? EATING_FACE : DRINKING_FACE) : t < DRINK_TIME - 0.4 ? (food ? PLEASED_FACE : RELIEVED_FACE) : null);
       // A gulp with each swallow while it's tipped up, and the "ahh".
       const swallows = t > 1.15 && t < 2.35 ? Math.floor((t - 1.15) / 0.38) + 1 : t >= 2.35 ? 99 : 0;
       const heard = gulped.get(key) ?? 0;
       if (swallows > heard) {
         const at = state.camera.getWorldPosition(earAt).distanceTo(vrm.scene.getWorldPosition(mouthAt));
-        if (swallows < 99) gulpSound(at);
-        else if (t > 2.95) ahhSound(at);
+        if (swallows < 99) (food ? biteSound : gulpSound)(at);
+        else if (t > 2.95) (food ? mmSound : ahhSound)(at);
         if (swallows < 99 || t > 2.95) gulped.set(key, swallows);
       }
 
       let b = bottles.get(key);
-      if (b && b.vrm !== vrm) {
+      if (b && (b.vrm !== vrm || b.item !== item)) {
         putAway(key);
         b = undefined;
       }
       if (raise > 0.02 && !b) {
-        const prop = makeBottle();
-        b = { vrm, prop, detach: holdInHand(vrm, "right", prop) };
+        const { prop, reach } = makeProp(item);
+        b = { vrm, prop, item, reach, detach: holdInHand(vrm, "right", prop) };
         bottles.set(key, b);
       }
       if (b) b.prop.scale.setScalar(Math.max(0.001, Math.min(1, t / 0.25, (3.3 - t) / 0.25)));
@@ -369,7 +479,7 @@ export function DrinkLayer() {
       const sample = trackingStore.get(source);
       if (sample !== null && now - sample.receivedAt < TRACKING_STALE_MS) continue;
       const rig = rigFor(vrm);
-      if (rig) poseDrink(vrm, rig, sharedOverlay(vrm, frame), t, feet, feetAndEye(rig, feet));
+      if (rig) poseDrink(vrm, rig, sharedOverlay(vrm, frame), t, feet, feetAndEye(rig, feet), b?.reach ?? 0.115, food);
     }
   });
 

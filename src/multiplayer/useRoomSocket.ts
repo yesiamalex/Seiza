@@ -487,7 +487,7 @@ export function useRoomSocket(
             setPlayers((prev) => (prev[msg.id] ? { ...prev, [msg.id]: { ...prev[msg.id], posture: msg.posture } } : prev));
             break;
           case "playerDrink":
-            seeDrink(msg.id);
+            seeDrink(msg.id, msg.item);
             break;
           case "playerHeatCalm":
             setPlayers((prev) => (prev[msg.id] ? { ...prev, [msg.id]: { ...prev[msg.id], heatCalm: msg.calm } } : prev));

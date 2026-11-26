@@ -115,6 +115,8 @@ export const GONDOLAS = [
 ];
 export const FRIDGES = { x0: 15.0, x1: 19.2, z0: 46.65, z1: 47.35 };
 export const MAGAZINES = { x0: 15.0, x1: 17.6, z0: 52.95, z1: 53.3 };
+/** The konbini's ATM, in the back corner by the end of the fridges. */
+export const ATM = { x0: 19.4, x1: 19.95, z0: 46.6, z1: 47.15 };
 
 /** The café: its counter along the back, Mio behind it, two tables for two. */
 export const CAFE_COUNTER = { x0: 0.1, x1: 3.6, z0: 49.15, z1: 49.75 };
@@ -282,6 +284,7 @@ export function seishoreObstacles(): Obstacle[] {
   list.push(o(COUNTER.x0, COUNTER.x1, COUNTER.z0, COUNTER.z1));
   for (const g of GONDOLAS) list.push(o(g.x0, g.x1, g.z0, g.z1));
   list.push(o(FRIDGES.x0, FRIDGES.x1, FRIDGES.z0, FRIDGES.z1), o(MAGAZINES.x0, MAGAZINES.x1, MAGAZINES.z0, MAGAZINES.z1));
+  list.push(o(ATM.x0, ATM.x1, ATM.z0, ATM.z1));
   // Inside the café and the family restaurant.
   list.push(o(CAFE_COUNTER.x0, CAFE_COUNTER.x1, CAFE_COUNTER.z0, CAFE_COUNTER.z1));
   for (const [x, z] of CAFE_TABLES) list.push(o(x - 0.3, x + 0.3, z - 0.3, z + 0.3));

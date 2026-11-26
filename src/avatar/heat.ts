@@ -125,21 +125,59 @@ export function drinkWater(): boolean {
   pendingCool += DRINK;
   // You're seen to drink, here and by the room (DrinkLayer).
   drinkers.set("local", now);
-  tellRoom?.();
+  consuming.set("local", "water");
+  tellRoom?.("water");
   return true;
+}
+
+/** Something to drink or eat, in your hand while you have it (DrinkLayer
+ *  makes each): a world's shops and tables hand these out. */
+export type Consumable = "water" | "tea" | "coffeeCan" | "cup" | "onigiri" | "sandwich" | "meal";
+export const CONSUMABLES: readonly Consumable[] = ["water", "tea", "coffeeCan", "cup", "onigiri", "sandwich", "meal"];
+export const isFood = (item: Consumable) => item === "onigiri" || item === "sandwich" || item === "meal";
+/** How long having one takes, from reaching for it to the last of the sigh. */
+export const CONSUME_SECONDS = 4.6;
+
+/**
+ * Has something (bought, or from a table): seen by the room, as a drink of
+ * water is. A drink cools you too, if your last was long enough ago. False
+ * if you're still busy with the last one.
+ */
+export function consume(item: Consumable): boolean {
+  const now = performance.now();
+  const since = drinkers.get("local");
+  if (since !== undefined && now - since < CONSUME_SECONDS * 1000) return false;
+  if (!isFood(item) && now - lastDrink >= DRINK_COOLDOWN_MS) {
+    lastDrink = now;
+    pendingCool += DRINK;
+  }
+  drinkers.set("local", now);
+  consuming.set("local", item);
+  tellRoom?.(item);
+  return true;
+}
+
+/** Whether you're still having the last one (so a shop doesn't take your
+ *  money for something you can't hold yet). */
+export function busyConsuming(): boolean {
+  const since = drinkers.get("local");
+  return since !== undefined && performance.now() - since < CONSUME_SECONDS * 1000;
 }
 
 /** Who's drinking, by avatar key ("local" for you, else a player's id),
  *  since when (performance.now): DrinkLayer puts a bottle in their hand. */
 export const drinkers = new Map<string, number>();
-let tellRoom: (() => void) | null = null;
+/** And what each is having (water, unless said). */
+export const consuming = new Map<string, Consumable>();
+let tellRoom: ((item: Consumable) => void) | null = null;
 /** App connects the room socket here, so the room sees you drink. */
-export const connectDrinks = (send: (() => void) | null) => {
+export const connectDrinks = (send: ((item: Consumable) => void) | null) => {
   tellRoom = send;
 };
-/** Someone else in the room had a drink. */
-export function seeDrink(id: string) {
+/** Someone else in the room had a drink (or something to eat). */
+export function seeDrink(id: string, item?: string) {
   drinkers.set(id, performance.now());
+  consuming.set(id, CONSUMABLES.includes(item as Consumable) ? (item as Consumable) : "water");
 }
 export const drinkReadyIn = () => Math.max(0, DRINK_COOLDOWN_MS - (performance.now() - lastDrink));
 /** Cools your load by this much on its next tick (fainting rests you most of the way). */

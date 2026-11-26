@@ -147,7 +147,11 @@ export interface Engine {
 }
 
 /** A moped's engine: a low sawtooth and its sub, throbbing at the firing
- *  rate through a low-pass, all rising with the speed. A few nodes, no samples. */
+ *  rate through a low-pass, all rising with the speed. A few nodes, no samples.
+ *  The throb, the sub, and the sawtooth are a rate and its 2x and 4x, so
+ *  they never drift in and out of step (that beat was a pop every second
+ *  or so), and the sub is a soft
+ *  triangle, whose edges don't click through the filter as a square's did. */
 export function startEngine(): Engine | null {
   const output = sfxOutput();
   if (!output || output.ctx.state !== "running") return null;
@@ -157,7 +161,7 @@ export function startEngine(): Engine | null {
   out.connect(output.out);
   const filter = ctx.createBiquadFilter();
   filter.type = "lowpass";
-  filter.Q.value = 2;
+  filter.Q.value = 0.9;
   filter.frequency.value = 380;
   const throb = ctx.createGain();
   throb.gain.value = 0.6;
@@ -167,13 +171,13 @@ export function startEngine(): Engine | null {
   saw.frequency.value = 42;
   saw.connect(filter);
   const sub = ctx.createOscillator();
-  sub.type = "square";
+  sub.type = "triangle";
   sub.frequency.value = 21;
   const subGain = ctx.createGain();
-  subGain.gain.value = 0.45;
+  subGain.gain.value = 0.6;
   sub.connect(subGain).connect(filter);
   const lfo = ctx.createOscillator();
-  lfo.frequency.value = 11;
+  lfo.frequency.value = 10.5;
   const depth = ctx.createGain();
   depth.gain.value = 0.4;
   lfo.connect(depth).connect(throb.gain);
@@ -184,7 +188,7 @@ export function startEngine(): Engine | null {
       const rev = Math.min(1, speed / 9.6);
       saw.frequency.setTargetAtTime(42 + 52 * rev, t, 0.2);
       sub.frequency.setTargetAtTime(21 + 26 * rev, t, 0.2);
-      lfo.frequency.setTargetAtTime(11 + 15 * rev, t, 0.2);
+      lfo.frequency.setTargetAtTime(10.5 + 13 * rev, t, 0.2);
       filter.frequency.setTargetAtTime(380 + 520 * rev, t, 0.2);
       // Three-quarters of what it first was: heard, without carrying over everything else.
       out.gain.setTargetAtTime(level * (0.075 + 0.06 * rev), t, 0.1);

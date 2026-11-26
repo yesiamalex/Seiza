@@ -7,7 +7,7 @@
 // timetable in vehicles.ts), its people, who talk in Japanese and English
 // (people.ts, knowledge.ts), the shrine and the temple, its sounds
 // (sounds.ts), and where everything is (plan.ts).
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import { createBrain } from "../../../src/guides/brain";
 import { Guide } from "../../../src/guides/Guide";
@@ -16,7 +16,6 @@ import { hush, speak } from "../../../src/guides/speech";
 import { openGuide, registerGuides, setGuideWarp } from "../../../src/guides/store";
 import { floorHeightAt, setTreeClearings, setWorldCeilings, setWorldFloors, setWorldObstacles } from "../../../src/scene/layout";
 import { SeatPad } from "../../../src/scene/SeatPad";
-import { drinkWater } from "../../../src/avatar/heat";
 import { skyState } from "../../../src/sky/skyState";
 import { L, useLang } from "../../../src/i18n/lang";
 import { showWorldOverlay, type WorldSceneProps } from "../../../src/worlds/WorldExtension";
@@ -25,8 +24,6 @@ import { CHEF, CUSTOMERS, PEOPLE } from "./people";
 import {
   allSeats,
 
-  CAFE_COUNTER,
-  CAFE_TABLES,
   DINER_TABLES,
   FAMIRESU,
   findPath,
@@ -44,38 +41,15 @@ import {
   seishoreSeats,
   TEMPLE,
   TEMPLE_PRAY,
-  VENDING,
   Y,
   type Kind,
 } from "./plan";
-import { coin, doorChime, furin, gull, omikujiShake, startFridges, startKitchen, steamWand, suzu, tonbi, vendingDrop, type Loop } from "./sounds";
+import { coin, doorChime, furin, gull, omikujiShake, startFridges, startKitchen, steamWand, suzu, tonbi, type Loop } from "./sounds";
 import { FURIN_AT, Town } from "./Town";
 import { Transit } from "./Transit";
 import { Sitter, Steam } from "./Extras";
-
-// --- a caption for what you're doing (praying, a fortune) ---------------------------------
-
-let caption: { ja: string; en: string } | null = null;
-let captionTimer = 0;
-const captionListeners = new Set<() => void>();
-function showCaption(ja: string, en: string, seconds = 3) {
-  caption = { ja, en };
-  window.clearTimeout(captionTimer);
-  captionTimer = window.setTimeout(() => {
-    caption = null;
-    captionListeners.forEach((l) => l());
-  }, seconds * 1000);
-  captionListeners.forEach((l) => l());
-}
-const useCaption = () =>
-  useSyncExternalStore(
-    (l) => {
-      captionListeners.add(l);
-      return () => captionListeners.delete(l);
-    },
-    () => caption,
-    () => null
-  );
+import { showCaption, useCaption } from "./caption";
+import { ShopMenu, ShopsScene, useShop } from "./Shops";
 
 function Hud() {
   useLang();
@@ -83,6 +57,7 @@ function Hud() {
   return (
     <>
       <GuideHud tagline={L("Seishore · answers in English and Japanese", "Seishore · 日本語と英語で答えます")} />
+      <ShopMenu />
       {c && (
         <div role="status" style={{ position: "fixed", left: "50%", bottom: 120, transform: "translateX(-50%)", zIndex: 30, padding: "10px 18px", borderRadius: 14, background: "rgba(16,18,24,0.78)", color: "#fff", textAlign: "center", fontFamily: "system-ui, 'Hiragino Sans', 'Noto Sans CJK JP', sans-serif", maxWidth: "calc(100vw - 32px)", pointerEvents: "none" }}>
           <div style={{ fontSize: 20, fontWeight: 700 }}>{c.ja}</div>
@@ -248,12 +223,9 @@ export function Scene({ warp, getSelfPosition, sit, occupiedSeatId, playGesture,
     return Math.hypot(sx - x, sz - z);
   };
 
-  // A drink from a vending machine: the coin, the drop, the bottle in your hand.
-  const buy = () => {
-    const [x, , z] = getSelfPosition();
-    vendingDrop(Math.min(...VENDING.map((v) => Math.hypot(x - v.x, z - v.z))));
-    drinkWater();
-  };
+  // A vending machine: its menu, then the coin, the drop, the can in your hand (Shops.tsx).
+  const shop = useShop();
+  const buy = () => shop("vending");
   // Praying: go to the spot before it, face it, and do it properly.
   const timers = useRef<number[]>([]);
   useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), []);
@@ -315,10 +287,6 @@ export function Scene({ warp, getSelfPosition, sit, occupiedSeatId, playGesture,
   };
 
   // Steam: over the café's cups and its machine, the kitchen's pots, the temple's incense.
-  const cafeSteam = useMemo<[number, number, number][]>(
-    () => [...CAFE_TABLES.flatMap(([x, z]) => [-0.14, 0.14].map((dx): [number, number, number] => [x + dx, Y + 0.88, z])), [CAFE_COUNTER.x0 + 0.55, Y + 1.55, (CAFE_COUNTER.z0 + CAFE_COUNTER.z1) / 2]],
-    []
-  );
   const kitchenSteam = useMemo<[number, number, number][]>(() => {
     const kz = frontOf(FAMIRESU).back + 0.55;
     return [...[0, 1, 2].map((i): [number, number, number] => [PASS.x0 + 1.4 + i * 2.0, Y + 1.2, kz]), ...DINER_TABLES.map(([x, z]): [number, number, number] => [x + 0.28, Y + 0.85, z - 0.12])];
@@ -330,7 +298,7 @@ export function Scene({ warp, getSelfPosition, sit, occupiedSeatId, playGesture,
       <Town onVending={buy} onShrine={atShrine} onTemple={atTemple} onOmikuji={drawFortune} />
       {transitShown && <Transit sit={sit} fixed={fixed} floors={floors} />}
       <TownSounds getSelfPosition={getSelfPosition} />
-      <Steam at={cafeSteam} rise={0.35} size={0.07} opacity={0.3} />
+      <ShopsScene />
       <Steam at={kitchenSteam} rise={0.7} size={0.14} opacity={0.3} />
       <Steam at={incense} rise={1.6} size={0.22} color="#d9dcd6" opacity={0.28} rate={0.6} />
       {sit && seats.map((seat) => <SeatPad key={seat.id} seat={seat} onSit={sit} occupied={occupiedSeatId === seat.id} />)}

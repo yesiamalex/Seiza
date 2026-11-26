@@ -1045,7 +1045,7 @@ export function Town({ onVending, onShrine, onTemple, onOmikuji }: TownActions) 
       <mesh position={[BUS_STOP.x - 0.03, OUTER_GROUND_Y + 2.25, BUS_STOP.z]} rotation={[0, -Math.PI / 2, 0]} material={m.bus} userData={{ navIgnore: true }}>
         <circleGeometry args={[0.32, 24]} />
       </mesh>
-      {/* Vending machines: click one for a drink (heat reactions' water). */}
+      {/* Vending machines: click one for its menu (Shops.tsx). */}
       {VENDING.map((v, i) => (
         <Clickable key={i} onClick={onVending}>
           <group position={[v.x, Y, v.z + 0.37]}>

@@ -307,3 +307,24 @@ export function steamWand(distance?: number) {
   if (!v) return;
   noiseHit(v, { frequency: 5000, duration: 1.4, gain: 0.05, q: 0.6, attack: 0.15 });
 }
+
+// --- paying -----------------------------------------------------------------------------
+
+/** The register: the scanner's beep, and the coins into the tray. */
+export function register(distance?: number) {
+  const v = voice(0.8, distance, 10, 1.4);
+  if (!v) return;
+  toneHit(v, { frequency: 2730, duration: 0.09, gain: 0.05, type: "square", attack: 0.002 });
+  bell(v, 4100, 0.45, 0.03, 0.12);
+  bell(v, 3700, 0.55, 0.025, 0.12);
+  noiseHit(v, { frequency: 2600, duration: 0.05, gain: 0.04, q: 1.5, delay: 0.62 });
+}
+
+/** The ATM: its keys, a whir, and the notes counted out. */
+export function atm(distance?: number) {
+  const v = voice(0.8, distance, 8, 2.4);
+  if (!v) return;
+  for (let i = 0; i < 4; i++) toneHit(v, { frequency: 1500, duration: 0.05, gain: 0.03, type: "square", delay: i * 0.16 });
+  noiseHit(v, { frequency: 600, duration: 0.9, gain: 0.035, q: 1.1, delay: 0.75, attack: 0.08 });
+  for (let i = 0; i < 6; i++) noiseHit(v, { frequency: 3200, duration: 0.025, gain: 0.03, q: 2, delay: 0.9 + i * 0.09 });
+}

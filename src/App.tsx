@@ -481,7 +481,7 @@ export default function App() {
   // Room modes (src/addons/): their events go out on the room socket.
   useEffect(() => {
     connectAddonBus(connected ? (mode, data) => send({ type: "addon", mode, data }) : null);
-    connectDrinks(connected ? () => send({ type: "drink" }) : null);
+    connectDrinks(connected ? (item) => send({ type: "drink", item }) : null);
     // A world's own things done, for the room's research counts, only where it keeps them.
     connectTrack(connected && worldState["stats.on"] === true ? (key) => send({ type: "track", key }) : null);
     return () => {

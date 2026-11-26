@@ -100,11 +100,17 @@ describe.skipIf(!built)("room server", () => {
     const room = freshRoom();
     const a = await client(room, "A", ["batch"]);
     const b = await client(room, "B", ["batch"]);
-    for (let i = 0; i < 5; i++) a.send({ type: "drink" });
+    a.send({ type: "drink", item: "onigiri" });
+    a.send({ type: "drink", item: "<script>" });
+    for (let i = 0; i < 3; i++) a.send({ type: "drink" });
     await until(() => b.received.find((m) => m.type === "playerDrink"));
     await new Promise((r) => setTimeout(r, 100));
     const drinks = b.received.filter((m) => m.type === "playerDrink");
-    expect(drinks.length).toBe(2);
+    // A burst of three (a coffee, then a meal, then one more), then no more.
+    expect(drinks.length).toBe(3);
+    // What it was goes with it, if it's a plain word; anything else is dropped.
+    expect(drinks[0].type === "playerDrink" && drinks[0].item).toBe("onigiri");
+    expect(drinks[1].type === "playerDrink" && drinks[1].item).toBeUndefined();
     expect(typeof (drinks[0].type === "playerDrink" && drinks[0].id)).toBe("string");
     expect(a.received.some((m) => m.type === "playerDrink")).toBe(false);
     a.socket.close();
