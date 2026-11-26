@@ -102,8 +102,10 @@ function roof(b: Builder, x0: number, x1: number, z0: number, z1: number, top: n
 }
 
 /** A window: a frame and its glass (the glass glows at night). */
-function windowPane(b: Builder, glass: Builder, x: number, y: number, z: number, out: number, w: number, h: number, frame = "#e9e7e1") {
+function windowPane(b: Builder, glass: Builder, x: number, y: number, z: number, out: number, w: number, h: number, frame = "#e9e7e1", curtain?: string) {
   b.box([w + 0.1, h + 0.1, 0.06], [x, y, z + out * 0.02], frame);
+  // Curtains, drawn back to either side, seen through the glass.
+  if (curtain) for (const s of [-1, 1]) b.box([w * 0.26, h * 0.96, 0.01], [x + s * w * 0.37, y, z + out * 0.052], curtain);
   glass.plane(w, h, [x, y, z + out * 0.055], "#ffffff", [0, out > 0 ? 0 : Math.PI, 0]);
   // The sash: two panes, side by side.
   b.box([0.04, h, 0.04], [x, y, z + out * 0.07], frame);
@@ -147,6 +149,15 @@ function addRoom(h: Building, b: Builder, panes: Builder, inside: Builder, windo
   inside.plane(w - 0.4, z1 - z0 - 0.4, [(h.x0 + h.x1) / 2, Y + height - 0.02, zc], "#f3efe6", [Math.PI / 2, 0, 0]);
 }
 
+/** A small, steady pick for a building's details, from its id. */
+function pick<T>(id: string, salt: number, of: readonly T[]): T {
+  let n = salt * 7919;
+  for (let i = 0; i < id.length; i++) n = (n * 31 + id.charCodeAt(i)) >>> 0;
+  return of[n % of.length];
+}
+const CURTAINS = ["#e9dcc0", "#cfe0e8", "#e8c9c9", "#d9e6cf", "#f2efe6"] as const;
+const WASHING = ["#ffffff", "#7fb3d9", "#f2c94c", "#e07a6a", "#9fd39b", "#3f5f8f", "#f4f2ec"] as const;
+
 function addHouse(h: Building, b: Builder, glass: Builder, roofs: Builder) {
   const { front, back, out } = frontOf(h);
   const z0 = Math.min(front, back);
@@ -168,20 +179,62 @@ function addHouse(h: Building, b: Builder, glass: Builder, roofs: Builder) {
     const dx = h.x0 + 1.1;
     b.box([1.5, 2.05, 0.06], [dx, Y + 0.28 + 1.02, f + out * 0.02], "#5a4232");
     bars(b, dx - 0.65, dx + 0.65, Y + 0.4, Y + 2.2, f + out * 0.06, 0.13, "#b48a5c", 0.015);
-    windowPane(b, glass, h.x1 - 1.3, Y + 1.45, f, out, 1.4, 0.95);
+    windowPane(b, glass, h.x1 - 1.3, Y + 1.45, f, out, 1.4, 0.95, undefined, pick(h.id, 1, CURTAINS));
     // A nameplate and a post box by the door.
     b.box([0.22, 0.32, 0.04], [dx + 1.0, Y + 1.5, f + out * 0.03], "#e8dcc4");
+    // The meters on the wall (gas, and the electric's dial), pots by the
+    // door, an umbrella stand.
+    b.box([0.24, 0.3, 0.14], [h.x0 + 0.22, Y + 1.05, f + out * 0.07], "#b9bcc0");
+    b.box([0.2, 0.24, 0.1], [h.x0 + 0.22, Y + 1.5, f + out * 0.05], "#f1f1ee");
+    b.cylinder(0.06, 0.06, 0.01, [h.x0 + 0.22, Y + 1.52, f + out * 0.105], "#2b2d30", [Math.PI / 2, 0, 0], 10);
+    for (const [px, r, leaf] of [
+      [dx + 0.95, 0.15, "#3f6e3a"],
+      [dx + 1.3, 0.11, "#5a8a4a"],
+      [dx - 0.95, 0.13, "#4a7a3e"],
+    ] as [number, number, string][]) {
+      b.cylinder(r, r * 0.8, r * 1.8, [px, Y + 0.28 + r * 0.9, f + out * 0.3], pick(h.id, Math.round(px * 10), ["#a35e3d", "#6b6f78", "#c9b9a0"]), undefined, 10);
+      b.raw(new THREE.SphereGeometry(r * 1.25, 8, 6).translate(px, Y + 0.28 + r * 2.2, f + out * 0.3), leaf);
+    }
+    b.cylinder(0.11, 0.1, 0.45, [dx + 0.85, Y + 0.5, f + out * 0.55], "#3a4a5a", undefined, 10);
+    for (const lean of [-0.12, 0.1]) b.bar([dx + 0.85, Y + 0.5, f + out * 0.55], [dx + 0.85 + lean, Y + 1.0, f + out * (0.55 + lean * 0.4)], 0.015, lean < 0 ? "#2f6fd0" : "#d23b31");
   }
   if (h.floors === 2) {
     // Upstairs: two windows, and a balcony with its rail and an AC unit.
-    windowPane(b, glass, h.x0 + w * 0.3, Y + STOREY + 1.25, f, out, 1.1, 1.0);
-    windowPane(b, glass, h.x0 + w * 0.72, Y + STOREY + 1.25, f, out, 1.1, 1.0);
+    windowPane(b, glass, h.x0 + w * 0.3, Y + STOREY + 1.25, f, out, 1.1, 1.0, undefined, pick(h.id, 2, CURTAINS));
+    windowPane(b, glass, h.x0 + w * 0.72, Y + STOREY + 1.25, f, out, 1.1, 1.0, undefined, pick(h.id, 3, CURTAINS));
     const bz = front + out * 0.55;
     b.box([w * 0.62, 0.08, 0.9], [h.x0 + w * 0.5, Y + STOREY + 0.2, front + out * 0.45], "#c9c6bd");
     bars(b, h.x0 + w * 0.2, h.x0 + w * 0.8, Y + STOREY + 0.24, Y + STOREY + 1.15, bz, 0.12, "#6c6f73", 0.012);
     b.box([w * 0.62, 0.04, 0.04], [h.x0 + w * 0.5, Y + STOREY + 1.16, bz], "#6c6f73");
     b.box([0.78, 0.55, 0.28], [h.x0 + w * 0.78, Y + STOREY + 0.52, front + out * 0.3], "#f1f1ee");
     b.cylinder(0.18, 0.18, 0.02, [h.x0 + w * 0.78 - 0.12, Y + STOREY + 0.52, front + out * 0.45], "#7d8085", [Math.PI / 2, 0, 0], 12);
+    // The washing out on the balcony: a pole across, towels and shirts on it.
+    if (pick(h.id, 4, [true, true, false])) {
+      const pole0 = h.x0 + w * 0.24;
+      const pole1 = h.x0 + w * 0.64;
+      const py = Y + STOREY + 1.55;
+      b.bar([pole0, py, bz - out * 0.25], [pole1, py, bz - out * 0.25], 0.012, "#c9ccd0");
+      for (const end of [pole0, pole1]) b.bar([end, py, bz - out * 0.25], [end, Y + STOREY + 0.24, bz - out * 0.25], 0.01, "#9da3a8");
+      const n = pick(h.id, 5, [3, 4, 5]);
+      for (let i = 0; i < n; i++) {
+        const x = pole0 + ((i + 0.5) / n) * (pole1 - pole0);
+        const tall = pick(h.id, 10 + i, [0.42, 0.55, 0.3]);
+        b.box([0.24, tall, 0.012], [x, py - tall / 2 - 0.02, bz - out * 0.25], pick(h.id, 20 + i, WASHING));
+      }
+    }
+  }
+  // A television aerial on the ridge, as on most roofs here.
+  if (pick(h.id, 6, [true, true, false])) {
+    const ridge = top + (d / 2) * Math.tan(PITCH) + 0.04;
+    const ax = h.x0 + w * pick(h.id, 7, [0.25, 0.7]);
+    b.bar([ax, ridge, zc], [ax, ridge + 1.6, zc], 0.018, "#8e9297");
+    for (const [y, span] of [
+      [1.5, 0.7],
+      [1.25, 0.55],
+      [1.0, 0.42],
+    ])
+      b.bar([ax - span / 2, ridge + y, zc], [ax + span / 2, ridge + y, zc], 0.008, "#8e9297");
+    b.bar([ax, ridge + 1.5, zc], [ax, ridge + 1.5, zc + 0.6], 0.008, "#8e9297");
   }
 }
 
@@ -267,6 +320,125 @@ function addFamiresu(h: Building, b: Builder, panes: Builder, inside: Builder, l
   inside.box([d.x1 - d.x0, 1.0, d.z1 - d.z0], [(d.x0 + d.x1) / 2, Y + 0.5, (d.z0 + d.z1) / 2], "#3a3d42");
   lit.box([0.03, 0.5, 1.4], [d.x1 + 0.005, Y + 1.3, (d.z0 + d.z1) / 2], "#7fd3e6");
   for (let i = 0; i < 4; i++) inside.cylinder(0.04, 0.035, 0.1, [d.x1 - 0.1, Y + 1.06, d.z0 + 0.3 + i * 0.35], "#e9f3f7", undefined, 8);
+}
+
+/**
+ * A small fishing boat pulled up on the sand, as they are on Shonan's
+ * beaches: a real hull (pointed bow rising, a flat transom, white topsides
+ * and a red bottom) on wooden skids, its wheelhouse with windows, the
+ * outboard tipped up, and the day's gear: nets, buoys, fish crates, a coil
+ * of rope, a mast with its lamp.
+ */
+function addBoat(b: Builder, boat: (typeof BOATS)[number]) {
+  const L = 5.2;
+  const beam = 1.7;
+  const depth = 0.85;
+  const base = SAND(boat.x, boat.z) + 0.22;
+  const toWorld = new THREE.Matrix4().makeRotationY(boat.yaw).setPosition(boat.x, base, boat.z);
+  const p = (dx: number, dy: number, dz: number): Vec3 => {
+    const v = new THREE.Vector3(dx, dy, dz).applyMatrix4(toWorld);
+    return [v.x, v.y, v.z];
+  };
+  // The hull, station by station from the transom (z −L/2) to the bow.
+  const N = 14;
+  const station = (i: number) => {
+    const u = i / N;
+    const z = -L / 2 + u * L;
+    // Full width aft, narrowing to a point at the bow.
+    const width = (beam / 2) * (u < 0.55 ? 0.88 + 0.12 * Math.sin((u / 0.55) * (Math.PI / 2)) : Math.sqrt(Math.max(0, 1 - ((u - 0.55) / 0.45) ** 2)));
+    const sheer = depth + 0.28 * Math.max(0, (u - 0.5) / 0.5) ** 2;
+    const keel = 0.12 * Math.max(0, (u - 0.75) / 0.25) ** 2;
+    return { z, width, sheer, chine: depth * 0.42 + keel, keel };
+  };
+  const top: number[] = [];
+  const bottom: number[] = [];
+  const quad = (list: number[], a: number[], b2: number[], c: number[], d: number[]) => list.push(...a, ...b2, ...c, ...a, ...c, ...d);
+  for (let i = 0; i < N; i++) {
+    const s0 = station(i);
+    const s1 = station(i + 1);
+    for (const side of [-1, 1]) {
+      const deck0 = [side * s0.width, s0.sheer, s0.z];
+      const deck1 = [side * s1.width, s1.sheer, s1.z];
+      const ch0 = [side * s0.width * 0.92, s0.chine, s0.z];
+      const ch1 = [side * s1.width * 0.92, s1.chine, s1.z];
+      const k0 = [0, s0.keel, s0.z];
+      const k1 = [0, s1.keel, s1.z];
+      // Wound outward on each side.
+      if (side > 0) {
+        quad(top, deck0, ch0, ch1, deck1);
+        quad(bottom, ch0, k0, k1, ch1);
+      } else {
+        quad(top, deck0, deck1, ch1, ch0);
+        quad(bottom, ch0, ch1, k1, k0);
+      }
+    }
+  }
+  // The transom, across the stern.
+  const t = station(0);
+  quad(top, [t.width, t.sheer, t.z], [-t.width, t.sheer, t.z], [-t.width * 0.92, t.chine, t.z], [t.width * 0.92, t.chine, t.z]);
+  bottom.push(t.width * 0.92, t.chine, t.z, -t.width * 0.92, t.chine, t.z, 0, t.keel, t.z);
+  const shell = (positions: number[], colour: string) => {
+    // The quads above are wound facing in; turn each triangle round to face out.
+    for (let i = 0; i < positions.length; i += 9) for (let k = 0; k < 3; k++) [positions[i + 3 + k], positions[i + 6 + k]] = [positions[i + 6 + k], positions[i + 3 + k]];
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    g.computeVertexNormals();
+    g.applyMatrix4(toWorld);
+    b.raw(g, colour);
+  };
+  shell(top, boat.color);
+  shell(bottom, "#9b2f2a");
+  // Inside: the deck, a little below the gunwale, and the rubbing strake round it.
+  const deck = new THREE.Shape();
+  for (let i = 0; i <= N; i++) {
+    const st = station(i);
+    if (i === 0) deck.moveTo(st.width - 0.06, -st.z);
+    else deck.lineTo(Math.max(0.01, st.width - 0.06), -st.z);
+  }
+  for (let i = N; i >= 0; i--) {
+    const st = station(i);
+    deck.lineTo(-Math.max(0.01, st.width - 0.06), -st.z);
+  }
+  const deckGeometry = new THREE.ShapeGeometry(deck).rotateX(-Math.PI / 2).translate(0, depth - 0.14, 0);
+  deckGeometry.applyMatrix4(toWorld);
+  b.raw(deckGeometry, "#cfc9bc");
+  for (let i = 0; i < N; i++) {
+    const s0 = station(i);
+    const s1 = station(i + 1);
+    for (const side of [-1, 1]) b.bar(p(side * s0.width, s0.sheer, s0.z), p(side * s1.width, s1.sheer, s1.z), 0.03, boat.trim, 4);
+  }
+  // Skids under it, as it was hauled up.
+  for (const z of [-1.4, 0.2, 1.6]) b.box([2.2, 0.16, 0.18], p(0, -0.14, z), "#7a6248", [0, boat.yaw, 0]);
+  // The wheelhouse: white, a window band, its roof; the mast and its lamp.
+  const wz = -0.9;
+  b.box([1.05, 0.85, 1.15], p(0, depth + 0.3, wz), "#eef1f3", [0, boat.yaw, 0]);
+  b.box([1.07, 0.26, 0.6], p(0, depth + 0.52, wz + 0.25), "#2b3a48", [0, boat.yaw, 0]);
+  b.box([1.08, 0.26, 0.02], p(0, depth + 0.52, wz + 0.58), "#2b3a48", [0, boat.yaw, 0]);
+  b.box([1.2, 0.06, 1.3], p(0, depth + 0.76, wz), boat.trim, [0, boat.yaw, 0]);
+  b.bar(p(0.3, depth + 0.76, wz - 0.3), p(0.3, depth + 2.1, wz - 0.3), 0.025, "#c9ccd0");
+  b.bar(p(0, depth + 1.85, wz - 0.3), p(0.6, depth + 1.85, wz - 0.3), 0.015, "#c9ccd0");
+  b.raw(new THREE.SphereGeometry(0.05, 8, 6).translate(...p(0.3, depth + 2.14, wz - 0.3)), "#f2c94c");
+  // The outboard, tipped up out of the sand.
+  b.box([0.32, 0.45, 0.4], p(0, depth + 0.08, -L / 2 - 0.15), "#2b2d30", [0, boat.yaw, 0]);
+  b.box([0.08, 0.5, 0.12], p(0, depth - 0.25, -L / 2 - 0.45), "#3a3d42", [0.9, boat.yaw, 0]);
+  // The gear: a pile of green net, orange buoys, blue fish crates, a coil of rope.
+  b.raw(new THREE.SphereGeometry(0.42, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2).scale(1.1, 0.5, 1.3).translate(...p(0.05, depth - 0.14, 1.05)), "#3f6e4a");
+  for (const [x, z] of [
+    [0.45, 0.4],
+    [-0.4, 0.55],
+    [0.3, 1.75],
+  ])
+    b.raw(new THREE.SphereGeometry(0.11, 10, 8).translate(...p(x, depth - 0.02, z)), "#ff7a2a");
+  for (const [x, z] of [
+    [-0.42, -0.1],
+    [-0.42, 0.25],
+  ])
+    b.box([0.42, 0.22, 0.3], p(x, depth - 0.03, z), "#2f6fd0", [0, boat.yaw, 0]);
+  b.cylinder(0.2, 0.2, 0.08, p(0.42, depth - 0.1, -1.9), "#c9a86a", undefined, 12);
+  // A buoy and a rope from the bow to a stake in the sand.
+  const bow = station(N);
+  b.bar(p(0, bow.sheer - 0.05, bow.z), p(0, -0.2, bow.z + 1.6), 0.012, "#c9a86a");
+  b.box([0.08, 0.45, 0.08], p(0, -0.02, bow.z + 1.6), "#7a6248", [0, boat.yaw, 0]);
 }
 
 /** The railway: its bed and ballast, sleepers and rails, the fence, the
@@ -586,20 +758,7 @@ function buildTown() {
     b.box([0.06, 0.35, 1.7], [x - 0.2, G + 0.68, z], WOOD);
     for (const dz of [-0.7, 0.7]) b.box([0.38, 0.44, 0.06], [x, G + 0.22, z + dz], "#4d5054");
   }
-  for (const boat of BOATS) {
-    const q = new THREE.Euler(0, boat.yaw, 0);
-    const base = SAND(boat.x, boat.z);
-    const p = (dx: number, dy: number, dz: number): Vec3 => {
-      const v = new THREE.Vector3(dx, dy, dz).applyEuler(q);
-      return [boat.x + v.x, base + v.y, boat.z + v.z];
-    };
-    b.box([1.5, 0.55, 4.2], p(0, 0.42, 0), boat.color, [0, boat.yaw, 0]);
-    b.box([1.0, 0.4, 0.9], p(0, 0.2, 2.35), boat.color, [0.5, boat.yaw, 0]);
-    b.box([1.52, 0.1, 4.22], p(0, 0.62, 0), boat.trim, [0, boat.yaw, 0]);
-    b.box([0.9, 0.7, 1.1], p(0, 1.05, -0.6), "#e8ecef", [0, boat.yaw, 0]);
-    b.box([0.25, 0.55, 0.3], p(0, 0.75, -2.2), "#2b2d30", [0, boat.yaw, 0]);
-    b.cylinder(0.25, 0.3, 0.12, p(0.95, 0.06, 0.4), "#c9a86a", undefined, 12);
-  }
+  for (const boat of BOATS) addBoat(b, boat);
 
   // --- the shrine, by the campsite -----------------------------------------------------------
   const tz = SHRINE.toriiZ;
