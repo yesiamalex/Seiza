@@ -1,11 +1,12 @@
 import { useEffect, useRef } from "react";
-import { useFrame } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { useVrmLoader } from "./useVrmLoader";
 import { stirPond } from "../scene/pondActivity";
 import { extendHairCollision } from "./springColliders";
 import { markForMirrors } from "../scene/Mirror";
 import type { VRM } from "@pixiv/three-vrm";
+import { avatarDetail, type AvatarDetail } from "../multiplayer/avatarDetail";
 
 export interface VrmAvatarProps {
   url: string;
@@ -14,6 +15,39 @@ export interface VrmAvatarProps {
   onLoaded?: (vrm: VRM | null) => void;
   /** Update every Nth frame (see AvatarAnimator's prop of the same name). */
   updateEvery?: () => number;
+  /** Lower its detail when it's far away or out of view (avatarDetail.ts).
+   *  On for everyone else's avatar, a guide, a townsperson; off for your
+   *  own and a preview, which are always right in front of you. */
+  lod?: boolean;
+}
+
+/** Every avatar with level of detail on, for how crowded the scene is. */
+const crowd = new Set<object>();
+/** How often each avatar rechecks where it is, seconds. */
+const LOD_CHECK = 0.25;
+/** An avatar's size for the view test: a sphere round its middle. */
+const BODY_RADIUS = 1.1;
+const FULL: AvatarDetail = { drawn: true, every: 1, springs: true, outlines: true };
+const scratchFrustum = new THREE.Frustum();
+const scratchMatrix = new THREE.Matrix4();
+const scratchSphere = new THREE.Sphere();
+const scratchEye = new THREE.Vector3();
+
+/** Its outlines, each a second pass over the avatar: an uploaded VRM's MToon
+ *  outline materials (its own, per avatar), or a designed avatar's outline
+ *  meshes (whose materials are shared between avatars, so the meshes). */
+function outlinesOf(vrm: VRM): { visible: boolean }[] {
+  const found: { visible: boolean }[] = [];
+  vrm.scene.traverse((node) => {
+    const mesh = node as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    if (mesh.name === "SeizaDesignerOutline") {
+      found.push(mesh);
+      return;
+    }
+    for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) if ((m as { isOutline?: boolean }).isOutline) found.push(m);
+  });
+  return found;
 }
 
 // Beyond this much movement in one frame, treat it as a teleport and let
@@ -65,7 +99,7 @@ const MAX_SPRING_DELTA = 1 / 30;
  * any instant jump in the model's world position flings them. Two guards:
  * the update delta is capped, and a teleport resets the simulation.
  */
-export function VrmAvatar({ url, position = [0, 0, 0], rotationY = 0, onLoaded, updateEvery }: VrmAvatarProps) {
+export function VrmAvatar({ url, position = [0, 0, 0], rotationY = 0, onLoaded, updateEvery, lod = true }: VrmAvatarProps) {
   const { vrm, error } = useVrmLoader(url || null);
   const onLoadedRef = useRef(onLoaded);
   onLoadedRef.current = onLoaded;
@@ -74,6 +108,25 @@ export function VrmAvatar({ url, position = [0, 0, 0], rotationY = 0, onLoaded, 
   const updateEveryRef = useRef(updateEvery);
   updateEveryRef.current = updateEvery;
   const throttle = useRef({ frame: 0, pending: 0 });
+  const root = useRef<THREE.Group>(null);
+  const gl = useThree((s) => s.gl);
+  const detail = useRef<{ now: AvatarDetail; checked: number; outlines: { visible: boolean }[]; outlinesShown: boolean; springsOn: boolean }>({ now: FULL, checked: Infinity, outlines: [], outlinesShown: true, springsOn: true });
+  useEffect(() => {
+    if (!lod) return;
+    const token = {};
+    crowd.add(token);
+    return () => {
+      crowd.delete(token);
+    };
+  }, [lod]);
+  useEffect(() => {
+    const d = detail.current;
+    d.outlines = vrm ? outlinesOf(vrm) : [];
+    d.outlinesShown = true;
+    d.springsOn = true;
+    d.now = FULL;
+    d.checked = Infinity;
+  }, [vrm]);
 
   useEffect(() => {
     // Once per model: lets long hair collide with the hips and thighs, not
@@ -90,9 +143,28 @@ export function VrmAvatar({ url, position = [0, 0, 0], rotationY = 0, onLoaded, 
     if (error) console.error("VRM load failed:", error);
   }, [error]);
 
-  useFrame((_, frameDelta) => {
+  useFrame(({ camera }, frameDelta) => {
     if (!vrm) return;
-    const every = Math.max(1, Math.round(updateEveryRef.current?.() ?? 1));
+    // Where it is, a few times a second: in view or not, how far, how crowded.
+    const d = detail.current;
+    d.checked += frameDelta;
+    if (lod && d.checked > LOD_CHECK) {
+      d.checked = 0;
+      const view = gl.xr.isPresenting ? gl.xr.getCamera() : camera;
+      scratchMatrix.multiplyMatrices(view.projectionMatrix, view.matrixWorldInverse);
+      scratchFrustum.setFromProjectionMatrix(scratchMatrix);
+      vrm.scene.getWorldPosition(scratchSphere.center);
+      scratchSphere.center.y += 0.9;
+      scratchSphere.radius = BODY_RADIUS;
+      view.getWorldPosition(scratchEye);
+      d.now = avatarDetail({ inView: scratchFrustum.intersectsSphere(scratchSphere), distance: scratchSphere.center.distanceTo(scratchEye), crowd: crowd.size });
+      if (root.current) root.current.visible = d.now.drawn;
+      if (d.now.outlines !== d.outlinesShown) {
+        d.outlinesShown = d.now.outlines;
+        for (const m of d.outlines) m.visible = d.now.outlines;
+      }
+    }
+    const every = Math.max(1, Math.round(updateEveryRef.current?.() ?? 1), d.now.every);
     const t = throttle.current;
     t.frame += 1;
     t.pending += frameDelta;
@@ -104,7 +176,19 @@ export function VrmAvatar({ url, position = [0, 0, 0], rotationY = 0, onLoaded, 
       vrm.springBoneManager?.reset();
     }
     lastWorld.current = (lastWorld.current ?? new THREE.Vector3()).copy(world);
-    vrm.update(Math.min(delta, MAX_SPRING_DELTA));
+    if (d.now.springs) {
+      // Hair back on after a while still: from where it is, not a fling.
+      if (!d.springsOn) vrm.springBoneManager?.reset();
+      d.springsOn = true;
+      vrm.update(Math.min(delta, MAX_SPRING_DELTA));
+    } else {
+      // Far away: everything VRM.update does but the hair and clothes physics.
+      d.springsOn = false;
+      vrm.humanoid.update();
+      vrm.lookAt?.update(delta);
+      vrm.expressionManager?.update();
+      vrm.nodeConstraintManager?.update();
+    }
     // Wading ripples (pondActivity.ts): a distance check, and only does
     // anything for an avatar actually standing in the pond.
     stirPond(vrm.scene.uuid, world.x, world.z);
@@ -126,7 +210,7 @@ export function VrmAvatar({ url, position = [0, 0, 0], rotationY = 0, onLoaded, 
   const facingOffset = vrm.meta.metaVersion === "1" ? Math.PI : 0;
   const shadow = getShadowTexture();
   return (
-    <group position={position} rotation={[0, rotationY, 0]}>
+    <group ref={root} position={position} rotation={[0, rotationY, 0]}>
       <primitive object={vrm.scene} rotation={[0, facingOffset, 0]} />
       {shadow && (
         <mesh position={[0, 0.015, 0]} rotation={[-Math.PI / 2, 0, 0]} userData={{ navIgnore: true }} renderOrder={-1}>

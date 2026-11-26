@@ -54,7 +54,7 @@ export function AvatarPreview({ url, height = "clamp(260px, 46vh, 460px)", expre
         <directionalLight position={[-2, 4, -3]} intensity={1.35} castShadow />
         <directionalLight position={[2, 2, 3]} intensity={0.35} />
         <Suspense fallback={null}>
-          <VrmAvatar url={url} onLoaded={setVrm} />
+          <VrmAvatar url={url} onLoaded={setVrm} lod={false} />
         </Suspense>
         <AvatarAnimator vrm={vrm} holdTPose={holdTPose} expression={expression} />
         <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
