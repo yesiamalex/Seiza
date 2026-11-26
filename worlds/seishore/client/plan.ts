@@ -178,9 +178,11 @@ export const TEMPLE_PRAY: [number, number] = [TEMPLE.hallX + 2.95, TEMPLE.z];
 /** The café's bench in front of it, the A-frame board beside. */
 export const CAFE_BENCH = { x: (CAFE.x0 + CAFE.x1) / 2 - 1.0, z: LANE.z0 + 0.32 };
 export const CAFE_BOARD = { x: CAFE.x0 + 0.6, z: LANE.z0 + 0.55 };
-/** A bench at the top of the street, by the crossing, looking out over the
- *  line and the coast road to the sea: where people wait to see the train. */
-export const VIEW_BENCH = { x: 21.3, z: 52.6 };
+/** A bench at the south end of Seishore-Kaigan's platform, by the crossing,
+ *  looking out over the line and the coast road to the sea: where people
+ *  wait to see the train. Up on the railway's own level (down beside the
+ *  konbini, the strip's retaining wall stood in front of its knees). */
+export const VIEW_BENCH = { x: 22.1, z: 58.3 };
 /** Where visitors arrive (world.json's spawnPoint): the street's west end, facing the sea. */
 export const ARRIVE: [number, number] = [-5.6, LANE_Z];
 
@@ -290,7 +292,7 @@ export function seishoreObstacles(): Obstacle[] {
   for (const [x, z] of POLES) list.push(o(x - 0.16, x + 0.16, z - 0.16, z + 0.16));
   list.push(o(MIRROR_AT[0] - 0.08, MIRROR_AT[0] + 0.08, MIRROR_AT[1] - 0.08, MIRROR_AT[1] + 0.08));
   list.push(o(CAFE_BENCH.x - 0.9, CAFE_BENCH.x + 0.9, LANE.z0, CAFE_BENCH.z + 0.2));
-  list.push(o(VIEW_BENCH.x - 0.2, VIEW_BENCH.x + 0.25, VIEW_BENCH.z - 0.9, VIEW_BENCH.z + 0.9));
+  list.push(o(VIEW_BENCH.x - 0.2, VIEW_BENCH.x + 0.2, VIEW_BENCH.z - 0.9, VIEW_BENCH.z + 0.9));
   list.push(o(CAFE_BOARD.x - 0.3, CAFE_BOARD.x + 0.3, CAFE_BOARD.z - 0.25, CAFE_BOARD.z + 0.25));
   // The sea wall, in its pieces between the gaps, and the promenade's things.
   const cuts = [ROAD.z0, ...SEAWALL.gaps.flatMap((g) => [g - SEAWALL.gap / 2, g + SEAWALL.gap / 2]), ROAD.z1];

@@ -808,6 +808,10 @@ let worldObstacles: Obstacle[] = [];
 export function setWorldObstacles(next: Obstacle[]): void {
   worldObstacles = next;
 }
+/** The obstacles a world set last (so a part of it can hand back only its own). */
+export function getWorldObstacles(): readonly Obstacle[] {
+  return worldObstacles;
+}
 
 /** Scenery that comes and goes with a world's settings, such as the
  *  seasonal tree (src/scene/Seasons.tsx). Built-in rooms only. */
@@ -1089,6 +1093,10 @@ export interface WorldFloor {
 let worldFloors: WorldFloor[] = [];
 export function setWorldFloors(next: WorldFloor[]): void {
   worldFloors = next;
+}
+/** The floors a world set last. */
+export function getWorldFloors(): readonly WorldFloor[] {
+  return worldFloors;
 }
 
 export function floorHeightAt(x: number, z: number): number {

@@ -78,7 +78,7 @@ function timeline(legs: Leg[]) {
 // --- the train ---------------------------------------------------------------------------
 
 /** Two cars, coupled: how long the whole train is, and each car. */
-export const CAR = { length: 12, width: 2.3, gap: 0.6, floor: 0.95, height: 3.15 };
+export const CAR = { length: 12, width: 2.3, gap: 0.6, floor: 0.5, height: 3.15 };
 export const TRAIN_LENGTH = CAR.length * 2 + CAR.gap;
 const mid = (i: number) => (STATIONS[i].z0 + STATIONS[i].z1) / 2;
 const SOUTH_END = TRACK.z0 + TRAIN_LENGTH / 2 + 0.5;
@@ -106,7 +106,7 @@ export const trainAt = timeline([
 
 // --- the bus -----------------------------------------------------------------------------
 
-export const BUS = { length: 8.8, width: 2.3, height: 3.0, floor: 0.55 };
+export const BUS = { length: 8.8, width: 2.3, height: 3.0, floor: 0.35 };
 /** Keeping left, as Japan does: north in the lane by the sea, south by the town. */
 export const BUS_LANES = { north: 28.35, south: 26.25 };
 /** Where it stops: its front door by the bus stop's bench. */

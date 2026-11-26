@@ -445,6 +445,13 @@ export function Outdoors() {
 
   const applyInstances = (mesh: THREE.InstancedMesh | null, elements: number[], colors?: number[]) => {
     if (!mesh) return;
+    // A world clearing ground for its road (setTreeClearings) changes how
+    // many trees there are; React can hand this the mesh made for the old
+    // count, so size its buffer to these trees rather than overflow it.
+    if (mesh.instanceMatrix.array.length !== elements.length) {
+      mesh.instanceMatrix = new THREE.InstancedBufferAttribute(new Float32Array(Math.max(16, elements.length)), 16);
+      mesh.count = elements.length / 16;
+    }
     mesh.instanceMatrix.set(elements);
     mesh.instanceMatrix.needsUpdate = true;
     if (colors) {

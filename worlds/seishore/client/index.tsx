@@ -209,9 +209,10 @@ function useStagger(total: number, everyMs: number, startMs = 0) {
 export function Scene({ warp, getSelfPosition, sit, occupiedSeatId, playGesture, faceToward }: WorldSceneProps) {
   useLang();
   // The ground the railway needs, before anything is drawn on it.
-  useState(() => {
-    setWorldFloors(seishoreFloors(floorHeightAt));
-    return true;
+  const [floors] = useState(() => {
+    const ground = seishoreFloors(floorHeightAt);
+    setWorldFloors(ground);
+    return ground;
   });
   const people = useMemo(() => [...PEOPLE, CHEF], []);
   useEffect(() => {
@@ -327,7 +328,7 @@ export function Scene({ warp, getSelfPosition, sit, occupiedSeatId, playGesture,
   return (
     <>
       <Town onVending={buy} onShrine={atShrine} onTemple={atTemple} onOmikuji={drawFortune} />
-      {transitShown && <Transit sit={sit} fixed={fixed} />}
+      {transitShown && <Transit sit={sit} fixed={fixed} floors={floors} />}
       <TownSounds getSelfPosition={getSelfPosition} />
       <Steam at={cafeSteam} rise={0.35} size={0.07} opacity={0.3} />
       <Steam at={kitchenSteam} rise={0.7} size={0.14} opacity={0.3} />
