@@ -26,15 +26,21 @@ export interface Site {
   lon: number;
   /** Mean daily temperature in °C, before the weather's offset. */
   meanTemp: number;
+  /** How far the season moves it, °C: warmest in early August, coldest in
+   *  early February. None in the tropics. */
+  seasonSwing?: number;
 }
 
-/** Philippine sites. All share UTC+8. Mean temperatures are rounded annual
- *  means for each city; the daily swing is a simple ±4 °C. */
+/** The sites a world's sky can be over: Philippine ones, and one in Japan.
+ *  Clock hours are Philippine time (UTC+8) throughout; the sun's position
+ *  follows each site's own longitude, so it's right for Japan too. Mean
+ *  temperatures are rounded annual means; the daily swing is a simple ±4 °C. */
 export const SITES: Record<string, Site> = {
   cebu: { label: "Cebu", labelJa: "セブ", lat: 10.31, lon: 123.89, meanTemp: 28 },
   manila: { label: "Metro Manila", labelJa: "マニラ首都圏", lat: 14.6, lon: 120.98, meanTemp: 28 },
   davao: { label: "Davao", labelJa: "ダバオ", lat: 7.07, lon: 125.61, meanTemp: 27.5 },
   baguio: { label: "Baguio", labelJa: "バギオ", lat: 16.41, lon: 120.6, meanTemp: 19 },
+  shonan: { label: "Kamakura, the Shonan coast", labelJa: "鎌倉・湘南", lat: 35.31, lon: 139.55, meanTemp: 16, seasonSwing: 10 },
 };
 const TZ_MERIDIAN = 120; // UTC+8
 
@@ -124,8 +130,9 @@ export function cloudyGhi(clearGhi: number, cloud: number): number {
 }
 
 /** Ambient temperature in °C: coolest before dawn, warmest mid-afternoon. */
-export function ambientTemperature(hour: number, site: Site, offset = 0): number {
-  return site.meanTemp + offset + 4 * Math.cos(((hour - 14.5) / 24) * 2 * Math.PI);
+export function ambientTemperature(hour: number, site: Site, offset = 0, dayOfYear?: number): number {
+  const season = site.seasonSwing && dayOfYear !== undefined ? site.seasonSwing * Math.cos(((dayOfYear - 218) / 365) * 2 * Math.PI) : 0;
+  return site.meanTemp + season + offset + 4 * Math.cos(((hour - 14.5) / 24) * 2 * Math.PI);
 }
 
 export type WeatherType = "clear" | "partly" | "overcast" | "rain" | "typhoon";

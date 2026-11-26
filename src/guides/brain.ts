@@ -97,6 +97,9 @@ export interface Knowledge {
   cardTitle?: (card: string, lang: GuideLang) => string;
   /** Gestures for particular topics; the rest nod (or point for "where"). */
   topicStyle?: Record<string, { gesture: GuideGesture; mood: Mood }>;
+  /** Show each answer in the other language too, beneath it (Reply.translation):
+   *  for a world where visitors are learning one from the other. */
+  bilingual?: boolean;
 }
 
 /** Who a guide is: their name and how they introduce themselves. */
@@ -119,6 +122,8 @@ export interface Reply {
   card?: string;
   place?: Place;
   suggestions: string[];
+  /** The same answer in the other language, when the world shows both (Knowledge.bilingual). */
+  translation?: string;
   /** Why this answer, for tests and tuning. */
   via: "guard" | "live" | "chat" | "topic" | "fallback";
   topic?: string;
@@ -508,7 +513,7 @@ export function createBrain(knowledge: Knowledge, persona: Persona): Brain {
     for (const c of CHAT) {
       // "hi, what is a battery?" is a question, not a greeting.
       if ((c.test.test(raw) || c.testJa.test(raw)) && !confident(hits[0]))
-        return { text: ja ? c.replyJa(persona) : c.reply(persona), gesture: c.gesture, mood: c.mood, suggestions: starters(), via: "chat" };
+        return { text: ja ? c.replyJa(persona) : c.reply(persona), translation: knowledge.bilingual ? (ja ? c.reply(persona) : c.replyJa(persona)) : undefined, gesture: c.gesture, mood: c.mood, suggestions: starters(), via: "chat" };
     }
 
     const wantsPlace = WANTS_PLACE.test(raw);
@@ -531,7 +536,8 @@ export function createBrain(knowledge: Knowledge, persona: Persona): Brain {
       const look = t.gesture
         ? { gesture: t.gesture, mood: t.mood ?? "happy" }
         : style[t.id] ?? (wantsPlace && t.place ? { gesture: "point" as const, mood: "neutral" as const } : { gesture: "nod" as const, mood: "relaxed" as const });
-      return { text, ...look, card: t.card, place: t.place, suggestions: next.length ? next.map(ask) : starters(), via: "topic", topic: t.id };
+      const translation = knowledge.bilingual && t.ja ? (ja ? t.answer : t.ja.answer) : undefined;
+      return { text, translation, ...look, card: t.card, place: t.place, suggestions: next.length ? next.map(ask) : starters(), via: "topic", topic: t.id };
     }
 
     const near = hits.slice(0, 3).map((h) => ask(titleOf(h.topic)));

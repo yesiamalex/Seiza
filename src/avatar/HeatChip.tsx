@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { L, useLang } from "../i18n/lang";
 import { pillButtonStyle } from "../ui/styles";
 import { Docked } from "../ui/StatusDock";
-import { ceilingHeightAt, floorHeightAt, getGround, isBlocked } from "../scene/layout";
+import { floorHeightAt, getGround, isBlocked, roofedAt } from "../scene/layout";
 import { coolBy, currentHeatIndex, drinkReadyIn, drinkWater, faintPhase, HEAT_LEVEL_LABELS, heatLevel, heatLoad, inDeclaredShade, LOCAL_HEAT, onFaintChange, setFaint, useHeatReactions } from "./heat";
 
 /**
@@ -81,7 +81,7 @@ export function setWakeAt(next: WakeAt) {
   }
 }
 
-const shadedAt = (x: number, y: number, z: number) => ceilingHeightAt(x, z) < Infinity || inDeclaredShade(x, z) || !!getGround()?.covered?.(x, y, z);
+const shadedAt = (x: number, y: number, z: number) => roofedAt(x, z) || inDeclaredShade(x, z) || !!getGround()?.covered?.(x, y, z);
 
 /**
  * Where you come to after fainting: the nearest shade you can stand in,

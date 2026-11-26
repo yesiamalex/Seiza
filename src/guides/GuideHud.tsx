@@ -119,6 +119,7 @@ function Chat({
                 }}
               >
                 {m.text}
+                {r?.translation && <div style={{ marginTop: 5, paddingTop: 5, borderTop: "1px solid rgba(255,255,255,0.12)", fontSize: "0.86em", opacity: 0.72 }}>{r.translation}</div>}
               </div>
               {r && ((r.card && onOpenCard) || r.place) && (
                 <div style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap" }}>

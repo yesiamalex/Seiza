@@ -1088,9 +1088,26 @@ export function sheltered(x: number, y: number, z: number): boolean {
   return contains(HALL, x, z) || contains(CORRIDOR, x, z) || contains(CLASSROOM, x, z);
 }
 
+/** A world's own roofed rooms (a shop you walk into): their ceilings, for
+ *  the camera, and their shade. Built-in worlds only. */
+let worldCeilings: { rect: Rect; height: number }[] = [];
+export function setWorldCeilings(next: { rect: Rect; height: number }[]): void {
+  worldCeilings = next;
+}
+
+/** Under a roof: the hall, the classroom, the corridor, or a world's own
+ *  rooms. Shade for heat reactions; the camera's limits are another thing
+ *  (ceilingHeightAt keeps it low over the garden too). */
+export function roofedAt(x: number, z: number): boolean {
+  if (ground) return false;
+  if (worldCeilings.some((c) => contains(c.rect, x, z))) return true;
+  return contains(HALL, x, z) || contains(CLASSROOM, x, z) || contains(CORRIDOR, x, z);
+}
+
 export function ceilingHeightAt(x: number, z: number): number {
   // A model world's buildings aren't known here: no ceiling for the camera.
   if (ground) return Infinity;
+  for (const c of worldCeilings) if (contains(c.rect, x, z)) return c.height;
   if (contains(CLASSROOM, x, z)) return CLASSROOM_WALL_HEIGHT - 0.25;
   if (contains(CORRIDOR, x, z)) return 2.95;
   // Open sky over the garden and the meadow: the camera may rise to look

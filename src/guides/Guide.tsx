@@ -55,7 +55,53 @@ export interface GuideProps {
   /** Where to look while standing, when nobody is near: the spawn point,
    *  say, so they greet arrivals. */
   faceAt?: [number, number];
+  /** What they are, on their name tag ("guide" by default): "konbini clerk". */
+  role?: string;
+  /** Things they say now and then to nobody in particular when you're
+   *  near, in a bubble over their head: Japanese, with English under it. */
+  chatter?: Chatter[];
 }
+
+export interface Chatter {
+  ja: string;
+  en: string;
+}
+
+/** A chatter bubble: the Japanese large, the English beneath. */
+function bubbleTexture(line: Chatter) {
+  const c = document.createElement("canvas");
+  c.width = 512;
+  c.height = 132;
+  const ctx = c.getContext("2d")!;
+  ctx.fillStyle = "rgba(255,255,255,0.94)";
+  ctx.beginPath();
+  ctx.roundRect(6, 6, 500, 104, 26);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(236, 108);
+  ctx.lineTo(256, 128);
+  ctx.lineTo(276, 108);
+  ctx.fill();
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#1d2230";
+  const fit = (text: string, size: number, weight: number) => {
+    let s = size;
+    do ctx.font = `${weight} ${s}px system-ui, 'Hiragino Sans', 'Noto Sans CJK JP', 'Yu Gothic', sans-serif`;
+    while (ctx.measureText(text).width > 470 && --s > 12);
+  };
+  fit(line.ja, 34, 700);
+  ctx.fillText(line.ja, 256, 50);
+  ctx.fillStyle = "#4a5266";
+  fit(line.en, 24, 500);
+  ctx.fillText(line.en, 256, 88);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+/** Seconds between lines, and how long each shows. */
+const CHATTER_GAP: [number, number] = [9, 17];
+const CHATTER_SHOW = 5.5;
+const CHATTER_RANGE = 9;
 
 const GESTURES = buildGestureRegistry({});
 /** How far behind the visitor may fall before a guide leading them waits. */
@@ -96,7 +142,17 @@ interface Walk {
   kind: "come" | "lead" | "return";
 }
 
-export function Guide({ id, name, avatarUrl, stops, speed = 1, pathsOnPatrol = false, getSelfPosition, findPath, faceAt }: GuideProps) {
+export function Guide({ id, name, avatarUrl, stops, speed = 1, pathsOnPatrol = false, getSelfPosition, findPath, faceAt, role = "guide", chatter }: GuideProps) {
+  const bubble = useRef<THREE.Sprite>(null);
+  const bubbleMaterial = useMemo(() => new THREE.SpriteMaterial({ depthWrite: false, transparent: true, opacity: 0 }), []);
+  const chat = useRef({ next: 3 + Math.random() * 6, shown: -1, line: -1 });
+  useEffect(
+    () => () => {
+      bubbleMaterial.map?.dispose();
+      bubbleMaterial.dispose();
+    },
+    [bubbleMaterial]
+  );
   const root = useRef<THREE.Group>(null);
   const hit = useRef<THREE.Mesh>(null);
   const camera = useThree((s) => s.camera);
@@ -260,7 +316,26 @@ export function Guide({ id, name, avatarUrl, stops, speed = 1, pathsOnPatrol = f
     g.rotation.y = yaw.current;
     const eye = viewerPosition(camera, scratchEye);
     far.current = Math.hypot(eye.x - pos.x, eye.z - pos.z) > 15;
-    if (tag.current) tag.current.visible = near && !talking;
+    if (tag.current) tag.current.visible = near && !talking && chat.current.shown < 0;
+    // Now and then, near you and not talking: a line, in both languages.
+    const c = chat.current;
+    if (chatter?.length && bubble.current) {
+      c.next -= dt;
+      if (c.shown >= 0) c.shown += dt;
+      if (c.shown < 0 && c.next <= 0 && toVisitor < CHATTER_RANGE && !talking) {
+        c.line = (c.line + 1 + Math.floor(Math.random() * Math.max(1, chatter.length - 1))) % chatter.length;
+        bubbleMaterial.map?.dispose();
+        bubbleMaterial.map = bubbleTexture(chatter[c.line]);
+        bubbleMaterial.needsUpdate = true;
+        c.shown = 0;
+      }
+      if (c.shown >= CHATTER_SHOW || (c.shown >= 0 && talking)) {
+        c.shown = -1;
+        c.next = CHATTER_GAP[0] + Math.random() * (CHATTER_GAP[1] - CHATTER_GAP[0]);
+      }
+      bubbleMaterial.opacity = c.shown < 0 ? 0 : Math.min(1, c.shown / 0.3, (CHATTER_SHOW - c.shown) / 0.5);
+      bubble.current.visible = c.shown >= 0;
+    }
   });
 
   useEffect(() => {
@@ -301,7 +376,8 @@ export function Guide({ id, name, avatarUrl, stops, speed = 1, pathsOnPatrol = f
         onGestureEnd={() => setMove((m) => ({ ...m, gesture: null }))}
         expression={talking ? mood : null}
       />
-      <NameTag name={`${name} · guide`} position={[0, 0, 0]} speaking={false} />
+      <NameTag name={`${name} · ${role}`} position={[0, 0, 0]} speaking={false} />
+      {chatter?.length ? <sprite ref={bubble} material={bubbleMaterial} position={[0, 2.42, 0]} scale={[1.25, 0.32, 1]} visible={false} raycast={noRaycast} userData={{ navIgnore: true }} /> : null}
       <sprite ref={tag} material={tagMaterial} position={[0, 2.25, 0]} scale={[0.7, 0.15, 1]} raycast={noRaycast} userData={{ navIgnore: true }} />
       {presenting && talking && <GuideXr guideId={id} />}
     </group>

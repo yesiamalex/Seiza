@@ -291,7 +291,7 @@ export class SkyClock {
     skyState.weatherState = this.weather;
     skyState.dayOfYear = dayOfYear;
     skyState.hour = hour;
-    skyState.temperature = ambientTemperature(hour, this.site, this.weather.tempOffset);
+    skyState.temperature = ambientTemperature(hour, this.site, this.weather.tempOffset, dayOfYear);
     advanceSeason(this.previewSeason ?? activeSeason(this.config.seasons === true, this.roomSettings, date), realMs);
   }
 }
