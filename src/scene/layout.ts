@@ -217,6 +217,42 @@ const WALKABLE: Rect[] = [
   },
 ];
 
+// --- the grounds round the building -------------------------------------
+//
+// The lawn outside: round the hall and the classroom (to look in at their
+// windows), down the garden's sides, west of the meadow to the foot of Mt.
+// Makiling. Rectangles that never overlap a building, each stopping a wall's
+// half and a player's radius short of its walls, so the walls still hold.
+// The treeline's nearest trees are solid (setTreeObstacles), so you go round
+// them, not through.
+const M = WALL_THICKNESS / 2 + PLAYER_RADIUS;
+const GARDEN_WING = 0.3;
+export const GROUNDS: Rect[] = [
+  // East and west of the hall, out toward the treeline, up to the meadow.
+  { minX: HALL.maxX + M, maxX: 34, minZ: -38, maxZ: FIELD.minZ + 1 },
+  { minX: -40, maxX: HALL.minX - M, minZ: -38, maxZ: FIELD.minZ + 1 },
+  // Behind the classroom.
+  { minX: -40, maxX: 34, minZ: -42, maxZ: CLASSROOM.minZ - M },
+  // Beside the classroom, and between it and the corridor, either side.
+  { minX: CLASSROOM.maxX + M, maxX: HALL.maxX + M + 0.2, minZ: CLASSROOM.minZ - M - 0.2, maxZ: HALL.minZ - M },
+  { minX: HALL.minX - M - 0.2, maxX: CLASSROOM.minX - M, minZ: CLASSROOM.minZ - M - 0.2, maxZ: HALL.minZ - M },
+  { minX: CORRIDOR.maxX + M, maxX: CLASSROOM.maxX + M + 0.2, minZ: CLASSROOM.maxZ + M, maxZ: HALL.minZ - M },
+  { minX: CLASSROOM.minX - M - 0.2, maxX: CORRIDOR.minX - M, minZ: CLASSROOM.maxZ + M, maxZ: HALL.minZ - M },
+  // The lawn down the garden's sides, over its low kerb from the garden,
+  // as far as the end walls by the meadow.
+  { minX: OUTDOOR.maxX - PLAYER_RADIUS - 0.05, maxX: HALL.maxX + M + 0.2, minZ: HALL.maxZ + M, maxZ: FIELD.minZ - GARDEN_WING - PLAYER_RADIUS },
+  { minX: HALL.minX - M - 0.2, maxX: OUTDOOR.minX + PLAYER_RADIUS + 0.05, minZ: HALL.maxZ + M, maxZ: FIELD.minZ - GARDEN_WING - PLAYER_RADIUS },
+  // West of the meadow, over its bank, on to the mountain's foot.
+  { minX: -40, maxX: FIELD.minX + PLAYER_RADIUS + 0.1, minZ: FIELD.minZ - 1, maxZ: FIELD.maxZ + 2 },
+];
+const onGrounds = (x: number, z: number) => !contains(OUTDOOR, x, z) && GROUNDS.some((r) => contains(r, x, z));
+
+/** The treeline's trees near enough to walk to, as trunks (Outdoors.tsx sets them). */
+let treeObstacles: Obstacle[] = [];
+export function setTreeObstacles(next: Obstacle[]): void {
+  treeObstacles = next;
+}
+
 // --- the beach --------------------------------------------------------------
 
 /**
@@ -273,7 +309,10 @@ export function swimmingAt(x: number, z: number): boolean {
 /** Where you can walk out of the meadow and down the beach: beside the
  *  meadow, into the shallows, and out to swim. */
 const SHORE_WALK: Rect = { minX: FIELD.maxX - PLAYER_RADIUS - 0.1, maxX: 95, minZ: FIELD.minZ + 2, maxZ: FIELD.maxZ - 2 };
-const WALKABLE_WITH_SHORE: Rect[] = [...WALKABLE, SHORE_WALK];
+/** And along the whole coast the beach is drawn for, from past the hall
+ *  to beyond the mountain's east side. */
+const COAST_WALK: Rect = { minX: 22, maxX: 95, minZ: -40, maxZ: 150 };
+const WALKABLE_WITH_SHORE: Rect[] = [...WALKABLE, SHORE_WALK, COAST_WALK];
 let shore = false;
 
 /** Opens the beach to walking (Beach.tsx, while it's there). */
@@ -281,7 +320,8 @@ export function setShore(on: boolean): void {
   shore = on;
 }
 
-const onShore = (x: number, z: number) => shore && x > FIELD.maxX && contains(SHORE_WALK, x, z);
+const onShore = (x: number, z: number) => shore && ((x > FIELD.maxX && contains(SHORE_WALK, x, z)) || (contains(COAST_WALK, x, z) && !inFieldRect(x, z)));
+const inFieldRect = (x: number, z: number) => contains(FIELD, x, z);
 
 /** Mt. Makiling's ground (mountain.ts), walkable from the meadow's far end
  *  up to the summit and all round it. On in every built-in world unless
@@ -323,7 +363,7 @@ export function clampToRooms(position: THREE.Vector3, margin = 0): void {
   // A world made of its own model has no rooms to stay in: walking is the
   // ground's (see setGround), and the camera goes where it likes.
   if (ground) return;
-  const walkable = [...(shore ? WALKABLE_WITH_SHORE : WALKABLE), ...(mountain ? [MOUNTAIN_WALK] : [])];
+  const walkable = [...(shore ? WALKABLE_WITH_SHORE : WALKABLE), ...GROUNDS, ...(mountain ? [MOUNTAIN_WALK] : [])];
   for (const room of walkable) {
     if (contains(inset(room, -margin), position.x, position.z)) return;
   }
@@ -826,6 +866,7 @@ export function resolveObstacles(position: THREE.Vector3, radius = PLAYER_RADIUS
   if (!ground) {
     pushOutOf(activeObstacles, position, radius);
     pushOutOf(sceneryObstacles, position, radius);
+    pushOutOf(treeObstacles, position, radius);
   }
   pushOutOf(worldObstacles, position, radius);
   pushOutOf(placedObstacles, position, radius, ground ? undefined : floorHeightAt(position.x, position.z));
@@ -1011,6 +1052,7 @@ export function floorHeightAt(x: number, z: number): number {
   // out of your depth, swimming: the floor stays where your head is above
   // the water.
   if (onShore(x, z)) return Math.max(shoreY(Math.max(0, x - coastX(z))), SHORE.seaY - SWIM_FLOOR);
+  if (onGrounds(x, z)) return OUTER_GROUND_Y;
   return pondDepthAt(x, z);
 }
 
@@ -1026,7 +1068,7 @@ export function surfaceAt(x: number, z: number): FloorSurface {
   if (onShore(x, z)) return x - coastX(z) > SHORE.toWater ? "water" : "grass";
   // The garden is gravel and stepping stones rather than floorboards.
   if (contains(OUTDOOR, x, z) || onSteps(x, z)) return "stone";
-  if (inField(x, z) || onMountainWalk(x, z)) return "grass";
+  if (inField(x, z) || onMountainWalk(x, z) || onGrounds(x, z)) return "grass";
   return "wood";
 }
 
@@ -1059,5 +1101,7 @@ export function ceilingHeightAt(x: number, z: number): number {
   // ceiling, and a ceiling here held the camera down inside the hill (and
   // made the whole mountain count as shade).
   if (onMountainWalk(x, z) || (mountain && mountainHeight(x, z) > 0)) return Infinity;
+  // Open sky over the lawns round the building.
+  if (onGrounds(x, z)) return Infinity;
   return WALL_HEIGHT - 0.5;
 }

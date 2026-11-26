@@ -3,7 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { seasonWeight, skyState } from "../sky/skyState";
 import { SEASONS, type Season } from "../sky/seasons";
-import { coastX, FIELD, POND_CENTER, POND_WATER_RADIUS } from "./layout";
+import { coastX, FIELD, POND_CENTER, POND_WATER_RADIUS, setTreeObstacles, type Obstacle } from "./layout";
 import { onMountain } from "./mountainShape";
 import { buildMeadowGeometry } from "./meadow";
 import { getWorldTheme } from "./materials";
@@ -363,7 +363,7 @@ export function Outdoors() {
   useEffect(() => () => snow?.dispose(), [snow]);
 
   // One instanced draw call for every tree, and another for the hills.
-  const { trees, treeColors, hills, treeCount, hillCount } = useMemo(() => {
+  const { trees, treeColors, hills, treeCount, hillCount, trunks } = useMemo(() => {
     const random = mulberry32(1337);
     const matrix = new THREE.Matrix4();
     const position = new THREE.Vector3();
@@ -372,6 +372,8 @@ export function Outdoors() {
 
     const trees: number[] = [];
     const treeColors: number[] = [];
+    // The trunks of those near enough to walk to, so you go round them.
+    const trunks: Obstacle[] = [];
     const tint = new THREE.Color();
     for (let i = 0; i < TREE_COUNT; i++) {
       // Squared interpolation biases trees outward, so the ground nearest
@@ -407,6 +409,7 @@ export function Outdoors() {
       scale.set(0.7 + random() * 0.5, height / 6, 0.7 + random() * 0.5);
       matrix.compose(position, quaternion, scale);
       trees.push(...matrix.elements);
+      if (radius < 80) trunks.push({ x: position.x, z: position.z, halfX: 0.35, halfZ: 0.35, rotationY: 0 });
       // Nearer trees keep their colour; distant ones wash toward the haze.
       tint.setHSL(0.25 - random() * 0.05, 0.3, THREE.MathUtils.lerp(0.22, 0.4, t * random()));
       treeColors.push(tint.r, tint.g, tint.b);
@@ -428,8 +431,12 @@ export function Outdoors() {
       hills.push(...matrix.elements);
     }
 
-    return { trees, treeColors, hills, treeCount: trees.length / 16, hillCount: hills.length / 16 };
+    return { trees, treeColors, hills, treeCount: trees.length / 16, hillCount: hills.length / 16, trunks };
   }, []);
+  useEffect(() => {
+    setTreeObstacles(trunks);
+    return () => setTreeObstacles([]);
+  }, [trunks]);
 
   const applyInstances = (mesh: THREE.InstancedMesh | null, elements: number[], colors?: number[]) => {
     if (!mesh) return;

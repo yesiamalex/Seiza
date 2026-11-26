@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import defaultWorld from "../../public/worlds/default/world.json";
 import seizoraWorld from "../../worlds/seizora/world/world.json";
 import seilayaWorld from "../../worlds/seilaya/world/world.json";
-import { CAMPFIRE, FIELD_Y, floorHeightAt, GARDEN_STEPS, isBlocked, OUTDOOR, placedBedSeat, SEATS, SLEEPING_BAG, TENT_DOORSTEP, facingVector } from "./layout";
+import * as THREE from "three";
+import { CAMPFIRE, ceilingHeightAt, clampToRooms, FIELD_Y, floorHeightAt, OUTER_GROUND_Y, GARDEN_STEPS, isBlocked, OUTDOOR, placedBedSeat, SEATS, SLEEPING_BAG, TENT_DOORSTEP, facingVector } from "./layout";
 
 describe("the campsite", () => {
   it("arrives every world outside the tent's door, facing the fire", () => {
@@ -50,5 +51,35 @@ describe("the campsite", () => {
     expect(last).toBeCloseTo(FIELD_Y);
     expect(isBlocked(GARDEN_STEPS.x, OUTDOOR.maxZ - 0.1)).toBe(false);
     expect(isBlocked(5, OUTDOOR.maxZ - 0.1)).toBe(true);
+  });
+});
+
+describe("the grounds round the building", () => {
+  it("lets you stand on the lawn beside the hall, behind the classroom, and west of the meadow", () => {
+    for (const [x, z] of [
+      [16, 4],
+      [-16, 4],
+      [0, -30],
+      [11, -18],
+      [-30, 55],
+    ] as [number, number][]) {
+      expect(isBlocked(x, z)).toBe(false);
+      expect(floorHeightAt(x, z)).toBeCloseTo(OUTER_GROUND_Y);
+      expect(ceilingHeightAt(x, z)).toBe(Infinity);
+    }
+  });
+
+  it("still keeps the hall's and the classroom's walls solid", () => {
+    // Right on the walls, and just either side of them.
+    for (const [x, z] of [
+      [12, 6],
+      [-12, 6],
+      [9, -18],
+      [0, -24],
+    ] as [number, number][])
+      expect(isBlocked(x, z)).toBe(true);
+    const out = new THREE.Vector3(12.05, 0, 6);
+    clampToRooms(out);
+    expect(Math.abs(out.x - 12.05)).toBeGreaterThan(0.3);
   });
 });
