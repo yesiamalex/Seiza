@@ -400,12 +400,19 @@ describe("the band's instruments", () => {
   });
 
   it("picks single strings from the chord held, and the bass its root, fifth, and octaves", () => {
-    // C, low to high, then the octave up past its top string.
-    expect([0, 1, 2, 3, 4, 5].map((s) => pickedMidi("guitar", 0, s))).toEqual([48, 52, 55, 60, 64, 60]);
+    // C, low to high, then on up its own notes past its top string (G4).
+    expect([0, 1, 2, 3, 4, 5].map((s) => pickedMidi("guitar", 0, s))).toEqual([48, 52, 55, 60, 64, 67]);
     expect([0, 1, 2, 3].map((s) => pickedMidi("bass", 0, s))).toEqual([36, 43, 48, 55]);
     expect(pickedMidi("bass", 0, 4)).toBeNull();
     // The lead picks from its power chords, not its lead notes.
-    expect(pickedMidi("electric", 0, 3)).toBe(52);
+    // E5 (E2 B2 E3) goes on up to B3, not round to E3 again.
+    expect(pickedMidi("electric", 0, 3)).toBe(59);
+    // No two strings of any chord play the same note, and they rise low to high.
+    for (const instrument of ["guitar", "electric"] as const)
+      for (let chord = 0; chord < (instrument === "electric" ? 6 : 12); chord++) {
+        const notes = [0, 1, 2, 3, 4, 5].map((s) => pickedMidi(instrument, chord, s)!);
+        for (let i = 1; i < notes.length; i++) expect(notes[i], `${instrument} chord ${chord} string ${i}`).toBeGreaterThan(notes[i - 1]);
+      }
     expect(pickedMidi("electric", 6, 0)).toBeNull();
     expect(unpick(pickNote(11, 5))).toEqual({ chord: 11, string: 5 });
     expect(validNote("guitar", pickNote(11, 5))).toBe(true);

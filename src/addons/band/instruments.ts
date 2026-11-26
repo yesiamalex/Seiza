@@ -178,7 +178,18 @@ export function pickedMidi(instrument: Worn, chord: number, string: number): num
   if (!pickable(instrument, chord) || !Number.isInteger(string) || string < 0 || string >= STRINGS[instrument]) return null;
   if (instrument === "bass") return CHORDS[chord].root + BASS_PICKS[string];
   const notes = instrument === "guitar" ? CHORDS[chord].notes : ELECTRIC[chord].notes;
-  return notes[string % notes.length] + 12 * Math.floor(string / notes.length);
+  // A chord with fewer notes than strings goes on up: each string past its
+  // last note plays the next of the chord's own notes above it. (Going round
+  // to its first notes an octave up landed on notes a chord already has,
+  // since chords double their root: a C chord picked C4 twice.)
+  const classes = new Set(notes.map((n) => n % 12));
+  const ladder = [...notes];
+  while (ladder.length <= string) {
+    let next = ladder[ladder.length - 1] + 1;
+    while (!classes.has(next % 12)) next++;
+    ladder.push(next);
+  }
+  return ladder[string];
 }
 
 const NAMES = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
