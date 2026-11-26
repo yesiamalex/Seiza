@@ -352,7 +352,8 @@ function routeToRoom(request: Request, url: URL, env: Env): Response | Promise<R
 async function handleStats(request: Request, env: Env): Promise<Response> {
   const token = env.SEIZA_STATS_TOKEN ?? "";
   const given = (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
-  if (token.length < 24 || !sameSecret(given, token)) return new Response("Not found", { status: 404 });
+  // 12 characters at least: a passcode, not a word. (The counts are anonymous.)
+  if (token.length < 12 || !sameSecret(given, token)) return new Response("Not found", { status: 404 });
   const stub = env.ROOMS.get(env.ROOMS.idFromName(env.SEIZA_WORLD_ID ?? "default"));
   const counts = await stub.fetch("https://room/stats");
   return new Response(counts.body, { headers: { "content-type": "application/json", "cache-control": "no-store" } });

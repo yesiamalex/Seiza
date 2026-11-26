@@ -282,7 +282,7 @@ export class SeizaRoom extends DurableObject<Env> {
       this.lights = { ...this.lights, ...((await ctx.storage.get<Record<LightZone, boolean>>(LIGHTS_STORAGE_KEY)) ?? {}) };
       this.roomPassword = (await ctx.storage.get<string | null>(ROOM_PASSWORD_STORAGE_KEY)) ?? null;
       // Research counts, only where the deployment has asked for them.
-      if ((env.SEIZA_STATS_TOKEN ?? "").length >= 24) {
+      if ((env.SEIZA_STATS_TOKEN ?? "").length >= 12) {
         this.stats = new RoomStats(ctx.storage);
         await this.stats.load();
       }

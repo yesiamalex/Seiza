@@ -48,7 +48,8 @@ Everything below can be done in the Cloudflare dashboard and on github.com.
 ### 1. Make one token
 
 Use a password manager's generator for a random password of 32 characters
-or more (the worlds ignore anything under 24). Or, with Node:
+or more, or a passcode of your own of at least 12 characters that nobody
+would guess (the worlds ignore anything shorter). Or, with Node:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
