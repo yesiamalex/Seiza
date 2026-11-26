@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { PerformanceMonitor } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
 import { XR, createXRStore } from "@react-three/xr";
 import * as THREE from "three";
@@ -91,6 +90,7 @@ import { hasMoved, NETWORK_TICK_MS, shouldSendState, shouldStepAway, type SentSt
 import { JoinScreen, type JoinedIdentity } from "./ui/JoinScreen";
 import { Arrival } from "./loading/Arrival";
 import { WarmUp } from "./loading/WarmUp";
+import { AdaptiveResolution } from "./loading/AdaptiveResolution";
 import { CameraViewToggle } from "./ui/CameraViewToggle";
 import { AvatarChooser, avatarUrlForChoice } from "./ui/AvatarChooser";
 import { useMediaQuery, useWantsTouchControls } from "./ui/useMediaQuery";
@@ -1585,13 +1585,7 @@ export default function App() {
         }}
       >
         <XR store={xrStore}>
-          <PerformanceMonitor
-            bounds={() => [40, 55]}
-            flipflops={4}
-            onDecline={() => setResolution((r) => Math.max(0.5, Math.round((r - 0.15) * 100) / 100))}
-            onIncline={() => setResolution((r) => Math.min(1, Math.round((r + 0.1) * 100) / 100))}
-            onFallback={() => setResolution(0.85)}
-          />
+          <AdaptiveResolution onChange={setResolution} />
           {!worldShown && <WarmUp worldId={world.id} avatarReady={!!localVrm} onReady={() => setWorldShown(true)} />}
           {/* A room-level environment uploaded through the editor wins
               over the deployment's static world.json sceneUrl. The group

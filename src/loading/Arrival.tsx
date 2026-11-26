@@ -429,7 +429,11 @@ export function Arrival({ ready, worldId, worldName, avatarUrl, onDone }: { read
           a.walk.fadeIn(0.3);
           a.seiza?.fadeOut(0.3);
         }
-        a.vrm.scene.rotation.y = Math.PI * turn;
+        // VRM 1.0 models are built facing +Z, 0.x ones −Z: the same half
+        // turn VrmAvatar gives them, so every avatar first faces you (+Z),
+        // then turns round to the portal (−Z) and walks the way it faces.
+        const facing = a.vrm.meta.metaVersion === "1" ? Math.PI : 0;
+        a.vrm.scene.rotation.y = facing + Math.PI * (1 - turn);
         a.vrm.scene.position.z = still ? 0 : smooth(walk) * walkTo;
         a.mixer.update(dt);
         a.vrm.update(dt);
