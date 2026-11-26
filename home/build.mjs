@@ -94,6 +94,38 @@ const worldCards = worlds
   )
   .join("\n");
 
+/**
+ * The Shinkanseiza's line map: every world a station on one line, in order,
+ * each a link; and the train, running the line inside the map's own box,
+ * stopping a moment at each station. Its stops are worked out here, so the
+ * page needs no script for it.
+ */
+const TRAIN_W = 74;
+const n = worlds.length;
+const run = 26; // seconds, end to end and round again
+const stops = worlds
+  .map((_, i) => {
+    const arrive = (i / n) * 100;
+    const leave = arrive + (100 / n) * 0.35;
+    const at = n > 1 ? i / (n - 1) : 0;
+    const left = `calc(${at.toFixed(4)} * (100% - ${TRAIN_W}px))`;
+    return `${arrive.toFixed(2)}% { left: ${left}; } ${leave.toFixed(2)}% { left: ${left}; }`;
+  })
+  .join(" ");
+const lineMap = `    <figure class="linemap" aria-label="The Shinkanseiza line, through every world">
+      <style>@keyframes linemap-run { ${stops} 100% { left: calc(100% - ${TRAIN_W}px); } }</style>
+      <div class="linemap-scroll">
+        <div class="linemap-inner" style="--n: ${n}">
+          <div class="linemap-rail" aria-hidden="true" style="background: linear-gradient(90deg, ${worlds.map((w, i) => `${esc(w.color)} ${((i / Math.max(1, n - 1)) * 100).toFixed(1)}%`).join(", ")})"></div>
+          <svg class="linemap-train" viewBox="0 0 74 20" aria-hidden="true"><path d="M2,4 H52 C64,4 71,10 73,15 V17 H2 Z" fill="#f4f5f2"/><rect x="2" y="12" width="70" height="2" fill="#e8c37a"/><rect x="6" y="7" width="40" height="3.5" rx="1" fill="#1b2340"/><path d="M56,6 C63,7 67,10 69,12 H58 Z" fill="#1b2340"/></svg>
+          <ol class="linemap-stations">
+${worlds.map((w) => `            <li style="--c: ${esc(w.color)}"><a href="${esc(w.url)}"><span class="stop" aria-hidden="true"></span><span class="name">${esc(w.name)}</span></a></li>`).join("\n")}
+          </ol>
+        </div>
+      </div>
+      <figcaption>The Shinkanseiza <span lang="ja">新幹星座</span>: every world of the EcoSeiztem on one line. A station in each takes you to the rest.</figcaption>
+    </figure>`;
+
 /** How many of a month's items show before its "Show all" (the page's
  *  script folds the rest; without it, everything shows). */
 const MONTH_PREVIEW = 6;
@@ -226,6 +258,7 @@ const template = readFileSync(here("index.html"), "utf8");
 const page = template
   .replace("<!--JSONLD-->", `<script type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g, "\\u003c")}</script>`)
   .replace("<!--WORLDS-->", worldCards)
+  .replace("<!--LINEMAP-->", lineMap)
   .replace("<!--GALLERY-->", gallery)
   .replace("<!--CHANGES-->", changes)
   .replaceAll("<!--WORLD_COUNT-->", String(worlds.length))
