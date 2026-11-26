@@ -312,8 +312,9 @@
   a.world { position: relative; padding-left: 8px; padding-right: 8px; border-radius: 4px; background: radial-gradient(240px circle at var(--mx, -300px) var(--my, -300px), color-mix(in srgb, var(--c) 18%, transparent), transparent 70%); transition: transform 200ms; }
   a.world:hover { transform: translateY(-2px); }
   /* Each world's mark is a portal, as in the rooms: a ring that spins up. */
-  a.world .ring { width: 16px; height: 16px; margin: 5px 0 0 0; background: transparent; border: 2px solid var(--c); border-top-color: transparent; box-shadow: 0 0 14px color-mix(in srgb, var(--c) 55%, transparent), inset 0 0 8px color-mix(in srgb, var(--c) 45%, transparent); }
-  a.world:hover .ring, a.world:focus-visible .ring { animation: spin 1.4s linear infinite; }
+  /* A station stop (it was a portal's open ring), a little bigger when pointed at. */
+  a.world .ring { width: 10px; height: 10px; margin: 6px 0 0 2px; background: #f7f7f2; border: 3px solid var(--c); box-shadow: 0 0 14px color-mix(in srgb, var(--c) 55%, transparent); transition: transform 200ms; }
+  a.world:hover .ring, a.world:focus-visible .ring { transform: scale(1.35); }
   @keyframes spin { to { transform: rotate(360deg); } }
   .constellation a .halo { animation: breathe 3.2s ease-in-out infinite; animation-delay: var(--d, 0s); }
   @keyframes breathe { 50% { opacity: 0.7; } }
@@ -553,63 +554,126 @@
   addEventListener("scroll", () => { if (!downQueued) { downQueued = true; requestAnimationFrame(setDown); } }, { passive: true });
   setDown();
 
-  // The worlds as one constellation: a star each, in its colour, along a
-  // shape like a kite with a tail, each a link to its world.
+  // The worlds as one constellation: a star each, in its colour, each a
+  // link to its world. Laid out for the box it's in (across in a long, easy
+  // wave on a wide screen, names above and below by turns so no two meet;
+  // down a winding path on a phone, names beside), laid out again when the
+  // box changes size, and drifting a little, each star on its own slow
+  // loop, the lines between following (still, for anyone who'd rather).
   {
     const figure = document.getElementById("constellation");
     const svg = figure.querySelector("svg");
     const cards = [...document.querySelectorAll("#world-list a.world")];
-    const SHAPE = [[90, 300], [210, 170], [360, 230], [470, 90], [600, 180], [560, 330], [720, 290], [840, 160], [930, 260], [780, 380], [300, 370], [140, 120]];
     const ns = "http://www.w3.org/2000/svg";
     const el = (name, attrs) => { const e = document.createElementNS(ns, name); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); return e; };
-    const points = cards.slice(0, SHAPE.length).map((card, i) => ({ card, x: SHAPE[i][0], y: SHAPE[i][1] }));
-    const defs = el("defs", {});
-    defs.innerHTML = '<filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="3"/></filter><radialGradient id="band" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#b48cff" stop-opacity="0.22"/><stop offset="0.6" stop-color="#4b2a66" stop-opacity="0.12"/><stop offset="1" stop-color="#0b1029" stop-opacity="0"/></radialGradient>';
-    svg.append(defs);
-    svg.append(el("ellipse", { cx: 520, cy: 210, rx: 620, ry: 120, fill: "url(#band)", transform: "rotate(-14 520 210)" }));
-    for (const r of [140, 260, 380]) svg.append(el("circle", { class: "grid", cx: 500, cy: 640, r: r + 300 }));
-    for (const x of [200, 500, 800]) svg.append(el("line", { class: "grid", x1: x, y1: 0, x2: x + 60, y2: 420 }));
-    // The same dust every visit: a fixed seed.
-    let seed = 7;
-    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-    for (let i = 0; i < 160; i++) {
-      const dust = el("circle", { class: "dust" + (i % 5 === 0 ? " twinkle" : ""), cx: (rnd() * 1000).toFixed(1), cy: (rnd() * 420).toFixed(1), r: (rnd() * 1.1 + 0.3).toFixed(2), opacity: (rnd() * 0.5 + 0.15).toFixed(2) });
-      if (i % 5 === 0) dust.style.setProperty("--d", (rnd() * 3).toFixed(2) + "s");
-      svg.append(dust);
-    }
-    if (points.length > 1) {
-      for (let i = 1; i < points.length; i++) {
-        const a = points[i - 1], b = points[i];
-        const len = Math.hypot(b.x - a.x, b.y - a.y);
-        svg.append(el("line", { class: "glow", x1: a.x, y1: a.y, x2: b.x, y2: b.y }));
-        svg.append(el("line", { class: "link", x1: a.x, y1: a.y, x2: b.x, y2: b.y, "stroke-dasharray": len, style: `--len: ${len}; animation: draw-in 900ms ${200 + i * 140}ms ease both` }));
+    let stars = [];
+    let links = [];
+    let laidFor = "";
+    const layout = () => {
+      const width = figure.clientWidth || 1000;
+      const tall = width < 640;
+      const key = `${tall}:${Math.round(width / 40)}`;
+      if (key === laidFor || cards.length < 2) return;
+      laidFor = key;
+      const n = cards.length;
+      // The same shape every visit: a fixed seed.
+      let seed = 7;
+      const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+      const VW = tall ? 600 : 1000;
+      const VH = tall ? 110 + n * 118 : Math.max(380, Math.min(460, 1000 * 0.42));
+      svg.setAttribute("viewBox", `0 0 ${VW} ${VH}`);
+      svg.replaceChildren();
+      const defs = el("defs", {});
+      defs.innerHTML = '<filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="3"/></filter><radialGradient id="band" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#b48cff" stop-opacity="0.22"/><stop offset="0.6" stop-color="#4b2a66" stop-opacity="0.12"/><stop offset="1" stop-color="#0b1029" stop-opacity="0"/></radialGradient>';
+      svg.append(defs);
+      svg.append(el("ellipse", { cx: VW / 2, cy: VH / 2, rx: VW * 0.62, ry: VH * 0.3, fill: "url(#band)", transform: `rotate(${tall ? 70 : -14} ${VW / 2} ${VH / 2})` }));
+      for (const r of [140, 260, 380]) svg.append(el("circle", { class: "grid", cx: VW / 2, cy: VH * 1.5, r: r + VH }));
+      for (let i = 0; i < 160 * (tall ? 1.4 : 1); i++) {
+        const dust = el("circle", { class: "dust" + (i % 5 === 0 ? " twinkle" : ""), cx: (rnd() * VW).toFixed(1), cy: (rnd() * VH).toFixed(1), r: (rnd() * 1.1 + 0.3).toFixed(2), opacity: (rnd() * 0.5 + 0.15).toFixed(2) });
+        if (i % 5 === 0) dust.style.setProperty("--d", (rnd() * 3).toFixed(2) + "s");
+        svg.append(dust);
       }
-      for (const { card, x, y } of points) {
+      // Where each star sits: evenly along the box, the path waving.
+      const at = cards.map((_, i) => {
+        if (tall) return { x: VW / 2 + VW * 0.27 * Math.sin(i * 1.25 + 0.4) + (rnd() - 0.5) * 30, y: 70 + i * 118 + (rnd() - 0.5) * 24 };
+        const m = 80;
+        return { x: m + (i * (VW - 2 * m)) / (n - 1), y: VH / 2 + VH * 0.26 * Math.sin(i * 1.3 + 0.4) + (rnd() - 0.5) * 30 };
+      });
+      links = [];
+      for (let i = 1; i < n; i++) {
+        const a = at[i - 1], b = at[i];
+        const len = Math.hypot(b.x - a.x, b.y - a.y);
+        const glow = el("line", { class: "glow", x1: a.x, y1: a.y, x2: b.x, y2: b.y });
+        const line = el("line", { class: "link", x1: a.x, y1: a.y, x2: b.x, y2: b.y, "stroke-dasharray": len, style: `--len: ${len}; animation: draw-in 900ms ${200 + i * 140}ms ease both` });
+        if (still) line.style.animation = "none";
+        svg.append(glow, line);
+        links.push({ a: i - 1, b: i, lines: [glow, line] });
+      }
+      stars = cards.map((card, i) => {
+        const { x, y } = at[i];
         const c = getComputedStyle(card).getPropertyValue("--c").trim() || "#f2b84b";
         const name = card.querySelector("h3")?.textContent ?? "";
         const link = el("a", { href: card.getAttribute("href") });
         link.append(el("title", {}));
         link.lastChild.textContent = card.getAttribute("aria-label") ?? name;
-        const spikes = `M${x - 13} ${y} L${x - 2} ${y - 1.2} L${x} ${y - 13} L${x + 2} ${y - 1.2} L${x + 13} ${y} L${x + 2} ${y + 1.2} L${x} ${y + 13} L${x - 2} ${y + 1.2} Z`;
-        link.append(
-          el("circle", { class: "halo", cx: x, cy: y, r: 18, fill: c, style: `--d: ${(x % 7) * 0.4}s` }),
-          el("circle", { class: "ring", cx: x, cy: y, r: 24, stroke: c }),
+        const g = el("g", { transform: `translate(${x} ${y})` });
+        const spikes = "M-13 0 L-2 -1.2 L0 -13 L2 -1.2 L13 0 L2 1.2 L0 13 L-2 1.2 Z";
+        g.append(
+          el("circle", { class: "halo", cx: 0, cy: 0, r: 18, fill: c }),
+          el("circle", { class: "ring", cx: 0, cy: 0, r: 24, stroke: c }),
           el("path", { d: spikes, fill: "#fff", opacity: 0.85 }),
-          el("circle", { cx: x, cy: y, r: 4.5, fill: "#fff" }),
-          el("circle", { cx: x, cy: y, r: 2.6, fill: c })
+          el("circle", { cx: 0, cy: 0, r: 4.5, fill: "#fff" }),
+          el("circle", { cx: 0, cy: 0, r: 2.6, fill: c })
         );
-        const right = x > 760;
-        const label = el("text", right ? { x: x - 30, y: y - 10, "text-anchor": "end" } : { x: x + 30, y: y - 10 });
+        // Its name: beside it on a phone (away from the nearer edge); above and
+        // below by turns across a wide box, kept inside its ends.
+        let place;
+        if (tall) {
+          const left = x > VW / 2;
+          place = { x: left ? -32 : 32, y: 6, anchor: left ? "end" : "start" };
+        } else {
+          const up = i % 2 === 0;
+          place = { x: 0, y: up ? -32 : 44, anchor: i === 0 ? "start" : i === n - 1 ? "end" : "middle" };
+          if (i === 0) place.x = -14;
+          if (i === n - 1) place.x = 14;
+        }
+        const label = el("text", { x: place.x, y: place.y, "text-anchor": place.anchor });
         label.textContent = name;
-        const blurb = el("text", { class: "blurb", x: right ? x - 30 : x + 30, y: y + 8, ...(right ? { "text-anchor": "end" } : {}) });
         const about = card.querySelector("p")?.textContent ?? "";
+        const blurb = el("text", { class: "blurb", x: place.x, y: place.y + (tall ? 26 : place.y < 0 ? -20 : 20), "text-anchor": place.anchor });
         blurb.textContent = about.length > 52 ? about.slice(0, 50).replace(/\s+\S*$/, "") + "…" : about;
-        link.append(label, blurb);
+        g.append(label, blurb);
+        link.append(g);
         svg.append(link);
-      }
+        return { g, x, y, phase: rnd() * Math.PI * 2, rate: 0.25 + rnd() * 0.2 };
+      });
       figure.hidden = false;
+      drift(performance.now());
+    };
+    // Drifting: a few units round a slow loop each, the lines kept joined.
+    const drift = (now) => {
+      const t = now / 1000;
+      const pos = stars.map((s) => (still ? { x: s.x, y: s.y } : { x: s.x + 7 * Math.sin(t * s.rate + s.phase), y: s.y + 6 * Math.cos(t * s.rate * 0.8 + s.phase * 1.3) }));
+      stars.forEach((s, i) => s.g.setAttribute("transform", `translate(${pos[i].x.toFixed(1)} ${pos[i].y.toFixed(1)})`));
+      for (const { a, b, lines } of links) for (const l of lines) { l.setAttribute("x1", pos[a].x.toFixed(1)); l.setAttribute("y1", pos[a].y.toFixed(1)); l.setAttribute("x2", pos[b].x.toFixed(1)); l.setAttribute("y2", pos[b].y.toFixed(1)); }
+    };
+    let visible = false;
+    let frame = 0;
+    const loop = (now) => {
+      frame = 0;
+      if (!visible || still) return;
+      drift(now);
+      frame = requestAnimationFrame(loop);
+    };
+    layout();
+    if ("ResizeObserver" in window) new ResizeObserver(() => layout()).observe(figure);
+    else addEventListener("resize", layout);
+    if (!still && "IntersectionObserver" in window) {
+      new IntersectionObserver((entries) => {
+        visible = entries.some((e) => e.isIntersecting);
+        if (visible && !frame) frame = requestAnimationFrame(loop);
+      }).observe(figure);
     }
-    if (still) svg.querySelectorAll(".link").forEach((l) => (l.style.animation = "none"));
   }
 
   // Sections rise in as they're reached. Only once the script is sure it
