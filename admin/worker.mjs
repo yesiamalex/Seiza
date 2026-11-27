@@ -61,12 +61,22 @@ async function summary(env) {
   } catch {
     return Response.json({ error: "SEIZA_WORLDS isn't valid JSON." }, { status: 500 });
   }
+  // Trimmed: a space or a line break pasted with the secret is the usual reason two "same" tokens differ.
+  const token = (env.SEIZA_STATS_TOKEN ?? "").trim();
   const results = await Promise.all(
     worlds.map(async (w) => {
+      if (token.length < 12) return { ...w, days: null, note: "This admin page has no SEIZA_STATS_TOKEN secret (or it's under 12 characters): add it in the admin Worker's Settings → Variables and Secrets." };
       try {
-        const response = await fetch(new URL("/api/stats", w.url), { headers: { authorization: `Bearer ${env.SEIZA_STATS_TOKEN ?? ""}` } });
-        if (response.status === 404) return { ...w, days: null, note: "Not counting: no matching SEIZA_STATS_TOKEN on that world." };
+        // Not following redirects: a redirect to another address would drop the token on the way.
+        const response = await fetch(new URL("/api/stats", w.url), { headers: { authorization: `Bearer ${token}` }, redirect: "manual" });
+        // Only this version of a world sends it, with every answer here.
+        const current = response.headers.get("x-seiza-stats") !== null;
+        if (response.status >= 300 && response.status < 400) return { ...w, days: null, note: `It sends you on to ${response.headers.get("location") ?? "another address"}: put that address in SEIZA_WORLDS instead.` };
+        if (response.status === 401) return { ...w, days: null, note: "Its SEIZA_STATS_TOKEN isn't the same as this page's: set exactly the same one on both." };
+        if (response.status === 404 && current) return { ...w, days: null, note: "Counting is off there: that world has no SEIZA_STATS_TOKEN secret, or it's under 12 characters." };
+        if (response.status === 404) return { ...w, days: null, note: "That world is running an older version, from before this check: redeploy it." };
         if (!response.ok) return { ...w, days: null, note: `It answered ${response.status}.` };
+        if (!(response.headers.get("content-type") ?? "").includes("json")) return { ...w, days: null, note: "It answered with a page, not its counts: that world is running an older version. Redeploy it." };
         return { ...w, days: await response.json() };
       } catch {
         return { ...w, days: null, note: "It didn't answer." };

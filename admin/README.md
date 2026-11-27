@@ -123,8 +123,21 @@ Access asks you to sign in, then the dashboard loads.
   tag isn't in `ACCESS_AUD` (each address has its own).
 - **403 without being asked to sign in (the workers.dev address):** Access
   isn't on for it yet: step 3's second half.
-- **A world says "not counting":** its `SEIZA_STATS_TOKEN` is missing or
-  differs from the admin Worker's.
+- **A world's card says what's wrong with it**, in so many words:
+  - *"running an older version":* that world hasn't been redeployed since
+    this check was added. Redeploy it (in its Worker: **Deployments**, or
+    push to main if it builds from Git).
+  - *"Counting is off there":* that world has no `SEIZA_STATS_TOKEN` secret,
+    or it's under 12 characters. The name must be exactly
+    `SEIZA_STATS_TOKEN`; the value is your passcode.
+  - *"isn't the same as this page's":* the two values differ. Paste the
+    same one into both again. (Spaces or a line break at either end don't
+    count: they're trimmed.)
+  - *"no SEIZA_STATS_TOKEN secret" on every card:* it's the admin Worker
+    that's missing it.
+- The token's value is never written in this repo, in a world's
+  `world.json` or anywhere else: only in each Worker's secrets. The name
+  `SEIZA_STATS_TOKEN` is in the code; that's just how it's looked up.
 
 ## Changing a token
 
