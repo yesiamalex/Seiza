@@ -65,6 +65,8 @@ export interface GuideProps {
   speak?: boolean;
   /** Their voice: a little higher or lower (1 is the browser's own). */
   pitch?: number;
+  /** Where they are, each frame (for something to follow them: a dog on its lead). */
+  onPlace?: (x: number, y: number, z: number, walking: boolean) => void;
 }
 
 export interface Chatter {
@@ -147,7 +149,7 @@ interface Walk {
   kind: "come" | "lead" | "return";
 }
 
-export function Guide({ id, name, avatarUrl, stops, speed = 1, pathsOnPatrol = false, getSelfPosition, findPath, faceAt, role = "guide", chatter, speak: aloud = false, pitch = 1 }: GuideProps) {
+export function Guide({ id, name, avatarUrl, stops, speed = 1, pathsOnPatrol = false, getSelfPosition, findPath, faceAt, role = "guide", chatter, speak: aloud = false, pitch = 1, onPlace }: GuideProps) {
   const bubble = useRef<THREE.Sprite>(null);
   const bubbleMaterial = useMemo(() => new THREE.SpriteMaterial({ depthWrite: false, transparent: true, opacity: 0 }), []);
   const chat = useRef({ next: 3 + Math.random() * 6, shown: -1, line: -1 });
@@ -309,6 +311,7 @@ export function Guide({ id, name, avatarUrl, stops, speed = 1, pathsOnPatrol = f
     // built-in floor plan's otherwise.
     const y = getGround() ? pos.y : floorHeightAt(pos.x, pos.z);
     g.position.set(pos.x, y, pos.z);
+    onPlace?.(pos.x, y, pos.z, heading !== null);
 
     // Face the visitor when near or talking; otherwise the way they walk.
     const near = toVisitor < 4.5;

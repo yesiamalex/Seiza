@@ -14,7 +14,8 @@ import { speak } from "../../../src/guides/speech";
 import { Builder, canvasTexture, FONT, noRaycast, paint } from "../../seisugbo/client/kit";
 import { CROSSING, G, STATIONS, TRACK } from "./plan";
 import { DRIVER, PASSENGERS } from "./people";
-import { busAt, BUS, CAR, clock, trainAt, TRAIN_LENGTH, type Pose } from "./vehicles";
+import { busAt, BUS, CAR, clock, timeline, trainAt, TRAIN_LENGTH, type Pose } from "./vehicles";
+import { LOOP_STOPS, loopLegs } from "./nishi";
 import { BENCHES, BUS_DOORS, BUS_DRIVER, BUS_WHEELS, busCabin, CAB, CARS, GANGWAY, TRAIN_DOOR_WIDTH, TRAIN_DOORS, trainCabin, WALL, type Block, type Cabin, type CabinSeat } from "./cabins";
 import { busDoors, crossingBell, railJoint, startDiesel, startMotor, trainDoors, type Loop } from "./sounds";
 import { Sitter } from "./Extras";
@@ -430,11 +431,35 @@ function Train({ sit, seats }: { sit?: (seat: Seat) => void; seats: RideSeat[] }
   );
 }
 
-// --- the bus ---------------------------------------------------------------------------------
+// --- the buses ---------------------------------------------------------------------------------
+
+/** A bus line: where its bus is (its timetable), its colours and board, its stops' names. */
+interface BusLine {
+  id: string;
+  poseAt: (seconds: number) => Pose;
+  livery: string;
+  board: [string, string];
+  stopName: (id: string) => [string, string] | null;
+}
+
+/** The coast bus, up and down the coast road; and the community bus, round Nishi-machi's ring. */
+const BUS_LINES: BusLine[] = [
+  { id: "bus", poseAt: busAt, livery: TEAL, board: ["海岸通り経由 山の前", "Kaigan-dōri · Yamanomae"], stopName: (id) => (id === "kaigan-dori" ? ["海岸通り", "Kaigan-dori"] : null) },
+  {
+    id: "loopbus",
+    poseAt: timeline(loopLegs()),
+    livery: "#f2994a",
+    board: ["西町循環", "Nishi-machi loop"],
+    stopName: (id) => {
+      const stop = LOOP_STOPS.find((x) => x.id === id);
+      return stop ? [stop.ja, stop.en] : null;
+    },
+  },
+];
 
 const BUS_TOP = 2.85;
 
-function buildBus(seats: RideSeat[]) {
+function buildBus(seats: RideSeat[], livery: string) {
   const body = new Builder();
   const glass = new Builder();
   const lit = new Builder();
@@ -447,7 +472,7 @@ function buildBus(seats: RideSeat[]) {
   const SILL = 1.15;
   const HEAD = 2.3;
   const bands: Band[] = [
-    [0.98, TEAL],
+    [0.98, livery],
     [1.06, STRIPE],
     [Infinity, SHELL],
   ];
@@ -553,12 +578,12 @@ function buildBus(seats: RideSeat[]) {
   return { body: body.build(), glass: glass.build(), lit: lit.build(), inside: inside.build() };
 }
 
-function Bus({ sit, seats }: { sit?: (seat: Seat) => void; seats: RideSeat[] }) {
+function Bus({ sit, seats, line }: { sit?: (seat: Seat) => void; seats: RideSeat[]; line: BusLine }) {
   const group = useRef<THREE.Group>(null);
   const front = useRef<THREE.Mesh>(null);
   const middle = useRef<(THREE.Mesh | null)[]>([]);
-  const geometry = useMemo(() => buildBus(seats), [seats]);
-  const m = useMaterials(() => destination("海岸通り経由 山の前", "Kaigan-dōri · Yamanomae"));
+  const geometry = useMemo(() => buildBus(seats, line.livery), [seats, line]);
+  const m = useMaterials(() => destination(line.board[0], line.board[1]));
   const [frontDoor, middleDoor] = BUS_DOORS;
   const frontLeaf = useMemo(() => leafGeometry(frontDoor[1] - frontDoor[0], 2.1), [frontDoor]);
   const middleLeaf = useMemo(() => leafGeometry((middleDoor[1] - middleDoor[0]) / 2, 2.1), [middleDoor]);
@@ -569,7 +594,7 @@ function Bus({ sit, seats }: { sit?: (seat: Seat) => void; seats: RideSeat[] }) 
     [geometry, frontLeaf, middleLeaf]
   );
   useFrame(() => {
-    const pose = busAt(clock());
+    const pose = line.poseAt(clock());
     if (group.current) {
       group.current.position.set(pose.x, G, pose.z);
       group.current.rotation.y = pose.heading;
@@ -703,12 +728,21 @@ const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
  */
 export function Transit({ sit, fixed, floors }: { sit?: (seat: Seat) => void; fixed: Obstacle[]; floors: WorldFloor[] }) {
   const trainRoom = useMemo(trainCabin, []);
-  const busRoom = useMemo(busCabin, []);
   const train = useMemo(() => rideSeats(trainRoom, "Train seat"), [trainRoom]);
-  const bus = useMemo(() => rideSeats(busRoom, "Bus seat"), [busRoom]);
+  // Each bus its own seats (the coast bus's ids as they always were).
+  const buses = useMemo(
+    () =>
+      BUS_LINES.map((line) => {
+        const room = busCabin();
+        const seats = rideSeats(room, "Bus seat");
+        if (line.id !== "bus") for (const r of seats) r.seat.id = r.seat.id.replace("seishore-bus", `seishore-${line.id}`);
+        return { line, room, seats };
+      }),
+    []
+  );
   const state = useRef({
     trainStop: null as string | null,
-    busStop: null as string | null,
+    busStops: new Map<string, string | null>(),
     trainClosing: false,
     joints: new Map<number, number>(),
     diesel: null as Loop | null,
@@ -718,47 +752,52 @@ export function Transit({ sit, fixed, floors }: { sit?: (seat: Seat) => void; fi
   // Everything that moves with them, made once and moved in place each frame.
   const live = useMemo(() => {
     const trainSlots = slotsOf(trainRoom);
-    const busSlots = slotsOf(busRoom);
+    const rideBuses = buses.map((b) => ({ ...b, slots: slotsOf(b.room), pose: b.line.poseAt(clock()), before: b.line.poseAt(clock()) }));
     const barriers: Obstacle[] = [TRACK.bed0 - 0.1, TRACK.bed1 - 0.03].map((x) => ({ x, z: (CROSSING.z0 + CROSSING.z1) / 2, halfX: 0.08, halfZ: (CROSSING.z1 - CROSSING.z0) / 2 + 0.1, rotationY: 0, disabled: true }));
-    const obstacles = [...fixed, ...trainSlots.map((s) => s.o), ...busSlots.map((s) => s.o), ...barriers];
+    const obstacles = [...fixed, ...trainSlots.map((s) => s.o), ...rideBuses.flatMap((b) => b.slots.map((s) => s.o)), ...barriers];
     const trainFloor: WorldFloor = { rect: { minX: TRACK.x - CAR.width / 2, maxX: TRACK.x + CAR.width / 2, minZ: 0, maxZ: 0 }, height: G + CAR.floor };
-    const now = { at: -1, t: trainAt(clock()), b: busAt(clock()) };
-    const insideBus = (x: number, z: number, pose = now.b) => {
+    const now = { at: -1, t: trainAt(clock()) };
+    const insideBus = (x: number, z: number, pose: Pose) => {
       const [lx, lz] = frame(pose, true).local(x, z);
       return Math.abs(lx) <= BUS.width / 2 && Math.abs(lz) <= BUS.length / 2;
     };
-    const busFloor: WorldFloor = { rect: { minX: 0, maxX: 0, minZ: 0, maxZ: 0 }, height: G + BUS.floor, holds: (x, z) => insideBus(x, z) };
-    const allFloors = [busFloor, trainFloor, ...floors];
+    const busFloors: WorldFloor[] = rideBuses.map((b) => ({ rect: { minX: 0, maxX: 0, minZ: 0, maxZ: 0 }, height: G + BUS.floor, holds: (x: number, z: number) => insideBus(x, z, b.pose) }));
+    const allFloors = [...busFloors, trainFloor, ...floors];
     /** Brings it all to this moment (once a moment, however many ask). */
     const sync = (at: number) => {
       if (at === now.at) return;
       now.at = at;
       now.t = trainAt(at);
-      now.b = busAt(at);
       placeBlocks(trainSlots, now.t, false);
-      placeBlocks(busSlots, now.b, true);
+      const r = Math.hypot(BUS.width, BUS.length) / 2;
+      rideBuses.forEach((b, i) => {
+        b.pose = b.line.poseAt(at);
+        placeBlocks(b.slots, b.pose, true);
+        Object.assign(busFloors[i].rect, { minX: b.pose.x - r, maxX: b.pose.x + r, minZ: b.pose.z - r, maxZ: b.pose.z + r });
+        placeSeats(b.seats, b.pose, true);
+      });
       const down = crossingOn(at);
       for (const o of barriers) o.disabled = !down;
       trainFloor.rect.minZ = now.t.z - TRAIN_LENGTH / 2;
       trainFloor.rect.maxZ = now.t.z + TRAIN_LENGTH / 2;
-      const r = Math.hypot(BUS.width, BUS.length) / 2;
-      Object.assign(busFloor.rect, { minX: now.b.x - r, maxX: now.b.x + r, minZ: now.b.z - r, maxZ: now.b.z + r });
       placeSeats(train, now.t, false);
-      placeSeats(bus, now.b, true);
     };
     // Carrying: where a point standing in one was when last asked, to where
     // that same spot in it is now.
-    let last = { t: now.t, b: now.b };
+    let lastTrain = now.t;
     let asked = false;
+    const remember = () => {
+      lastTrain = now.t;
+      for (const b of rideBuses) b.before = b.pose;
+    };
     const carry = (x: number, z: number) => {
       sync(clock());
-      const before = last;
-      last = { t: now.t, b: now.b };
-      asked = true;
       const rides: [Pose, Pose, number, number, boolean][] = [
-        [before.b, now.b, BUS.width, BUS.length, true],
-        [before.t, now.t, CAR.width, TRAIN_LENGTH, false],
+        ...rideBuses.map((b): [Pose, Pose, number, number, boolean] => [b.before, b.pose, BUS.width, BUS.length, true]),
+        [lastTrain, now.t, CAR.width, TRAIN_LENGTH, false],
       ];
+      remember();
+      asked = true;
       for (const [p0, p1, width, length, turns] of rides) {
         const f0 = frame(p0, turns);
         const [lx, lz] = f0.local(x, z);
@@ -771,11 +810,11 @@ export function Transit({ sit, fixed, floors }: { sit?: (seat: Seat) => void; fi
     };
     /** Each frame: if no one asked to be carried, start from here next time. */
     const settle = () => {
-      if (!asked) last = { t: now.t, b: now.b };
+      if (!asked) remember();
       asked = false;
     };
-    return { obstacles, allFloors, sync, carry, settle, now };
-  }, [fixed, floors, trainRoom, busRoom, train, bus]);
+    return { obstacles, allFloors, sync, carry, settle, now, rideBuses };
+  }, [fixed, floors, trainRoom, train, buses]);
 
   useEffect(() => {
     live.sync(clock());
@@ -800,10 +839,18 @@ export function Transit({ sit, fixed, floors }: { sit?: (seat: Seat) => void; fi
     setPlatformCarry(live.carry, ++stamp.current);
     const s = state.current;
     const t = live.now.t;
-    const b = live.now.b;
     camera.getWorldPosition(ear);
     const toTrain = Math.hypot(ear.x - t.x, Math.max(0, Math.abs(ear.z - t.z) - TRAIN_LENGTH / 2));
-    const toBus = Math.hypot(ear.x - b.x, ear.z - b.z);
+    // The nearer bus's engine (one engine sound for whichever it is).
+    let b = live.rideBuses[0].pose;
+    let toBus = Infinity;
+    for (const ride of live.rideBuses) {
+      const d = Math.hypot(ear.x - ride.pose.x, ear.z - ride.pose.z);
+      if (d < toBus) {
+        toBus = d;
+        b = ride.pose;
+      }
+    }
     // Their engines, near enough to hear.
     if (toBus < 45) {
       s.diesel ??= startDiesel();
@@ -852,20 +899,26 @@ export function Transit({ sit, fixed, floors }: { sit?: (seat: Seat) => void; fi
         speak("ドアが閉まります。ご注意ください。", "ja-JP", { volume: 1 - toTrain / 45, rate: 1.1 });
       }
     }
-    if (b.stop !== s.busStop) {
-      if (b.stop && toBus < 40) {
-        busDoors(toBus);
-        const v = 1 - toBus / 45;
-        speak("お待たせいたしました。海岸通りです。", "ja-JP", { volume: v, rate: 1.05 });
-        speak("Kaigan-dori. Thank you for waiting.", "en-US", { volume: v });
+    for (const ride of live.rideBuses) {
+      const stop = ride.pose.stop;
+      if (stop === (s.busStops.get(ride.line.id) ?? null)) continue;
+      const d = Math.hypot(ear.x - ride.pose.x, ear.z - ride.pose.z);
+      const name = stop ? ride.line.stopName(stop) : null;
+      if (name && d < 40) {
+        busDoors(d);
+        const v = 1 - d / 45;
+        speak(`お待たせいたしました。${name[0]}です。`, "ja-JP", { volume: v, rate: 1.05 });
+        speak(`${name[1]}. Thank you for waiting.`, "en-US", { volume: v });
       }
-      s.busStop = b.stop;
+      s.busStops.set(ride.line.id, stop);
     }
   });
   return (
     <>
       <Train sit={sit} seats={train} />
-      <Bus sit={sit} seats={bus} />
+      {buses.map((b) => (
+        <Bus key={b.line.id} sit={sit} seats={b.seats} line={b.line} />
+      ))}
       <Crossing />
     </>
   );

@@ -245,7 +245,13 @@ export const GROUNDS: Rect[] = [
   // West of the meadow, over its bank, on to the mountain's foot.
   { minX: -40, maxX: FIELD.minX + PLAYER_RADIUS + 0.1, minZ: FIELD.minZ - 1, maxZ: FIELD.maxZ + 2 },
 ];
-const onGrounds = (x: number, z: number) => !contains(OUTDOOR, x, z) && GROUNDS.some((r) => contains(r, x, z));
+/** More outer ground a world builds on (Seishore's west quarter): walkable,
+ *  at the outer ground's level, like GROUNDS. */
+let worldGrounds: Rect[] = [];
+export function setWorldGrounds(rects: Rect[]): void {
+  worldGrounds = rects;
+}
+const onGrounds = (x: number, z: number) => !contains(OUTDOOR, x, z) && (GROUNDS.some((r) => contains(r, x, z)) || worldGrounds.some((r) => contains(r, x, z)));
 
 /** Where a world keeps trees off (a road, a railway, a temple's grounds):
  *  the treeline (Outdoors.tsx) and the mountain's forest (Mountain.tsx)
@@ -381,7 +387,7 @@ export function clampToRooms(position: THREE.Vector3, margin = 0): void {
   // A world made of its own model has no rooms to stay in: walking is the
   // ground's (see setGround), and the camera goes where it likes.
   if (ground) return;
-  const walkable = [...(shore ? WALKABLE_WITH_SHORE : WALKABLE), ...GROUNDS, ...(mountain ? [MOUNTAIN_WALK] : [])];
+  const walkable = [...(shore ? WALKABLE_WITH_SHORE : WALKABLE), ...GROUNDS, ...worldGrounds, ...(mountain ? [MOUNTAIN_WALK] : [])];
   for (const room of walkable) {
     if (contains(inset(room, -margin), position.x, position.z)) return;
   }

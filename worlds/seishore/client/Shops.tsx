@@ -56,9 +56,20 @@ export function purchase(id: ShopId, ware: Ware) {
       speak("かしこまりました!", "ja-JP", { pitch: 0.95 });
       showCaption("ご注文を承りました", "Order taken: it'll be right out");
       break;
+    case "burger":
+      register();
+      speak("ありがとうございます!少々お待ちください。", "ja-JP", { pitch: 1.2, rate: 1.1 });
+      showCaption("ご注文ありがとうございます", "Thanks for your order: just a moment");
+      break;
+    case "kissa":
+      register();
+      speak("かしこまりました。", "ja-JP", { pitch: 0.85 });
+      window.setTimeout(() => steamWand(), 1500);
+      showCaption("少々お待ちください", "Just a moment: the master is making it");
+      break;
   }
   window.setTimeout(() => {
-    if (id === "cafe" || id === "famiresu") {
+    if (id === "cafe" || id === "famiresu" || id === "burger" || id === "kissa") {
       speak("お待たせいたしました。", "ja-JP", { pitch: id === "cafe" ? 1.15 : 0.95 });
       showCaption("お待たせいたしました", `Here you are: ${ware.en}`);
     }
@@ -142,7 +153,7 @@ export function ShopMenu() {
 // --- in the world ----------------------------------------------------------------------------
 
 /** A place to click: invisible until you point at it, then a soft glow. */
-function Spot({ at, size, onClick }: { at: [number, number, number]; size: [number, number, number]; onClick: () => void }) {
+export function Spot({ at, size, onClick }: { at: [number, number, number]; size: [number, number, number]; onClick: () => void }) {
   const [hover, setHover] = useState(false);
   useEffect(() => {
     if (!hover) return;

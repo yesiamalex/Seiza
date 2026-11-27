@@ -22,9 +22,12 @@ export interface Pose {
   departsIn: number;
 }
 
-type Leg =
+export type Leg =
   | { kind: "wait"; seconds: number; x: number; z: number; heading: number; stop?: string }
-  | { kind: "move"; seconds: number; from: [number, number]; to: [number, number]; heading: number }
+  /** Straight, starting and stopping gently (or, with `ease`, only speeding
+   *  up at its start, "in", or only slowing at its end, "out", to run on
+   *  into a corner or come out of one at speed). */
+  | { kind: "move"; seconds: number; from: [number, number]; to: [number, number]; heading: number; ease?: "in" | "out" }
   /** A U-turn: half an ellipse from one lane to the other (`phi` from `phi0`
    *  to `phi1`), its middle at (x, z), `across` wide and `ahead` deep. */
   | { kind: "turn"; seconds: number; x: number; z: number; across: number; ahead: number; phi0: number; phi1: number };
@@ -32,7 +35,7 @@ type Leg =
 const smooth = (u: number) => u * u * (3 - 2 * u);
 const DOOR_SECONDS = 1.6;
 
-function timeline(legs: Leg[]) {
+export function timeline(legs: Leg[]) {
   const total = legs.reduce((a, l) => a + l.seconds, 0);
   return (seconds: number): Pose => {
     let t = ((seconds % total) + total) % total;
@@ -49,10 +52,10 @@ function timeline(legs: Leg[]) {
       }
       const u = t / leg.seconds;
       if (leg.kind === "move") {
-        const s = smooth(u);
+        const s = leg.ease === "in" ? u * u : leg.ease === "out" ? 1 - (1 - u) * (1 - u) : smooth(u);
         const length = Math.hypot(leg.to[0] - leg.from[0], leg.to[1] - leg.from[1]);
-        // Smoothstep's speed: 6u(1−u) times the average.
-        const speed = (length / leg.seconds) * 6 * u * (1 - u);
+        // Smoothstep's speed: 6u(1−u) times the average; a one-ended ease, 2u or 2(1−u).
+        const speed = (length / leg.seconds) * (leg.ease === "in" ? 2 * u : leg.ease === "out" ? 2 * (1 - u) : 6 * u * (1 - u));
         return { x: leg.from[0] + (leg.to[0] - leg.from[0]) * s, z: leg.from[1] + (leg.to[1] - leg.from[1]) * s, heading: leg.heading, speed, stop: null, doors: 0, departsIn: 0 };
       }
       // Round the arc at an even pace, facing the way it goes.
@@ -64,7 +67,8 @@ function timeline(legs: Leg[]) {
         x: leg.x + leg.across * Math.cos(phi),
         z: leg.z + leg.ahead * Math.sin(phi),
         heading: Math.atan2(dx, dz),
-        speed: (Math.PI * (leg.across + leg.ahead)) / 2 / leg.seconds,
+        // An ellipse's arc, near enough: its average radius round the angle turned.
+        speed: (Math.abs(leg.phi1 - leg.phi0) * (leg.across + leg.ahead)) / 2 / leg.seconds,
         stop: null,
         doors: 0,
         departsIn: 0,

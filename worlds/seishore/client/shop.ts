@@ -3,7 +3,7 @@
 // money and nothing is sent anywhere); the konbini's ATM tops it up.
 import type { Consumable } from "../../../src/avatar/heat";
 
-export type ShopId = "vending" | "konbini" | "cafe" | "famiresu";
+export type ShopId = "vending" | "konbini" | "cafe" | "famiresu" | "burger" | "kissa";
 
 export interface Ware {
   id: string;
@@ -24,6 +24,28 @@ export interface Shop {
 }
 
 export const SHOPS: Record<ShopId, Shop> = {
+  burger: {
+    ja: "シーバーガー",
+    en: "SeaBurger",
+    wait: 3,
+    wares: [
+      { id: "teri", ja: "てりやきバーガー", en: "Teriyaki burger", price: 390, item: "sandwich" },
+      { id: "shrimp", ja: "えびバーガー", en: "Shrimp burger", price: 420, item: "sandwich" },
+      { id: "fries", ja: "ポテト", en: "Fries", price: 260, item: "meal" },
+      { id: "melon", ja: "メロンソーダ", en: "Melon soda", price: 200, item: "cup" },
+    ],
+  },
+  kissa: {
+    ja: "喫茶 波音",
+    en: "Kissa Namioto",
+    wait: 4,
+    wares: [
+      { id: "blend", ja: "ブレンドコーヒー", en: "House blend", price: 480, item: "cup" },
+      { id: "cream", ja: "クリームソーダ", en: "Cream soda", price: 620, item: "cup" },
+      { id: "napolitan", ja: "ナポリタン", en: "Napolitan spaghetti", price: 850, item: "meal" },
+      { id: "pudding", ja: "プリン", en: "Custard pudding", price: 450, item: "meal" },
+    ],
+  },
   vending: {
     ja: "自動販売機",
     en: "Vending machine",

@@ -21,9 +21,56 @@ export const PLACES = {
   surf: place("surf", "Kaze Surf", "風サーフ", "surf"),
   bus: place("bus", "the bus stop on the coast road", "海岸通りのバス停", "busStop"),
   wall: place("wall", "the sea wall", "堤防", "wallGap"),
+  // Out west, over the meadow (the town's paths don't reach it: shown, not led to).
+  nishi: { id: "nishi", label: "Nishi-machi, over the meadow to the west", labelJa: "原っぱの向こう、西町", at: [-30, -0.06, 55] as [number, number, number], walk: false },
+  yose: { id: "yose", label: "Shōfuku, the rakugo café in Nishi-machi", labelJa: "西町の寄席カフェ「笑福」", at: [-43.9, -0.06, 56.2] as [number, number, number], walk: false },
+  dojo: { id: "dojo", label: "Hoshi dōjō in Nishi-machi", labelJa: "西町の星道場", at: [-53.1, -0.06, 56.2] as [number, number, number], walk: false },
 };
 
 const topics: Topic[] = [
+  {
+    id: "nishi",
+    title: "Nishi-machi",
+    answer:
+      "Nishi-machi is the new quarter out west, over the meadow on the stepping stones. Down Nishi-dōri: Ongakudō, a music shop where you can try any instrument; SeaBurger, with tables upstairs; Hon-no-Mori, a secondhand bookshop; Kissa Namioto, an old-style coffee shop; Shōfuku, a rakugo café; and Hoshi dōjō. Behind them, a lantern alley of little stalls, and Nishi park. The orange community bus goes round it all, stopping four times.",
+    asks: ["nishi machi", "nishi-machi", "west", "new shops", "burger", "bookshop", "music shop", "community bus", "loop bus", "kissaten", "yokocho", "lantern alley", "rent a bike", "bikes"],
+    place: PLACES.nishi,
+    mood: "happy",
+    ja: {
+      title: "西町",
+      answer: "西町は、原っぱの飛び石を渡った西の新しい町。西通りには、試奏できる楽器店「音楽堂」、二階席のある「シーバーガー」、古本屋「本の森」、昔ながらの喫茶店「波音」、寄席カフェ「笑福」、そして「星道場」。裏には提灯の横丁と西公園。オレンジ色の循環バスが四つの停留所をぐるっと回ります。",
+      asks: ["西町", "新しいお店", "バーガー", "本屋", "楽器店", "循環バス", "喫茶店", "横丁", "自転車"],
+    },
+  },
+  {
+    id: "rakugo",
+    title: "Rakugo",
+    answer:
+      "Rakugo is Japanese storytelling: one teller kneeling on a cushion, with only a fan and a cloth, plays every person in the story. Before the main tale they warm the room up with kobanashi, little jokes and puns. Shōfuku in Nishi-machi has a teller on most afternoons: sit on the benches and listen.",
+    asks: ["rakugo", "kobanashi", "storyteller", "yose", "comedy", "shofuku", "jokes"],
+    place: PLACES.yose,
+    gesture: "nod",
+    mood: "happy",
+    ja: {
+      title: "落語",
+      answer: "落語は、座布団に正座した噺家がひとり、扇子と手ぬぐいだけで、登場人物を全部演じる日本の話芸。本題の前に、小噺(こばなし)で場を温めます。西町の「笑福」には、たいてい午後に噺家さんがいるので、ベンチに座って聞いてみて。",
+      asks: ["落語", "小噺", "噺家", "寄席", "笑福"],
+    },
+  },
+  {
+    id: "dojo",
+    title: "The dojo",
+    answer:
+      "Hoshi dōjō is where people practise the sword. Bow as you step onto the tatami, take a practice sword from the rack (it needs fantasy mode on in this room), and try your cuts on the makiwara posts. It starts with a bow and ends with one.",
+    asks: ["dojo", "sword", "practice", "kendo", "martial arts", "fantasy", "katana", "makiwara"],
+    place: PLACES.dojo,
+    gesture: "bow",
+    ja: {
+      title: "道場",
+      answer: "星道場は剣の稽古をする所。畳に上がるときに一礼して、棚から稽古用の刀を取って(この部屋でファンタジーモードがオンのとき)、巻藁で打ち込んでみて。礼に始まり、礼に終わる。",
+      asks: ["道場", "剣道", "稽古", "刀", "巻藁"],
+    },
+  },
   {
     id: "town",
     title: "Seishore",

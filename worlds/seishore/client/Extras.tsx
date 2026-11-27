@@ -6,12 +6,14 @@ import * as THREE from "three";
 import type { VRM } from "@pixiv/three-vrm";
 import { VrmAvatar } from "../../../src/avatar/VrmAvatar";
 import { AvatarAnimator } from "../../../src/avatar/AvatarAnimator";
-import { buildGestureRegistry, findGesture, SIT_GESTURE_NAME } from "../../../src/avatar/gestures";
+import { buildGestureRegistry, findGesture, SEIZA_GESTURE_NAME, SIT_GESTURE_NAME } from "../../../src/avatar/gestures";
 import { bubbleTexture, type Chatter } from "../../../src/guides/Guide";
 import { noRaycast } from "../../seisugbo/client/kit";
 
 const GESTURES = buildGestureRegistry({});
 const SIT = findGesture(GESTURES, SIT_GESTURE_NAME);
+/** Kneeling, as a rakugo teller does on the stage. */
+const SEIZA = findGesture(GESTURES, SEIZA_GESTURE_NAME);
 const STILL = new THREE.Vector3();
 
 /**
@@ -21,7 +23,7 @@ const STILL = new THREE.Vector3();
  * to; now and then, if they have lines and you're near, one in a bubble.
  * Placed inside a moving group, they ride along with it.
  */
-export function Sitter({ avatar, position, rotationY, chatter, near = () => Infinity }: { avatar: string; position: [number, number, number]; rotationY: number; chatter?: Chatter[]; near?: () => number }) {
+export function Sitter({ avatar, position, rotationY, chatter, near = () => Infinity, kneel = false, bubbleSeconds = 5 }: { avatar: string; position: [number, number, number]; rotationY: number; chatter?: Chatter[]; near?: () => number; kneel?: boolean; bubbleSeconds?: number }) {
   const [vrm, setVrm] = useState<VRM | null>(null);
   const bubble = useRef<THREE.Sprite>(null);
   const material = useMemo(() => new THREE.SpriteMaterial({ depthWrite: false, transparent: true, opacity: 0 }), []);
@@ -45,17 +47,17 @@ export function Sitter({ avatar, position, rotationY, chatter, near = () => Infi
       material.needsUpdate = true;
       s.shown = 0;
     }
-    if (s.shown >= 5) {
+    if (s.shown >= bubbleSeconds) {
       s.shown = -1;
       s.next = 14 + Math.random() * 16;
     }
-    material.opacity = s.shown < 0 ? 0 : Math.min(1, s.shown / 0.3, (5 - s.shown) / 0.5);
+    material.opacity = s.shown < 0 ? 0 : Math.min(1, s.shown / 0.3, (bubbleSeconds - s.shown) / 0.5);
     bubble.current.visible = s.shown >= 0;
   });
   return (
     <group position={position} rotation={[0, rotationY, 0]}>
       <VrmAvatar url={avatar} onLoaded={setVrm} updateEvery={() => 2} />
-      <AvatarAnimator vrm={vrm} updateEvery={() => 2} getPosition={() => STILL} posture={SIT} gesture={null} gestureSeq={0} />
+      <AvatarAnimator vrm={vrm} updateEvery={() => 2} getPosition={() => STILL} posture={kneel ? SEIZA : SIT} gesture={null} gestureSeq={0} />
       {chatter?.length ? <sprite ref={bubble} material={material} position={[0, 1.75, 0]} scale={[1.15, 0.3, 1]} visible={false} raycast={noRaycast} userData={{ navIgnore: true }} /> : null}
     </group>
   );

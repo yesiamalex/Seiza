@@ -14,13 +14,16 @@ import { Guide } from "../../../src/guides/Guide";
 import { GuideHud } from "../../../src/guides/GuideHud";
 import { hush, speak } from "../../../src/guides/speech";
 import { openGuide, registerGuides, setGuideWarp } from "../../../src/guides/store";
-import { floorHeightAt, setTreeClearings, setWorldCeilings, setWorldFloors, setWorldObstacles, setWorldSoundZones } from "../../../src/scene/layout";
+import { floorHeightAt, setTreeClearings, setWorldCeilings, setWorldFloors, setWorldGrounds, setWorldObstacles, setWorldSoundZones } from "../../../src/scene/layout";
+import type * as THREE from "three";
 import { SeatPad } from "../../../src/scene/SeatPad";
 import { skyState } from "../../../src/sky/skyState";
 import { L, useLang } from "../../../src/i18n/lang";
 import { showWorldOverlay, type WorldSceneProps } from "../../../src/worlds/WorldExtension";
 import { seishoreKnowledge } from "./knowledge";
-import { CHEF, CUSTOMERS, PEOPLE } from "./people";
+import { CHEF, CUSTOMERS, NISHI_PEOPLE, PEOPLE } from "./people";
+import { NISHI, type NishiKind, nishiCeilings, nishiClearings, nishiFloors, nishiObstacles, nishiRoomAt, nishiSeats } from "./nishi";
+import { DOG_WALKERS, NishiScene, walkers } from "./NishiScene";
 import {
   allSeats,
 
@@ -82,7 +85,12 @@ const FORTUNES: { ja: string; en: string }[] = [
 // --- the town's sounds and greetings -------------------------------------------------------
 
 /** Each room's greeting as you come in, said by whoever works there. */
-const GREETINGS: Partial<Record<Kind, { in: [string, string]; out?: [string, string]; pitch: number }>> = {
+const GREETINGS: Partial<Record<Kind | NishiKind, { in: [string, string]; out?: [string, string]; pitch: number }>> = {
+  burger: { in: ["いらっしゃいませ!ご注文はお決まりですか?", "Welcome! Ready to order?"], out: ["ありがとうございました!", "Thank you!"], pitch: 1.2 },
+  books: { in: ["いらっしゃいませー、本日も買取やってまーす!", "Welcome! We're buying books today too!"], pitch: 1.1 },
+  kissa: { in: ["いらっしゃい。お好きな席へどうぞ。", "Welcome. Sit wherever you like."], pitch: 0.85 },
+  music: { in: ["いらっしゃいませ。試奏もどうぞ!", "Welcome. Feel free to try anything!"], pitch: 1.0 },
+  yose: { in: ["いらっしゃいませ。もうすぐ始まりますよ。", "Welcome. It's about to start."], pitch: 1.05 },
   konbini: { in: ["いらっしゃいませー!", "Welcome in!"], out: ["ありがとうございましたー!", "Thank you very much!"], pitch: 1.25 },
   cafe: { in: ["いらっしゃいませ、どうぞ。", "Welcome, come on in."], pitch: 1.15 },
   famiresu: { in: ["いらっしゃいませ!何名様ですか?", "Welcome! How many in your party?"], pitch: 0.9 },
@@ -93,7 +101,7 @@ const GREETINGS: Partial<Record<Kind, { in: [string, string]; out?: [string, str
  *  greeting as you go in or out, the fridges' hum inside, the kitchen's
  *  sizzle, the café's steam. The surf is Seiza's own. */
 function TownSounds({ getSelfPosition }: { getSelfPosition: () => [number, number, number] }) {
-  const state = useRef({ kite: 8 + Math.random() * 10, gull: 5 + Math.random() * 10, room: null as Kind | null, steam: 6, fridges: null as Loop | null, kitchen: null as Loop | null });
+  const state = useRef({ kite: 8 + Math.random() * 10, gull: 5 + Math.random() * 10, room: null as Kind | NishiKind | null, steam: 6, fridges: null as Loop | null, kitchen: null as Loop | null });
   useEffect(
     () => () => {
       state.current.fridges?.stop();
@@ -126,11 +134,11 @@ function TownSounds({ getSelfPosition }: { getSelfPosition: () => [number, numbe
       if (d < 12 && Math.random() < dt * (0.08 + 0.35 * wind)) furin(d);
     }
     // Going in or out of a room: the konbini's chime, a greeting.
-    const room = roomAt(x, z);
+    const room = roomAt(x, z) ?? nishiRoomAt(x, z);
     if (room !== s.room) {
       const left = s.room;
       s.room = room;
-      if (room === "konbini" || left === "konbini") doorChime(0);
+      if (room === "konbini" || left === "konbini" || room === "burger" || room === "books") doorChime(0);
       const g = room ? GREETINGS[room] : left ? GREETINGS[left] : undefined;
       if (g && room) speak(g.in[0], "ja-JP", { pitch: g.pitch });
       else if (g?.out && left) speak(g.out[0], "ja-JP", { pitch: g.pitch });
@@ -181,25 +189,32 @@ function useStagger(total: number, everyMs: number, startMs = 0) {
   return n;
 }
 
-export function Scene({ warp, getSelfPosition, sit, occupiedSeatId, playGesture, faceToward }: WorldSceneProps) {
+/** Everything Seishore blocks: the town's, and Nishi-machi's. */
+const allObstacles = () => [...seishoreObstacles(), ...nishiObstacles()];
+const inNishi = (v: THREE.Vector3) => v.x < NISHI.maxX && v.z > NISHI.minZ;
+/** The town's paths; in Nishi-machi people walk straight (its streets are open). */
+const findWay = (from: THREE.Vector3, to: THREE.Vector3) => (inNishi(from) || inNishi(to) ? null : findPath(from, to));
+
+export function Scene({ warp, getSelfPosition, sit, occupiedSeatId, playGesture, faceToward, worldState }: WorldSceneProps) {
   useLang();
-  // The ground the railway needs, before anything is drawn on it.
+  // The ground the railway needs, before anything is drawn on it; and Nishi-machi's, out west.
   const [floors] = useState(() => {
-    const ground = seishoreFloors(floorHeightAt);
+    setWorldGrounds([NISHI]);
+    const ground = [...seishoreFloors(floorHeightAt), ...nishiFloors()];
     setWorldFloors(ground);
     return ground;
   });
-  const people = useMemo(() => [...PEOPLE, CHEF], []);
+  const people = useMemo(() => [...PEOPLE, CHEF, ...NISHI_PEOPLE], []);
   useEffect(() => {
     registerGuides(people.map((p) => ({ id: p.id, name: p.name, brain: createBrain(seishoreKnowledge(), p.persona) })));
     showWorldOverlay(<Hud />);
-    setWorldCeilings(seishoreCeilings());
+    setWorldCeilings([...seishoreCeilings(), ...nishiCeilings()]);
     // Voices from inside a shop are muffled outside it, and the other way.
-    setWorldSoundZones(roomAt);
+    setWorldSoundZones((x, z) => roomAt(x, z) ?? nishiRoomAt(x, z));
     // The town's collision now; the bus and train add theirs when they come (Transit).
-    setWorldObstacles(seishoreObstacles());
+    setWorldObstacles(allObstacles());
     // No trees on the road, the railway, or the temple's grounds.
-    setTreeClearings(seishoreClearings());
+    setTreeClearings([...seishoreClearings(), ...nishiClearings()]);
     return () => {
       setWorldObstacles([]);
       setTreeClearings([]);
@@ -209,14 +224,15 @@ export function Scene({ warp, getSelfPosition, sit, occupiedSeatId, playGesture,
       setWorldCeilings([]);
       setWorldSoundZones(null);
       setWorldFloors([]);
+      setWorldGrounds([]);
     };
   }, [people]);
   useEffect(() => {
     setGuideWarp(warp);
     return () => setGuideWarp(null);
   }, [warp]);
-  const fixed = useMemo(seishoreObstacles, []);
-  const seats = useMemo(seishoreSeats, []);
+  const fixed = useMemo(allObstacles, []);
+  const seats = useMemo(() => [...seishoreSeats(), ...nishiSeats()], []);
   const customers = useMemo(() => allSeats().filter((s) => CUSTOMERS[s.id]), []);
   const shownPeople = useStagger(people.length, 220, 300);
   const shownCustomers = useStagger(customers.length, 220, 300 + people.length * 220);
@@ -302,6 +318,7 @@ export function Scene({ warp, getSelfPosition, sit, occupiedSeatId, playGesture,
       {transitShown && <Transit sit={sit} fixed={fixed} floors={floors} />}
       <TownSounds getSelfPosition={getSelfPosition} />
       <ShopsScene />
+      <NishiScene worldState={worldState} getSelfPosition={getSelfPosition} />
       <Steam at={kitchenSteam} rise={0.7} size={0.14} opacity={0.3} />
       <Steam at={incense} rise={1.6} size={0.22} color="#d9dcd6" opacity={0.28} rate={0.6} />
       {sit && seats.map((seat) => <SeatPad key={seat.id} seat={seat} onSit={sit} occupied={occupiedSeatId === seat.id} />)}
@@ -322,7 +339,8 @@ export function Scene({ warp, getSelfPosition, sit, occupiedSeatId, playGesture,
           speak
           pitch={[1.25, 1.15, 0.8, 1.0, 1.1, 1.05, 0.9][i] ?? 1}
           getSelfPosition={getSelfPosition}
-          findPath={findPath}
+          findPath={findWay}
+          onPlace={DOG_WALKERS.includes(p.id) ? (x, y, z, walking) => walkers.set(p.id, { x, y, z, walking }) : undefined}
         />
       ))}
     </>

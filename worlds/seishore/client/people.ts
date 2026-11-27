@@ -8,7 +8,7 @@ import type { Persona } from "../../../src/guides/brain";
 import type { Chatter } from "../../../src/guides/Guide";
 import type { Stop } from "../../../src/guides/route";
 import { encodeAvatarSpec, type AvatarSpec } from "../../../src/avatar/designer/avatarSpec";
-import { at, type Node } from "./plan";
+import { at, G, type Node } from "./plan";
 
 export interface Townsperson {
   id: string;
@@ -273,4 +273,38 @@ export const PASSENGERS = [
   look({ hairStyle: "bob", hairColor: "#1f1a17", top: "blazer", topColor: "#2f3b52", bottom: "skirt", bottomColor: "#2f3b52", accessories: ["tie"], accessoryColor: "#8c2f39", height: 0.95, build: 0.92 }),
   look({ hairStyle: "none", top: "longsleeve", topColor: "#6b6f78", bottom: "pants", accessories: ["glasses"], height: 0.98, build: 1.04, waist: 1.08 }),
   look({ skin: "#b87a55", hairStyle: "short", hairColor: "#8a5a33", top: "hoodie", topColor: "#4f8fc9", bottom: "shorts", height: 1.04 }),
+];
+
+// --- Nishi-machi ---------------------------------------------------------------------------
+
+/** Nishi-machi's people: Mika, who walks her shiba, Kuro, round Nishi park (NishiScene.tsx draws the dog). */
+export const NISHI_PEOPLE: Townsperson[] = [
+  {
+    id: "mika",
+    name: "Mika",
+    role: "dog walker",
+    persona: {
+      name: "Mika",
+      nameJa: "美香",
+      self: "I'm Mika, and this is Kuro, my shiba. We walk round Nishi park twice a day. Kuro knows every bench, and SeaBurger's back door.",
+      selfJa: "美香です。この子は柴犬のクロ。西公園を一日二回お散歩するの。クロはベンチを全部覚えてて、シーバーガーの裏口もね。",
+      invite: "Ask me about Nishi-machi: the shops, the loop bus, the rakugo café, or the dojo.",
+      inviteJa: "西町のこと、お店、循環バス、寄席カフェ、道場のこと、聞いてね。",
+    },
+    avatar: look({ skin: "#f6d7c3", hairStyle: "ponytail", hairColor: "#4a2f22", top: "hoodie", topColor: "#e8c37a", bottom: "pants", bottomColor: "#3d7a5a", shoeColor: "#f2f0eb", accessories: ["cap"], accessoryColor: "#d97b3f", height: 0.97, build: 0.94, shoulders: 0.92, waist: 0.85 }),
+    // Along the park's gravel path, and back (the ground there is OUTER_GROUND_Y).
+    stops: [
+      { at: [-58, G, 41.5], wait: 25 },
+      { at: [-47, G, 41.5], wait: 8 },
+      { at: [-36, G, 41.5], wait: 30 },
+      { at: [-47, G, 41.5], wait: 8 },
+    ],
+    speed: 0.8,
+    chatter: [
+      { ja: "クロ、待って〜!", en: "Kuro, wait for me!" },
+      { ja: "よしよし、いい子ね。", en: "There, there, good dog." },
+      { ja: "触ってもいいよ。おとなしいから。", en: "You can pet him. He's gentle." },
+      { ja: "落語カフェ、今日は満員かな。", en: "I wonder if the rakugo café's full today." },
+    ],
+  },
 ];

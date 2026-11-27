@@ -2036,8 +2036,6 @@ export default function App() {
           onSetLink={setObjectLink}
           selectedModel={selectedObjectId && objects[selectedObjectId]?.kind === "model" ? objects[selectedObjectId] : null}
           onReplaceModel={setObjectModel}
-          selectedScale={selectedObjectId ? (objects[selectedObjectId]?.scale ?? null) : null}
-          onScaleSelected={(scale) => selectedObjectId && scaleObject(selectedObjectId, scale)}
           editorPasswordRequired={editGateProps.editorPasswordRequired}
           isEditor={editGateProps.isEditor}
           editorAuthPending={editGateProps.editorAuthPending}
