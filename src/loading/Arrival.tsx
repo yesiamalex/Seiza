@@ -499,26 +499,28 @@ export function Arrival({
     const leafMaterial = lambert("#c9ccd0");
     const leaves = [-1, 1].map((s) => box([0.6, 2.05, 0.04], [DOOR_X + s * 0.3, 1.025, WALL_Z + 0.03], leafMaterial));
     for (const leaf of leaves) box([0.36, 0.7, 0.01], [0, 0.35, 0.025], basic("#1a2140"), leaf);
-    // Seats like a Gran Class car's: one each under the windows, a big
-    // single wing-back in cream leather in its walnut shell, wooden
-    // armrests, a footrest; turned to the aisle here, so you face the room.
-    // Yours is the middle one. The cushion is 0.5 m up, as the long seat's was.
+    // Seats like a Gran Class car's: a row of big single wing-backs down
+    // the window side, cream leather, a walnut shell behind each, wooden
+    // armrests, a footrest, every one facing forward (the way the train
+    // goes, toward the door), a seat's pitch apart. Yours is the one by
+    // the middle window: from the aisle you see yourself side on, as you'd
+    // see anyone sitting there. The cushion is 0.5 m up.
     const leather = lambert("#e6d8bd");
     const shell = lambert("#5a3a22");
     const trim = lambert("#8a5c36");
     const base = lambert("#3a3d42");
-    const zc = WALL_Z + 0.27;
-    for (const sx of [-3.6, KNEEL[0], 4.8]) {
-      box([0.36, 0.3, 0.36], [sx, 0.15, zc], base);
-      box([0.6, 0.15, 0.56], [sx, 0.43, zc + 0.02], leather);
-      box([0.58, 0.92, 0.12], [sx, 0.96, zc - 0.24], leather);
+    const cz = SEAT.z;
+    for (const sx of [KNEEL[0] - 2.6, KNEEL[0] - 1.3, KNEEL[0], DOOR_X + 1.5, DOOR_X + 2.8, DOOR_X + 4.1]) {
+      box([0.36, 0.3, 0.36], [sx - 0.08, 0.15, cz], base);
+      box([0.56, 0.15, 0.6], [sx - 0.06, 0.43, cz], leather);
+      box([0.12, 0.92, 0.58], [sx - 0.36, 0.96, cz], leather);
+      box([0.05, 1.24, 0.72], [sx - 0.44, 0.84, cz], shell);
       for (const side of [-1, 1]) {
-        box([0.08, 0.38, 0.16], [sx + side * 0.25, 1.24, zc - 0.16], leather);
-        box([0.05, 1.0, 0.5], [sx + side * 0.35, 0.82, zc - 0.07], shell);
-        box([0.1, 0.06, 0.48], [sx + side * 0.3, 0.66, zc + 0.03], trim);
+        box([0.16, 0.38, 0.08], [sx - 0.29, 1.24, cz + side * 0.25], leather);
+        box([0.48, 0.06, 0.1], [sx - 0.06, 0.66, cz + side * 0.3], trim);
+        box([0.06, 0.18, 0.08], [sx - 0.06, 0.54, cz + side * 0.3], shell);
       }
-      box([0.72, 1.24, 0.05], [sx, 0.84, zc - 0.31], shell);
-      box([0.48, 0.04, 0.22], [sx, 0.12, zc + 0.42], base);
+      box([0.22, 0.04, 0.48], [sx + 0.4, 0.12, cz], base);
     }
     // Straps on a rail over the aisle, rocking with the train.
     box([16, 0.03, 0.03], [0, 2.08, 0.15], lambert("#c9ccd0"));
@@ -644,36 +646,7 @@ export function Arrival({
         bow = 1;
       }
     };
-    // Dragging looks round the carriage (a turn of the head, not a walk); a
-    // press that doesn't move is a tap, acted on as it lifts. Let go, and the
-    // view drifts back to where it was a few seconds later.
-    const look = { yaw: 0, pitch: 0, toYaw: 0, toPitch: 0, from: null as null | { x: number; y: number; yaw: number; pitch: number; moved: boolean }, idle: 0 };
-    const onDown = (event: PointerEvent) => {
-      look.from = { x: event.clientX, y: event.clientY, yaw: look.toYaw, pitch: look.toPitch, moved: false };
-      el.setPointerCapture?.(event.pointerId);
-    };
-    const onMove = (event: PointerEvent) => {
-      const from = look.from;
-      if (!from) return;
-      const dx = event.clientX - from.x;
-      const dy = event.clientY - from.y;
-      if (!from.moved && Math.hypot(dx, dy) < 7) return;
-      from.moved = true;
-      const across = Math.max(320, el.clientWidth || window.innerWidth);
-      look.toYaw = THREE.MathUtils.clamp(from.yaw + (dx / across) * 2.4, -1.0, 1.0);
-      look.toPitch = THREE.MathUtils.clamp(from.pitch + (dy / across) * 1.6, -0.35, 0.45);
-      look.idle = 0;
-    };
-    const onUp = (event: PointerEvent) => {
-      const from = look.from;
-      look.from = null;
-      if (from && !from.moved) onTap(event);
-    };
-    el.style.touchAction = "none";
-    el.addEventListener("pointerdown", onDown);
-    el.addEventListener("pointermove", onMove);
-    el.addEventListener("pointerup", onUp);
-    el.addEventListener("pointercancel", onUp);
+    el.addEventListener("pointerdown", onTap);
 
     const loop = () => {
       frame = requestAnimationFrame(loop);
@@ -771,10 +744,11 @@ export function Arrival({
           a.walk.fadeIn(0.3);
           a.seiza?.fadeOut(0.3);
         }
-        // VRM 1.0 models are built facing +Z, 0.x ones −Z: facing you first,
-        // then a quarter turn to the door, then another, out through it.
+        // VRM 1.0 models are built facing +Z, 0.x ones −Z.
         const facing = a.vrm.meta.metaVersion === "1" ? Math.PI : 0;
-        a.vrm.scene.rotation.y = facing + Math.PI + (Math.PI / 2) * turn + (Math.PI / 2) * smooth((after - outAt) / 0.35);
+        // Seated facing forward (the way the train goes, toward the door);
+        // up, a step out into the aisle, along it, and a quarter turn out.
+        a.vrm.scene.rotation.y = facing + Math.PI + Math.PI / 2 + (Math.PI / 2) * smooth((after - outAt) / 0.35);
         if (!still) {
           const up = smooth((after - riseAt) / STAND_SECONDS);
           a.vrm.scene.position.x = KNEEL[0] + (DOOR_X - KNEEL[0]) * walk;
@@ -807,18 +781,6 @@ export function Arrival({
       camera.position.set(baseX + (1.9 - baseX) * follow + 0.01 * Math.sin(t * 9) * rock, 1.3 + (still ? 0 : 0.015 * smooth(phase)) + 0.006 * Math.sin(t * 11) * rock, 3.4 - 0.6 * follow);
       camera.lookAt((portrait ? KNEEL[0] : 0.1) + (portrait ? 2.2 : 1.6) * follow, 1.05, -0.6);
       camera.rotateZ(0.004 * Math.sin(t * 1.3) * rock);
-      // Where you've dragged the view to, eased; back to the middle a while after you let go.
-      if (!look.from) {
-        look.idle += dt;
-        if (look.idle > 3.5) {
-          look.toYaw *= 1 - Math.min(1, dt * 1.2);
-          look.toPitch *= 1 - Math.min(1, dt * 1.2);
-        }
-      }
-      look.yaw += (look.toYaw - look.yaw) * Math.min(1, dt * 10);
-      look.pitch += (look.toPitch - look.pitch) * Math.min(1, dt * 10);
-      camera.rotateY(look.yaw);
-      camera.rotateX(look.pitch);
 
       // The constellation: a line every breath and a bit, and one for each shooting star.
       const drawn = Math.min(lines.length, Math.floor(t / 1.2) + 1 + extraLines + (after >= 0 ? lines.length : 0));
@@ -843,10 +805,7 @@ export function Arrival({
       cancelAnimationFrame(frame);
       cancelled = true;
       window.clearTimeout(avatarTimer);
-      el.removeEventListener("pointerdown", onDown);
-      el.removeEventListener("pointermove", onMove);
-      el.removeEventListener("pointerup", onUp);
-      el.removeEventListener("pointercancel", onUp);
+      el.removeEventListener("pointerdown", onTap);
       if (self) {
         scene.remove(self.vrm.scene);
         VRMUtils.deepDispose(self.vrm.scene);
@@ -880,7 +839,7 @@ export function Arrival({
         <span aria-hidden style={{ width: 160, height: 3, borderRadius: 2, background: "rgba(255,255,255,0.18)", overflow: "hidden" }}>
           <span style={{ display: "block", height: "100%", width: `${Math.round((ready ? 1 : 0.1 + 0.85 * share) * 100)}%`, background: color, transition: "width 400ms" }} />
         </span>
-        <span style={{ fontSize: 13, opacity: 0.75 }}>{!tapped && !flat ? L("Tap the window, a strap, the speaker, or yourself · drag to look around", "窓、つり革、スピーカー、自分をタップ · ドラッグで見回せます") : L(...tip)}</span>
+        <span style={{ fontSize: 13, opacity: 0.75 }}>{!tapped && !flat ? L("Tap the window, a strap, the speaker, or yourself", "窓、つり革、スピーカー、自分をタップしてみて") : L(...tip)}</span>
       </div>
     </div>
   );
