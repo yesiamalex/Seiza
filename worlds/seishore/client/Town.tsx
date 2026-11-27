@@ -31,10 +31,16 @@ import {
   STRIP,
   TEMPLE,
   TEMPLE_OFFERING,
+  TEMPLE_STEPS,
+  TEMPLE_YARD,
+  TEMPLE_STAIR,
+  TEMPLE_BENCH,
+  PRAY_AT,
   TRACK,
   SHELTER_Z,
   WALL,
   BUS_STOP,
+  BUS_BENCH,
   CAFE,
   CAFE_BENCH,
   CAFE_BOARD,
@@ -482,6 +488,72 @@ function addRailway(b: Builder, roofs: Builder, marks: Builder) {
   });
 }
 
+/**
+ * A saisen-bako, the offering box before a shrine or a temple's hall: a
+ * wooden chest standing out in front, its top a row of slanted slats the
+ * coins drop between, iron bands at its corners and edges, and 賽銭 on its
+ * front. Built facing +z; one geometry for both boxes.
+ */
+function offeringBoxGeometry() {
+  const b = new Builder();
+  const W = 0.96;
+  const H = 0.7;
+  const D = 0.62;
+  // The chest: legs, the body, a lip round the top.
+  for (const [x, z] of [[-W / 2 + 0.06, -D / 2 + 0.06], [W / 2 - 0.06, -D / 2 + 0.06], [-W / 2 + 0.06, D / 2 - 0.06], [W / 2 - 0.06, D / 2 - 0.06]] as [number, number][])
+    b.box([0.1, 0.1, 0.1], [x, 0.05, z], "#3a2a1d");
+  b.box([W, H - 0.16, D], [0, 0.1 + (H - 0.16) / 2, 0], "#8d5f38");
+  // Its planks: dark seams across the front, back and sides, a darker plinth.
+  for (let i = 1; i < 4; i++) {
+    const y = 0.1 + (i * (H - 0.16)) / 4;
+    b.box([W + 0.004, 0.012, D + 0.004], [0, y, 0], "#4a3020");
+  }
+  b.box([W + 0.02, 0.06, D + 0.02], [0, 0.13, 0], "#5a3c26");
+  // Vertical battens either side of the front plate.
+  for (const x of [-0.3, 0.3]) b.box([0.05, H - 0.22, 0.02], [x, 0.1 + (H - 0.16) / 2, D / 2 + 0.01], "#6b4428");
+  b.box([W + 0.06, 0.06, D + 0.06], [0, H - 0.03, 0], "#5a3c26");
+  // The slats across the top, each tilted, the dark inside showing between.
+  b.box([W - 0.08, 0.02, D - 0.08], [0, H - 0.14, 0], "#140d08");
+  const n = 7;
+  for (let i = 0; i < n; i++) b.box([W - 0.1, 0.035, (D - 0.1) / n - 0.02], [0, H - 0.05, -D / 2 + 0.05 + (i + 0.5) * ((D - 0.1) / n)], "#8a6040", [0.55, 0, 0]);
+  // Iron bands: up each corner, round the top and the foot.
+  for (const x of [-W / 2, W / 2]) for (const z of [-D / 2, D / 2]) b.box([0.05, H - 0.1, 0.05], [x, 0.1 + (H - 0.1) / 2, z], "#2b2d30");
+  for (const y of [0.14, H - 0.08]) {
+    b.box([W + 0.02, 0.035, 0.02], [0, y, D / 2 + 0.005], "#2b2d30");
+    b.box([W + 0.02, 0.035, 0.02], [0, y, -D / 2 - 0.005], "#2b2d30");
+  }
+  // Studs along the bands.
+  for (let i = 0; i < 6; i++) b.cylinder(0.015, 0.015, 0.02, [-W / 2 + 0.1 + i * ((W - 0.2) / 5), H - 0.08, D / 2 + 0.02], "#c9a54a", [Math.PI / 2, 0, 0], 6);
+  return b.build();
+}
+
+/** The front's plate: 賽銭 in gold on dark wood. */
+function saisenPlate() {
+  return canvasTexture(256, 128, (ctx, w, h) => {
+    ctx.fillStyle = "#3a2618";
+    ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = "#c9a54a";
+    ctx.lineWidth = 6;
+    ctx.strokeRect(8, 8, w - 16, h - 16);
+    ctx.fillStyle = "#e3c172";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = `800 76px ${FONT}`;
+    ctx.fillText("賽銭", w / 2, h / 2 + 4);
+  });
+}
+
+function OfferingBox({ position, facing, geometry, grain, plate }: { position: [number, number, number]; facing: number; geometry: THREE.BufferGeometry; grain: THREE.Material; plate: THREE.Material }) {
+  return (
+    <group position={position} rotation={[0, facing, 0]}>
+      <mesh geometry={geometry} material={grain} castShadow receiveShadow />
+      <mesh position={[0, 0.4, 0.312]} material={plate}>
+        <planeGeometry args={[0.5, 0.25]} />
+      </mesh>
+    </group>
+  );
+}
+
 /** The temple, Seikai-ji: a roofed gate, the bronze incense burner, the main
  *  hall up on its stone base, and pines. */
 function addTemple(b: Builder, roofs: Builder) {
@@ -492,14 +564,29 @@ function addTemple(b: Builder, roofs: Builder) {
   for (const dz of [-1.5, 1.5]) b.cylinder(0.17, 0.19, 3.2, [TEMPLE.gateX, gb + 1.6, z + dz], TEMPLE_WOOD, undefined, 10);
   b.box([0.4, 0.3, 3.6], [TEMPLE.gateX, gb + 3.0, z], TEMPLE_WOOD);
   roof(roofs, TEMPLE.gateX - 1.0, TEMPLE.gateX + 1.0, z - 2.1, z + 2.1, gb + 3.15, "#3c3a38", TEMPLE_WOOD);
-  // A stone path to the hall.
-  for (let x = TEMPLE.gateX - 1.0; x > TEMPLE.hallX + 2.2; x -= 0.75) b.box([0.6, 0.06, 1.0], [x, floorHeightAt(x, z) + 0.03, z], "#a8a49b");
-  // The incense burner: a bronze bowl on legs, a little roof over it.
-  const bb = floorHeightAt(TEMPLE.burnerX, z);
-  b.cylinder(0.45, 0.32, 0.4, [TEMPLE.burnerX, bb + 0.75, z], "#4e4a3e", undefined, 14);
-  for (const a of [0, 2.1, 4.2]) b.box([0.08, 0.6, 0.08], [TEMPLE.burnerX + Math.cos(a) * 0.3, bb + 0.3, z + Math.sin(a) * 0.3], "#3f3b32");
-  for (const a of [0.8, 2.4, 3.9, 5.5]) b.box([0.06, 0.8, 0.06], [TEMPLE.burnerX + Math.cos(a) * 0.4, bb + 1.35, z + Math.sin(a) * 0.4], "#3f3b32");
-  b.cylinder(0.0, 0.62, 0.35, [TEMPLE.burnerX, bb + 1.9, z], "#3f3b32", undefined, 8);
+  // The terrace: dressed stone up from the slope, a coping round its top.
+  const yard = TEMPLE_YARD;
+  const low = Math.min(floorHeightAt(yard.x1, yard.z0), floorHeightAt(yard.x1, yard.z1), TEMPLE_STAIR.foot) - 0.3;
+  b.box([yard.x1 - yard.x0, yard.y - low, yard.z1 - yard.z0], [(yard.x0 + yard.x1) / 2, (yard.y + low) / 2, (yard.z0 + yard.z1) / 2], "#8f8b82");
+  b.box([yard.x1 - yard.x0 + 0.1, 0.08, yard.z1 - yard.z0 + 0.1], [(yard.x0 + yard.x1) / 2, yard.y - 0.03, (yard.z0 + yard.z1) / 2], "#b3ab98");
+  // The stair down to the gate: a step every 20 cm or so, each solid to the ground.
+  const st = TEMPLE_STAIR;
+  const steps = Math.max(1, Math.round((yard.y - st.foot) / 0.2));
+  for (let i = 0; i < steps; i++) {
+    const x0 = st.x0 + (i * (st.x1 - st.x0)) / steps;
+    const top = yard.y + ((st.foot - yard.y) * (i + 1)) / steps;
+    b.box([(st.x1 - st.x0) / steps + 0.01, top - low, st.z1 - st.z0], [x0 + (st.x1 - st.x0) / steps / 2, (top + low) / 2, z], "#a8a49b");
+  }
+  for (const side of [st.z0 - 0.12, st.z1 + 0.12]) b.bar([st.x0, yard.y + 0.1, side], [st.x1, st.foot + 0.1, side], 0.12, "#8f8b82", 4);
+  // Stones from the stair's top across the yard to the hall's steps.
+  for (let x = yard.x1 - 0.5; x > TEMPLE_STEPS.x1 + 0.2; x -= 0.75) b.box([0.6, 0.04, 1.0], [x, yard.y + 0.02, z], "#a8a49b");
+  // The incense burner, to one side of the way: a bronze bowl on legs, a little roof over it.
+  const bb = yard.y;
+  const bz = TEMPLE.burnerZ;
+  b.cylinder(0.45, 0.32, 0.4, [TEMPLE.burnerX, bb + 0.75, bz], "#4e4a3e", undefined, 14);
+  for (const a of [0, 2.1, 4.2]) b.box([0.08, 0.6, 0.08], [TEMPLE.burnerX + Math.cos(a) * 0.3, bb + 0.3, bz + Math.sin(a) * 0.3], "#3f3b32");
+  for (const a of [0.8, 2.4, 3.9, 5.5]) b.box([0.06, 0.8, 0.06], [TEMPLE.burnerX + Math.cos(a) * 0.4, bb + 1.35, bz + Math.sin(a) * 0.4], "#3f3b32");
+  b.cylinder(0.0, 0.62, 0.35, [TEMPLE.burnerX, bb + 1.9, bz], "#3f3b32", undefined, 8);
   // The main hall: a stone base, a raised floor and verandah, white walls
   // between dark posts, the doors open, a great roof.
   b.box([5.0, 0.6, 5.6], [TEMPLE.hallX - 0.35, base + 0.3, z], "#9d9a92");
@@ -509,14 +596,12 @@ function addTemple(b: Builder, roofs: Builder) {
   b.box([0.08, 2.0, 1.3], [TEMPLE.hallX + 1.16, base + 1.72, z], "#2a1d15");
   b.box([0.1, 0.2, 4.2], [TEMPLE.hallX + 1.2, base + 3.1, z], TEMPLE_WOOD);
   roof(roofs, TEMPLE.hallX - 2.8, TEMPLE.hallX + 1.9, z - 2.9, z + 2.9, base + 3.2, "#3c3a38", TEMPLE_WHITE);
-  // Steps up to the verandah.
-  for (let i = 0; i < 3; i++) b.box([0.35, 0.2, 1.6], [TEMPLE.hallX + 1.95 + i * 0.32, base + 0.6 - i * 0.2, z], "#a8a49b");
-  // The offering box before the doors.
-  b.box([0.7, 0.45, 0.5], [TEMPLE_OFFERING[0], floorHeightAt(...TEMPLE_OFFERING) + 0.23, TEMPLE_OFFERING[1]], "#5a3c26");
+  // Steps up to the verandah: solid stone from the ground, out from the base.
+  const tread = (TEMPLE_STEPS.x1 - TEMPLE_STEPS.x0) / TEMPLE_STEPS.tops.length;
+  TEMPLE_STEPS.tops.forEach((top, i) => b.box([tread + 0.02, top, 1.6], [TEMPLE_STEPS.x0 + (i + 0.5) * tread, base + top / 2, z], "#a8a49b"));
   // The bench, pines.
-  const benchY = floorHeightAt(TEMPLE.burnerX + 0.4, z + 3.2);
-  b.box([1.8, 0.06, 0.42], [TEMPLE.burnerX + 0.4, benchY + 0.45, z + 3.2], WOOD);
-  for (const dx of [-0.7, 0.7]) b.box([0.06, 0.44, 0.38], [TEMPLE.burnerX + 0.4 + dx, benchY + 0.22, z + 3.2], WOOD_DARK);
+  b.box([1.8, 0.06, 0.42], [TEMPLE_BENCH.x, yard.y + 0.45, TEMPLE_BENCH.z], WOOD);
+  for (const dx of [-0.7, 0.7]) b.box([0.06, 0.44, 0.38], [TEMPLE_BENCH.x + dx, yard.y + 0.22, TEMPLE_BENCH.z], WOOD_DARK);
   for (const [dx, dz, sc] of [
     [3.2, 4.2, 1],
     [4.5, -4.4, 0.85],
@@ -770,10 +855,12 @@ function buildTown() {
     b.box([SEAWALL.thick + 0.08, 0.06, z1 - z0], [SEAWALL.x, G + SEAWALL.height + 0.03, (z0 + z1) / 2], "#cfccc4");
   }
   // The bus stop: its pole and round sign, the timetable, a bench facing the road.
-  b.cylinder(0.04, 0.04, 2.5, [BUS_STOP.x, G + 1.25, BUS_STOP.z], "#d8d8d4", undefined, 8);
+  // The pole, up to behind the sign's middle; the sign's backing disc, in the line's green.
+  b.cylinder(0.04, 0.04, 2.25, [BUS_STOP.x, G + 1.125, BUS_STOP.z], "#d8d8d4", undefined, 8);
+  b.cylinder(0.335, 0.335, 0.035, [BUS_STOP.x - 0.06, G + 2.25, BUS_STOP.z], "#2f6a3a", [0, 0, Math.PI / 2], 24);
   b.box([0.3, 0.42, 0.04], [BUS_STOP.x, G + 1.35, BUS_STOP.z - 0.03], "#f4f4f0");
-  b.box([0.42, 0.06, 1.7], [BUS_STOP.x + 0.33, G + 0.45, BUS_STOP.z + 1.3], WOOD);
-  for (const dz of [-0.7, 0.7]) b.box([0.38, 0.44, 0.06], [BUS_STOP.x + 0.33, G + 0.22, BUS_STOP.z + 1.3 + dz], "#7d7f82");
+  b.box([0.42, 0.06, 1.7], [BUS_BENCH.x, G + 0.45, BUS_BENCH.z], WOOD);
+  for (const dz of [-0.7, 0.7]) b.box([0.38, 0.44, 0.06], [BUS_BENCH.x, G + 0.22, BUS_BENCH.z + dz], "#7d7f82");
   for (const [x, z] of PROMENADE_BENCHES) {
     b.box([0.42, 0.06, 1.7], [x, G + 0.45, z], WOOD);
     b.box([0.06, 0.35, 1.7], [x - 0.2, G + 0.68, z], WOOD);
@@ -793,7 +880,7 @@ function buildTown() {
   for (const dx of [-0.6, 0, 0.6]) cloth.plane(0.12, 0.32, [SHRINE.x + dx, Y + 2.08, tz + 0.02], "#ffffff");
   // A stone path to the shrine, stone lanterns, the small shrine on its base.
   const hz = SHRINE.hokoraZ;
-  for (let z = tz + 0.6; z < hz - 1.0; z += 0.75) b.box([0.9, 0.06, 0.6], [SHRINE.x, Y + 0.03, z], "#a8a49b");
+  for (let z = tz + 0.6; z < PRAY_AT[1] + 0.3; z += 0.75) b.box([0.9, 0.06, 0.6], [SHRINE.x, Y + 0.03, z], "#a8a49b");
   for (const dx of [-1.7, 1.7]) {
     const lz = hz - 1.45;
     b.box([0.45, 0.12, 0.45], [SHRINE.x + dx, Y + 0.06, lz], "#9d9a92");
@@ -1106,6 +1193,8 @@ export function Town({ onVending, onShrine, onTemple, onOmikuji }: TownActions) 
   const area = useRef<THREE.Group>(null);
   useDrawDistance(area, [12, 55], 90);
   const geometry = useMemo(buildTown, []);
+  const offering = useMemo(offeringBoxGeometry, []);
+  useEffect(() => () => offering.dispose(), [offering]);
   const paving = useMemo(
     () => ({
       lane: drape(LANE.x0, LANE.x1 + 4.2, LANE.z0, LANE.z1, 56, 6, 0.03),
@@ -1129,6 +1218,7 @@ export function Town({ onVending, onShrine, onTemple, onOmikuji }: TownActions) 
       marks: paint({ ...ON_TOP }),
       inside: new THREE.MeshBasicMaterial({ vertexColors: true }),
       grain: surfaceMaterial("grain", true),
+      saisen: new THREE.MeshLambertMaterial({ map: saisenPlate() }),
       plaster: surfaceMaterial("plaster", true),
       grainIn: surfaceMaterial("grain", false),
       vinylIn: surfaceMaterial("vinyl", false),
@@ -1225,14 +1315,10 @@ export function Town({ onVending, onShrine, onTemple, onOmikuji }: TownActions) 
       </mesh>
       {/* The offering boxes: click to pray. The fortune box: click to draw one. */}
       <Clickable onClick={onShrine}>
-        <mesh position={[OFFERING_AT[0], Y + 0.7, OFFERING_AT[1]]} material={m.wood}>
-          <boxGeometry args={[0.72, 0.42, 0.42]} />
-        </mesh>
+        <OfferingBox position={[OFFERING_AT[0], Y, OFFERING_AT[1]]} facing={Math.PI} geometry={offering} grain={m.grain} plate={m.saisen} />
       </Clickable>
       <Clickable onClick={onTemple}>
-        <mesh position={[TEMPLE_OFFERING[0], floorHeightAt(...TEMPLE_OFFERING) + 0.5, TEMPLE_OFFERING[1]]} material={m.wood}>
-          <boxGeometry args={[0.72, 0.12, 0.52]} />
-        </mesh>
+        <OfferingBox position={[TEMPLE_OFFERING[0], floorHeightAt(TEMPLE.hallX, TEMPLE.z) + 0.72, TEMPLE_OFFERING[1]]} facing={Math.PI / 2} geometry={offering} grain={m.grain} plate={m.saisen} />
       </Clickable>
       <Clickable onClick={onOmikuji}>
         <mesh position={[OMIKUJI_AT[0], Y + 1.05, OMIKUJI_AT[1]]} material={m.wood}>
@@ -1243,7 +1329,7 @@ export function Town({ onVending, onShrine, onTemple, onOmikuji }: TownActions) 
       <mesh position={[CAFE_BOARD.x, Y + 0.52, CAFE_BOARD.z + 0.15]} rotation={[-0.18, 0, 0]} material={m.board} userData={{ navIgnore: true }}>
         <planeGeometry args={[0.48, 0.72]} />
       </mesh>
-      <mesh position={[BUS_STOP.x - 0.03, OUTER_GROUND_Y + 2.25, BUS_STOP.z]} rotation={[0, -Math.PI / 2, 0]} material={m.bus} userData={{ navIgnore: true }}>
+      <mesh position={[BUS_STOP.x - 0.08, OUTER_GROUND_Y + 2.25, BUS_STOP.z]} rotation={[0, -Math.PI / 2, 0]} material={m.bus} userData={{ navIgnore: true }}>
         <circleGeometry args={[0.32, 24]} />
       </mesh>
       {/* Vending machines: click one for its menu (Shops.tsx). */}

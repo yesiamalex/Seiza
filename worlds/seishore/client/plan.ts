@@ -153,8 +153,10 @@ export const POLES: [number, number][] = [
 ];
 /** The curved traffic mirror at the street's corner by the crossing. */
 export const MIRROR_AT: [number, number] = [21.1, 57.15];
-/** The bus stop: its sign, and its bench facing the road. */
+/** The coast bus stop's pole, by where the bus's front door opens (z 50.8), off the promenade's walking line. */
 export const BUS_STOP = { x: 30.2, z: 49.5 };
+/** Its bench, back to the sea wall, a metre past the door, so the way on board is clear. */
+export const BUS_BENCH = { x: 30.9, z: BUS_STOP.z + 3.2 };
 /** Benches on the promenade, facing the sea. */
 export const PROMENADE_BENCHES: [number, number][] = [
   [30.5, 62.5],
@@ -162,21 +164,38 @@ export const PROMENADE_BENCHES: [number, number][] = [
 ];
 /** Fishing boats pulled up on the sand. */
 export const BOATS = [
-  { x: 39.2, z: 47.2, yaw: 0.25, color: "#f2f2ee", trim: "#2f6fd0" },
-  { x: 40.4, z: 50.8, yaw: -0.15, color: "#f2f2ee", trim: "#c8402f" },
+  { x: 38.6, z: 48.4, yaw: 0.12, color: "#f2f2ee", trim: "#2f6fd0" },
+  { x: 41.6, z: 49.6, yaw: -0.08, color: "#f2f2ee", trim: "#c8402f" },
 ];
 /** The shrine, up the meadow by the campsite: its torii, the shrine, its
  *  offering box (where you pray), and the fortune box beside it. */
 export const SHRINE = { x: -14.5, toriiZ: 62.6, hokoraZ: 67.6 };
-export const OFFERING_AT: [number, number] = [SHRINE.x, SHRINE.hokoraZ - 0.75];
-export const PRAY_AT: [number, number] = [SHRINE.x, SHRINE.hokoraZ - 1.55];
+/** The offering box stands on the ground before the shrine's stone base (its front at hokoraZ − 0.9). */
+export const OFFERING_AT: [number, number] = [SHRINE.x, SHRINE.hokoraZ - 1.3];
+export const PRAY_AT: [number, number] = [SHRINE.x, SHRINE.hokoraZ - 2.15];
 export const OMIKUJI_AT: [number, number] = [SHRINE.x - 1.05, SHRINE.hokoraZ - 2.45];
 export const SHRINE_BENCH = { x: -12.2, z: 65.4 };
 /** The temple, Seikai-ji, at the mountain's foot west of the second station:
  *  its gate, the incense burner, the main hall, and its offering box. */
-export const TEMPLE = { gateX: 17.2, hallX: 9.8, z: 108.2, burnerX: 13.6 };
-export const TEMPLE_OFFERING: [number, number] = [TEMPLE.hallX + 2.15, TEMPLE.z];
-export const TEMPLE_PRAY: [number, number] = [TEMPLE.hallX + 2.95, TEMPLE.z];
+/** The temple along x: the gate (east), the incense burner on the path, the
+ *  hall's steps (out from its stone base, which ends at hallX + 2.15), the hall. */
+export const TEMPLE = { gateX: 17.2, hallX: 9.8, z: 108.2, burnerX: 13.7, burnerZ: 108.2 + 1.9 };
+/**
+ * The ground falls nearly two metres from the hall to the gate, so the hall
+ * stands on a level stone terrace, as a temple on a hillside does, with a
+ * stone stair from the gate up to it. Its level is the ground's at the hall.
+ */
+export const TEMPLE_YARD = { x0: 7.0, x1: 14.6, z0: TEMPLE.z - 3.2, z1: TEMPLE.z + 3.2, y: floorHeightAt(TEMPLE.hallX, TEMPLE.z) };
+/** The stair, down from the terrace's edge to the gate. */
+export const TEMPLE_STAIR = { x0: TEMPLE_YARD.x1, x1: 16.9, z0: TEMPLE.z - 0.8, z1: TEMPLE.z + 0.8, foot: floorHeightAt(16.9, TEMPLE.z) };
+/** The bench on the terrace, by its south edge, looking across the yard. */
+export const TEMPLE_BENCH = { x: 13.2, z: TEMPLE.z - 2.6 };
+/** Where the hall's steps start and end (from the stone base out), each step's top. */
+export const TEMPLE_STEPS = { x0: TEMPLE.hallX + 2.15, x1: TEMPLE.hallX + 3.05, tops: [0.45, 0.3, 0.15] };
+/** The offering box up on the verandah, before the open doors. */
+export const TEMPLE_OFFERING: [number, number] = [TEMPLE.hallX + 1.6, TEMPLE.z];
+/** Where you stand to pray: at the foot of the steps. */
+export const TEMPLE_PRAY: [number, number] = [TEMPLE_STEPS.x1 + 0.5, TEMPLE.z];
 /** The café's bench in front of it, the A-frame board beside. */
 export const CAFE_BENCH = { x: (CAFE.x0 + CAFE.x1) / 2 - 1.0, z: LANE.z0 + 0.32 };
 export const CAFE_BOARD = { x: CAFE.x0 + 0.6, z: LANE.z0 + 0.55 };
@@ -200,6 +219,12 @@ export function seishoreFloors(meadowAt: (x: number, z: number) => number): Worl
   const ramp0 = 20.9;
   return [
     { rect: { minX: STRIP.x0, maxX: STRIP.x1, minZ: TRACK.z0, maxZ: TRACK.z1 }, height: G },
+    // The temple's terrace, and its stair down to the gate.
+    { rect: { minX: TEMPLE_YARD.x0, maxX: TEMPLE_YARD.x1, minZ: TEMPLE_YARD.z0, maxZ: TEMPLE_YARD.z1 }, height: TEMPLE_YARD.y },
+    {
+      rect: { minX: TEMPLE_STAIR.x0, maxX: TEMPLE_STAIR.x1, minZ: TEMPLE_STAIR.z0, maxZ: TEMPLE_STAIR.z1 },
+      height: (x) => TEMPLE_YARD.y + (TEMPLE_STAIR.foot - TEMPLE_YARD.y) * Math.max(0, Math.min(1, (x - TEMPLE_STAIR.x0) / (TEMPLE_STAIR.x1 - TEMPLE_STAIR.x0))),
+    },
     {
       rect: { minX: ramp0, maxX: STRIP.x0, minZ: LANE.z0, maxZ: LANE.z1 },
       height: (x, z) => {
@@ -232,7 +257,7 @@ export function allSeats(): Seat[] {
   pair("cafe-bench", "Café bench", CAFE_BENCH.x, CAFE_BENCH.z + 0.06, "x", FACING.pz);
   // Up on the outer ground, 0.54 above the meadow.
   const up = G - Y;
-  pair("bus", "Bus stop", BUS_STOP.x + 0.35, BUS_STOP.z + 1.3, "z", FACING.nx, BENCH_SEAT + up);
+  pair("bus", "Bus stop", BUS_BENCH.x, BUS_BENCH.z, "z", FACING.nx, BENCH_SEAT + up);
   PROMENADE_BENCHES.forEach(([x, z], i) => pair(`prom-${i}`, "Bench by the sea", x + 0.08, z, "z", FACING.px, BENCH_SEAT + up));
   pair("shrine", "Shrine bench", SHRINE_BENCH.x, SHRINE_BENCH.z, "z", FACING.px);
   // The café's tables: a chair each side, facing across.
@@ -247,7 +272,7 @@ export function allSeats(): Seat[] {
   });
   // The stations' benches, under their shelters, facing the track.
   STATIONS.forEach((s, i) => pair(`station-${s.id}`, `${s.name} station`, PLATFORM.x0 + 0.3, SHELTER_Z[i], "z", FACING.px, BENCH_SEAT + up));
-  pair("temple", "Temple bench", TEMPLE.burnerX + 0.4, TEMPLE.z + 3.2, "x", FACING.nz, BENCH_SEAT + floorHeightAt(TEMPLE.burnerX + 0.4, TEMPLE.z + 3.2) - Y);
+  pair("temple", "Temple bench", TEMPLE_BENCH.x, TEMPLE_BENCH.z, "x", FACING.pz, BENCH_SEAT + TEMPLE_YARD.y - Y);
   return seats;
 }
 /** The seats visitors can take. */
@@ -302,7 +327,7 @@ export function seishoreObstacles(): Obstacle[] {
   const cuts = [ROAD.z0, ...SEAWALL.gaps.flatMap((g) => [g - SEAWALL.gap / 2, g + SEAWALL.gap / 2]), ROAD.z1];
   for (let i = 0; i < cuts.length; i += 2) list.push(o(SEAWALL.x - SEAWALL.thick / 2, SEAWALL.x + SEAWALL.thick / 2, cuts[i], cuts[i + 1]));
   list.push(o(BUS_STOP.x - 0.08, BUS_STOP.x + 0.08, BUS_STOP.z - 0.08, BUS_STOP.z + 0.08));
-  list.push(o(BUS_STOP.x + 0.1, BUS_STOP.x + 0.55, BUS_STOP.z + 0.4, BUS_STOP.z + 2.2));
+  list.push(o(BUS_BENCH.x - 0.22, BUS_BENCH.x + 0.22, BUS_BENCH.z - 0.9, BUS_BENCH.z + 0.9));
   for (const [x, z] of PROMENADE_BENCHES) list.push(o(x - 0.2, x + 0.25, z - 0.9, z + 0.9));
   for (const b of BOATS) list.push({ x: b.x, z: b.z, halfX: 0.85, halfZ: 2.4, rotationY: b.yaw });
   // The railway's fence, and the stations' benches.
@@ -317,9 +342,15 @@ export function seishoreObstacles(): Obstacle[] {
   list.push(o(SHRINE_BENCH.x - 0.2, SHRINE_BENCH.x + 0.2, SHRINE_BENCH.z - 0.9, SHRINE_BENCH.z + 0.9));
   // The temple.
   for (const dz of [-1.5, 1.5]) list.push(o(TEMPLE.gateX - 0.2, TEMPLE.gateX + 0.2, TEMPLE.z + dz - 0.2, TEMPLE.z + dz + 0.2));
-  list.push(o(TEMPLE.hallX - 2.6, TEMPLE.hallX + 1.9, TEMPLE.z - 2.6, TEMPLE.z + 2.6));
-  list.push(o(TEMPLE.burnerX - 0.45, TEMPLE.burnerX + 0.45, TEMPLE.z - 0.45, TEMPLE.z + 0.45));
-  list.push(o(TEMPLE.burnerX - 0.5, TEMPLE.burnerX + 1.3, TEMPLE.z + 3.0, TEMPLE.z + 3.4));
+  list.push(o(TEMPLE.hallX - 2.6, TEMPLE.hallX + 2.15, TEMPLE.z - 2.6, TEMPLE.z + 2.6));
+  // The steps up to the verandah (looked at, not climbed: you pray at their foot).
+  list.push(o(TEMPLE_STEPS.x0, TEMPLE_STEPS.x1, TEMPLE.z - 0.8, TEMPLE.z + 0.8));
+  list.push(o(TEMPLE.burnerX - 0.45, TEMPLE.burnerX + 0.45, TEMPLE.burnerZ - 0.45, TEMPLE.burnerZ + 0.45));
+  list.push(o(TEMPLE_BENCH.x - 0.9, TEMPLE_BENCH.x + 0.9, TEMPLE_BENCH.z - 0.22, TEMPLE_BENCH.z + 0.22));
+  // The terrace's edges, where it stands above the slope: the way up is the stair.
+  const Y0 = TEMPLE_YARD;
+  list.push(o(Y0.x1 - 0.1, Y0.x1 + 0.1, Y0.z0, TEMPLE_STAIR.z0), o(Y0.x1 - 0.1, Y0.x1 + 0.1, TEMPLE_STAIR.z1, Y0.z1));
+  list.push(o(TEMPLE.hallX + 2.15, Y0.x1 + 0.1, Y0.z0 - 0.1, Y0.z0 + 0.1), o(TEMPLE.hallX + 2.15, Y0.x1 + 0.1, Y0.z1 - 0.1, Y0.z1 + 0.1));
   return list;
 }
 
@@ -396,11 +427,14 @@ export const NODES = {
   gapLand: [29.85, LANE_Z],
   wallGap: [SEAWALL.x, LANE_Z],
   beach: [37.5, LANE_Z],
-  boats: [37.6, 49.2],
+  boats: [36.5, 49.0],
+  /** Down by the water, where Genji-san looks out to sea (apart from where Kaito waits). */
+  shoreline: [40.2, LANE_Z + 1.8],
   platform2: [22.3, stationMid(1)],
   platform2Exit: [22.3, (FENCE.gaps[1][0] + FENCE.gaps[1][1]) / 2],
   templeGate: [TEMPLE.gateX + 1.0, TEMPLE.z],
-  templeYard: [TEMPLE.burnerX + 1.6, TEMPLE.z - 1.3],
+  templeStair: [(TEMPLE_STAIR.x0 + TEMPLE_STAIR.x1) / 2, TEMPLE.z],
+  templeYard: [TEMPLE_YARD.x1 - 0.6, TEMPLE.z - 0.9],
   templeSide: [TEMPLE_PRAY[0], TEMPLE.z - 1.3],
   templePray: TEMPLE_PRAY,
 } satisfies Record<string, readonly [number, number]>;
@@ -446,9 +480,12 @@ export const EDGES: [Node, Node][] = [
   ["gapLand", "promenadeNorth"],
   ["wallGap", "beach"],
   ["beach", "boats"],
+  ["boats", "shoreline"],
+  ["beach", "shoreline"],
   ["platform2", "platform2Exit"],
   ["platform2Exit", "templeGate"],
-  ["templeGate", "templeYard"],
+  ["templeGate", "templeStair"],
+  ["templeStair", "templeYard"],
   ["templeYard", "templeSide"],
   ["templeSide", "templePray"],
 ];

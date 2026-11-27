@@ -310,7 +310,7 @@ export function Scene({ warp, getSelfPosition, sit, occupiedSeatId, playGesture,
     const kz = frontOf(FAMIRESU).back + 0.55;
     return [...[0, 1, 2].map((i): [number, number, number] => [PASS.x0 + 1.4 + i * 2.0, Y + 1.2, kz]), ...DINER_TABLES.map(([x, z]): [number, number, number] => [x + 0.28, Y + 0.85, z - 0.12])];
   }, []);
-  const incense = useMemo<[number, number, number][]>(() => [[TEMPLE.burnerX, floorHeightAt(TEMPLE.burnerX, TEMPLE.z) + 1.0, TEMPLE.z]], []);
+  const incense = useMemo<[number, number, number][]>(() => [[TEMPLE.burnerX, floorHeightAt(TEMPLE.burnerX, TEMPLE.burnerZ) + 1.0, TEMPLE.burnerZ]], []);
 
   return (
     <>

@@ -108,7 +108,7 @@ export const PEOPLE: Townsperson[] = [
       inviteJa: "海のこと、魚のこと、町のこと、知ってることなら話すよ。",
     },
     avatar: look({ skin: "#d9a07a", hairStyle: "buzz", hairColor: "#e7e2dc", top: "longsleeve", topColor: "#2f3b52", bottom: "pants", bottomColor: "#6b6f78", shoeColor: "#1f1f1f", accessories: ["cap"], accessoryColor: "#f2f0eb", height: 0.94, build: 1.05, shoulders: 1.05, waist: 1.05 }),
-    stops: round(["boats", 300], ["beach", 40]),
+    stops: round(["boats", 300], ["shoreline", 40]),
     speed: 0.6,
     faceAt: [44, 50],
     chatter: [

@@ -328,6 +328,8 @@ export function PlayerRig({
   if (postureEyeHeight !== null) lastPostureEyeHeightRef.current = postureEyeHeight;
   const postureCameraBlendRef = useRef(0);
   const seatedExitRef = useRef(false);
+  /** A moving seat's heading last frame, so the view turns as it does. */
+  const seatYawRef = useRef<number | null>(null);
   const onStandUpRef = useRef(onStandUp);
   onStandUpRef.current = onStandUp;
   const onWarpedRef = useRef(onWarped);
@@ -1122,15 +1124,25 @@ export function PlayerRig({
     }
     previousSitAnchorRef.current = sit;
 
+    if (!sit?.moving) seatYawRef.current = null;
     if (sit) {
       if (move.lengthSq() > 0 || jumpPressed) {
         onStandUpRef.current?.();
       } else {
         const lying = sit.pose === "lie";
         const seatEye = new THREE.Vector3(sit.position[0], sit.position[1] + (lying ? LYING_EYE_HEIGHT : SEATED_EYE_HEIGHT), sit.position[2]);
-        // A moving seat (a ride's back seat) is kept to exactly, or the view would trail it.
-        if (sit.moving) vcam.position.copy(seatEye);
-        else vcam.position.lerp(seatEye, 1 - Math.exp(-POSTURE_CAMERA_EASE_RATE * delta));
+        // A moving seat (a ride's back seat) is kept to exactly, or the view would trail it;
+        // and as it turns (a bus round a corner, or its U-turn), the view turns with it.
+        if (sit.moving) {
+          vcam.position.copy(seatEye);
+          const last = seatYawRef.current;
+          if (last !== null) {
+            const turn = THREE.MathUtils.euclideanModulo(sit.rotationY - last + Math.PI, Math.PI * 2) - Math.PI;
+            // A small step is the ride turning; a big one is a different seat.
+            if (turn !== 0 && Math.abs(turn) < 0.5) vcam.rotateOnWorldAxis(WORLD_UP, turn);
+          }
+          seatYawRef.current = sit.rotationY;
+        } else vcam.position.lerp(seatEye, 1 - Math.exp(-POSTURE_CAMERA_EASE_RATE * delta));
         verticalVelocityRef.current = 0;
         moveTargetRef.current = null;
         if (movePathRef) movePathRef.current = null;
