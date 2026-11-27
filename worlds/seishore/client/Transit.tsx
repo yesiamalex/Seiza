@@ -743,6 +743,7 @@ export function Transit({ sit, fixed, floors }: { sit?: (seat: Seat) => void; fi
   const state = useRef({
     trainStop: null as string | null,
     busStops: new Map<string, string | null>(),
+    busClosing: new Set<string>(),
     trainClosing: false,
     joints: new Map<number, number>(),
     diesel: null as Loop | null,
@@ -886,8 +887,8 @@ export function Transit({ sit, fixed, floors }: { sit?: (seat: Seat) => void; fi
         const st = STATIONS.find((x) => x.id === t.stop)!;
         trainDoors(toTrain, true);
         const v = 1 - toTrain / 45;
-        speak(`${st.nameJa}、${st.nameJa}です。`, "ja-JP", { volume: v, rate: 1.05 });
-        speak(`${st.name}. ${st.name}.`, "en-US", { volume: v });
+        speak(`${st.nameJa}、${st.nameJa}です。お降りの際は、足元にご注意ください。`, "ja-JP", { volume: v, rate: 1.05 });
+        speak(`${st.name}. ${st.name}. Please mind your step.`, "en-US", { volume: v });
       }
       s.trainStop = t.stop;
       s.trainClosing = false;
@@ -897,18 +898,29 @@ export function Transit({ sit, fixed, floors }: { sit?: (seat: Seat) => void; fi
       if (toTrain < 40) {
         trainDoors(toTrain, false);
         speak("ドアが閉まります。ご注意ください。", "ja-JP", { volume: 1 - toTrain / 45, rate: 1.1 });
+        speak("The doors are closing. Please stand clear.", "en-US", { volume: 1 - toTrain / 45 });
       }
     }
     for (const ride of live.rideBuses) {
       const stop = ride.pose.stop;
+      // Pulling out: "the bus is leaving, please hold on", as Japanese buses say.
+      if (stop && ride.pose.departsIn < 3.5 && !s.busClosing.has(ride.line.id)) {
+        s.busClosing.add(ride.line.id);
+        const d = Math.hypot(ear.x - ride.pose.x, ear.z - ride.pose.z);
+        if (d < 30) {
+          speak("発車します。ご注意ください。", "ja-JP", { volume: 1 - d / 35, rate: 1.08 });
+          speak("The bus is leaving. Please hold on.", "en-US", { volume: 1 - d / 35 });
+        }
+      }
       if (stop === (s.busStops.get(ride.line.id) ?? null)) continue;
+      s.busClosing.delete(ride.line.id);
       const d = Math.hypot(ear.x - ride.pose.x, ear.z - ride.pose.z);
       const name = stop ? ride.line.stopName(stop) : null;
       if (name && d < 40) {
         busDoors(d);
         const v = 1 - d / 45;
-        speak(`お待たせいたしました。${name[0]}です。`, "ja-JP", { volume: v, rate: 1.05 });
-        speak(`${name[1]}. Thank you for waiting.`, "en-US", { volume: v });
+        speak(`お待たせいたしました。${name[0]}です。お降りの際は、足元にご注意ください。`, "ja-JP", { volume: v, rate: 1.05 });
+        speak(`${name[1]}. Thank you for waiting. Please mind your step.`, "en-US", { volume: v });
       }
       s.busStops.set(ride.line.id, stop);
     }

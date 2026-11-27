@@ -11,6 +11,7 @@ import { decodeAvatarSpec, isDesignerAvatarUrl } from "../avatar/designer/avatar
 import { buildDesignerVrm } from "../avatar/designer/buildDesignerVrm";
 import { noiseHit, toneHit, voice } from "../addons/sound";
 import { speak } from "../guides/speech";
+import { stationReading } from "../guides/reading";
 
 /**
  * Arriving in a world, by the Seikansen (星環線), the train that links
@@ -589,7 +590,8 @@ export function Arrival({
     let chimed = false;
     let lastAnnouncement = -10;
     const announce = () => {
-      speak(`次は、${ja}。${ja}です。`, "ja-JP", { volume: 0.8, rate: 1.05 });
+      const said = stationReading(ja);
+      speak(`次は、${said}。${said}です。`, "ja-JP", { volume: 0.8, rate: 1.05 });
       speak(`The next station is ${en}.`, "en-US", { volume: 0.8 });
     };
 
@@ -681,6 +683,9 @@ export function Arrival({
       if (after >= DOORS_AT && !chimed) {
         chimed = true;
         chime();
+        // As every train in Japan says when its doors open.
+        speak("お降りの際は、足元にご注意ください。", "ja-JP", { volume: 0.75, rate: 1.08 });
+        speak("Please mind your step as you leave the train.", "en-US", { volume: 0.7 });
       }
       leaves.forEach((leaf, i) => (leaf.position.x = DOOR_X + (i ? 1 : -1) * (0.3 + 0.62 * doors)));
       // The wheels over the joints, quicker the faster.

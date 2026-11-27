@@ -1,4 +1,5 @@
 import { isSfxMuted } from "../audio/sfx";
+import { forJapaneseVoice } from "./reading";
 
 /**
  * Spoken lines, in the browser's own voices (the Web Speech API): a
@@ -33,7 +34,8 @@ export function speak(text: string, lang: string, options: SpeakOptions = {}): b
   if (volume < 0.05 || waiting > 1) return false;
   const voice = voiceFor(lang);
   if (!voice) return false;
-  const line = new SpeechSynthesisUtterance(text);
+  // A Japanese voice says Seiza's names as names, not letter by letter (reading.ts).
+  const line = new SpeechSynthesisUtterance(lang.startsWith("ja") ? forJapaneseVoice(text) : text);
   line.voice = voice;
   line.lang = voice.lang;
   line.volume = volume;
