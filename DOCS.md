@@ -369,7 +369,30 @@ Seiza deploys as one Worker (`wrangler.jsonc` and `worker/index.ts`). It
 serves the static frontend, the upload API, and the real-time room server
 (`worker/room.ts`, a Durable Object bound into the same Worker).
 
-To deploy from the command line:
+#### Without a terminal (the Cloudflare dashboard)
+
+Everything can be done by clicking, in a browser:
+
+1. Press **Deploy to Cloudflare** above. Sign in to Cloudflare (a free
+   account is enough) and connect your GitHub account when it asks.
+   Cloudflare copies Seiza into your GitHub and puts it online; the page
+   shows its address (`https://<name>.<your-subdomain>.workers.dev`).
+2. To change your world, open your copy on **github.com**, go to
+   `public/worlds/default/world.json`, press the pencil to edit it, and
+   **Commit changes**. Cloudflare rebuilds and redeploys it by itself
+   within a minute or two (**Workers & Pages > your Worker > Deployments**
+   shows each one).
+3. To set a secret (an admin key, a password), go to **Workers & Pages >
+   your Worker > Settings > Variables and Secrets > Add**, choose
+   **Secret**, give its name and value, and **Deploy**.
+4. To use your own domain, go to **Workers & Pages > your Worker >
+   Settings > Domains & Routes > Add > Custom domain**.
+
+If you already have a copy on GitHub, **Workers & Pages > Create > Import a
+repository** connects it instead: pick the repository, leave the build
+settings as they are, and deploy.
+
+#### From the command line
 
 ```bash
 npm install
@@ -930,6 +953,10 @@ npx wrangler secret put SEIZA_EDITOR_PASSWORD   # protects editing only
 npx wrangler secret put SEIZA_ADMIN_KEY         # protects editing and enables
                                                  # mute, remove, and gather
 ```
+
+Or, in the dashboard: **Workers & Pages > your Worker > Settings >
+Variables and Secrets > Add**, type **Secret**, the name
+(`SEIZA_ADMIN_KEY` or `SEIZA_EDITOR_PASSWORD`) and its value, then **Deploy**.
 
 - If you set neither, editing stays open to everyone.
 - If you set `SEIZA_ADMIN_KEY`, Edit Mode asks for the admin key instead of

@@ -86,8 +86,7 @@ const TAGS = { new: "New", world: "World", better: "Better" };
 const worldCards = worlds
   .map(
     (w) => `      <a class="world" href="${esc(w.url)}" style="--c: ${esc(w.color)}" aria-label="${esc(`${w.name}: ${w.blurb}`)}">
-        <span class="ring" aria-hidden="true"></span>
-        <h3>${esc(w.name)}</h3>
+        <span class="board"><span class="line" aria-hidden="true">星環線 · SEIKANSEN</span><h3>${esc(w.name)}</h3><span class="stripe" aria-hidden="true"></span></span>
         <p>${esc(w.blurb)}</p>
         <span class="go">${esc(w.url.replace("https://", ""))}</span>
       </a>`
@@ -95,7 +94,7 @@ const worldCards = worlds
   .join("\n");
 
 /**
- * The Shinkanseiza's line map: every world a station on one line, in order,
+ * The Seikansen's line map: every world a station on one line, in order,
  * each a link; and the train, running the line inside the map's own box,
  * stopping a moment at each station. Its stops are worked out here, so the
  * page needs no script for it.
@@ -112,7 +111,7 @@ const stops = worlds
     return `${arrive.toFixed(2)}% { left: ${left}; } ${leave.toFixed(2)}% { left: ${left}; }`;
   })
   .join(" ");
-const lineMap = `    <figure class="linemap" aria-label="The Shinkanseiza line, through every world">
+const lineMap = `    <figure class="linemap" aria-label="The Seikansen line, through every world">
       <style>@keyframes linemap-run { ${stops} 100% { left: calc(100% - ${TRAIN_W}px); } }</style>
       <div class="linemap-scroll">
         <div class="linemap-inner" style="--n: ${n}">
@@ -123,7 +122,7 @@ ${worlds.map((w) => `            <li style="--c: ${esc(w.color)}"><a href="${esc
           </ol>
         </div>
       </div>
-      <figcaption>The Shinkanseiza <span lang="ja">新幹星座</span>: every world of the EcoSeiztem on one line. A station in each takes you to the rest.</figcaption>
+      <figcaption>The Seikansen <span lang="ja">星環線</span>: every world of the EcoSeiztem on one line. A station in each takes you to the rest.</figcaption>
     </figure>`;
 
 /** How many of a month's items show before its "Show all" (the page's

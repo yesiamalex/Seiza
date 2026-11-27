@@ -7,7 +7,7 @@ import { extendHairCollision } from "./springColliders";
 import { markForMirrors } from "../scene/Mirror";
 import type { VRM } from "@pixiv/three-vrm";
 import { avatarDetail, type AvatarDetail } from "../multiplayer/avatarDetail";
-import { isLowGraphics } from "../scene/graphics";
+import { leanCrowd } from "../scene/graphics";
 
 export interface VrmAvatarProps {
   url: string;
@@ -185,7 +185,7 @@ export function VrmAvatar({ url, position = [0, 0, 0], rotationY = 0, onLoaded, 
       scratchSphere.center.y += 0.9;
       scratchSphere.radius = BODY_RADIUS;
       view.getWorldPosition(scratchEye);
-      d.now = avatarDetail({ inView: scratchFrustum.intersectsSphere(scratchSphere), distance: scratchSphere.center.distanceTo(scratchEye), crowd: crowd.size, tight: gl.xr.isPresenting || isLowGraphics() });
+      d.now = avatarDetail({ inView: scratchFrustum.intersectsSphere(scratchSphere), distance: scratchSphere.center.distanceTo(scratchEye), crowd: crowd.size, tight: gl.xr.isPresenting || leanCrowd() });
       if (d.now.outlines !== d.outlinesShown) {
         d.outlinesShown = d.now.outlines;
         for (const m of d.outlines) m.visible = d.now.outlines;

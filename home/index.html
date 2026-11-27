@@ -109,7 +109,7 @@
   /* The EcoSeiztem, under the name. */
   .hero .eco { margin: 2px 0 14px; font-size: 15px; letter-spacing: 0.03em; opacity: 0.88; }
   .hero .eco b { font-weight: 700; }
-  /* The Shinkanseiza, the line between the worlds, running along the
+  /* The Seikansen, the line between the worlds, running along the
      bottom of the sky: an SVG train on a CSS loop, no script; it stands
      still for anyone who'd rather nothing moved. */
   header.hero { padding-bottom: 86px; }
@@ -118,6 +118,7 @@
   .shinkan .train { position: absolute; left: 0; bottom: 10px; width: min(520px, 78vw); height: auto; animation: shinkan-run 18s linear infinite; filter: drop-shadow(0 3px 10px rgba(0, 0, 0, 0.35)); }
   @keyframes shinkan-run { 0% { transform: translateX(-105%); } 62% { transform: translateX(100vw); } 100% { transform: translateX(100vw); } }
   @media (prefers-reduced-motion: reduce) { .shinkan .train { animation: none; left: 6%; } }
+  @media (max-width: 640px) { header.hero { padding-bottom: 96px; } .shinkan .train { width: 70vw; } }
   #sky { opacity: var(--stars); transition: opacity 1.2s ease; }
   /* 正座 and 星座 down the right, as on a poster: the page's one bold thing. */
   /* 正座 and 星座 down the right, as on a poster: the page's one bold thing. */
@@ -213,10 +214,17 @@
   .no-js .strip-bar { display: none; }
 
   /* The worlds: stars of one constellation, each its colour. */
-  .worlds { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 32px; }
+  .worlds { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px 28px; }
   @media (max-width: 900px) { .worlds { grid-template-columns: repeat(2, 1fr); } }
   @media (max-width: 560px) { .worlds { grid-template-columns: 1fr; } }
-  a.world { --c: var(--lantern); display: grid; grid-template-columns: 22px 1fr; column-gap: 12px; padding: 18px 0; border-top: 1px solid var(--line); text-decoration: none; }
+  /* Each world a station's name board, as in the worlds: the line along the
+     top, the name large, its colour along the foot; what it is, under. */
+  a.world { --c: var(--lantern); display: flex; flex-direction: column; gap: 10px; padding: 0; text-decoration: none; }
+  a.world .board { display: block; border-radius: 6px; overflow: hidden; background: #f7f7f2; box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35); transition: transform 200ms, box-shadow 200ms; }
+  a.world .board .line { display: block; background: #1d2433; color: #fff; font: 700 11px var(--text); letter-spacing: 0.14em; text-align: center; padding: 5px 0; }
+  a.world .board h3 { margin: 0; padding: 14px 10px 10px; text-align: center; color: #1d2433; font-size: 26px; }
+  a.world .board .stripe { display: block; height: 10px; background: var(--c); }
+  a.world:hover .board, a.world:focus-visible .board { transform: translateY(-3px); box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45), 0 0 0 2px var(--c); }
   /* Each world a station: a white stop ringed in its line's colour. */
   a.world .ring { grid-row: span 3; width: 9px; height: 9px; margin: 7px 0 0 3px; border-radius: 50%; background: #f7f7f2; border: 3px solid var(--c); box-shadow: 0 0 14px color-mix(in srgb, var(--c) 60%, transparent); }
   /* The line map: the worlds as stations on one line, the train running it,
@@ -237,7 +245,7 @@
   a.world h3 { margin: 0; font-size: 19px; }
   a.world p { margin: 2px 0 6px; color: var(--muted); font-size: 15px; }
   a.world .go { font-size: 14px; color: var(--c); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: color-mix(in srgb, var(--c) 45%, transparent); }
-  a.world:hover h3 { color: var(--c); }
+  a.world:hover .board h3 { color: #1d2433; }
 
   /* --- what's new: a timeline, each month a star on one thread --- */
   .changes { display: grid; gap: 32px; position: relative; padding-left: 26px; }
@@ -364,7 +372,7 @@
   <div class="wrap stage">
     <div>
       <h1>Seiza</h1>
-      <p class="eco">An <b>EcoSeiztem</b> of worlds, linked by the <b>Shinkanseiza</b> <span lang="ja">新幹星座</span></p>
+      <p class="eco">An <b>EcoSeiztem</b> of worlds, linked by the <b>Seikansen</b> <span lang="ja">星環線</span></p>
       <ul class="meaning" aria-label="What the name means">
         <li><b lang="ja">正座</b><span>to kneel, as at a lesson</span></li>
         <li><b lang="ja">星座</b><span>a constellation</span></li>
@@ -412,7 +420,7 @@
         <path d="M466,15 C484,17 498,24 506,31 H472 Z"/>
       </g>
       <g fill="#c9ccd0"><rect x="158" y="18" width="5" height="22"/><rect x="323" y="18" width="5" height="22"/></g>
-      <text x="243" y="31" text-anchor="middle" font-size="7" font-weight="700" fill="#1b2340" font-family="system-ui, sans-serif" letter-spacing="0.6">新幹星座  SHINKANSEIZA</text>
+      <text x="243" y="31" text-anchor="middle" font-size="7" font-weight="700" fill="#1b2340" font-family="system-ui, sans-serif" letter-spacing="0.6">星環線  SEIKANSEN</text>
       <g fill="#2a2d36">
         <circle cx="28" cy="46" r="4"/><circle cx="130" cy="46" r="4"/><circle cx="190" cy="46" r="4"/><circle cx="296" cy="46" r="4"/><circle cx="356" cy="46" r="4"/><circle cx="470" cy="46" r="4"/>
       </g>
@@ -461,7 +469,7 @@
 
   <section id="worlds" aria-labelledby="worlds-title">
     <h2 id="worlds-title">The worlds</h2>
-    <div class="intro"><p>Each is its own room, open now. A Shinkanseiza station in every one takes you to the rest.</p></div>
+    <div class="intro"><p>Each is its own room, open now. A Seikansen station in every one takes you to the rest.</p></div>
 <!--LINEMAP-->
     <figure class="constellation" id="constellation" hidden><svg viewBox="0 0 1000 420" role="group" aria-label="The worlds, as one constellation"></svg><figcaption>Point at a star to see the world; select it to go there.</figcaption></figure>
     <div class="worlds" id="world-list">
@@ -509,6 +517,7 @@
         <div class="link-card"><span class="faces" aria-hidden="true"><i style="--c:#f2b84b"></i><i style="--c:#ff8f6b"></i><i style="--c:#8fd3ff"></i><i style="--c:#b48cff"></i></span><div><b>my-class.workers.dev</b><br><span>4 people in the hall</span></div></div>
       </li>
     </ol>
+    <p class="cost"><b>Rather click than type?</b> All of it works from the browser: press <b>Deploy to Cloudflare</b>, sign in, and connect GitHub; edit <code>world.json</code> with the pencil on github.com and it redeploys itself; set an admin key under <b>Workers &amp; Pages › your Worker › Settings › Variables and Secrets</b>. The docs walk through it.</p>
     <p class="cost">A class usually fits in Cloudflare's free plan. Nothing to install on anyone's device, and no server of your own to look after.</p>
     <div class="actions">
       <a class="button primary" href="https://deploy.workers.cloudflare.com/?url=https://github.com/yesiamalex/Seiza">Deploy to Cloudflare</a>
@@ -593,12 +602,49 @@
         if (i % 5 === 0) dust.style.setProperty("--d", (rnd() * 3).toFixed(2) + "s");
         svg.append(dust);
       }
-      // Where each star sits: evenly along the box, the path waving.
-      const at = cards.map((_, i) => {
-        if (tall) return { x: VW / 2 + VW * 0.27 * Math.sin(i * 1.25 + 0.4) + (rnd() - 0.5) * 30, y: 70 + i * 118 + (rnd() - 0.5) * 24 };
-        const m = 80;
-        return { x: m + (i * (VW - 2 * m)) / (n - 1), y: VH / 2 + VH * 0.26 * Math.sin(i * 1.3 + 0.4) + (rnd() - 0.5) * 30 };
-      });
+      // Where each star sits, found the way a graph is drawn: every star
+      // pushes every other away (a star with its name takes up room, so the
+      // names never meet), the stars joined in the line pull to an easy
+      // distance, and the box's edges push in. Started from a gentle wave and
+      // the same seed every time, so the map is the same each visit and, with
+      // a world added, simply makes room.
+      const names = cards.map((card) => card.querySelector("h3")?.textContent ?? "");
+      const size = names.map((nm) => ({ w: 46 + nm.length * (tall ? 13 : 9.5), h: tall ? 54 : 70 }));
+      const at = cards.map((_, i) =>
+        tall
+          ? { x: VW / 2 + VW * 0.25 * Math.sin(i * 1.25 + 0.4), y: 70 + ((VH - 140) * i) / Math.max(1, n - 1) }
+          : { x: 80 + (i * (VW - 160)) / Math.max(1, n - 1), y: VH / 2 + VH * 0.22 * Math.sin(i * 1.3 + 0.4) + (rnd() - 0.5) * 20 }
+      );
+      const rest = tall ? (VH - 140) / Math.max(1, n - 1) * 1.05 : Math.max(90, (VW - 160) / Math.max(1, n - 1)) * 1.05;
+      const pad = { x: 60, top: tall ? 50 : 60, bottom: tall ? 60 : 70 };
+      for (let step = 0; step < 320; step++) {
+        const cool = 1 - step / 320;
+        const push = at.map(() => ({ x: 0, y: 0 }));
+        for (let i = 0; i < n; i++)
+          for (let j = i + 1; j < n; j++) {
+            const dx = at[j].x - at[i].x, dy = at[j].y - at[i].y;
+            // Overlap of the two stars' boxes (each with its name), if any; else a soft push.
+            const ox = (size[i].w + size[j].w) / 2 - Math.abs(dx), oy = (size[i].h + size[j].h) / 2 - Math.abs(dy);
+            const d = Math.hypot(dx, dy) || 0.01;
+            let f = 2600 / (d * d);
+            if (ox > 0 && oy > 0) f += Math.min(ox, oy) * 0.5;
+            push[i].x -= (dx / d) * f; push[i].y -= (dy / d) * f;
+            push[j].x += (dx / d) * f; push[j].y += (dy / d) * f;
+          }
+        for (let i = 1; i < n; i++) {
+          const dx = at[i].x - at[i - 1].x, dy = at[i].y - at[i - 1].y;
+          const d = Math.hypot(dx, dy) || 0.01;
+          const f = (d - rest) * 0.04;
+          push[i].x -= (dx / d) * f; push[i].y -= (dy / d) * f;
+          push[i - 1].x += (dx / d) * f; push[i - 1].y += (dy / d) * f;
+        }
+        for (let i = 0; i < n; i++) {
+          at[i].x += Math.max(-12, Math.min(12, push[i].x)) * cool;
+          at[i].y += Math.max(-12, Math.min(12, push[i].y)) * cool;
+          at[i].x = Math.max(pad.x, Math.min(VW - pad.x, at[i].x));
+          at[i].y = Math.max(pad.top, Math.min(VH - pad.bottom, at[i].y));
+        }
+      }
       links = [];
       for (let i = 1; i < n; i++) {
         const a = at[i - 1], b = at[i];
@@ -632,10 +678,11 @@
           const left = x > VW / 2;
           place = { x: left ? -32 : 32, y: 6, anchor: left ? "end" : "start" };
         } else {
-          const up = i % 2 === 0;
-          place = { x: 0, y: up ? -32 : 44, anchor: i === 0 ? "start" : i === n - 1 ? "end" : "middle" };
-          if (i === 0) place.x = -14;
-          if (i === n - 1) place.x = 14;
+          // Above, unless that's crowded (a neighbour above, or the top), then below.
+          const above = at.filter((o, j) => j !== i && Math.abs(o.x - x) < size[i].w && o.y < y && y - o.y < 80).length;
+          const up = y - 40 > pad.top - 20 && (above === 0 || y > VH / 2);
+          const nearLeft = x < 110, nearRight = x > VW - 110;
+          place = { x: nearLeft ? -14 : nearRight ? 14 : 0, y: up ? -32 : 44, anchor: nearLeft ? "start" : nearRight ? "end" : "middle" };
         }
         const label = el("text", { x: place.x, y: place.y, "text-anchor": place.anchor });
         label.textContent = name;

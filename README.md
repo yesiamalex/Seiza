@@ -1,6 +1,6 @@
-# 🌸 Seiza
+# 🌸 [Seiza](https://home.seiza.cc)
 
-Seiza is a small 3D world that people can walk around in together from a web
+[Seiza](https://home.seiza.cc) is a small 3D world that people can walk around in together from a web
 browser. It runs entirely on your own Cloudflare account, not on a server
 that someone else operates.
 
@@ -12,7 +12,7 @@ Pick a name and an avatar, open the link, and you are in a room with everyone
 else who opened it. Nothing to install, and no headset needed (though it
 works with one).
 
-Seiza is a self-hosted complement to hosted spaces such as FrameVR, not a
+[Seiza](https://home.seiza.cc) is a self-hosted complement to hosted spaces such as FrameVR, not a
 replacement. It is smaller and plainer. In return, you get a room that nobody
 else can shut down, re-price, or take your data out of.
 
@@ -171,13 +171,13 @@ Hosted worlds keep closing. Mozilla Hubs shut down in 2024, Ready Player Me
 in January 2026, and Spatial.io retired its free 3D worlds in July 2026. None
 of those closures had to do with whether people still used them.
 
-You, your school, or your club set up Seiza on your own Cloudflare account.
+You, your school, or your club set up [Seiza](https://home.seiza.cc) on your own Cloudflare account.
 Everything placed in a room, and everyone in it, lives on that account. The
 Seiza project does not run a server, so there is nothing in the middle.
 
 ## 💸 What it costs
 
-For a class-sized room, it is usually free. Seiza fits in Cloudflare's free
+For a class-sized room, it is usually free. [Seiza](https://home.seiza.cc) fits in Cloudflare's free
 tiers, and audio and video travel directly between browsers instead of
 through your server.
 
@@ -242,7 +242,7 @@ Two limits apply:
 
 ## 🚧 Known limitations
 
-Seiza works, but it isn't production-hardened yet.
+[Seiza](https://home.seiza.cc) works, but it isn't production-hardened yet.
 
 - Voice is a peer-to-peer mesh, so it suits rooms of about 12 people, not
   large events.
@@ -268,7 +268,7 @@ moderation, see [Known limitations](DOCS.md#known-limitations) in DOCS.md.
 
 ## 🤝 Support and services
 
-Seiza is free and open source. If it's useful to you, you can support its
+[Seiza](https://home.seiza.cc) is free and open source. If it's useful to you, you can support its
 development through [Ko-fi](https://ko-fi.com/seizadeveloper), GitHub
 Sponsors, or, in the Philippines, GCash or BPI. See [DONATE.md](DONATE.md).
 
@@ -284,13 +284,13 @@ customized (a different world, branding, or features), or maintained, without
 working with the code yourselves, this is available as a paid service. Email
 **seizadeveloper@gmail.com** to discuss what you need.
 
-This is separate from licensing. Running Seiza under the AGPL is free and
+This is separate from licensing. Running [Seiza](https://home.seiza.cc) under the AGPL is free and
 needs no permission; [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md) only
 matters if you want to use it in a closed-source product.
 
 ## 👤 About the author
 
-Seiza is made by [Ziedell Alexander Figueroa](https://zafigueroa.vercel.app),
+[Seiza](https://home.seiza.cc) is made by [Ziedell Alexander Figueroa](https://zafigueroa.vercel.app),
 a full-stack and XR developer in Cebu City: lecturer in the Department of
 Computer Science at the University of the Philippines Cebu, and consultant
 and researcher at UP Open University's ISCOLab. Its learning worlds grew out
@@ -301,7 +301,7 @@ and the ISCOLab dashboard.
 
 ## ⚖️ License
 
-Seiza is dual-licensed:
+[Seiza](https://home.seiza.cc) is dual-licensed:
 
 - **AGPL-3.0-or-later** ([LICENSE](LICENSE)) for open and self-hosted use.
 - A **commercial license** ([COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md))
@@ -310,7 +310,7 @@ Seiza is dual-licensed:
 3D assets are licensed separately. See
 [THIRD_PARTY_ASSETS.md](THIRD_PARTY_ASSETS.md).
 
-The avatars in the GIF and screenshots were made with Seiza's built-in designer,
+The avatars in the GIF and screenshots were made with [Seiza](https://home.seiza.cc)'s built-in designer,
 plus the CC0 VRoid Studio sample "Sendagaya Shino" (pixiv Inc.) and the
 fan-made model credited below.
 
@@ -320,5 +320,5 @@ Rock!* (© Aki Hamaji / Houbunsha / Aniplex). It appears only in the GIF at
 the top and in this screenshot, from the maintainer's own copy, to show how an uploaded,
 artist-made VRM looks in Seiza. The model is **not** included in this
 repository or in any deployment, and its license doesn't allow
-redistribution or corporate commercial use. Seiza isn't affiliated with or
+redistribution or corporate commercial use. [Seiza](https://home.seiza.cc) isn't affiliated with or
 endorsed by the model's author or the rights holders.

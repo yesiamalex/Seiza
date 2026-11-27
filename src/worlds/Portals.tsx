@@ -1,5 +1,5 @@
 /**
- * Stations of the Shinkanseiza (新幹星座), the line between the EcoSeiztem's
+ * Stations of the Seikansen (星環線), the line between the EcoSeiztem's
  * worlds, from world.json's `portals`: a row of station name boards, each
  * in its world's colour, its name in Japanese and English. Click one and
  * the departure board comes up: the line's trains to every world, the one
@@ -59,7 +59,7 @@ function board(world: PortalWorld, color: string): THREE.CanvasTexture {
   ctx.fillStyle = "#ffffff";
   ctx.textAlign = "center";
   ctx.font = `700 22px ${FONT}`;
-  ctx.fillText("新幹星座  SHINKANSEIZA  ·  EcoSeiztem", 384, 28);
+  ctx.fillText("星環線  SEIKANSEN  ·  EcoSeiztem", 384, 28);
   ctx.fillStyle = "#1d2433";
   ctx.font = `800 92px ${FONT}`;
   ctx.fillText(world.labelJa ?? world.label, 384, 140, 720);
@@ -154,7 +154,7 @@ const MONO = "ui-monospace, 'SF Mono', Menlo, Consolas, 'Hiragino Sans', 'Noto S
 const at = (minutes: number) => new Date(Date.now() + minutes * 60_000).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 
 /**
- * Before leaving for another world: the Shinkanseiza's departure board,
+ * Before leaving for another world: the Seikansen's departure board,
  * every world's train in amber, its words turning between Japanese and
  * English as real boards do, the one you picked boarding at the top, and
  * a button to board it (a new tab). Mounted beside the HUD.
@@ -193,7 +193,7 @@ export function PortalCard({ config, inXr, traveller = null }: { config: PortalC
         {/* The board's head: the line, and the time. */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "#1d2433", borderBottom: `3px solid ${color}` }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: 0.5 }}>{ja ? "新幹星座　発車案内" : "Shinkanseiza · Departures"}</div>
+            <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: 0.5 }}>{ja ? "星環線　発車案内" : "Seikansen · Departures"}</div>
             <div style={{ fontSize: 11, opacity: 0.7 }}>{ja ? "EcoSeiztem 全線" : "Every line of the EcoSeiztem"}</div>
           </div>
           <div style={{ fontFamily: MONO, fontSize: 20, color: LED, textShadow: `0 0 8px ${LED_DIM}` }}>{at(0)}</div>
@@ -211,7 +211,7 @@ export function PortalCard({ config, inXr, traveller = null }: { config: PortalC
             return (
               <div key={w.id} style={{ display: "grid", gridTemplateColumns: "clamp(44px, 12vw, 56px) clamp(52px, 15vw, 64px) minmax(0, 1fr) 40px", gap: 8, alignItems: "center", padding: "7px 14px", fontSize: mine ? 17 : 15, background: mine ? "rgba(255,179,71,0.07)" : undefined, borderTop: "1px solid #1c1e26" }}>
                 <span>{mine ? at(0) : at(i * 3)}</span>
-                <span style={{ fontSize: 11, color: "#10131a", background: w.color ?? "#8fb3ff", borderRadius: 4, padding: "2px 4px", textAlign: "center", textShadow: "none", fontFamily: FONT, fontWeight: 700 }}>{ja ? "新幹星座" : "SHINKAN"}</span>
+                <span style={{ fontSize: 11, color: "#10131a", background: w.color ?? "#8fb3ff", borderRadius: 4, padding: "2px 4px", textAlign: "center", textShadow: "none", fontFamily: FONT, fontWeight: 700 }}>{ja ? "星環線" : "SEIKAN"}</span>
                 <span style={{ overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
                   {ja ? (w.labelJa ?? w.label) : w.label}
                   {mine && <span style={{ marginLeft: 10, fontSize: 12, animation: "seiza-board-blink 1.2s steps(2) infinite" }}>{ja ? "乗車中" : "BOARDING"}</span>}

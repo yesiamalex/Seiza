@@ -13,7 +13,7 @@ import { noiseHit, toneHit, voice } from "../addons/sound";
 import { speak } from "../guides/speech";
 
 /**
- * Arriving in a world, by the Shinkanseiza (新幹星座), the train that links
+ * Arriving in a world, by the Seikansen (星環線), the train that links
  * the EcoSeiztem's worlds: you sit on its long seat at night, facing us,
  * and breathe, slowly, while the world loads. Through the
  * window behind you the night streams past (near poles fast, the hills
@@ -163,7 +163,7 @@ function stationSign(nameJa: string, nameEn: string, color: string) {
     ctx.fillText(nameEn, 512, 210, 960);
     ctx.fillStyle = "#ffffff";
     ctx.font = `700 26px ${FONT}`;
-    ctx.fillText("新幹星座  SHINKANSEIZA  ·  EcoSeiztem", 512, 267);
+    ctx.fillText("星環線  SEIKANSEN  ·  EcoSeiztem", 512, 267);
     ctx.fillStyle = "#1d2433";
     ctx.font = `500 26px ${FONT}`;
     ctx.textAlign = "left";
@@ -183,9 +183,9 @@ function lineAd(color: string) {
     ctx.fillStyle = "#fff";
     ctx.textAlign = "center";
     ctx.font = `800 54px ${FONT}`;
-    ctx.fillText("新幹星座", 256, 92);
+    ctx.fillText("星環線", 256, 92);
     ctx.font = `700 30px ${FONT}`;
-    ctx.fillText("SHINKANSEIZA", 256, 136);
+    ctx.fillText("SEIKANSEN", 256, 136);
     ctx.font = `500 24px ${FONT}`;
     ctx.fillStyle = "rgba(255,255,255,0.8)";
     ctx.fillText("Every world of the EcoSeiztem, one line", 256, 180);
@@ -814,7 +814,7 @@ export function Arrival({
     >
       <div style={{ position: "absolute", zIndex: 1, left: 0, right: 0, bottom: 34, display: "grid", justifyItems: "center", gap: 8, color: "#fff", fontFamily: "system-ui, sans-serif", textShadow: "0 1px 6px rgba(0,0,0,0.7)", pointerEvents: "none", padding: "0 16px", textAlign: "center", opacity: fading ? 0 : 1, transition: "opacity 300ms" }}>
         <span style={{ fontSize: 14, opacity: 0.85, letterSpacing: 1, transition: "opacity 600ms" }}>{ready ? L("Tap to step off", "タップで降りる") : breath === "in" ? L("Breathe in…", "吸って…") : L("…and out", "…吐いて")}</span>
-        <strong style={{ fontSize: 18, letterSpacing: 0.3 }}>{L(`Shinkanseiza to ${worldName}`, `新幹星座 ${worldName}行き`)}</strong>
+        <strong style={{ fontSize: 18, letterSpacing: 0.3 }}>{L(`Seikansen to ${worldName}`, `星環線 ${worldName}行き`)}</strong>
         <span aria-hidden style={{ width: 160, height: 3, borderRadius: 2, background: "rgba(255,255,255,0.18)", overflow: "hidden" }}>
           <span style={{ display: "block", height: "100%", width: `${Math.round((ready ? 1 : 0.1 + 0.85 * share) * 100)}%`, background: color, transition: "width 400ms" }} />
         </span>

@@ -1,5 +1,5 @@
-// How much the graphics ask of the device: High (as Seiza always was) or
-// Low, for older phones. Auto picks Low on an older iPhone (iPhone 11, XR,
+// How much the graphics ask of the device: High (as Seiza always was),
+// Medium between, or Low, for older phones. Auto picks Low on an older iPhone (iPhone 11, XR,
 // SE: the 2× screens) and on phones that say they're short of memory or
 // cores, and High everywhere else; anyone can choose either.
 //
@@ -7,18 +7,21 @@
 // avatars' textures to 1024 px (a VRoid avatar's 2048 px ones are about
 // 20 MB each on the GPU, and a busy room of them is what runs Safari out of
 // memory), and steps far avatars' detail down sooner, as a headset does.
+// Medium keeps the shadows, draws a little less sharp than High, keeps
+// textures to 2048 px, and steps far avatars down as Low does.
 // Nothing about sound or voice changes.
 import { useSyncExternalStore } from "react";
 import * as THREE from "three";
 
-export type GraphicsChoice = "auto" | "high" | "low";
+export type GraphicsChoice = "auto" | "high" | "medium" | "low";
+export type GraphicsLevel = "high" | "medium" | "low";
 const KEY = "seiza-graphics";
 const listeners = new Set<() => void>();
 
 function stored(): GraphicsChoice {
   try {
     const v = localStorage.getItem(KEY);
-    return v === "high" || v === "low" ? v : "auto";
+    return v === "high" || v === "medium" || v === "low" ? v : "auto";
   } catch {
     return "auto";
   }
@@ -68,15 +71,28 @@ export function lowEndDevice(nav: Navigator | undefined = typeof navigator === "
   return memory === undefined && cores <= 4;
 }
 
-/** Low graphics now: chosen, or picked by Auto. */
-export function isLowGraphics(): boolean {
-  return choice === "low" || (choice === "auto" && lowEndDevice());
-}
+const levelOf = (c: GraphicsChoice): GraphicsLevel => (c === "auto" ? (lowEndDevice() ? "low" : "high") : c);
 
-export function useLowGraphics(): boolean {
-  const c = useGraphicsChoice();
-  return c === "low" || (c === "auto" && lowEndDevice());
+/** The graphics now: chosen, or what Auto picked for this device. */
+export function graphicsLevel(): GraphicsLevel {
+  return levelOf(choice);
 }
+export function useGraphicsLevel(): GraphicsLevel {
+  return levelOf(useGraphicsChoice());
+}
+/** Low graphics now. */
+export function isLowGraphics(): boolean {
+  return graphicsLevel() === "low";
+}
+/** Far avatars' detail steps down sooner (Medium and Low), as in a headset. */
+export const leanCrowd = () => graphicsLevel() !== "high";
+/** The largest texture side an avatar keeps, or null for its own. */
+export function textureCap(level: GraphicsLevel = graphicsLevel()): number | null {
+  return level === "low" ? LOW_TEXTURE_SIZE : level === "medium" ? 2048 : null;
+}
+/** The most pixels drawn per screen pixel; and whether the sun casts shadows. */
+export const PIXEL_CAP: Record<GraphicsLevel, number> = { high: 1.5, medium: 1.15, low: 1 };
+export const castsShadows = (level: GraphicsLevel) => level !== "low";
 
 /** The largest texture side an avatar keeps on Low graphics. */
 export const LOW_TEXTURE_SIZE = 1024;

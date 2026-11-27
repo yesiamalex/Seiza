@@ -1,4 +1,4 @@
-// Boarding the Shinkanseiza from one world to another: who you are goes
+// Boarding the Seikansen from one world to another: who you are goes
 // with you, so the next world takes you straight onto the train (its
 // loading screen) instead of its join screen.
 //

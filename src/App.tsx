@@ -87,7 +87,7 @@ import { GraphicsToggle } from "./ui/GraphicsToggle";
 import { decodeAvatarSpec } from "./avatar/designer/avatarSpec";
 import { takeTraveller } from "./worlds/handoff";
 import { unlockAudio } from "./media/audioContext";
-import { useLowGraphics } from "./scene/graphics";
+import { castsShadows, PIXEL_CAP, useGraphicsLevel } from "./scene/graphics";
 import { Toast } from "./ui/Toast";
 import { ControlsGuide, hasSeenControlsGuide } from "./ui/ControlsGuide";
 import { TopCenterCluster } from "./ui/TopCenterCluster";
@@ -239,7 +239,7 @@ export default function App() {
   // rate drops (a crowd, a weak GPU), raised again when it recovers.
   const [resolution, setResolution] = useState(1);
   // Low graphics (older phones, scene/graphics.ts): a pixel per pixel, no sun shadows.
-  const lowGraphics = useLowGraphics();
+  const graphics = useGraphicsLevel();
   const [arrived, setArrived] = useState(false);
   const [localVrm, setLocalVrm] = useState<VRM | null>(null);
   const [localGesture, setLocalGesture] = useState<{ gesture: GestureDefinition; seq: number } | null>(null);
@@ -1594,13 +1594,13 @@ export default function App() {
         // distance nothing occupies, which shows up as surfaces flickering
         // against each other when the camera moves.
         camera={{ position: [0, 1.6, 4], near: 0.12, far: 260 }}
-        shadows={!lowGraphics}
+        shadows={castsShadows(graphics)}
         // Rendering at the full device pixel ratio means four times the
         // pixels on a typical high-density screen, which is what pushed
         // weaker GPUs into dropped frames and lost contexts.
         // And when the frame rate drops, a little lower again, down to 0.75 of
         // a pixel (PerformanceMonitor below), and back up when it recovers.
-        dpr={Math.max(0.75, Math.min(lowGraphics ? 1 : 1.5, Math.max(1, typeof window === "undefined" ? 1 : window.devicePixelRatio)) * resolution)}
+        dpr={Math.max(0.75, Math.min(PIXEL_CAP[graphics], Math.max(1, typeof window === "undefined" ? 1 : window.devicePixelRatio)) * resolution)}
         gl={{ powerPreference: "high-performance" }}
         fallback={<CenteredMessage text={L("3D graphics are unavailable in this browser.", "このブラウザでは3Dグラフィックスを使えません。")} />}
         onCreated={({ gl }) => {
