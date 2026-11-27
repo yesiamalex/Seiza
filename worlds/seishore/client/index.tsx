@@ -205,7 +205,7 @@ const onCrossing = (x: number, z: number) => x > TRACK.bed0 - 0.7 && x < TRACK.b
 /** People wait at the crossing while its barriers are down; anyone already on it walks clear. */
 const mayStep = (x0: number, z0: number, x1: number, z1: number) => onCrossing(x0, z0) || !onCrossing(x1, z1) || !crossingOn(clock());
 
-export function Scene({ warp, getSelfPosition, sit, occupiedSeatId, playGesture, faceToward, worldState }: WorldSceneProps) {
+export function Scene({ warp, getSelfPosition, sit, occupiedSeatId, playGesture, faceToward, worldState, players, selfId, sendWorldMessage }: WorldSceneProps) {
   useLang();
   // The ground the railway needs, before anything is drawn on it; and Nishi-machi's, out west.
   const [floors] = useState(() => {
@@ -331,7 +331,7 @@ export function Scene({ warp, getSelfPosition, sit, occupiedSeatId, playGesture,
       {transitShown && <Transit sit={sit} fixed={fixed} floors={floors} />}
       <TownSounds getSelfPosition={getSelfPosition} />
       <ShopsScene />
-      <NishiScene worldState={worldState} getSelfPosition={getSelfPosition} />
+      <NishiScene worldState={worldState} getSelfPosition={getSelfPosition} players={players} selfId={selfId} sendWorldMessage={sendWorldMessage} />
       <Steam at={kitchenSteam} rise={0.7} size={0.14} opacity={0.3} />
       <Steam at={incense} rise={1.6} size={0.22} color="#d9dcd6" opacity={0.28} rate={0.6} />
       {sit && seats.map((seat) => <SeatPad key={seat.id} seat={seat} onSit={sit} occupied={occupiedSeatId === seat.id} />)}
