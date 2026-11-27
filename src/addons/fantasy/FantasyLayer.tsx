@@ -7,7 +7,7 @@ import { LOCAL_TRACKING_SOURCE, trackingStore } from "../../xr/body/trackingStor
 import { PooledLight } from "../../scene/LightPool";
 import { TRACKING_STALE_MS } from "../../xr/body/trackingWire";
 import type { PlayerState } from "../../multiplayer/types";
-import { cancelSelfPush, pushSelf } from "../../player/selfPush";
+import { cancelSelfPush, liftSelf, pushSelf } from "../../player/selfPush";
 import { getAddonAvatar, LOCAL_AVATAR } from "../avatars";
 import { blendBody, carryHand, copyBody, Gait, newBodyPose, poseBody, type BodyPose } from "../body";
 import { onAddonEvent, sendAddonEvent } from "../bus";
@@ -166,7 +166,11 @@ const KO_FACE: FaceCue = { blink: 1, sad: 0.4 };
 const ARROW_RANGE = 40;
 /** How far each element's special carries you forward: Havoc lunges into
  *  its plunge, Electro and Glacio hold their ground. */
-const SPECIAL_STEP: Record<Element, number> = { spectro: 0.2, havoc: 0.6, aero: 0.12, electro: 0, fusion: 0.3, glacio: 0.08 };
+const SPECIAL_STEP: Record<Element, number> = { spectro: 0.2, havoc: 0.6, aero: 0.12, electro: 0, fusion: 0.3, glacio: 0.08, uzu: 0.35, nen: 0 };
+/** Nen's hold: how high it lifts, how long it holds, and its wearing-down (ticks of damage while held). */
+const NEN_HOLD = { height: 1.0, rise: 0.45, hold: 2.2, fall: 0.5, ticks: 4, every: 0.5, damage: 3 };
+/** Uzu's throw: how far back, how fast, and the hop off the ground. */
+const UZU_THROW = { distance: 2.8, seconds: 0.45, hop: 0.45 };
 /** How long a special gathers before it's released (effects.ts's gather). */
 const WIND_UP_SECONDS = 0.42;
 /** Trigger (index curl, see xrPose.ts) past this fires; under the second re-arms. */
@@ -669,11 +673,27 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode, selfS
                 playKnockedOut();
                 knockedOut(from);
               });
-              // Knocked back, away from whoever hit you; a special throws further.
-              if (theirs) {
+              // Knocked back, away from whoever hit you; a special throws further,
+              // Uzu's furthest of all, up off your feet; Nen's holds you up in
+              // the air instead, wearing you down while it holds.
+              const uzu = event.special && fighter.element === "uzu";
+              const nen = event.special && fighter.element === "nen";
+              if (theirs && !nen) {
                 const away = Math.hypot(mine[0] - theirs[0], mine[2] - theirs[2]);
-                const distance = event.special ? 0.55 : 0.18;
-                if (away > 0.01) pushSelf(((mine[0] - theirs[0]) / away) * distance, ((mine[2] - theirs[2]) / away) * distance, event.special ? 0.3 : 0.16);
+                const distance = uzu ? UZU_THROW.distance : event.special ? 0.55 : 0.18;
+                if (away > 0.01) pushSelf(((mine[0] - theirs[0]) / away) * distance, ((mine[2] - theirs[2]) / away) * distance, uzu ? UZU_THROW.seconds : event.special ? 0.3 : 0.16);
+                if (uzu) liftSelf(UZU_THROW.hop, UZU_THROW.seconds * 0.4, 0, UZU_THROW.seconds * 0.6);
+              }
+              if (nen) {
+                liftSelf(NEN_HOLD.height, NEN_HOLD.rise, NEN_HOLD.hold, NEN_HOLD.fall);
+                for (let i = 1; i <= NEN_HOLD.ticks; i++)
+                  window.setTimeout(() => {
+                    if (fantasy.get().ko || !fantasy.get().weapon) return;
+                    takeDamage(NEN_HOLD.damage, () => {
+                      playKnockedOut();
+                      knockedOut(from);
+                    });
+                  }, (NEN_HOLD.rise + i * NEN_HOLD.every) * 1000);
               }
               buzz(gl, "left", 0.4, 60);
               buzz(gl, "right", 0.4, 60);

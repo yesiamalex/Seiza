@@ -57,6 +57,7 @@ import { Sitter, Steam } from "./Extras";
 import { showCaption, useCaption } from "./caption";
 import { ShopMenu, ShopsScene, useShop } from "./Shops";
 import { BookReader } from "./BookReader";
+import { track } from "../../../src/analytics/track";
 
 function Hud() {
   useLang();
@@ -264,6 +265,7 @@ export function Scene({ warp, getSelfPosition, sit, occupiedSeatId, playGesture,
     faceToward(face[0], face[1]);
   };
   const atShrine = () => {
+    track("pray.shrine");
     timers.current.forEach((t) => window.clearTimeout(t));
     goPray(PRAY_AT, [SHRINE.x, SHRINE.hokoraZ]);
     coin();
@@ -294,6 +296,7 @@ export function Scene({ warp, getSelfPosition, sit, occupiedSeatId, playGesture,
     });
   };
   const atTemple = () => {
+    track("pray.temple");
     timers.current.forEach((t) => window.clearTimeout(t));
     goPray(TEMPLE_PRAY, [TEMPLE.hallX, TEMPLE.z]);
     coin();
@@ -308,6 +311,7 @@ export function Scene({ warp, getSelfPosition, sit, occupiedSeatId, playGesture,
     });
   };
   const drawFortune = () => {
+    track("omikuji");
     const [x, , z] = getSelfPosition();
     omikujiShake(Math.hypot(x - OMIKUJI_AT[0], z - OMIKUJI_AT[1]));
     const f = FORTUNES[Math.floor(Math.random() * FORTUNES.length)];

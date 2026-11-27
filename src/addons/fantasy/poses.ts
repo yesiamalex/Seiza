@@ -481,7 +481,7 @@ interface Move {
   body: BodyKey[];
 }
 
-const MOVES: Record<Element, Move> = {
+const BASE_MOVES: Record<Exclude<Element, "uzu" | "nen">, Move> = {
   // Spectro: light let go from the open palm, swept from left to right as
   // the chest turns through, the blade held aside.
   spectro: {
@@ -554,6 +554,32 @@ const MOVES: Record<Element, Move> = {
       pose(0.82, { lean: 0.46, drop: 0.27, twist: -0.1, shiftZ: -0.04, left: [-0.03, -0.16, 0], right: [0.04, 0.14, 0] }),
       stance(1),
     ],
+  },
+};
+
+const MOVES: Record<Element, Move> = {
+  ...BASE_MOVES,
+  // Uzu: the hand cupped low by the hip, the sphere spun up in it, then
+  // driven out and in with a lunge, the weapon held aside.
+  uzu: {
+    right: [GUARD, at(ASIDE, 0.3), at(ASIDE, 0.8), { ...GUARD, at: 1 }],
+    left: [at(HAND_DOWN, 0), { at: 0.3, pos: [-0.26, 0.62, -0.08], ...PALM_UP }, { at: 0.56, pos: [0.02, 0.92, -0.52], ...PALM_OUT }, { at: 0.8, pos: [0.02, 0.92, -0.52], ...PALM_OUT }, at(HAND_DOWN, 1)],
+    free: true,
+    body: [
+      stance(0),
+      pose(0.3, { twist: 0.3, lean: 0.08, drop: 0.12, carry: 0.3 }),
+      pose(0.56, { twist: -0.12, lean: 0.34, drop: 0.16, shiftZ: -0.12, carry: 0.3, ...LUNGE_FEET }),
+      pose(0.8, { twist: -0.1, lean: 0.3, drop: 0.15, shiftZ: -0.11, carry: 0.3, ...LUNGE_FEET }),
+      stance(1),
+    ],
+  },
+  // Nen: the open hand raised to head height toward them and held there,
+  // leaning back a little, as if holding something up, the weapon aside.
+  nen: {
+    right: [GUARD, at(ASIDE, 0.35), at(ASIDE, 0.85), { ...GUARD, at: 1 }],
+    left: [at(HAND_DOWN, 0), { at: 0.35, pos: [-0.1, 1.28, -0.42], ...PALM_OUT }, { at: 0.85, pos: [-0.1, 1.34, -0.42], ...PALM_OUT }, at(HAND_DOWN, 1)],
+    free: true,
+    body: [stance(0), pose(0.35, { twist: -0.18, lean: -0.08, head: 0.12, carry: 0.3 }), pose(0.56, { twist: -0.2, lean: -0.1, head: 0.16, carry: 0.3 }), pose(0.85, { twist: -0.2, lean: -0.12, head: 0.18, carry: 0.3 }), stance(1)],
   },
 };
 

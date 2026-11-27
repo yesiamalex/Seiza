@@ -9,7 +9,7 @@ import { turningOptions, useXrControls } from "../xr/controls";
 import { Teleport } from "../xr/Teleport";
 import { drive } from "./drive";
 import { selfViewStore } from "../xr/body/selfViewStore";
-import { takeSelfPush } from "./selfPush";
+import { selfLift, takeSelfPush } from "./selfPush";
 import {
   CAMERA_RADIUS,
   ceilingHeightAt,
@@ -1232,6 +1232,8 @@ export function PlayerRig({
         avatarYawRef.current += carried.turn;
       }
     }
+    // Held in the air by a hold, you can't walk off.
+    if (!isPresenting && selfLift()?.held) velocity.set(0, 0, 0);
     vcam.position.addScaledVector(velocity, delta);
     // Gravity/jump — applied every frame so landing is a clean clamp back to
     // eye height rather than separate ground detection. The ground is not
@@ -1283,6 +1285,13 @@ export function PlayerRig({
       }
     }
     if (vcam.position.y <= groundEyeY && postureEye === null && !seatedExitRef.current) {
+      verticalVelocityRef.current = 0;
+    }
+    // Lifted off the ground (selfPush.ts's liftSelf: a blast's hop, a hold):
+    // up there, gravity waiting. Never in a headset.
+    const lifted = isPresenting ? null : selfLift();
+    if (lifted && lifted.height > 0.001) {
+      vcam.position.y = Math.max(vcam.position.y, groundEyeY + lifted.height);
       verticalVelocityRef.current = 0;
     }
 

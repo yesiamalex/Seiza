@@ -220,7 +220,12 @@ function piecesFor(element: Element): THREE.BufferGeometry {
       break;
     }
     case "electro":
+    case "uzu":
       g = new THREE.SphereGeometry(0.05, 8, 6);
+      break;
+    case "nen":
+      // A soft orb.
+      g = new THREE.IcosahedronGeometry(0.07, 1);
       break;
     case "glacio":
       // A crystal: six-sided, pointed.
@@ -260,7 +265,7 @@ function buildWhirl() {
 
 /** How long each element's burst lasts: Havoc's feathers and Glacio's
  *  mist linger. */
-const BURST_SECONDS: Record<Element, number> = { spectro: 1.1, havoc: 1.6, aero: 1.3, electro: 1.1, fusion: 1.2, glacio: 1.5 };
+const BURST_SECONDS: Record<Element, number> = { spectro: 1.1, havoc: 1.6, aero: 1.3, electro: 1.1, fusion: 1.2, glacio: 1.5, uzu: 1.0, nen: 2.8 };
 const GATHER_SECONDS = 0.42;
 const HAVOC_DARK = new THREE.Color("#3a0e2c");
 
@@ -278,6 +283,10 @@ const HAVOC_DARK = new THREE.Color("#3a0e2c");
  * - Fusion: tongues of flame flickering up from a column of fire.
  * - Glacio: crystals breaking up out of the ground, and a cold mist
  *   sublimating off them as they sink (snowflakes are FantasyEffects').
+ * - Uzu: a bright sphere wrapped in a spiral spinning round it, beads
+ *   flung out from it in a wheeling disc.
+ * - Nen: a faint column of the mind's hold round the spot, and soft orbs
+ *   rising slowly up it while it lasts.
  *
  * Each also lights the place round it for a moment (`light`, read by
  * FantasyLayer for a real pooled light).
@@ -381,12 +390,19 @@ class Burst {
         this.dark.position.y = 1;
         opacity(this.dark, 0.15 + 0.45 * k);
       }
-      // The wind tightening round them, spinning faster.
-      show(this.whirl, e === "aero");
+      // The wind tightening round them, spinning faster; Uzu's, wound tight into a sphere in the hand.
+      show(this.whirl, e === "aero" || e === "uzu");
       if (e === "aero") {
+        this.whirl.position.y = 0;
+        this.whirl.rotation.set(0, 0, 0);
         this.whirl.scale.set(1.6 - 0.9 * k, 0.6 + 0.2 * k, 1.6 - 0.9 * k);
         this.whirl.rotation.y = -age * (6 + 10 * k);
         opacity(this.whirl, 0.5 * k);
+      } else if (e === "uzu") {
+        this.whirl.scale.set(0.5 - 0.25 * k, 0.32 - 0.12 * k, 0.5 - 0.25 * k);
+        this.whirl.position.y = 0.75;
+        this.whirl.rotation.set(0.5, -age * 30, 0);
+        opacity(this.whirl, 0.85 * k);
       }
       // Light gathering in from all round.
       show(this.shards, e === "spectro");
@@ -415,16 +431,25 @@ class Burst {
     show(this.ring2, true);
     this.ring.scale.setScalar(0.3 + grow * 3.6);
     this.ring.position.y = 0.08;
-    opacity(this.ring, (e === "havoc" ? 0.7 : 1) - age / 0.7);
+    opacity(this.ring, (e === "havoc" ? 0.7 : e === "nen" ? 0.35 : 1) - age / 0.7);
     const late = Math.max(0, age - 0.12);
     this.ring2.scale.setScalar(0.3 + (1 - Math.pow(1 - Math.min(1, late / 0.6), 3)) * 4.6);
     this.ring2.position.y = 0.1;
-    opacity(this.ring2, 0.7 * (1 - late / 0.75));
+    opacity(this.ring2, (e === "nen" ? 0.25 : 0.7) * (1 - late / 0.75));
     if (e === "glacio") {
       // A cold mist breathing out and lingering, rather than a flash.
       this.flash.scale.set(0.6 + age * 2.2, 0.4 + age * 1.1, 0.6 + age * 2.2);
       this.flash.position.y = 0.4;
       opacity(this.flash, 0.22 * Math.min(1, age / 0.15) * (1 - age / life));
+    } else if (e === "uzu") {
+      // The sphere itself, pulsing as it spins, then bursting.
+      this.flash.scale.setScalar((0.42 + 0.05 * Math.sin(time * 40)) * (age < 0.5 ? 1 : 1 + (age - 0.5) * 3));
+      this.flash.position.y = 1.0;
+      opacity(this.flash, age < 0.5 ? 0.85 : 0.85 - (age - 0.5) * 1.8);
+    } else if (e === "nen") {
+      this.flash.scale.setScalar(0.3 + Math.min(1, age / 0.3) * 0.5);
+      this.flash.position.y = 1.2;
+      opacity(this.flash, 0.25 * (1 - age / life));
     } else {
       this.flash.scale.setScalar(0.3 + Math.min(1, age / 0.12) * (e === "fusion" ? 1.25 : e === "havoc" ? 0.6 : 0.9));
       this.flash.position.y = 0.9;
@@ -435,8 +460,13 @@ class Burst {
     // fire, and Havoc's plunging down from above onto the spot; Aero and
     // Glacio have their own instead ----------------------------------------
     const column = e === "spectro" || e === "electro" || e === "fusion" || e === "havoc";
-    show(this.pillar, column);
-    if (e === "havoc") {
+    show(this.pillar, column || e === "nen");
+    if (e === "nen") {
+      // The hold: a faint column round them while it lasts, breathing.
+      this.pillar.position.y = 0;
+      this.pillar.scale.set(0.62 + 0.04 * Math.sin(time * 3), 2.6, 0.62 + 0.04 * Math.sin(time * 3));
+      opacity(this.pillar, 0.2 * Math.min(1, age / 0.3) * (1 - age / life) * (0.7 + 0.3 * Math.sin(time * 4)));
+    } else if (e === "havoc") {
       const fall = Math.min(1, age / 0.12);
       this.pillar.scale.set(0.22 + age * 0.3, 0.01 + fall * 6, 0.22 + age * 0.3);
       this.pillar.position.y = 6 * (1 - fall);
@@ -458,13 +488,20 @@ class Burst {
       opacity(this.dark, 0.4 * (1 - age / life));
     }
 
-    // ---- Aero: the whirlwind ------------------------------------------------
-    show(this.whirl, e === "aero");
+    // ---- Aero: the whirlwind; Uzu: the spiral wound round its sphere -------
+    show(this.whirl, e === "aero" || e === "uzu");
     if (e === "aero") {
       const up = Math.min(1, age / 0.3);
+      this.whirl.position.y = 0;
+      this.whirl.rotation.set(0, -age * 9, 0);
       this.whirl.scale.set(0.8 + age * 1.6, 0.4 + up * 1.2, 0.8 + age * 1.6);
-      this.whirl.rotation.y = -age * 9;
       opacity(this.whirl, 0.75 * (1 - age / life));
+    } else if (e === "uzu") {
+      const open = age < 0.5 ? 0 : (age - 0.5) * 2;
+      this.whirl.position.y = 0.62 - open * 0.3;
+      this.whirl.rotation.set(0.55, -age * 34, 0.2);
+      this.whirl.scale.set(0.34 + open * 1.2, 0.3 + open * 0.4, 0.34 + open * 1.2);
+      opacity(this.whirl, 0.9 * (1 - age / life));
     }
 
     // ---- the pieces -----------------------------------------------------------
@@ -510,6 +547,22 @@ class Burst {
             pieceMatrix(i, shardAt.set(Math.cos(a) * ring * 0.9, 0, Math.sin(a) * ring * 0.9), shardQ.setFromEuler(shardE.set(Math.sin(a) * lean, 0, -Math.cos(a) * lean)), shardS.set(1, Math.max(0.001, tall * up), 1));
             break;
           }
+          case "uzu": {
+            // Beads flung out from the sphere in a wheeling, tilted disc.
+            const turn = a + age * 14;
+            const r = 0.25 + age * (1.6 + (i % 3) * 0.4);
+            pieceMatrix(i, shardAt.set(Math.cos(turn) * r, 1.0 + Math.sin(turn) * r * 0.25, Math.sin(turn) * r), shardQ.identity(), shardS.setScalar(0.8 + 0.4 * Math.abs(Math.sin(time * 20 + i))));
+            fade = 0.9 * (1 - age / life);
+            break;
+          }
+          case "nen": {
+            // Soft orbs rising slowly round the one held, drifting round.
+            const climb = ((age * 0.6 + i / SHARDS) % 1) * 2.4;
+            const turn = a + age * 0.8;
+            pieceMatrix(i, shardAt.set(Math.cos(turn) * 0.62, climb, Math.sin(turn) * 0.62), shardQ.identity(), shardS.setScalar(0.7 + 0.3 * Math.sin(time * 3 + i)));
+            fade = 0.65 * Math.min(1, age / 0.3) * (1 - age / life);
+            break;
+          }
           default: {
             // Fusion: tongues of flame licking up round the spot, each
             // flickering in height and width, swaying, and drawn in toward
@@ -537,7 +590,7 @@ class Burst {
     // The light: Electro flickers, Fusion wavers, Havoc is a dim glow.
     const fade = Math.max(0, 1 - age / 0.7);
     this.light =
-      e === "electro" ? fade * (0.55 + 0.45 * Math.sin(time * 60)) : e === "fusion" ? fade * (0.8 + 0.2 * Math.sin(time * 17)) : e === "havoc" ? 0.45 * fade : fade * fade;
+      e === "electro" ? fade * (0.55 + 0.45 * Math.sin(time * 60)) : e === "fusion" ? fade * (0.8 + 0.2 * Math.sin(time * 17)) : e === "havoc" ? 0.45 * fade : e === "nen" ? 0.35 * Math.max(0, 1 - age) : fade * fade;
   }
 
   dispose() {
@@ -739,6 +792,8 @@ const MOTES: Record<Element, { count: number; speed: number; up: number; gravity
   electro: { count: 46, speed: 6.5, up: 0, gravity: 5, life: 0.35, height: 0.8, color: "#d4c2ff" },
   fusion: { count: 46, speed: 2.4, up: 3, gravity: -1.5, life: 1, height: 0.4, color: "#ffb35c" },
   glacio: { count: 56, speed: 1.4, up: 2.2, gravity: 0.9, life: 2, height: 0.5, color: "#f4fdff" },
+  uzu: { count: 44, speed: 5.5, up: 0.6, gravity: 1, life: 0.6, height: 1, color: "#bfe6ff" },
+  nen: { count: 30, speed: 0.7, up: 1.4, gravity: -0.4, life: 2.2, height: 0.4, color: "#f3dcff" },
 };
 
 /** Everything above in one group, added to the scene once. */

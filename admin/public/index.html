@@ -80,7 +80,7 @@
   <p class="note" id="country-note" hidden></p>
   <section><h2>What people chose and used</h2><p>The rides they took, the instruments and weapons they picked, what they ate and drank, picked up, placed, and did together: of the visitors, how many, and how often.</p><div class="groups" id="groups"></div></section>
   <section id="compare"><h2>The worlds compared</h2><p>Each world over the days chosen.</p><table><thead><tr><th>World</th><th class="n">Visits</th><th class="n">Visitors</th><th class="n">Hours</th><th class="n">Average stay</th><th class="n">Near someone</th><th class="n">Talked (mic)</th><th>Most done</th></tr></thead><tbody id="compare-rows"></tbody></table></section>
-  <section><h2>Exhibits and a world's own things</h2><p>Pieces opened, cards read: what each world reports for itself (Seisugbo's artworks, Seinag's cards).</p><table><thead><tr><th>World</th><th>What</th><th class="n">People</th><th class="n">Times</th></tr></thead><tbody id="exhibits"></tbody></table></section>
+  <section><h2>Exhibits and a world's own things</h2><p>What each world reports for itself: Seisugbo's artworks, Seinag's cards, and Seishore's shops (what was bought, card or cash), books read, prayers, fortunes, instruments tried, bikes, the dojo's bouts.</p><table><thead><tr><th>World</th><th>What</th><th class="n">People</th><th class="n">Times</th></tr></thead><tbody id="exhibits"></tbody></table></section>
   <div class="two">
     <section><h2>When</h2><p>Time spent in the worlds by hour of the day, Manila time.</p><div class="chart" id="hours"></div><div class="axis"><span>00</span><span>06</span><span>12</span><span>18</span><span>23</span></div></section>
     <section><h2>By day</h2><p>Visitors each day, by world.</p><div class="chart stacked" id="daily"></div><div class="axis" id="daily-axis"></div><div class="legend" id="daily-legend"></div></section>
@@ -107,6 +107,7 @@
   const GROUPS = [
     ["ride.", "Rides"], ["play.", "Instruments"], ["wield.", "Weapons"], ["pet.", "Pets"],
     ["had.", "Ate and drank"], ["grab.", "Picked up"], ["placed.", "Placed (edit mode)"], ["together.", "Together gestures"],
+    ["element.", "Elements chosen"], ["special.", "Specials let go"],
   ];
   const EVENTS = ["band.note", "fantasy.hit", "fantasy.ko", "ride.bell", "pet.pat"];
   const grouped = (k) => GROUPS.some(([p]) => k.startsWith(p)) || EVENTS.includes(k);
@@ -311,7 +312,7 @@
     const own = {};
     for (const d of list) for (const [k, [people, times]] of Object.entries(d.did)) if (k.startsWith("world.")) { const key = d.world.name + "|" + k.slice(6); const t = (own[key] ??= [0, 0]); t[0] += people; t[1] += times; }
     const ownRows = Object.entries(own).sort((a, b) => b[1][1] - a[1][1]).slice(0, 60);
-    for (const [key, [people, times]] of ownRows) { const [w, what] = key.split("|"); const tr = el("tr"); tr.append(el("td", w), el("td", what), el("td", String(people), "n"), el("td", String(times), "n")); exhibits.append(tr); }
+    for (const [key, [people, times]] of ownRows) { const [w, what] = key.split("|"); const tr = el("tr"); tr.append(el("td", w), el("td", what.split(".").join(" · ").replace(/-/g, " ")), el("td", String(people), "n"), el("td", String(times), "n")); exhibits.append(tr); }
     if (!ownRows.length) { const tr = el("tr"); tr.append(el("td", "Nothing yet.", "note")); exhibits.append(tr); }
 
     // When, and by day.

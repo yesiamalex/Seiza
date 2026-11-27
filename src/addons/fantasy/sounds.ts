@@ -85,6 +85,16 @@ export function playSpecialCharge(element: Element, distance?: number) {
       toneHit(v, { frequency: 520, sweepTo: 1560, duration: 0.42, gain: 0.14, type: "triangle", attack: 0.34 });
       noiseHit(v, { frequency: 8000, duration: 0.42, gain: 0.12, type: "highpass", attack: 0.3 });
       break;
+    case "uzu":
+      // A spin winding up in the hand, faster and higher.
+      for (let i = 0; i < 5; i++) noiseHit(v, { frequency: 600 + i * 260, sweepTo: 1400 + i * 400, duration: 0.09, gain: 0.22, q: 5, delay: i * 0.075 });
+      toneHit(v, { frequency: 180, sweepTo: 720, duration: 0.42, gain: 0.12, type: "sawtooth", attack: 0.34 });
+      break;
+    case "nen":
+      // A low hum gathering.
+      toneHit(v, { frequency: 98, sweepTo: 147, duration: 0.42, gain: 0.2, type: "sine", attack: 0.36 });
+      toneHit(v, { frequency: 294, duration: 0.42, gain: 0.06, type: "sine", attack: 0.38 });
+      break;
   }
 }
 
@@ -139,6 +149,18 @@ export function playSpecial(element: Element, distance?: number) {
       noiseHit(v, { frequency: 7000, sweepTo: 2600, duration: 0.4, gain: 0.6, type: "highpass" });
       for (let i = 0; i < 6; i++) toneHit(v, { frequency: 4200 - i * 330, duration: 0.12, gain: 0.06, type: "sine", delay: 0.1 + i * 0.07 });
       noiseHit(v, { frequency: 5000, sweepTo: 9000, duration: 1.2, gain: 0.15, type: "highpass", delay: 0.3, attack: 0.3 });
+      break;
+    case "uzu":
+      // The spin grinding as it's driven in, then the blast throwing them back.
+      for (let i = 0; i < 8; i++) noiseHit(v, { frequency: 900 + (i % 2) * 500, sweepTo: 2600, duration: 0.07, gain: 0.35, q: 4, delay: i * 0.055 });
+      noiseHit(v, { frequency: 2200, sweepTo: 300, duration: 0.7, gain: 0.7, type: "lowpass", delay: 0.45 });
+      toneHit(v, { frequency: 140, sweepTo: 40, duration: 0.8, gain: 0.5, type: "triangle", delay: 0.45 });
+      break;
+    case "nen":
+      // A deep, held hum while they're held, and a shimmer over it.
+      toneHit(v, { frequency: 73, duration: 2.6, gain: 0.45, type: "sine", attack: 0.2 });
+      toneHit(v, { frequency: 146, duration: 2.4, gain: 0.12, type: "sine", attack: 0.3 });
+      for (let i = 0; i < 6; i++) toneHit(v, { frequency: 1760 + i * 220, duration: 0.5, gain: 0.03, type: "sine", delay: 0.3 + i * 0.35 });
       break;
   }
 }

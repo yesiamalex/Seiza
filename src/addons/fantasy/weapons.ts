@@ -12,9 +12,12 @@ export const isPole = (weapon: Weapon) => weapon === "naginata" || weapon === "s
  * What a special carries, each with its own move, burst, glow, and sound:
  * Spectro's light let go from the palm, Havoc's dark plunge, Aero's
  * updraft, Electro called down from the sky, Fusion's fire from the hand,
- * Glacio's ice raised from the ground. Also a light saber's colour.
+ * Glacio's ice raised from the ground; Uzu's spiralling sphere, driven
+ * into whoever it meets, throwing them back through the air; Nen's hold of
+ * the mind, lifting whoever it catches off the ground and wearing them
+ * down while it holds. Also a light saber's colour.
  */
-export const ELEMENTS = ["spectro", "havoc", "aero", "electro", "fusion", "glacio"] as const;
+export const ELEMENTS = ["spectro", "havoc", "aero", "electro", "fusion", "glacio", "uzu", "nen"] as const;
 export type Element = (typeof ELEMENTS)[number];
 
 export interface WeaponSpec {
@@ -99,6 +102,8 @@ export const ELEMENT_COLORS: Record<Element, string> = {
   electro: "#a77bff",
   fusion: "#ff5a36",
   glacio: "#9ff4ff",
+  uzu: "#4fb4ff",
+  nen: "#e0a3ff",
 };
 export const ELEMENT_LABELS: Record<Element, [string, string]> = {
   spectro: ["Spectro", "スペクトロ(光)"],
@@ -107,6 +112,8 @@ export const ELEMENT_LABELS: Record<Element, [string, string]> = {
   electro: ["Electro", "エレクトロ(雷)"],
   fusion: ["Fusion", "フュージョン(炎)"],
   glacio: ["Glacio", "グレイシオ(氷)"],
+  uzu: ["Uzu (spiral)", "渦(うず)"],
+  nen: ["Nen (mind)", "念(ねん)"],
 };
 
 /**
@@ -131,6 +138,12 @@ export function elementPulse(element: Element, t: number): number {
       return 0.62 + 0.18 * Math.sin(t * 13) + 0.14 * Math.sin(t * 29 + 1);
     case "glacio":
       return 0.62 + 0.2 * Math.sin(t * 1.6);
+    case "uzu":
+      // Spinning: a quick shimmer over a steady glow.
+      return 0.66 + 0.22 * Math.sin(t * 14) * Math.sin(t * 3.1);
+    case "nen":
+      // Breathing in and out, slow and even.
+      return 0.45 + 0.45 * Math.pow(Math.sin(t * 1.2), 2);
   }
 }
 

@@ -31,6 +31,7 @@ import { panelTexture, Register, Spot, useShop } from "./Shops";
 import { SHOPS, yen } from "./shop";
 import { setPlaces } from "./serve";
 import { openBook } from "./BookReader";
+import { track } from "../../../src/analytics/track";
 import { Sitter } from "./Extras";
 import { G, LANE } from "./plan";
 import {
@@ -767,6 +768,7 @@ export function NishiScene({ worldState, getSelfPosition }: { worldState: Record
 
   // Trying an instrument: a strum, a chord, a beat, and (band mode on) it's yours.
   const tryInstrument = (instrument: Instrument) => {
+    track(`try.${instrument}`);
     if (instrument === "kit") [KIT.kick, KIT.hat, KIT.snare, KIT.hat].forEach((n, i) => window.setTimeout(() => playNote("kit", n), i * 230));
     else if (instrument === "keys") {
       const stop = [60, 64, 67].map((n) => holdNote("keys", n));
@@ -789,12 +791,17 @@ export function NishiScene({ worldState, getSelfPosition }: { worldState: Record
   };
 
   // A book off the shelf, opened on the screen to read (BookReader.tsx).
-  const pickBook = () => openBook(BOOKS[Math.floor(Math.random() * BOOKS.length)]);
+  const pickBook = () => {
+    const book = BOOKS[Math.floor(Math.random() * BOOKS.length)];
+    track(`book.${book.en}`);
+    openBook(book);
+  };
 
   // The bikes: which is out, and when it goes back by itself.
   const [out, setOut] = useState<Record<number, number>>({});
   const riding = useRef<number | null>(null);
   const takeBike = (i: number) => {
+    track("bike");
     if (!modeOn("exer")) {
       showCaption("レンタサイクル", "Free bikes: an editor can turn ride mode on to ride one", 4);
       return;
@@ -1105,10 +1112,12 @@ function DojoPractice({ fantasyOn, getSelfPosition }: { fantasyOn: boolean; getS
     state.current.started = performance.now() / 1000;
     state.current.next = state.current.started + 2;
     setBout(true);
+    track("dojo.bout");
     showCaption("よし、かかってきなさい", "Very well: come at me. Three clean hits, and guard against mine.", 4);
   };
   const end = (won: boolean) => {
     setBout(false);
+    if (won) track("dojo.won");
     showCaption(won ? "見事!一本!" : "今日はここまで", won ? "Well struck! The bout is yours." : "That's enough for today. Come again.", 4);
   };
   const senseiHit = () => {

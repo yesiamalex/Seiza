@@ -1236,6 +1236,15 @@ export class SeizaRoom extends DurableObject<Env> {
         stats.did(connId, `mode.${mode}`);
         stats.did(connId, `${prefix}.${pick}`);
       }
+      // A fighter's element, when they change it (with a weapon in hand).
+      const element = mode === "fantasy" && pick ? word(data.e) : null;
+      if (element && stats.changed(connId, "fantasy.element", element)) stats.did(connId, `element.${element}`);
+      return;
+    }
+    // A special let go, by its element.
+    if (mode === "fantasy" && data.k === "fx") {
+      const element = word(data.e);
+      if (element) stats.did(connId, `special.${element}`);
       return;
     }
     const events: Record<string, string> = { "band:n": "band.note", "fantasy:hit": "fantasy.hit", "fantasy:ko": "fantasy.ko", "exer:bell": "ride.bell", "pet:pat": "pet.pat" };

@@ -21,6 +21,7 @@ import { getBasket, getPayBy, onPayBy, setPayBy, getOpenShop, getWallet, konbini
 import { clearServed, serveNearYou, setPlaces, setSelf, takeServed, useServed, type Dish } from "./serve";
 import { atm, cardBeep, coinClink, register, steamWand, vendingDrop } from "./sounds";
 import { Steam } from "./Extras";
+import { track } from "../../../src/analytics/track";
 
 const FONT = "system-ui, 'Hiragino Sans', 'Noto Sans CJK JP', sans-serif";
 
@@ -42,6 +43,9 @@ export function purchase(id: ShopId, ware: Ware): boolean {
   setWallet(next);
   openShop(null);
   const shop = SHOPS[id];
+  // For the research counts: what was bought where, and how it was paid.
+  track(`buy.${id}.${ware.id}`);
+  if (id !== "vending") track(`pay.${getPayBy()}`);
   // Paying: by card, a touch on the reader; in cash, the coins on the tray. One wallet either way.
   if (id !== "vending") {
     const card = getPayBy() === "card";
@@ -530,6 +534,7 @@ export function ShopsScene() {
     if (consume("cup")) showCaption("ドリンクバー — おかわり自由", "Drink bar: help yourself");
   };
   const atATM = () => {
+    track("atm");
     const before = getWallet();
     const after = withdraw(before);
     if (after.yen === before.yen) {

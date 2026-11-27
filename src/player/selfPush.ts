@@ -50,5 +50,40 @@ export function takeSelfPush(delta: number, out: { x: number; z: number }) {
 
 /** Forgets any push still to come (a mode switched off, a teleport). */
 export function cancelSelfPush() {
+  lift = null;
   pushes.length = 0;
+}
+
+// --- lifts: up off the ground, a moment ------------------------------------------------------
+
+/** A lift (a room mode's hold, a blast's hop): up over `rise`, held, down over `fall`. */
+interface Lift {
+  at: number;
+  height: number;
+  rise: number;
+  hold: number;
+  fall: number;
+}
+let lift: Lift | null = null;
+
+/** Lifts this visitor `height` metres off the ground: up over `rise`
+ *  seconds, held there `hold` (unable to walk), and down over `fall`.
+ *  Never in a headset (PlayerRig doesn't apply it there). */
+export function liftSelf(height: number, rise = 0.3, hold = 0, fall = 0.35) {
+  if (!Number.isFinite(height) || height <= 0) return;
+  lift = { at: now(), height: Math.min(2, height), rise: Math.max(0.05, rise), hold: Math.max(0, hold), fall: Math.max(0.05, fall) };
+}
+
+/** How high a lift has this visitor now, and whether it's holding them in place; null when none. */
+export function selfLift(): { height: number; held: boolean } | null {
+  if (!lift) return null;
+  const t = now() - lift.at;
+  const { height, rise, hold, fall } = lift;
+  if (t >= rise + hold + fall) {
+    lift = null;
+    return null;
+  }
+  const ease = (k: number) => k * k * (3 - 2 * k);
+  const h = t < rise ? ease(t / rise) : t < rise + hold ? 1 : 1 - ease((t - rise - hold) / fall);
+  return { height: height * h, held: t < rise + hold };
 }
