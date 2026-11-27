@@ -9,7 +9,7 @@
   character model: a silhouette this small carries the head, the line of the
   back, and the fold of the legs, and nothing else survives at 16px anyway.
 -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Seiza">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Seiza research">
   <defs>
     <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#070c26"/>
@@ -85,6 +85,14 @@
         <use href="#body"/>
       </g>
       <use href="#arm" fill="none" stroke="#fbf3e4" stroke-width="4"/>
+      <!-- The admin's own: round glasses on the front of the face, the arm
+           back to the ear, a glint on the lens. -->
+      <circle cx="39.2" cy="17.8" r="2.9" fill="#8fd3ff" fill-opacity="0.28"/>
+      <g fill="none" stroke="#1b1546" stroke-width="1.3">
+        <circle cx="39.2" cy="17.8" r="2.9"/>
+        <path d="M36.3 17.5 L31.6 16.6"/>
+      </g>
+      <path d="M38.0 16.4 Q39.0 15.6 40.2 16.0" fill="none" stroke="#ffffff" stroke-width="0.7" stroke-linecap="round" opacity="0.9"/>
     </g>
   </g>
 </svg>
