@@ -1022,15 +1022,23 @@ export function PlayerRig({
         // either, at any speed or zoom.
         const floor = viewFloorAt(camera.position.x, camera.position.z);
         let lifted = Math.max(camera.position.y, floor + 0.4);
+        // Swimming, you're in the sea up to your eyes, so the point the
+        // camera turns round is under the view's floor (the water's top).
+        // The line to the camera then starts at the water, not under it:
+        // measured from under it, the whole sea looked like a hill in the
+        // way, and the camera was thrown up into the sky.
+        const pivotFloor = viewFloorAt(pivot.x, pivot.z) + 0.4;
+        const swimming = pivotFloor - 0.4 > feetY + 0.3;
+        const from = Math.max(pivot.y, pivotFloor);
         // On a hill (Mt. Makiling): not looking up at you from down the
         // slope, and the slope never between you and the camera. The line
         // from you to it is lifted wherever the ground would rise over it.
-        if (Math.abs(floor - feetY) > 0.3) lifted = Math.max(lifted, pivot.y - 0.3);
+        if (!swimming && Math.abs(floor - feetY) > 0.3) lifted = Math.max(lifted, pivot.y - 0.3);
         for (let i = 1; i < 6; i++) {
           const k = i / 6;
           const ground = viewFloorAt(pivot.x + (camera.position.x - pivot.x) * k, pivot.z + (camera.position.z - pivot.z) * k) + 0.4;
-          const line = pivot.y + (lifted - pivot.y) * k;
-          if (ground > line) lifted = pivot.y + (ground - pivot.y) / k;
+          const line = from + (lifted - from) * k;
+          if (ground > line) lifted = from + (ground - from) / k;
         }
         camera.position.y = Math.min(lifted, ceilingHeightAt(camera.position.x, camera.position.z));
         camera.lookAt(pivot);

@@ -633,7 +633,36 @@ export function Arrival({
         bow = 1;
       }
     };
-    el.addEventListener("pointerdown", onTap);
+    // Dragging looks round the carriage (a turn of the head, not a walk); a
+    // press that doesn't move is a tap, acted on as it lifts. Let go, and the
+    // view drifts back to where it was a few seconds later.
+    const look = { yaw: 0, pitch: 0, toYaw: 0, toPitch: 0, from: null as null | { x: number; y: number; yaw: number; pitch: number; moved: boolean }, idle: 0 };
+    const onDown = (event: PointerEvent) => {
+      look.from = { x: event.clientX, y: event.clientY, yaw: look.toYaw, pitch: look.toPitch, moved: false };
+      el.setPointerCapture?.(event.pointerId);
+    };
+    const onMove = (event: PointerEvent) => {
+      const from = look.from;
+      if (!from) return;
+      const dx = event.clientX - from.x;
+      const dy = event.clientY - from.y;
+      if (!from.moved && Math.hypot(dx, dy) < 7) return;
+      from.moved = true;
+      const across = Math.max(320, el.clientWidth || window.innerWidth);
+      look.toYaw = THREE.MathUtils.clamp(from.yaw + (dx / across) * 2.4, -1.0, 1.0);
+      look.toPitch = THREE.MathUtils.clamp(from.pitch + (dy / across) * 1.6, -0.35, 0.45);
+      look.idle = 0;
+    };
+    const onUp = (event: PointerEvent) => {
+      const from = look.from;
+      look.from = null;
+      if (from && !from.moved) onTap(event);
+    };
+    el.style.touchAction = "none";
+    el.addEventListener("pointerdown", onDown);
+    el.addEventListener("pointermove", onMove);
+    el.addEventListener("pointerup", onUp);
+    el.addEventListener("pointercancel", onUp);
 
     const loop = () => {
       frame = requestAnimationFrame(loop);
@@ -767,6 +796,18 @@ export function Arrival({
       camera.position.set(baseX + (1.9 - baseX) * follow + 0.01 * Math.sin(t * 9) * rock, 1.3 + (still ? 0 : 0.015 * smooth(phase)) + 0.006 * Math.sin(t * 11) * rock, 3.4 - 0.6 * follow);
       camera.lookAt((portrait ? KNEEL[0] : 0.1) + (portrait ? 2.2 : 1.6) * follow, 1.05, -0.6);
       camera.rotateZ(0.004 * Math.sin(t * 1.3) * rock);
+      // Where you've dragged the view to, eased; back to the middle a while after you let go.
+      if (!look.from) {
+        look.idle += dt;
+        if (look.idle > 3.5) {
+          look.toYaw *= 1 - Math.min(1, dt * 1.2);
+          look.toPitch *= 1 - Math.min(1, dt * 1.2);
+        }
+      }
+      look.yaw += (look.toYaw - look.yaw) * Math.min(1, dt * 10);
+      look.pitch += (look.toPitch - look.pitch) * Math.min(1, dt * 10);
+      camera.rotateY(look.yaw);
+      camera.rotateX(look.pitch);
 
       // The constellation: a line every breath and a bit, and one for each shooting star.
       const drawn = Math.min(lines.length, Math.floor(t / 1.2) + 1 + extraLines + (after >= 0 ? lines.length : 0));
@@ -791,7 +832,10 @@ export function Arrival({
       cancelAnimationFrame(frame);
       cancelled = true;
       window.clearTimeout(avatarTimer);
-      el.removeEventListener("pointerdown", onTap);
+      el.removeEventListener("pointerdown", onDown);
+      el.removeEventListener("pointermove", onMove);
+      el.removeEventListener("pointerup", onUp);
+      el.removeEventListener("pointercancel", onUp);
       if (self) {
         scene.remove(self.vrm.scene);
         VRMUtils.deepDispose(self.vrm.scene);
@@ -825,7 +869,7 @@ export function Arrival({
         <span aria-hidden style={{ width: 160, height: 3, borderRadius: 2, background: "rgba(255,255,255,0.18)", overflow: "hidden" }}>
           <span style={{ display: "block", height: "100%", width: `${Math.round((ready ? 1 : 0.1 + 0.85 * share) * 100)}%`, background: color, transition: "width 400ms" }} />
         </span>
-        <span style={{ fontSize: 13, opacity: 0.75 }}>{!tapped && !flat ? L("Tap the window, a strap, the speaker, or yourself", "窓、つり革、スピーカー、自分をタップしてみて") : L(...tip)}</span>
+        <span style={{ fontSize: 13, opacity: 0.75 }}>{!tapped && !flat ? L("Tap the window, a strap, the speaker, or yourself · drag to look around", "窓、つり革、スピーカー、自分をタップ · ドラッグで見回せます") : L(...tip)}</span>
       </div>
     </div>
   );
