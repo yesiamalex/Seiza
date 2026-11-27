@@ -551,6 +551,7 @@ export class SeizaRoom extends DurableObject<Env> {
         if (!attachment.player || !this.allow(attachment.connId, "drink", DRINK_RATE)) return;
         // What it was (a word: "tea", "onigiri"), for the right thing in their hand.
         const item = typeof message.item === "string" && /^[A-Za-z]{1,16}$/.test(message.item) ? message.item : undefined;
+        this.stats?.did(attachment.connId, `had.${(item ?? "water").toLowerCase()}`);
         this.broadcast({ type: "playerDrink", id: attachment.connId, ...(item ? { item } : {}) }, attachment.connId);
         break;
       }
@@ -635,6 +636,7 @@ export class SeizaRoom extends DurableObject<Env> {
         const object: WorldObject = { ...validated, id: crypto.randomUUID(), ownerId: attachment.connId };
         this.objects.set(object.id, object);
         this.persistObjects();
+        this.stats?.did(attachment.connId, `placed.${object.kind}`);
         this.broadcast({ type: "objectAdded", object });
         break;
       }
@@ -661,13 +663,17 @@ export class SeizaRoom extends DurableObject<Env> {
       }
       case "objectHold":
       case "objectDrop": {
-        if (message.type === "objectHold" && attachment.player) this.stats?.did(attachment.connId, "grab");
         // Picking something up: an editor, anything (as moving it in Edit
         // mode); anyone, a ball. Holding is relayed and never kept; the
         // drop is kept, like a move.
         if (!attachment.player) return;
         const object = this.objects.get(message.id);
         if (!object) return;
+        // Counted once a pick-up (a hold is sent on every move while held), by what it was.
+        if (this.stats?.changed(attachment.connId, "hold", message.type === "objectHold" ? message.id : "") && message.type === "objectHold") {
+          this.stats.did(attachment.connId, "grab");
+          this.stats.did(attachment.connId, `grab.${object.kind}`);
+        }
         const anyone = (GRABBABLE_BY_ANYONE as readonly string[]).includes(object.kind);
         if (!anyone && this.editingRequiresAuth() && !attachment.isEditor) return;
         if (!Array.isArray(message.position) || message.position.length !== 3) return;
@@ -952,7 +958,9 @@ export class SeizaRoom extends DurableObject<Env> {
         if (!attachment.player || !this.allow(attachment.connId, "together", TOGETHER_RATE)) return;
         const { to, gesture } = message;
         if (typeof to !== "string" || to === attachment.connId || !isTogetherGesture(gesture)) return;
+        // Counted by kind (a hug, a handshake): never who asked whom.
         this.stats?.did(attachment.connId, "together");
+        this.stats?.did(attachment.connId, `together.${gesture}`);
         const target = this.findConnection(to);
         const targetPlayer = target ? this.att(target)?.player : null;
         if (!target || !targetPlayer) return;
@@ -1028,16 +1036,17 @@ export class SeizaRoom extends DurableObject<Env> {
         break;
       }
       case "addon": {
-        if (attachment.player && (ADDON_MODES as readonly unknown[]).includes(message.mode)) this.stats?.did(attachment.connId, `mode.${message.mode}`);
-        // A room mode's event (src/addons/): relayed to everyone else,
-        // never read or kept. Only while an editor has that mode on, so a
-        // room that never uses the modes passes none of it.
+        // A room mode's event (src/addons/): relayed to everyone else, and
+        // otherwise never kept, but for the counts below. Only while an
+        // editor has that mode on, so a room that never uses the modes
+        // passes none of it.
         if (!attachment.player) return;
         const { mode, data } = message;
         if (!(ADDON_MODES as readonly unknown[]).includes(mode) || this.worldState[addonModeKey(mode)] !== true) return;
         if (typeof data !== "object" || data === null || Array.isArray(data)) return;
         if (!this.allow(attachment.connId, "addon", ADDON_RATE)) return;
         if (JSON.stringify(data).length > MAX_ADDON_EVENT_CHARS) return;
+        this.countAddon(attachment.connId, mode, data as Record<string, unknown>);
         this.broadcast({ type: "addonEvent", from: attachment.connId, mode, data }, attachment.connId);
         break;
       }
@@ -1187,6 +1196,32 @@ export class SeizaRoom extends DurableObject<Env> {
         .map((origin) => origin.trim().replace(/\/+$/, ""))
         .filter(Boolean)
     );
+  }
+
+  /**
+   * A room mode's counts, from the events it relays anyway: what each
+   * person chose (an instrument, a ride, a weapon, a pet), counted once
+   * when they choose it; and how often they played a note, landed a hit,
+   * rang a bell, patted a pet. Only the kind of thing, from a short list
+   * of plain words: nothing anyone typed, and never who with whom.
+   */
+  private countAddon(connId: string, mode: string, data: Record<string, unknown>) {
+    const stats = this.stats;
+    if (!stats) return;
+    const word = (v: unknown) => (typeof v === "string" && (v === "" || /^[a-z][a-z0-9-]{0,23}$/i.test(v)) ? v.toLowerCase() : null);
+    const choice: Record<string, [string, unknown]> = { band: ["play", data.i], exer: ["ride", data.v], fantasy: ["wield", data.w], pet: ["pet", data.v] };
+    if (data.k === "lo" || data.k === "pe") {
+      const [prefix, raw] = choice[mode] ?? ["", null];
+      const pick = word(raw);
+      if (prefix && pick !== null && stats.changed(connId, mode, pick) && pick) {
+        stats.did(connId, `mode.${mode}`);
+        stats.did(connId, `${prefix}.${pick}`);
+      }
+      return;
+    }
+    const events: Record<string, string> = { "band:n": "band.note", "fantasy:hit": "fantasy.hit", "fantasy:ko": "fantasy.ko", "exer:bell": "ride.bell", "pet:pat": "pet.pat" };
+    const kind = events[`${mode}:${String(data.k)}`];
+    if (kind) stats.did(connId, kind);
   }
 
   /** A token bucket: true if this action is allowed now, and spends it. */

@@ -99,6 +99,20 @@ export class RoomStats {
     this.visitOf.delete(connId);
     this.media.delete(connId);
     this.lastAt.delete(connId);
+    this.chose.delete(connId);
+  }
+
+  /** What each person has chosen in each slot (their instrument, their
+   *  ride, what they're holding), so a choice counts once when it's made,
+   *  not on every message that repeats it. */
+  private chose = new Map<string, Map<string, string>>();
+  /** Whether someone's choice in `slot` is new (and remembers it). */
+  changed(connId: string, slot: string, value: string): boolean {
+    let mine = this.chose.get(connId);
+    if (!mine) this.chose.set(connId, (mine = new Map()));
+    if (mine.get(slot) === value) return false;
+    mine.set(slot, value);
+    return true;
   }
 
   /** Someone did something worth counting (see the kinds on the admin page). */

@@ -44,6 +44,15 @@
   .worlds-status { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--muted); }
   .worlds-status b { color: var(--ink); }
   .off { color: #ff9a8a; }
+  .insights { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 15px; }
+  .insights b { color: var(--lantern); font-weight: 700; }
+  .groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px 22px; }
+  .groups h3 { margin: 0 0 6px; font: 700 15px Georgia, serif; }
+  .groups .bar { grid-template-columns: minmax(90px, 140px) 1fr 76px; font-size: 13px; }
+  .chart.stacked div { background: none; display: flex; flex-direction: column-reverse; }
+  .chart.stacked div i { display: block; width: 100%; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
   footer { width: min(1180px, 100% - 32px); margin: 0 auto 40px; color: var(--faint); font-size: 13px; }
 </style>
 </head>
@@ -58,14 +67,17 @@
 <main>
   <p class="worlds-status" id="status">Asking the worlds…</p>
   <div class="cards" id="cards"></div>
+  <section><h2>At a glance</h2><p>What stands out in the days chosen, worked out from the counts below.</p><ul class="insights" id="insights"></ul></section>
   <div class="two">
     <section><h2>Communication</h2><p>Of the visitors, how many used each way of talking or showing.</p><div class="bars" id="comms"></div></section>
     <section><h2>Interaction</h2><p>Of the visitors, how many did each thing at least once, and how often in all.</p><div class="bars" id="acts"></div></section>
   </div>
+  <section><h2>What people chose and used</h2><p>The rides they took, the instruments and weapons they picked, what they ate and drank, picked up, placed, and did together: of the visitors, how many, and how often.</p><div class="groups" id="groups"></div></section>
+  <section id="compare"><h2>The worlds compared</h2><p>Each world over the days chosen.</p><table><thead><tr><th>World</th><th class="n">Visits</th><th class="n">Visitors</th><th class="n">Hours</th><th class="n">Average stay</th><th class="n">Near someone</th><th class="n">Talked (mic)</th><th>Most done</th></tr></thead><tbody id="compare-rows"></tbody></table></section>
   <section><h2>Exhibits and a world's own things</h2><p>Pieces opened, cards read: what each world reports for itself (Seisugbo's artworks, Seinag's cards).</p><table><thead><tr><th>World</th><th>What</th><th class="n">People</th><th class="n">Times</th></tr></thead><tbody id="exhibits"></tbody></table></section>
   <div class="two">
     <section><h2>When</h2><p>Time spent in the worlds by hour of the day, Manila time.</p><div class="chart" id="hours"></div><div class="axis"><span>00</span><span>06</span><span>12</span><span>18</span><span>23</span></div></section>
-    <section><h2>By day</h2><p>Visitors each day.</p><div class="chart" id="daily"></div><div class="axis" id="daily-axis"></div></section>
+    <section><h2>By day</h2><p>Visitors each day, by world.</p><div class="chart stacked" id="daily"></div><div class="axis" id="daily-axis"></div><div class="legend" id="daily-legend"></div></section>
   </div>
   <section id="where"><h2>Where, and what people did there</h2><p>Pick one world. Each square is 2 m of floor; brighter is more time. The layers show which share of that time people were talking (mic on), sitting, near someone (within 3 m), or moving, the closest counts come to why a place is used.</p>
     <div class="layers" id="layers"></div>
@@ -83,7 +95,17 @@
     mic: "Turned on their mic", camera: "Turned on a camera", screen: "Shared a screen", chat: "Sent a chat message", together: "Asked for a together gesture",
     gesture: "Played a gesture", sit: "Sat or knelt", board: "Wrote on a board", grab: "Picked something up", present: "Presented on a screen",
     "mode.fantasy": "Fantasy mode", "mode.band": "Band mode", "mode.exer": "ExerSeiza (rides)", "mode.pet": "Pets",
+    "band.note": "Notes played", "fantasy.hit": "Hits landed", "fantasy.ko": "Knock-outs", "ride.bell": "Bells rung", "pet.pat": "Pets patted",
   };
+  /** The kinds counted by what was chosen or used, in groups. */
+  const GROUPS = [
+    ["ride.", "Rides"], ["play.", "Instruments"], ["wield.", "Weapons"], ["pet.", "Pets"],
+    ["had.", "Ate and drank"], ["grab.", "Picked up"], ["placed.", "Placed (edit mode)"], ["together.", "Together gestures"],
+  ];
+  const EVENTS = ["band.note", "fantasy.hit", "fantasy.ko", "ride.bell", "pet.pat"];
+  const grouped = (k) => GROUPS.some(([p]) => k.startsWith(p)) || EVENTS.includes(k);
+  const nice = (k) => { const w = k.slice(k.indexOf(".") + 1).replace(/-/g, " "); return w.charAt(0).toUpperCase() + w.slice(1); };
+  const PALETTE = ["#f2b84b", "#8fd3ff", "#ff8f6b", "#9be07a", "#c79bff", "#ffd6e7", "#7ae0d2", "#e8c37a", "#6f9bff", "#ff6b8a"];
   const COMMS = ["mic", "camera", "screen", "chat", "together"];
   let data = null;
 
@@ -149,7 +171,72 @@
       if (!keys.length) box.append(el("p", "Nothing yet.", "note"));
     };
     bars("comms", COMMS);
-    bars("acts", Object.keys(did).filter((k) => !COMMS.includes(k) && !k.startsWith("world.")).sort((a, b) => did[b][0] - did[a][0]));
+    bars("acts", Object.keys(did).filter((k) => !COMMS.includes(k) && !k.startsWith("world.") && !grouped(k)).sort((a, b) => did[b][0] - did[a][0]));
+
+    // What people chose and used, in groups (each group's kinds, most-used first).
+    const groups = $("groups");
+    groups.replaceChildren();
+    for (const [prefix, title] of [...GROUPS, ["", "Events (how often)"]]) {
+      const keys = prefix ? Object.keys(did).filter((k) => k.startsWith(prefix)) : EVENTS.filter((k) => did[k]);
+      if (!keys.length) continue;
+      keys.sort((a, b) => did[b][1] - did[a][1]);
+      const box = el("div");
+      box.append(el("h3", title));
+      const most = Math.max(...keys.map((k) => did[k][1]));
+      for (const k of keys.slice(0, 8)) {
+        const [people, times] = did[k];
+        const row = el("div", undefined, "bar");
+        const track = el("div");
+        const fill = el("i");
+        fill.style.width = (most ? (times / most) * 100 : 0) + "%";
+        track.append(fill);
+        row.append(el("span", prefix ? nice(k) : LABELS[k] ?? k), track, el("em", prefix ? `${people} · ${times}×` : `${times}×`));
+        box.append(row);
+      }
+      groups.append(box);
+    }
+    if (!groups.children.length) groups.append(el("p", "Nothing yet: rides, instruments, food and the rest show here once people use them.", "note"));
+
+    // The worlds compared.
+    const perWorld = {};
+    for (const d of list) {
+      const w = (perWorld[d.world.id] ??= { name: d.world.name, joins: 0, people: 0, seconds: 0, together: 0, mic: 0, did: {} });
+      w.joins += d.joins; w.people += d.people; w.seconds += d.seconds; w.together += d.together; w.mic += d.did.mic?.[0] ?? 0;
+      for (const [k, [, times]] of Object.entries(d.did)) if (!COMMS.includes(k) && !k.startsWith("mode.") && !EVENTS.includes(k)) w.did[k] = (w.did[k] ?? 0) + times;
+    }
+    const rows = $("compare-rows");
+    rows.replaceChildren();
+    $("compare").style.display = $("world").value ? "none" : "";
+    for (const w of Object.values(perWorld).sort((a, b) => b.seconds - a.seconds)) {
+      const top = Object.entries(w.did).sort((a, b) => b[1] - a[1])[0];
+      const tr = el("tr");
+      tr.append(el("td", w.name), el("td", String(w.joins), "n"), el("td", String(w.people), "n"), el("td", (w.seconds / 3600).toFixed(1), "n"), el("td", w.people ? Math.round(w.seconds / w.people / 60) + " min" : "–", "n"), el("td", pct(w.together, w.seconds), "n"), el("td", pct(w.mic, w.people), "n"), el("td", top ? `${top[0].startsWith("world.") ? top[0].slice(6) : LABELS[top[0]] ?? nice(top[0])} (${top[1]}×)` : "–"));
+      rows.append(tr);
+    }
+
+    // At a glance: the few things worth saying, in words.
+    const said = [];
+    const hoursAll = new Array(24).fill(0);
+    for (const d of list) d.hours.forEach((v, h) => (hoursAll[h] += v));
+    const busiest = hoursAll.indexOf(Math.max(...hoursAll));
+    if (seconds > 0) said.push(`Busiest around <b>${String(busiest).padStart(2, "0")}:00</b> Manila time.`);
+    const worldsBy = Object.values(perWorld).sort((a, b) => b.seconds - a.seconds);
+    if (worldsBy.length > 1) said.push(`<b>${worldsBy[0].name}</b> had the most time spent in it: ${(worldsBy[0].seconds / 3600).toFixed(1)} h, ${Math.round((worldsBy[0].seconds / Math.max(1, seconds)) * 100)}% of all.`);
+    if (visitors) said.push(`A visitor stayed <b>${Math.round(seconds / visitors / 60)} min</b> on average, and spent <b>${pct(sum((d) => d.together), seconds)}</b> of their time near someone.`);
+    const micShare = visitors ? (did.mic?.[0] ?? 0) / visitors : 0;
+    if (visitors) said.push(`<b>${Math.round(micShare * 100)}%</b> turned on their mic${did.chat ? `; ${pct(did.chat[0], visitors)} used chat` : ""}.`);
+    const used = Object.entries(did).filter(([k]) => grouped(k) && !EVENTS.includes(k)).sort((a, b) => b[1][0] - a[1][0]);
+    if (used.length) said.push(`The most-used thing: <b>${nice(used[0][0])}</b> (${GROUPS.find(([p]) => used[0][0].startsWith(p))?.[1].toLowerCase()}), by ${used[0][1][0]} visitor${used[0][1][0] === 1 ? "" : "s"}.`);
+    const dayList = [...new Set(list.map((d) => d.day))].sort();
+    if (dayList.length >= 4) {
+      const half = Math.floor(dayList.length / 2);
+      const early = sum((d) => (dayList.indexOf(d.day) < half ? d.people : 0)) / half;
+      const late = sum((d) => (dayList.indexOf(d.day) >= dayList.length - half ? d.people : 0)) / half;
+      if (early > 0) { const change = Math.round(((late - early) / early) * 100); said.push(`Visitors a day are <b>${change >= 0 ? "up" : "down"} ${Math.abs(change)}%</b> in the second half of these days against the first.`); }
+    }
+    const insights = $("insights");
+    insights.innerHTML = "";
+    for (const line of said.length ? said : ["Nothing yet: come back once people have visited."]) { const li = el("li"); li.innerHTML = line; insights.append(li); }
 
     // A world's own things, per world.
     const exhibits = $("exhibits");
@@ -165,9 +252,22 @@
     for (const d of list) d.hours.forEach((s, h) => (hours[h] += s));
     chart("hours", hours);
     const byDay = {};
-    for (const d of list) byDay[d.day] = (byDay[d.day] ?? 0) + d.people;
+    const worldIds = [...new Set(list.map((d) => d.world.id))];
+    for (const d of list) { const t = (byDay[d.day] ??= {}); t[d.world.id] = (t[d.world.id] ?? 0) + d.people; }
     const dayKeys = Object.keys(byDay).sort();
-    chart("daily", dayKeys.map((k) => byDay[k]), dayKeys);
+    const daily = $("daily");
+    daily.replaceChildren();
+    const dayTop = Math.max(1, ...dayKeys.map((k) => Object.values(byDay[k]).reduce((a, b) => a + b, 0)));
+    for (const k of dayKeys) {
+      const col = el("div");
+      const total = Object.values(byDay[k]).reduce((a, b) => a + b, 0);
+      col.style.height = (total / dayTop) * 100 + "%";
+      col.title = `${k}: ${total} visitor${total === 1 ? "" : "s"}` + worldIds.filter((id) => byDay[k][id]).map((id) => `\n${data.worlds.find((w) => w.id === id).name}: ${byDay[k][id]}`).join("");
+      for (const id of worldIds) if (byDay[k][id]) { const part = el("i"); part.style.height = (byDay[k][id] / total) * 100 + "%"; part.style.background = PALETTE[worldIds.indexOf(id) % PALETTE.length]; col.append(part); }
+      daily.append(col);
+    }
+    const legend = $("daily-legend");
+    legend.replaceChildren(...worldIds.map((id, i) => { const s2 = el("span", data.worlds.find((w) => w.id === id).name); const dot = el("i"); dot.style.background = PALETTE[i % PALETTE.length]; s2.prepend(dot); return s2; }));
     const axis = $("daily-axis");
     axis.replaceChildren(...(dayKeys.length ? [el("span", dayKeys[0].slice(5)), el("span", dayKeys[dayKeys.length - 1].slice(5))] : []));
 
