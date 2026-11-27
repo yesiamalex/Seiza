@@ -67,6 +67,10 @@ export interface GuideProps {
   pitch?: number;
   /** Where they are, each frame (for something to follow them: a dog on its lead). */
   onPlace?: (x: number, y: number, z: number, walking: boolean) => void;
+  /** Whether they may take their round's next step, from where they are to
+   *  where it goes (a world holds people at a closed level crossing). When
+   *  not, they wait where they are, their round paused, and go on after. */
+  mayStep?: (x0: number, z0: number, x1: number, z1: number) => boolean;
 }
 
 export interface Chatter {
@@ -149,7 +153,7 @@ interface Walk {
   kind: "come" | "lead" | "return";
 }
 
-export function Guide({ id, name, avatarUrl, stops, speed = 1, pathsOnPatrol = false, getSelfPosition, findPath, faceAt, role = "guide", chatter, speak: aloud = false, pitch = 1, onPlace }: GuideProps) {
+export function Guide({ id, name, avatarUrl, stops, speed = 1, pathsOnPatrol = false, getSelfPosition, findPath, faceAt, role = "guide", chatter, speak: aloud = false, pitch = 1, onPlace, mayStep }: GuideProps) {
   const bubble = useRef<THREE.Sprite>(null);
   const bubbleMaterial = useMemo(() => new THREE.SpriteMaterial({ depthWrite: false, transparent: true, opacity: 0 }), []);
   const chat = useRef({ next: 3 + Math.random() * 6, shown: -1, line: -1 });
@@ -247,13 +251,23 @@ export function Guide({ id, name, avatarUrl, stops, speed = 1, pathsOnPatrol = f
   }, [talking]);
 
   const scratch = useMemo<RoutePosition>(() => ({ x: 0, y: 0, z: 0, heading: null }), []);
+  /** How far behind the clock their round is (time spent held up), and where it put them last frame. */
+  const held = useRef<{ lag: number; at: [number, number, number] | null }>({ lag: 0, at: null });
   useFrame((_, delta) => {
     const g = root.current;
     if (!g) return;
     const dt = Math.min(delta, 0.1);
     const [sx, sy, sz] = getSelfPosition();
     const toVisitor = Math.hypot(sx - pos.x, sz - pos.z);
-    route.at(Date.now() / 1000, onRoute);
+    route.at(Date.now() / 1000 - held.current.lag, onRoute);
+    // Held up (the barriers are down): stay put, the round paused till they lift.
+    const was = held.current.at;
+    if (mayStep && was && !walk.current && !talking && !mayStep(was[0], was[2], onRoute.x, onRoute.z)) {
+      held.current.lag += dt;
+      [onRoute.x, onRoute.y, onRoute.z] = was;
+      onRoute.heading = null;
+    }
+    held.current.at = [onRoute.x, onRoute.y, onRoute.z];
     let heading: number | null = null;
 
     if (!placed.current) {

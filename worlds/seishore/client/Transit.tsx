@@ -628,7 +628,7 @@ function Bus({ sit, seats, line }: { sit?: (seat: Seat) => void; seats: RideSeat
 // --- the level crossing -------------------------------------------------------------------------
 
 /** On while a train is over the crossing, or will be within a few seconds. */
-function crossingOn(now: number) {
+export function crossingOn(now: number) {
   const span = (p: Pose) => [p.z - TRAIN_LENGTH / 2, p.z + TRAIN_LENGTH / 2];
   const near = (p: Pose) => {
     const [a, b] = span(p);

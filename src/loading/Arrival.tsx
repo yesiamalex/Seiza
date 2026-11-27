@@ -417,14 +417,15 @@ export function Arrival({
     const hills = new THREE.Group();
     for (const dx of [-80, 0, 80]) add(hillGeometry, hillMaterial, [dx, 0, -50], hills);
     scene.add(hills);
-    // Poles along the line, near the window: a dark post and its arm, every 9 m.
+    // Poles along the line, a dark post and its arm every 9 m: beyond the
+    // platform, so the station's name board is never behind one when the train stops.
     const poleMaterial = basic("#151a2c");
     const poles = new THREE.Group();
     for (let i = 0; i < 6; i++) {
       const p = new THREE.Group();
       box([0.16, 7, 0.16], [0, 1.5, 0], poleMaterial, p);
       box([1.4, 0.08, 0.08], [0.2, 4.6, 0], poleMaterial, p);
-      p.position.set(-27 + i * 9, 0, -3.6);
+      p.position.set(-27 + i * 9, 0, WALL_Z - 4.4);
       poles.add(p);
     }
     scene.add(poles);
@@ -464,7 +465,8 @@ export function Arrival({
     for (let x = -24; x <= 24; x += 8) box([1.2, 0.06, 0.18], [x, 2.92, WALL_Z - 1.6], basic("#fff3d6"), station);
     const signMap = keep(stationSign(ja, en, color));
     add(new THREE.PlaneGeometry(2.7, 0.89), basic("#ffffff", { map: signMap }), [KNEEL[0], 1.55, WALL_Z - 2.9], station);
-    for (const dx of [-1.2, 1.2]) box([0.07, 1.6, 0.07], [KNEEL[0] + dx, 0.8, WALL_Z - 2.92], lambert("#7d7f82"), station);
+    // Its legs, up to its foot (behind it, never over its name).
+    for (const dx of [-1.2, 1.2]) box([0.07, 1.12, 0.07], [KNEEL[0] + dx, 0.56, WALL_Z - 2.96], lambert("#7d7f82"), station);
     scene.add(station);
 
     // --- the carriage --------------------------------------------------------------------------

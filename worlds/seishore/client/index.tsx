@@ -44,12 +44,15 @@ import {
   seishoreSeats,
   TEMPLE,
   TEMPLE_PRAY,
+  TRACK,
+  CROSSING,
   Y,
   type Kind,
 } from "./plan";
 import { coin, doorChime, furin, gull, omikujiShake, startFridges, startKitchen, steamWand, suzu, tonbi, type Loop } from "./sounds";
 import { FURIN_AT, Town } from "./Town";
-import { Transit } from "./Transit";
+import { crossingOn, Transit } from "./Transit";
+import { clock } from "./vehicles";
 import { Sitter, Steam } from "./Extras";
 import { showCaption, useCaption } from "./caption";
 import { ShopMenu, ShopsScene, useShop } from "./Shops";
@@ -194,6 +197,10 @@ const allObstacles = () => [...seishoreObstacles(), ...nishiObstacles()];
 const inNishi = (v: THREE.Vector3) => v.x < NISHI.maxX && v.z > NISHI.minZ;
 /** The town's paths; in Nishi-machi people walk straight (its streets are open). */
 const findWay = (from: THREE.Vector3, to: THREE.Vector3) => (inNishi(from) || inNishi(to) ? null : findPath(from, to));
+/** On the level crossing (its road over the rails, and a step either side). */
+const onCrossing = (x: number, z: number) => x > TRACK.bed0 - 0.7 && x < TRACK.bed1 + 0.7 && z > CROSSING.z0 - 0.3 && z < CROSSING.z1 + 0.3;
+/** People wait at the crossing while its barriers are down; anyone already on it walks clear. */
+const mayStep = (x0: number, z0: number, x1: number, z1: number) => onCrossing(x0, z0) || !onCrossing(x1, z1) || !crossingOn(clock());
 
 export function Scene({ warp, getSelfPosition, sit, occupiedSeatId, playGesture, faceToward, worldState }: WorldSceneProps) {
   useLang();
@@ -340,6 +347,7 @@ export function Scene({ warp, getSelfPosition, sit, occupiedSeatId, playGesture,
           pitch={[1.25, 1.15, 0.8, 1.0, 1.1, 1.05, 0.9][i] ?? 1}
           getSelfPosition={getSelfPosition}
           findPath={findWay}
+          mayStep={mayStep}
           onPlace={DOG_WALKERS.includes(p.id) ? (x, y, z, walking) => walkers.set(p.id, { x, y, z, walking }) : undefined}
         />
       ))}
