@@ -7,9 +7,12 @@
 <title>Seiza research</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <style>
+  @font-face { font-family: "Twemoji Country Flags"; unicode-range: U+1F1E6-1F1FF, U+1F3F4, U+E0062-E0063, U+E0065, U+E0067, U+E006C, U+E006E, U+E0073-E0074, U+E0077, U+E007F; src: url("https://cdn.jsdelivr.net/npm/country-flag-emoji-polyfill@0.1.8/dist/TwemojiCountryFlags.woff2") format("woff2"); font-display: swap; }
   :root { --night: #0b1029; --deep: #121a3d; --panel: rgba(18, 26, 61, 0.72); --ink: #f3efe6; --muted: rgba(243, 239, 230, 0.68); --faint: rgba(243, 239, 230, 0.45); --line: rgba(243, 239, 230, 0.13); --lantern: #f2b84b; --dawn: #ff8f6b; --sky: #8fd3ff; }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--night); color: var(--ink); font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  body { margin: 0; background: var(--night); color: var(--ink); font: 15px/1.5 "Twemoji Country Flags", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .flag { font-size: 20px; line-height: 1; margin-right: 8px; vertical-align: -3px; }
+  .share { display: block; height: 8px; border-radius: 4px; background: linear-gradient(90deg, var(--sky), var(--lantern)); min-width: 2px; }
   header { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; padding: 12px 20px; background: rgba(11, 16, 41, 0.92); border-bottom: 1px solid var(--line); backdrop-filter: blur(8px); }
   header h1 { margin: 0 auto 0 0; font: 700 18px/1 Georgia, serif; letter-spacing: 0.01em; }
   header h1 span { color: var(--lantern); }
@@ -60,7 +63,8 @@
 <header>
   <h1>Seiza <span>research</span></h1>
   <label>World <select id="world"><option value="">All worlds</option></select></label>
-  <label>Days <select id="range"><option value="7">Last 7</option><option value="30" selected>Last 30</option></select></label>
+  <label>Days <select id="range"><option value="7">Last 7</option><option value="30" selected>Last 30</option><option value="90">Last 90</option><option value="365">Last year</option><option value="1095">Last 3 years</option></select></label>
+  <label>Country <select id="country"><option value="">All countries</option></select></label>
   <button type="button" id="csv">Download CSV</button>
   <button type="button" id="json">Download JSON</button>
 </header>
@@ -72,6 +76,8 @@
     <section><h2>Communication</h2><p>Of the visitors, how many used each way of talking or showing.</p><div class="bars" id="comms"></div></section>
     <section><h2>Interaction</h2><p>Of the visitors, how many did each thing at least once, and how often in all.</p><div class="bars" id="acts"></div></section>
   </div>
+  <section id="countries-section"><h2>Where visitors came from</h2><p>By the country each connection came from (where they connected from, not their nationality; a VPN changes it). Pick a country above to see what its visitors used.</p><table><thead><tr><th>Country</th><th class="n">Visitors</th><th class="n">Visits</th><th class="n">Hours</th><th class="n">Average stay</th><th style="width:30%">Share of visitors</th></tr></thead><tbody id="countries"></tbody></table></section>
+  <p class="note" id="country-note" hidden></p>
   <section><h2>What people chose and used</h2><p>The rides they took, the instruments and weapons they picked, what they ate and drank, picked up, placed, and did together: of the visitors, how many, and how often.</p><div class="groups" id="groups"></div></section>
   <section id="compare"><h2>The worlds compared</h2><p>Each world over the days chosen.</p><table><thead><tr><th>World</th><th class="n">Visits</th><th class="n">Visitors</th><th class="n">Hours</th><th class="n">Average stay</th><th class="n">Near someone</th><th class="n">Talked (mic)</th><th>Most done</th></tr></thead><tbody id="compare-rows"></tbody></table></section>
   <section><h2>Exhibits and a world's own things</h2><p>Pieces opened, cards read: what each world reports for itself (Seisugbo's artworks, Seinag's cards).</p><table><thead><tr><th>World</th><th>What</th><th class="n">People</th><th class="n">Times</th></tr></thead><tbody id="exhibits"></tbody></table></section>
@@ -86,7 +92,7 @@
     <table><thead><tr><th>Place (m)</th><th>Reads as</th><th class="n">Hours</th><th class="n">Talking</th><th class="n">Sitting</th><th class="n">Together</th><th class="n">Moving</th></tr></thead><tbody id="zones"></tbody></table>
   </section>
 </main>
-<footer>Counts only, kept 30 days in each world: no names, accounts, addresses, recordings, or anyone's path. A visitor here is one visit to a page (a reload is another); "people" over several days adds up each day's. Visitors see a notice that the world is counting.</footer>
+<footer>Counts only, kept three years in each world: no names, accounts, addresses, recordings, or anyone's path; a country is where a connection came from, counted, never tied to anyone. A visitor here is one visit to a page (a reload is another); "people" over several days adds up each day's. Visitors see a notice that the world is counting.</footer>
 <script>
   const $ = (id) => document.getElementById(id);
   const el = (tag, text, cls) => { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (cls) e.className = cls; return e; };
@@ -109,21 +115,39 @@
   const COMMS = ["mic", "camera", "screen", "chat", "together"];
   let data = null;
 
-  fetch("/api/summary").then((r) => r.json()).then((d) => { data = d; setup(); render(); }).catch(() => ($("status").textContent = "Couldn't reach the summary."));
+  /** Fewer visitors than this from a country, and what they did isn't broken down (so no one can be picked out). */
+  const SMALL = 5;
+  const regionName = (() => { try { return new Intl.DisplayNames(["en"], { type: "region" }); } catch { return null; } })();
+  const countryName = (cc) => { try { return regionName?.of(cc) ?? cc; } catch { return cc; } };
+  const flag = (cc) => String.fromCodePoint(...[...cc].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65));
+  let fetched = 0;
+  function load(days) {
+    $("status").textContent = "Asking the worlds…";
+    return fetch(`/api/summary?days=${days}`).then((r) => r.json()).then((d) => { data = d; fetched = days; });
+  }
+  load(Number($("range").value)).then(() => { setup(); render(); }).catch(() => ($("status").textContent = "Couldn't reach the summary."));
 
-  function setup() {
+  function setup(again) {
     const status = $("status");
     status.textContent = "";
     for (const w of data.worlds) {
-      const option = el("option", w.name);
-      option.value = w.id;
-      $("world").append(option);
+      if (!again) {
+        const option = el("option", w.name);
+        option.value = w.id;
+        $("world").append(option);
+      }
       const s = el("span");
       s.append(el("b", w.name + " "), el("span", w.days ? `${w.days.length} day${w.days.length === 1 ? "" : "s"}` : w.note, w.days ? "" : "off"));
       status.append(s);
     }
     $("world").onchange = render;
-    $("range").onchange = render;
+    $("country").onchange = render;
+    // A longer range than what's here is asked for; a shorter one is cut from it.
+    $("range").onchange = () => {
+      const want = Number($("range").value);
+      if (want <= fetched) return render();
+      load(want).then(() => { setup(true); render(); }).catch(() => ($("status").textContent = "Couldn't reach the summary."));
+    };
     $("json").onclick = () => download("seiza-research.json", JSON.stringify(data, null, 2), "application/json");
     $("csv").onclick = () => download("seiza-research.csv", csv(), "text/csv");
   }
@@ -138,10 +162,49 @@
   function render() {
     const list = days();
     const sum = (f) => list.reduce((a, d) => a + f(d), 0);
-    const visitors = sum((d) => d.people);
-    const seconds = sum((d) => d.seconds);
-    const did = {};
-    for (const d of list) for (const [k, [people, times]] of Object.entries(d.did)) { const t = (did[k] ??= [0, 0]); t[0] += people; t[1] += times; }
+    // Every country, its visitors, visits and time, over the days chosen.
+    const byCountry = {};
+    for (const d of list) for (const [cc, [people, joins, secs]] of Object.entries(d.countries ?? {})) { const t = (byCountry[cc] ??= [0, 0, 0]); t[0] += people; t[1] += joins; t[2] += secs; }
+    const ccs = Object.keys(byCountry).sort((a, b) => byCountry[b][0] - byCountry[a][0]);
+    const pick = $("country");
+    const picked = ccs.includes(pick.value) ? pick.value : "";
+    pick.replaceChildren(el("option", "All countries"));
+    pick.firstChild.value = "";
+    for (const cc of ccs) { const o = el("option", `${flag(cc)} ${countryName(cc)}`); o.value = cc; pick.append(o); }
+    pick.value = picked;
+    const allVisitors = sum((d) => d.people);
+    const ctable = $("countries");
+    ctable.replaceChildren();
+    const top = Math.max(1, ...ccs.map((cc) => byCountry[cc][0]));
+    for (const cc of ccs) {
+      const [people, joins, secs] = byCountry[cc];
+      const tr = el("tr");
+      const name = el("td");
+      name.append(el("span", flag(cc), "flag"), document.createTextNode(countryName(cc)));
+      const bar = el("td");
+      const fill = el("i", undefined, "share");
+      fill.style.width = (people / top) * 100 + "%";
+      bar.append(fill);
+      tr.append(name, el("td", String(people), "n"), el("td", String(joins), "n"), el("td", (secs / 3600).toFixed(1), "n"), el("td", people ? Math.round(secs / people / 60) + " min" : "–", "n"), bar);
+      if (cc === picked) tr.style.background = "rgba(242,184,75,0.1)";
+      ctable.append(tr);
+    }
+    if (!ccs.length) { const tr = el("tr"); tr.append(el("td", "No countries yet: they're counted from the next visits on (after this version is deployed).", "note")); ctable.append(tr); }
+    // One country picked: what its visitors did, unless they're too few to show without picking someone out.
+    const note = $("country-note");
+    note.hidden = true;
+    let visitors = allVisitors;
+    let seconds = sum((d) => d.seconds);
+    let did = {};
+    if (picked) {
+      const [people, , secs] = byCountry[picked];
+      visitors = people;
+      seconds = secs;
+      if (people < SMALL) {
+        note.hidden = false;
+        note.textContent = `${flag(picked)} ${countryName(picked)}: fewer than ${SMALL} visitors in these days, so what they did isn't broken down (so no one can be picked out). The totals above still count them.`;
+      } else for (const d of list) for (const [k, [p, times]] of Object.entries(d.byCountry?.[picked] ?? {})) { const t = (did[k] ??= [0, 0]); t[0] += p; t[1] += times; }
+    } else for (const d of list) for (const [k, [people, times]] of Object.entries(d.did)) { const t = (did[k] ??= [0, 0]); t[0] += people; t[1] += times; }
 
     // The headline numbers.
     const cards = $("cards");
@@ -225,6 +288,10 @@
     if (visitors) said.push(`A visitor stayed <b>${Math.round(seconds / visitors / 60)} min</b> on average, and spent <b>${pct(sum((d) => d.together), seconds)}</b> of their time near someone.`);
     const micShare = visitors ? (did.mic?.[0] ?? 0) / visitors : 0;
     if (visitors) said.push(`<b>${Math.round(micShare * 100)}%</b> turned on their mic${did.chat ? `; ${pct(did.chat[0], visitors)} used chat` : ""}.`);
+    if (ccs.length) {
+      const first = ccs[0];
+      said.push(`Visitors came from <b>${ccs.length} countr${ccs.length === 1 ? "y" : "ies"}</b>, most from <b>${flag(first)} ${countryName(first)}</b> (${pct(byCountry[first][0], allVisitors)}).`);
+    }
     const used = Object.entries(did).filter(([k]) => grouped(k) && !EVENTS.includes(k)).sort((a, b) => b[1][0] - a[1][0]);
     if (used.length) said.push(`The most-used thing: <b>${nice(used[0][0])}</b> (${GROUPS.find(([p]) => used[0][0].startsWith(p))?.[1].toLowerCase()}), by ${used[0][1][0]} visitor${used[0][1][0] === 1 ? "" : "s"}.`);
     const dayList = [...new Set(list.map((d) => d.day))].sort();

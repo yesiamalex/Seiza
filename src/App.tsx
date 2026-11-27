@@ -904,7 +904,7 @@ export default function App() {
     } catch {
       // No storage: say it anyway.
     }
-    setNotice(L("This world keeps anonymous counts for research: how many visit, what they use, and where people gather. Never who you are, and nothing is recorded.", "この世界では研究のために匿名の集計をしています:訪問数、使われた機能、人が集まる場所。あなたが誰かは記録せず、録音・録画もしません。"));
+    setNotice(L("This world keeps anonymous counts for research: how many visit and from which country, what they use, and where people gather. Never who you are, and nothing is recorded.", "この世界では研究のために匿名の集計をしています:訪問数と接続元の国、使われた機能、人が集まる場所。あなたが誰かは記録せず、録音・録画もしません。"));
   }, [statsOn]);
 
   // ---- seiza endurance (see avatar/seizaEndurance.ts) -------------------

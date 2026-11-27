@@ -11,7 +11,11 @@ import type { PlayerMedia, PlayerState } from "../src/multiplayer/types";
  * Counts only. No names, accounts, addresses, or anyone's path through the
  * world: a day being counted keeps short per-visit tokens (the page's own
  * random session id, cut short) only so each person counts once, and a
- * finished day keeps the counts alone. Thirty days are kept, then dropped.
+ * finished day keeps the counts alone. Three years are kept, then dropped
+ * (a day is a few kilobytes to a hundred or so; the admin page asks for
+ * only the days it shows). Visitors are counted by the country their
+ * connection comes from (Cloudflare's two letters: where they connect from,
+ * not who they are), and so is what each country's visitors did.
  * Off unless the deployment sets SEIZA_STATS_TOKEN (the room tells its
  * visitors when it's on). Lean: sampled on movement the room already
  * receives, at most every 10 s, saved every 10 minutes and when the room
@@ -21,7 +25,9 @@ const SAMPLE_MS = 10_000;
 /** The longest a quiet room's last sample stands for (no one moving). */
 const MAX_GAP_S = 60;
 const SAVE_MS = 10 * 60_000;
-const KEEP_DAYS = 30;
+const KEEP_DAYS = 3 * 365;
+const MAX_COUNTRIES = 250;
+const MAX_COUNTRY_KINDS = 4000;
 /** A zone: a 2 m square of the floor (and a storey, in a model world). */
 const CELL = 2;
 /** Near enough to be together: within 3 m (personal to social distance). */
@@ -50,24 +56,32 @@ export interface DayStats {
   /** Each thing done: [distinct people, times]. */
   did: Record<string, [number, number]>;
   zones: Record<string, Zone>;
+  /** By the country connected from: [distinct visitors, visits, person-seconds]. */
+  countries?: Record<string, [people: number, joins: number, seconds: number]>;
+  /** What each country's visitors did: [distinct people, times], by country, by kind. */
+  byCountry?: Record<string, Record<string, [number, number]>>;
 }
 
 interface Saved {
   stats: DayStats;
   seen: string[];
   who: Record<string, string[]>;
+  /** A country's visit tokens, and a country's for each kind ("PH|chat"), while the day lasts. */
+  cwho?: Record<string, string[]>;
 }
 
 const manila = (now = Date.now()) => new Date(now + 8 * 3600_000);
 const dayOf = (now = Date.now()) => manila(now).toISOString().slice(0, 10);
-const fresh = (day: string): DayStats => ({ day, joins: 0, people: 0, peak: 0, seconds: 0, together: 0, hours: new Array(24).fill(0), did: {}, zones: {} });
+const fresh = (day: string): DayStats => ({ day, joins: 0, people: 0, peak: 0, seconds: 0, together: 0, hours: new Array(24).fill(0), did: {}, zones: {}, countries: {}, byCountry: {} });
 const round = (n: number) => Math.round(n * 10) / 10;
 
 export class RoomStats {
   private today: DayStats = fresh(dayOf());
   private seen = new Set<string>();
   private who = new Map<string, Set<string>>();
+  private cwho = new Map<string, Set<string>>();
   private visitOf = new Map<string, string>();
+  private countryOf = new Map<string, string>();
   private media = new Map<string, PlayerMedia>();
   private lastAt = new Map<string, [number, number]>();
   private sampledAt = 0;
@@ -82,10 +96,13 @@ export class RoomStats {
       this.today = saved.stats;
       this.seen = new Set(saved.seen);
       this.who = new Map(Object.entries(saved.who).map(([k, v]) => [k, new Set(v)]));
+      this.cwho = new Map(Object.entries(saved.cwho ?? {}).map(([k, v]) => [k, new Set(v)]));
+      this.today.countries ??= {};
+      this.today.byCountry ??= {};
     } else await this.finish(saved.stats);
   }
 
-  join(connId: string, session: string | undefined, here: number) {
+  join(connId: string, session: string | undefined, here: number, country?: string) {
     this.roll();
     const visit = (session ?? connId).slice(0, 12);
     this.visitOf.set(connId, visit);
@@ -93,6 +110,25 @@ export class RoomStats {
     if (this.seen.size < MAX_PEOPLE) this.seen.add(visit);
     this.today.people = this.seen.size;
     this.today.peak = Math.max(this.today.peak, here);
+    const countries = (this.today.countries ??= {});
+    if (country && (countries[country] || Object.keys(countries).length < MAX_COUNTRIES)) {
+      this.countryOf.set(connId, country);
+      const people = this.cwhoOf(country);
+      if (people) people.add(visit);
+      const c = (countries[country] ??= [0, 0, 0]);
+      c[0] = people?.size ?? c[0];
+      c[1]++;
+    }
+  }
+
+  /** The visit tokens kept for a country, or a country's kind, while the day lasts. */
+  private cwhoOf(key: string) {
+    let set = this.cwho.get(key);
+    if (!set) {
+      if (this.cwho.size >= MAX_COUNTRY_KINDS) return null;
+      this.cwho.set(key, (set = new Set()));
+    }
+    return set.size < MAX_PEOPLE ? set : null;
   }
 
   leave(connId: string) {
@@ -100,6 +136,7 @@ export class RoomStats {
     this.media.delete(connId);
     this.lastAt.delete(connId);
     this.chose.delete(connId);
+    this.countryOf.delete(connId);
   }
 
   /** What each person has chosen in each slot (their instrument, their
@@ -130,6 +167,16 @@ export class RoomStats {
     d[0] = people.size;
     d[1]++;
     this.today.did[kind] = d;
+    // And by the country they came from.
+    const country = this.countryOf.get(connId);
+    if (country) {
+      const byCountry = ((this.today.byCountry ??= {})[country] ??= {});
+      const set = this.cwhoOf(`${country}|${kind}`);
+      if (set) set.add(visit);
+      const c = (byCountry[kind] ??= [0, 0]);
+      c[0] = set?.size ?? c[0];
+      c[1]++;
+    }
   }
 
   /** A mic, a camera, or a screen turned on counts once per turning on. */
@@ -161,6 +208,9 @@ export class RoomStats {
       this.lastAt.set(p.id, [x, z]);
       t.seconds += dt;
       t.hours[hour] += dt;
+      const country = this.countryOf.get(p.id);
+      const c = country ? t.countries?.[country] : undefined;
+      if (c) c[2] += dt;
       if (together) t.together += dt;
       const level = Math.round(y / 3);
       const key = `${Math.floor(x / CELL)},${Math.floor(z / CELL)}${level ? `,${level}` : ""}`;
@@ -185,15 +235,20 @@ export class RoomStats {
     t.together = round(t.together);
     t.hours = t.hours.map(round);
     for (const zone of Object.values(t.zones)) for (let i = 0; i < 5; i++) zone[i] = round(zone[i]);
+    for (const c of Object.values(t.countries ?? {})) c[2] = round(c[2]);
     const who: Record<string, string[]> = {};
     for (const [k, v] of this.who) who[k] = [...v];
-    await this.storage.put(TODAY_KEY, { stats: t, seen: [...this.seen], who } satisfies Saved);
+    const cwho: Record<string, string[]> = {};
+    for (const [k, v] of this.cwho) cwho[k] = [...v];
+    await this.storage.put(TODAY_KEY, { stats: t, seen: [...this.seen], who, cwho } satisfies Saved);
   }
 
-  /** Every kept day, and today so far: what the admin page reads. */
-  async read(): Promise<DayStats[]> {
-    const days = await this.storage.list<DayStats>({ prefix: DAY_PREFIX });
-    return [...days.values(), this.today];
+  /** The last `days` kept days (every one, if not said), and today so far: what the admin page reads. */
+  async read(days?: number): Promise<DayStats[]> {
+    const want = days && days > 0 ? Math.min(KEEP_DAYS, Math.floor(days)) : KEEP_DAYS;
+    const since = `stats:${dayOf(Date.now() - (want - 1) * 86400_000)}`;
+    const kept = await this.storage.list<DayStats>({ prefix: DAY_PREFIX, start: since });
+    return [...kept.values(), this.today];
   }
 
   /** A new day in Manila: yesterday's counts kept (without the tokens), old ones dropped. */
@@ -204,6 +259,7 @@ export class RoomStats {
     this.today = fresh(day);
     this.seen.clear();
     this.who.clear();
+    this.cwho.clear();
   }
 
   private async finish(stats: DayStats) {

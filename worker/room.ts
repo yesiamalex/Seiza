@@ -156,6 +156,8 @@ const DEFAULT_OBJECT_COLOR = "#cccccc";
 
 interface ConnectionAttachment {
   connId: string;
+  /** The country the connection comes from (two letters), for the research counts only. */
+  country?: string;
   player: PlayerState | null; // null until this connection sends "join"
   lastChatAt?: number;
   lastGestureAt?: number;
@@ -296,7 +298,8 @@ export class SeizaRoom extends DurableObject<Env> {
     // /api/stats, behind its token); a visitor's /rooms/… path never matches.
     if (new URL(request.url).pathname === "/stats") {
       await this.ready;
-      return Response.json(this.stats ? await this.stats.read() : null);
+      const days = Number(new URL(request.url).searchParams.get("days")) || undefined;
+      return Response.json(this.stats ? await this.stats.read(days) : null);
     }
     if (request.headers.get("Upgrade") !== "websocket") {
       return new Response("Expected a WebSocket upgrade", { status: 426 });
@@ -313,7 +316,10 @@ export class SeizaRoom extends DurableObject<Env> {
     const [client, server] = Object.values(pair);
     const connId = crypto.randomUUID();
     const ip = request.headers.get("cf-connecting-ip") ?? undefined;
-    server.serializeAttachment({ connId, player: null, ip } satisfies ConnectionAttachment);
+    // Its country (the Worker's two letters, never the visitor's own say), for the counts alone.
+    const cc = request.headers.get("x-seiza-country") ?? "";
+    const country = /^[A-Z]{2}$/.test(cc) ? cc : undefined;
+    server.serializeAttachment({ connId, player: null, ip, ...(country ? { country } : {}) } satisfies ConnectionAttachment);
     this.ctx.acceptWebSocket(server);
     return new Response(null, { status: 101, webSocket: client });
   }
@@ -393,7 +399,7 @@ export class SeizaRoom extends DurableObject<Env> {
         // A reconnect from the same page replaces its old connection now,
         // rather than leaving a frozen copy until that socket times out.
         if (session) this.dropOtherSessionConnections(ws, session);
-        this.stats?.join(attachment.connId, session, this.listPlayers().length + 1);
+        this.stats?.join(attachment.connId, session, this.listPlayers().length + 1, attachment.country);
         this.save(ws, {
           ...attachment,
           player,

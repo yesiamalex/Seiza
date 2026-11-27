@@ -13,7 +13,7 @@ export default {
     const who = await signedIn(request, env);
     if (!who) return new Response("Sign in through Cloudflare Access to see this.", { status: 403 });
     const url = new URL(request.url);
-    if (url.pathname === "/api/summary") return summary(env);
+    if (url.pathname === "/api/summary") return summary(env, Number(url.searchParams.get("days")) || 30);
     const page = await env.ASSETS.fetch(request);
     const headers = new Headers(page.headers);
     headers.set("cache-control", "no-store");
@@ -54,7 +54,8 @@ async function signedIn(request, env) {
 }
 
 /** Each world's counts, as it gave them: every kept day, and today so far. */
-async function summary(env) {
+async function summary(env, days) {
+  const range = Math.max(1, Math.min(1095, Math.floor(days)));
   let worlds = [];
   try {
     worlds = JSON.parse(env.SEIZA_WORLDS ?? "[]");
@@ -68,7 +69,7 @@ async function summary(env) {
       if (token.length < 12) return { ...w, days: null, note: "This admin page has no SEIZA_STATS_TOKEN secret (or it's under 12 characters): add it in the admin Worker's Settings → Variables and Secrets." };
       try {
         // Not following redirects: a redirect to another address would drop the token on the way.
-        const response = await fetch(new URL("/api/stats", w.url), { headers: { authorization: `Bearer ${token}` }, redirect: "manual" });
+        const response = await fetch(new URL(`/api/stats?days=${range}`, w.url), { headers: { authorization: `Bearer ${token}` }, redirect: "manual" });
         // Only this version of a world sends it, with every answer here.
         const current = response.headers.get("x-seiza-stats") !== null;
         if (response.status >= 300 && response.status < 400) return { ...w, days: null, note: `It sends you on to ${response.headers.get("location") ?? "another address"}: put that address in SEIZA_WORLDS instead.` };

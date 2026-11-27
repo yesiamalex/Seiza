@@ -344,7 +344,13 @@ function routeToRoom(request: Request, url: URL, env: Env): Response | Promise<R
   if (!roomId) return new Response("Missing room id", { status: 400 });
   const id = env.ROOMS.idFromName(roomId);
   const stub = env.ROOMS.get(id);
-  return stub.fetch(request);
+  // The country the connection comes from (Cloudflare's two letters), for
+  // the research counts' visitors-by-country: set here, so a visitor can't
+  // send their own. Unknown ("XX") and Tor ("T1") are left blank.
+  const country = (request as { cf?: { country?: unknown } }).cf?.country;
+  const forwarded = new Request(request);
+  forwarded.headers.set("x-seiza-country", typeof country === "string" && /^[A-Z]{2}$/.test(country) && country !== "XX" ? country : "");
+  return stub.fetch(forwarded);
 }
 
 /** Sent with every /api/stats answer, so the admin page knows the world runs this version. */
@@ -363,7 +369,9 @@ async function handleStats(request: Request, env: Env): Promise<Response> {
   if (token.length < 12) return new Response("Not counting here", { status: 404, headers });
   if (!sameSecret(given, token)) return new Response("Not your token", { status: 401, headers });
   const stub = env.ROOMS.get(env.ROOMS.idFromName(env.SEIZA_WORLD_ID ?? "default"));
-  const counts = await stub.fetch("https://room/stats");
+  // Only the days asked for (the admin page's range), not all three years.
+  const days = Math.max(1, Math.min(1095, Math.floor(Number(new URL(request.url).searchParams.get("days")) || 30)));
+  const counts = await stub.fetch(`https://room/stats?days=${days}`);
   return new Response(counts.body, { headers: { "content-type": "application/json", "cache-control": "no-store" } });
 }
 
