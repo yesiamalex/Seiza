@@ -14,21 +14,27 @@ import type { Chatter } from "../../../src/guides/Guide";
 import type { WorldStateValue } from "../../../src/multiplayer/types";
 import { floorHeightAt } from "../../../src/scene/layout";
 import { buildKeyboard, buildKit, buildViolin, buildWorn } from "../../../src/addons/band/BandLayer";
+import { buildWeapon } from "../../../src/addons/fantasy/weapons";
 import { holdNote, KIT, playNote, type Instrument } from "../../../src/addons/band/instruments";
 import { setInstrument } from "../../../src/addons/band/band";
-import { setWeapon } from "../../../src/addons/fantasy/combat";
+import { fantasy, practiceStrike, practiceTargets, setWeapon } from "../../../src/addons/fantasy/combat";
+import type { VRM } from "@pixiv/three-vrm";
+import { VrmAvatar } from "../../../src/avatar/VrmAvatar";
+import { AvatarAnimator } from "../../../src/avatar/AvatarAnimator";
 import { ride, setVehicle } from "../../../src/addons/exer/ride";
 import { buildPet } from "../../../src/addons/pet/pets";
-import { Builder, canvasTexture, FONT, noRaycast, ON_TOP, paint } from "../../seisugbo/client/kit";
+import { Builder, canvasTexture, FONT, noRaycast, ON_TOP, paint, useDrawDistance } from "../../seisugbo/client/kit";
 import { RoutedBuilder, surfaceMaterial } from "./surfaces";
 import { DEFAULT_AVATAR_SPEC, encodeAvatarSpec, type AvatarSpec } from "../../../src/avatar/designer/avatarSpec";
 import { showCaption } from "./caption";
 import { panelTexture, Register, Spot, useShop } from "./Shops";
 import { SHOPS, yen } from "./shop";
 import { setPlaces } from "./serve";
+import { openBook } from "./BookReader";
 import { Sitter } from "./Extras";
 import { G, LANE } from "./plan";
 import {
+  ARCH,
   BIKE_RACK,
   BOOK_COUNTER,
   BOOK_SHELVES,
@@ -40,6 +46,7 @@ import {
   MUSIC_COUNTER,
   MUSIC_KEYS,
   MUSIC_KIT,
+  MUSIC_STANDS,
   MUSIC_WALL,
   NISHI_SHOPS,
   NISHI_STREET,
@@ -56,6 +63,8 @@ import {
 } from "./nishi";
 
 const WOOD = "#8a6545";
+/** How far a worn instrument's neck leans from upright (BandLayer builds them across the chest). */
+const NECK_TILT = Math.atan2(0.47, -0.88) - Math.PI / 2;
 const WOOD_DARK = "#3a2c22";
 
 // --- the people who follow someone: a dog on its lead ----------------------------------------
@@ -138,6 +147,40 @@ function signTexture(ja: string, en: string, bg: string, fg = "#ffffff") {
   });
 }
 
+/** A hanging sign's face: the shop's name read downwards, as on a sode-kanban. */
+function hangingTexture(name: string, bg: string) {
+  return canvasTexture(128, 384, (ctx, w, h) => {
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = "rgba(255,255,255,0.55)";
+    ctx.lineWidth = 4;
+    ctx.strokeRect(8, 8, w - 16, h - 16);
+    const chars = [...name.replace(/[s　]/g, "")].slice(0, 7);
+    const size = Math.min(84, (h - 40) / chars.length);
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = `800 ${size}px ${FONT}`;
+    chars.forEach((c, i) => ctx.fillText(c, w / 2, 20 + size * (i + 0.5) + (h - 40 - size * chars.length) / 2));
+  });
+}
+
+/** The arch's sign: the street's name, lit. */
+function archTexture() {
+  return canvasTexture(512, 128, (ctx, w, h) => {
+    ctx.fillStyle = "#1d2433";
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = "#ffd79a";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = `800 56px ${FONT}`;
+    ctx.fillText("西通り商店街", w / 2, 52, w - 24);
+    ctx.font = `600 22px ${FONT}`;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText("NISHI-DŌRI SHOPPING STREET", w / 2, 104, w - 24);
+  });
+}
+
 /** Rows of book spines, for the shelves' faces. */
 function spines() {
   return canvasTexture(512, 256, (ctx, w, h) => {
@@ -196,9 +239,49 @@ function buildQuarter() {
   for (let z = south + half + 1; z < north - half - 1; z += 3) for (const x of [east, west]) marks.box([0.15, 0.022, 1.6], [x, roadY + 0.002, z], "#f2f0eb");
   for (let x = west + half + 1; x < east - half - 1; x += 3) for (const z of [north, south]) marks.box([1.6, 0.022, 0.15], [x, roadY + 0.002, z], "#f2f0eb");
   for (let i = 0; i < 6; i++) marks.box([0.5, 0.024, LANE.z1 - LANE.z0 - 0.3], [east - half + 0.6 + i * 1.0, roadY + 0.004, (LANE.z0 + LANE.z1) / 2], "#f2f0eb");
-  // Nishi-dōri: red-brown paving, its kerbs; and the stepping stones over the meadow.
-  marks.box([NISHI_STREET.x1 - NISHI_STREET.x0, 0.02, NISHI_STREET.z1 - NISHI_STREET.z0], [(NISHI_STREET.x0 + NISHI_STREET.x1) / 2, roadY, (NISHI_STREET.z0 + NISHI_STREET.z1) / 2], "#9a6a52");
-  for (let x = NISHI_STREET.x0 + 1; x < NISHI_STREET.x1; x += 1.2) marks.box([0.03, 0.022, NISHI_STREET.z1 - NISHI_STREET.z0], [x, roadY + 0.002, (NISHI_STREET.z0 + NISHI_STREET.z1) / 2], "#7a5040");
+  // Nishi-dōri: red-brown paving with a paler band down its middle and a
+  // darker gutter each side, in two pieces, either side of the ring road
+  // (laid over it, the two fought for the same ground and flickered).
+  const sz0 = NISHI_STREET.z0;
+  const sz1 = NISHI_STREET.z1;
+  const szc = (sz0 + sz1) / 2;
+  for (const [a, c] of [
+    [NISHI_STREET.x0, east - half],
+    [east + half, NISHI_STREET.x1],
+  ] as [number, number][]) {
+    const xc = (a + c) / 2;
+    marks.box([c - a, 0.02, sz1 - sz0], [xc, roadY, szc], "#9a6a52");
+    marks.box([c - a, 0.022, 0.9], [xc, roadY + 0.002, szc], "#b98a6a");
+    for (const zz of [sz0 + 0.12, sz1 - 0.12]) marks.box([c - a, 0.022, 0.18], [xc, roadY + 0.002, zz], "#6e4a3a");
+    for (let x = a + 0.6; x < c; x += 1.2) marks.box([0.03, 0.024, sz1 - sz0 - 0.4], [x, roadY + 0.003, szc], "#7a5040");
+  }
+  // The shopping street's arch over its way in, from the ring road: two
+  // posts and the lit sign band (NishiScene draws its words).
+  for (const zz of [ARCH.z0, ARCH.z1]) {
+    b.box([0.3, 4.1, 0.3], [ARCH.x, G + 2.05, zz], "#3a3d42");
+    b.box([0.42, 0.2, 0.42], [ARCH.x, G + 0.1, zz], "#5f6670");
+  }
+  b.box([0.36, 0.86, ARCH.z1 - ARCH.z0 + 0.3], [ARCH.x, G + 3.85, (ARCH.z0 + ARCH.z1) / 2], "#3a3d42");
+  for (let i = 0; i < 9; i++) lit.cylinder(0.07, 0.07, 0.05, [ARCH.x + 0.19, G + 4.36, ARCH.z0 + 0.2 + i * ((ARCH.z1 - ARCH.z0 - 0.4) / 8)], "#ffd79a", [0, 0, Math.PI / 2], 10);
+  // Lamps on brackets off the shop fronts, between the shops and at the ends.
+  for (const x of [-33.6, -41.4, -50.2, -60.8])
+    for (const [zz, out] of [
+      [sz0, 1],
+      [sz1, -1],
+    ] as [number, number][]) {
+      b.bar([x, G + 3.0, zz], [x, G + 3.0, zz + out * 0.55], 0.025, "#2b2d30");
+      b.bar([x, G + 3.0, zz + out * 0.55], [x, G + 2.85, zz + out * 0.55], 0.012, "#2b2d30");
+      lit.raw(new THREE.SphereGeometry(0.13, 12, 8).translate(x, G + 2.72, zz + out * 0.55), "#fff3d6");
+    }
+  // Strings of pennants across the street, as a shōtengai hangs them.
+  const flags = ["#c8302b", "#f2c94c", "#2f6fd0", "#3f8f5a", "#f2efe6"];
+  for (let x = -36.5; x > -60; x -= 6) {
+    b.bar([x, G + 3.7, sz0 + 0.05], [x, G + 3.7, sz1 - 0.05], 0.006, "#2b2d30");
+    for (let i = 0; i < 6; i++) {
+      const zz = sz0 + 0.3 + i * ((sz1 - sz0 - 0.6) / 5);
+      b.raw(new THREE.ConeGeometry(0.09, 0.22, 3).rotateX(Math.PI).translate(x, G + 3.58, zz), flags[(i + Math.round(-x)) % flags.length]);
+    }
+  }
   for (let x = MEADOW_PATH.x0 + 0.5; x < MEADOW_PATH.x1; x += 0.95) {
     const z = (MEADOW_PATH.z0 + MEADOW_PATH.z1) / 2 + Math.sin(x * 1.3) * 0.35;
     b.cylinder(0.32, 0.36, 0.06, [x, floorHeightAt(x, z) + 0.02, z], "#a8a49b", undefined, 9);
@@ -300,9 +383,23 @@ function shop(s: NishiShop, out: Builder, roofs: Builder, glass: Builder, lit: B
     out.box([0.06, 1.8, T + 0.02], [(a + c) / 2, G + 1.5, fz], "#3a3330");
   }
   out.box([s.door[1] - s.door[0], H - 2.2, T], [(s.door[0] + s.door[1]) / 2, G + 2.2 + (H - 2.2) / 2, fz], s.wall);
-  roofs.box([w + 0.3, 0.2, s.depth + 0.3], [(s.x0 + s.x1) / 2, G + H + 0.1, zc], s.roof);
-  // An awning over the windows, in the roof's colour.
-  roofs.box([w, 0.05, 0.9], [(s.x0 + s.x1) / 2, G + 2.45, fz + f.out * 0.45], s.roof, [f.out * 0.25, 0, 0]);
+  // The front rises above the roof, as a shōtengai shop's does (kanban
+  // kenchiku): its sign on the flat face, nothing over it. Pilasters at its
+  // ends, a coping along its top, two lamps leaning over the sign.
+  const FRONT = s.kind === "burger" ? H : H + 0.85;
+  if (FRONT > H) out.box([w, FRONT - H, T], [(s.x0 + s.x1) / 2, G + H + (FRONT - H) / 2, fz], s.wall);
+  for (const x of [s.x0 + 0.09, s.x1 - 0.09]) out.box([0.18, FRONT, T + 0.08], [x, G + FRONT / 2, fz], s.roof);
+  out.box([w + 0.08, 0.12, T + 0.18], [(s.x0 + s.x1) / 2, G + FRONT + 0.06, fz], s.roof);
+  const signY = s.kind === "burger" ? 4.4 : 3.05;
+  for (const dx of [-1, 1]) {
+    const lx = (s.x0 + s.x1) / 2 + dx * Math.min(1.6, w / 2 - 0.8);
+    out.bar([lx, G + signY + 0.6, fz + f.out * 0.1], [lx, G + signY + 0.62, fz + f.out * 0.42], 0.015, "#2b2d30");
+    lit.box([0.16, 0.05, 0.1], [lx, G + signY + 0.59, fz + f.out * 0.44], "#fff3d6");
+  }
+  // The roof, behind the front (not over it), out a little at the sides and back.
+  roofs.box([w + 0.2, 0.2, s.depth + 0.15], [(s.x0 + s.x1) / 2, G + H + 0.1, zc - f.out * 0.075], s.roof);
+  // An awning over the windows and the door, below the sign, in the roof's colour.
+  roofs.box([w - 0.36, 0.05, 0.62], [(s.x0 + s.x1) / 2, G + 2.32, fz + f.out * 0.31], s.roof, [f.out * 0.3, 0, 0]);
   inside.plane(w - 0.4, s.depth - 0.4, [(s.x0 + s.x1) / 2, G + 0.014, zc], FLOORS[s.kind], [-Math.PI / 2, 0, 0]);
   inside.plane(w - 0.4, s.depth - 0.4, [(s.x0 + s.x1) / 2, G + H - 0.02, zc], "#f3efe6", [Math.PI / 2, 0, 0]);
   for (let i = 0; i < Math.max(1, Math.round(w / 3)); i++) lit.plane(0.4, s.depth * 0.5, [s.x0 + ((i + 0.5) * w) / Math.max(1, Math.round(w / 3)), G + H - 0.04, zc], "#ffffff", [Math.PI / 2, 0, 0]);
@@ -312,70 +409,188 @@ function musicShop(inside: Builder, lit: Builder) {
   const s = shopById("music");
   const f = shopFront(s);
   const c = MUSIC_COUNTER;
-  inside.box([c.x1 - c.x0, 1.0, c.z1 - c.z0], [(c.x0 + c.x1) / 2, G + 0.5, (c.z0 + c.z1) / 2], WOOD_DARK);
-  inside.box([0.4, 0.3, 0.3], [c.x0 + 0.4, G + 1.15, (c.z0 + c.z1) / 2], "#2b2d30");
-  // Pegboards on the walls the instruments hang on; amplifiers on the floor.
-  for (const x of [s.x0 + 0.22, s.x1 - 0.22]) inside.box([0.03, 2.2, s.depth - 1.0], [x, G + 1.5, (f.z0 + f.z1) / 2], "#d9cdb5");
-  for (let i = 0; i < 3; i++) inside.box([0.55, 0.5, 0.35], [s.x1 - 0.7, G + 0.25, f.z0 + 1.6 + i * 1.1], "#1d1d1d");
+  // The counter, its glass top over strings and picks; the clerk's stool behind.
+  inside.box([c.x1 - c.x0, 0.95, c.z1 - c.z0], [(c.x0 + c.x1) / 2, G + 0.475, (c.z0 + c.z1) / 2], WOOD_DARK);
+  inside.box([c.x1 - c.x0 + 0.04, 0.04, c.z1 - c.z0 + 0.04], [(c.x0 + c.x1) / 2, G + 0.97, (c.z0 + c.z1) / 2], "#c9ccd0");
+  for (let i = 0; i < 8; i++) inside.box([0.12, 0.02, 0.16], [c.x0 + 0.25 + i * 0.24, G + 0.92, (c.z0 + c.z1) / 2], ["#c8302b", "#f2c94c", "#2f6fd0", "#3f8f5a"][i % 4]);
+  // Pegboards on both walls, hooks on them for what hangs there.
+  for (const [x, inward] of [
+    [s.x0 + 0.22, 1],
+    [s.x1 - 0.22, -1],
+  ] as [number, number][]) {
+    inside.box([0.03, 2.2, s.depth - 1.0], [x, G + 1.5, (f.z0 + f.z1) / 2], "#d9cdb5");
+    for (let k = 0; k < 9; k++) inside.bar([x, G + 2.15, f.z0 + 0.8 + k * ((s.depth - 1.6) / 8)], [x + inward * 0.1, G + 2.17, f.z0 + 0.8 + k * ((s.depth - 1.6) / 8)], 0.008, "#7d7f82");
+  }
+  // The violin's display: a board on the wall, its bracket, a little lit label.
+  const v = MUSIC_WALL.find((w) => w.instrument === "violin")!;
+  inside.box([0.05, 0.95, 0.5], [v.x - 0.05, G + 1.6, v.z], "#5a3a22");
+  inside.box([0.1, 0.03, 0.3], [v.x + 0.01, G + 1.18, v.z], "#3a2c22");
+  lit.box([0.012, 0.1, 0.36], [v.x - 0.02, G + 2.14, v.z], "#ffe9a8");
+  // Amplifiers, stacked, their grilles and knobs; guitar stands on the floor.
+  for (let i = 0; i < 3; i++) {
+    const az = f.z0 + 1.6 + i * 1.1;
+    inside.box([0.55, 0.5, 0.35], [s.x1 - 0.7, G + 0.25, az], "#1d1d1d");
+    inside.box([0.01, 0.34, 0.28], [s.x1 - 0.98, G + 0.22, az], "#3a3d42");
+    for (let k = 0; k < 4; k++) inside.cylinder(0.012, 0.012, 0.02, [s.x1 - 0.98, G + 0.44, az - 0.1 + k * 0.065], "#c9ccd0", [0, 0, Math.PI / 2], 6);
+  }
+  for (const gx of MUSIC_STANDS.map(([x]) => x)) {
+    const gz = MUSIC_STANDS.find(([x]) => x === gx)![1];
+    inside.bar([gx - 0.14, G, gz + 0.12], [gx, G + 0.5, gz], 0.012, "#2b2d30");
+    inside.bar([gx + 0.14, G, gz + 0.12], [gx, G + 0.5, gz], 0.012, "#2b2d30");
+    inside.bar([gx, G, gz - 0.16], [gx, G + 0.5, gz], 0.012, "#2b2d30");
+  }
   lit.plane(2.4, 0.4, [(s.x0 + s.x1) / 2, G + 2.6, f.z0 + 0.25], "#ffcf5a");
 }
 
 function burgerShop(inside: Builder, lit: Builder, b: Builder) {
   const c = BURGER.counter;
-  inside.box([c.x1 - c.x0, 1.05, c.z1 - c.z0], [(c.x0 + c.x1) / 2, G + 0.52, (c.z0 + c.z1) / 2], "#c8402f");
-  // (The menu boards over the counter are NishiScene's, with the menu on them.)
+  const cx = (c.x0 + c.x1) / 2;
+  const cz = (c.z0 + c.z1) / 2;
+  // The counter: red, a yellow stripe along it, a steel top; trays stacked at its end.
+  inside.box([c.x1 - c.x0, 1.05, c.z1 - c.z0], [cx, G + 0.52, cz], "#c8402f");
+  inside.box([c.x1 - c.x0 + 0.01, 0.12, c.z1 - c.z0 + 0.01], [cx, G + 0.7, cz], "#f2c94c");
+  inside.box([c.x1 - c.x0 + 0.04, 0.03, c.z1 - c.z0 + 0.04], [cx, G + 1.06, cz], "#c9ccd0");
+  for (let i = 0; i < 5; i++) inside.box([0.34, 0.012, 0.26], [c.x0 + 0.3, G + 1.08 + i * 0.014, cz], "#c8402f");
+  // The kitchen behind: the fryers, the grill, the drinks fountain, the warming shelf.
   const k = BURGER.kitchen;
   inside.box([k.x1 - k.x0, 0.95, 0.7], [(k.x0 + k.x1) / 2, G + 0.48, k.z0 + 0.5], "#b9bec2");
+  for (let i = 0; i < 2; i++) {
+    inside.box([0.45, 0.06, 0.4], [k.x0 + 0.6 + i * 0.55, G + 0.98, k.z0 + 0.5], "#2b2d30");
+    inside.box([0.35, 0.02, 0.3], [k.x0 + 0.6 + i * 0.55, G + 1.0, k.z0 + 0.5], "#c99a3a");
+  }
+  inside.box([0.9, 0.05, 0.5], [k.x0 + 2.0, G + 0.98, k.z0 + 0.5], "#3a3d42");
+  inside.box([0.6, 0.7, 0.45], [k.x1 - 0.6, G + 1.3, k.z0 + 0.45], "#d9dde2");
+  for (let i = 0; i < 4; i++) inside.box([0.06, 0.1, 0.06], [k.x1 - 0.82 + i * 0.15, G + 1.08, k.z0 + 0.72], ["#9fe07a", "#3a2416", "#f2994a", "#e94f3d"][i]);
+  lit.box([1.2, 0.04, 0.3], [k.x0 + 2.0, G + 1.62, k.z0 + 0.45], "#ffd27a");
   // The mezzanine: its slab, the rail along its open edge, the tables by the window.
   const m = BURGER.mezzanine;
   inside.box([m.x1 - m.x0, 0.2, m.z1 - m.z0], [(m.x0 + m.x1) / 2, BURGER.up - 0.1, (m.z0 + m.z1) / 2], "#e8e9e6");
-  inside.box([m.x1 - m.x0 - 1.6, 1.0, 0.05], [(m.x0 + m.x1) / 2 - 0.8, BURGER.up + 0.5, m.z1], "#c9ccd0");
+  for (let x = m.x0 + 0.1; x < m.x1 - 1.6; x += 0.4) b.bar([x, BURGER.up, m.z1], [x, BURGER.up + 1.0, m.z1], 0.015, "#c9ccd0");
+  b.bar([m.x0, BURGER.up + 1.0, m.z1], [m.x1 - 1.6, BURGER.up + 1.0, m.z1], 0.03, "#c8402f");
   for (const [x, z] of BURGER.tables) {
     inside.box([0.7, 0.04, 0.7], [x, BURGER.up + 0.74, z], "#f2efe6");
     inside.box([0.08, 0.72, 0.08], [x, BURGER.up + 0.36, z], "#55504a");
-    // Four to a table.
-    for (const [ax, az] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as [number, number][]) inside.box([0.42, 0.45, 0.42], [x + ax * 0.6, BURGER.up + 0.225, z + az * 0.6], "#c8402f");
+    // Four to a table: red stools on chrome posts.
+    for (const [ax, az] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as [number, number][]) {
+      inside.cylinder(0.2, 0.2, 0.07, [x + ax * 0.6, BURGER.up + 0.43, z + az * 0.6], "#c8402f", undefined, 14);
+      inside.cylinder(0.03, 0.03, 0.4, [x + ax * 0.6, BURGER.up + 0.2, z + az * 0.6], "#c9ccd0", undefined, 8);
+      inside.cylinder(0.16, 0.18, 0.02, [x + ax * 0.6, BURGER.up + 0.01, z + az * 0.6], "#9da3a8", undefined, 12);
+    }
   }
-  // The stairs: a step every 20 cm up to the mezzanine.
+  // The stairs: a step every 20 cm up to the mezzanine, a nosing on each.
   const st = BURGER.stairs;
   const steps = Math.round((BURGER.up - G) / 0.2);
   for (let i = 0; i < steps; i++) {
     const z = st.z1 - ((i + 0.5) * (st.z1 - st.z0)) / steps;
     inside.box([st.x1 - st.x0, 0.2 * (i + 1), (st.z1 - st.z0) / steps], [(st.x0 + st.x1) / 2, G + 0.1 * (i + 1), z], "#9da3a8");
+    inside.box([st.x1 - st.x0, 0.02, 0.04], [(st.x0 + st.x1) / 2, G + 0.2 * (i + 1) + 0.01, z + (st.z1 - st.z0) / steps / 2 - 0.02], "#f2c94c");
   }
   b.bar([st.x0, G + 1.0, st.z1], [st.x0, BURGER.up + 1.0, st.z0], 0.02, "#c9ccd0");
 }
 
 function bookShop(inside: Builder, lit: Builder) {
-  for (const sh of BOOK_SHELVES) inside.box([sh.maxX - sh.minX, 2.0, sh.maxZ - sh.minZ], [(sh.minX + sh.maxX) / 2, G + 1.0, (sh.minZ + sh.maxZ) / 2], WOOD);
+  for (const sh of BOOK_SHELVES) {
+    const xc = (sh.minX + sh.maxX) / 2;
+    const zc = (sh.minZ + sh.maxZ) / 2;
+    // The shelf's carcass, a board under each row of books, its end panels and their signs.
+    inside.box([sh.maxX - sh.minX - 0.06, 2.0, sh.maxZ - sh.minZ], [xc, G + 1.0, zc], WOOD_DARK);
+    for (let r = 0; r <= 4; r++) inside.box([sh.maxX - sh.minX + 0.04, 0.03, sh.maxZ - sh.minZ], [xc, G + 0.06 + r * 0.47, zc], WOOD);
+    for (const z of [sh.minZ - 0.02, sh.maxZ + 0.02]) {
+      inside.box([sh.maxX - sh.minX + 0.06, 2.06, 0.04], [xc, G + 1.03, z], WOOD);
+      lit.box([sh.maxX - sh.minX - 0.04, 0.18, 0.01], [xc, G + 1.85, z + Math.sign(z - zc) * 0.025], "#fff2d0");
+    }
+  }
   const c = BOOK_COUNTER;
   inside.box([c.x1 - c.x0, 1.0, c.z1 - c.z0], [(c.x0 + c.x1) / 2, G + 0.5, (c.z0 + c.z1) / 2], WOOD_DARK);
+  // Stacks of books on the counter waiting to be priced, a step stool by the shelves.
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 4 - i; j++) inside.box([0.22, 0.04, 0.16], [c.x0 + 0.3 + i * 0.3, G + 1.02 + j * 0.042, (c.z0 + c.z1) / 2], ["#8a2f2a", "#2f5fa8", "#e8c37a", "#3f6e4a"][(i + j) % 4]);
+  const sx = BOOK_SHELVES[0].maxX + 0.45;
+  inside.box([0.36, 0.22, 0.3], [sx, G + 0.11, BOOK_SHELVES[0].minZ + 0.6], "#c49a6c");
+  inside.box([0.36, 0.22, 0.15], [sx, G + 0.33, BOOK_SHELVES[0].minZ + 0.525], "#c49a6c");
   lit.plane(1.6, 0.5, [c.x0 + 0.8, G + 2.4, c.z0 - 0.6], "#fff2d0");
 }
 
 function kissaten(inside: Builder, lit: Builder) {
+  const s = shopById("kissa");
+  const f = shopFront(s);
   const c = KISSA.counter;
+  // Dark wood panelling to dado height round the room.
+  for (const x of [s.x0 + 0.22, s.x1 - 0.22]) inside.box([0.03, 1.1, s.depth - 0.5], [x, G + 0.55, (f.z0 + f.z1) / 2], WOOD_DARK);
+  inside.box([s.x1 - s.x0 - 0.5, 1.1, 0.03], [(s.x0 + s.x1) / 2, G + 0.55, f.z1 - 0.22], WOOD_DARK);
+  // The counter, its pale top; behind it the back bar: shelves of cups, the siphons.
   inside.box([c.x1 - c.x0, 1.0, c.z1 - c.z0], [(c.x0 + c.x1) / 2, G + 0.5, (c.z0 + c.z1) / 2], WOOD_DARK);
   inside.box([c.x1 - c.x0 + 0.08, 0.05, c.z1 - c.z0 + 0.08], [(c.x0 + c.x1) / 2, G + 1.02, (c.z0 + c.z1) / 2], "#d9c3a0");
-  for (let i = 0; i < 4; i++) inside.cylinder(0.18, 0.18, 0.06, [shopById("kissa").x0 + 1.2 + i * 1.2, G + 0.62, c.z0 - 0.45], "#8a2f2a", undefined, 14);
+  for (const y of [1.45, 1.85]) {
+    inside.box([c.x1 - c.x0, 0.03, 0.26], [(c.x0 + c.x1) / 2, G + y, f.z1 - 0.34], WOOD);
+    for (let i = 0; i < 10; i++) inside.cylinder(0.04, 0.035, 0.08, [c.x0 + 0.3 + i * ((c.x1 - c.x0 - 0.6) / 9), G + y + 0.055, f.z1 - 0.34], i % 3 ? "#f4f2ec" : "#2f6fd0", undefined, 10);
+  }
+  for (let i = 0; i < 3; i++) {
+    const x = c.x0 + 0.5 + i * 0.35;
+    inside.cylinder(0.08, 0.06, 0.16, [x, G + 1.13, (c.z0 + c.z1) / 2], "#cfe6ee", undefined, 12);
+    inside.raw(new THREE.SphereGeometry(0.07, 10, 8).translate(x, G + 1.3, (c.z0 + c.z1) / 2), "#3a2416");
+    inside.cylinder(0.01, 0.01, 0.3, [x, G + 1.2, (c.z0 + c.z1) / 2 + 0.12], "#2b2d30", undefined, 6);
+  }
+  // The counter's stools: a red seat on a post, a footring, a heavy foot.
+  for (let i = 0; i < 4; i++) {
+    const x = s.x0 + 1.2 + i * 1.2;
+    const z = c.z0 - 0.45;
+    inside.cylinder(0.18, 0.18, 0.07, [x, G + 0.62, z], "#8a2f2a", undefined, 16);
+    inside.cylinder(0.035, 0.035, 0.6, [x, G + 0.3, z], "#c9ccd0", undefined, 8);
+    inside.raw(new THREE.TorusGeometry(0.13, 0.012, 6, 16).rotateX(Math.PI / 2).translate(x, G + 0.25, z), "#c9ccd0");
+    inside.cylinder(0.16, 0.18, 0.03, [x, G + 0.015, z], "#3a3d42", undefined, 14);
+  }
   for (const [x, z] of KISSA.tables) {
     inside.cylinder(0.4, 0.4, 0.04, [x, G + 0.72, z], WOOD, undefined, 18);
     inside.cylinder(0.05, 0.05, 0.7, [x, G + 0.35, z], WOOD_DARK, undefined, 8);
-    for (const [ax, az] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as [number, number][]) inside.box([0.44, 0.45, 0.44], [x + ax * 0.62, G + 0.225, z + az * 0.62], "#8a2f2a");
+    inside.cylinder(0.22, 0.24, 0.03, [x, G + 0.015, z], WOOD_DARK, undefined, 12);
+    // Velvet chairs, four to a table, each with its back away from the table.
+    for (const [ax, az] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as [number, number][]) {
+      inside.box([0.44, 0.12, 0.44], [x + ax * 0.62, G + 0.4, z + az * 0.62], "#8a2f2a");
+      inside.box(ax ? [0.08, 0.5, 0.44] : [0.44, 0.5, 0.08], [x + ax * 0.84, G + 0.7, z + az * 0.84], "#8a2f2a");
+      for (const [lx, lz] of [[-0.17, -0.17], [0.17, -0.17], [-0.17, 0.17], [0.17, 0.17]]) inside.box([0.04, 0.34, 0.04], [x + ax * 0.62 + lx, G + 0.17, z + az * 0.62 + lz], WOOD_DARK);
+    }
   }
   // Glass pendant lamps, and the jukebox's glow in the corner.
-  for (const [x, z] of KISSA.tables) lit.cylinder(0.12, 0.2, 0.18, [x, G + 2.3, z], "#ffcf7a", undefined, 12);
-  lit.box([0.6, 1.2, 0.4], [shopById("kissa").x1 - 0.6, G + 0.6, shopFront(shopById("kissa")).z1 - 0.5], "#ff8a5a");
+  for (const [x, z] of KISSA.tables) {
+    inside.bar([x, G + ROOM_H - 0.02, z], [x, G + 2.4, z], 0.008, "#222");
+    lit.cylinder(0.12, 0.2, 0.18, [x, G + 2.3, z], "#ffcf7a", undefined, 12);
+  }
+  lit.box([0.6, 1.2, 0.4], [s.x1 - 0.6, G + 0.6, f.z0 + 0.6], "#ff8a5a");
 }
 
 function yoseCafe(inside: Builder, lit: Builder) {
+  const s = shopById("yose");
+  const f = shopFront(s);
   const st = YOSE.stage;
-  inside.box([st.x1 - st.x0, 0.6, st.z1 - st.z0], [(st.x0 + st.x1) / 2, G + 0.3, (st.z0 + st.z1) / 2], WOOD);
-  // The red-and-white curtain behind the kōza, the zabuton the teller kneels on, a little screen.
-  for (let i = 0; i < 10; i++) inside.box([(st.x1 - st.x0) / 10, 2.0, 0.03], [st.x0 + ((i + 0.5) * (st.x1 - st.x0)) / 10, G + 1.6, st.z1 - 0.05], i % 2 ? "#ffffff" : "#c8302b");
-  inside.box([0.7, 0.08, 0.7], [YOSE.teller[0], G + 0.64, YOSE.teller[1]], "#8a2f5a");
-  // The audience's low benches, in their rows.
-  for (const z of YOSE.rows) inside.box([5.2, 0.4, 0.42], [(YOSE.cols[0] + YOSE.cols[3]) / 2, G + 0.2, z], WOOD);
+  const sx = (st.x0 + st.x1) / 2;
+  // The kōza: the raised stage, its red felt (hi-mōsen) over the top and down the front.
+  inside.box([st.x1 - st.x0, 0.6, st.z1 - st.z0], [sx, G + 0.3, (st.z0 + st.z1) / 2], WOOD);
+  inside.box([st.x1 - st.x0 + 0.02, 0.02, st.z1 - st.z0 + 0.02], [sx, G + 0.61, (st.z0 + st.z1) / 2], "#b8252a");
+  inside.box([st.x1 - st.x0 + 0.02, 0.5, 0.01], [sx, G + 0.35, st.z0 - 0.01], "#b8252a");
+  // Behind it, a gold folding screen (byōbu), six panels zigzagging.
+  for (let i = 0; i < 6; i++) {
+    const w = (st.x1 - st.x0 - 0.4) / 6;
+    inside.box([w, 1.6, 0.03], [st.x0 + 0.2 + (i + 0.5) * w, G + 1.42, st.z1 - 0.12 - (i % 2) * 0.06], i % 2 ? "#d9b25a" : "#e8c56a");
+    inside.box([w, 0.04, 0.05], [st.x0 + 0.2 + (i + 0.5) * w, G + 2.23, st.z1 - 0.12 - (i % 2) * 0.06], "#3a2c22");
+  }
+  // The teller's cushion, and the mekuri stand beside the stage with today's name on it.
+  inside.box([0.7, 0.08, 0.7], [YOSE.teller[0], G + 0.66, YOSE.teller[1]], "#6b3b8a");
+  inside.box([0.06, 1.2, 0.06], [st.x1 + 0.25, G + 0.6, st.z0 + 0.3], WOOD_DARK);
+  inside.box([0.5, 0.06, 0.06], [st.x1 + 0.25, G + 1.22, st.z0 + 0.3], WOOD_DARK);
+  // Wooden lattice (kōshi) along the side walls, and the chōchin lanterns over them.
+  for (const x of [s.x0 + 0.22, s.x1 - 0.22]) for (let k = 0; k < 14; k++) inside.box([0.03, 2.2, 0.04], [x, G + 1.2, f.z0 + 0.6 + k * ((s.depth - 1.4) / 13)], WOOD);
+  for (const x of [s.x0 + 0.5, s.x1 - 0.5])
+    for (let k = 0; k < 4; k++) {
+      const z = f.z0 + 1.0 + k * ((s.depth - 2.2) / 3);
+      lit.cylinder(0.14, 0.14, 0.36, [x, G + 2.45, z], "#ffe9c8", undefined, 12);
+      inside.cylinder(0.145, 0.145, 0.04, [x, G + 2.65, z], "#1d1d1d", undefined, 12);
+    }
+  // The audience's benches, in rows, a cushion at each place.
+  for (const z of YOSE.rows) {
+    inside.box([5.2, 0.06, 0.42], [(YOSE.cols[0] + YOSE.cols[3]) / 2, G + 0.37, z], WOOD);
+    for (const x of [YOSE.cols[0] - 0.4, YOSE.cols[3] + 0.4]) inside.box([0.08, 0.34, 0.38], [x, G + 0.17, z], WOOD_DARK);
+    for (const x of YOSE.cols) inside.box([0.4, 0.05, 0.36], [x, G + 0.42, z], "#6b3b8a");
+  }
   for (const x of [st.x0 - 0.3, st.x1 + 0.3]) lit.cylinder(0.14, 0.14, 0.4, [x, G + 2.2, st.z0], "#ffd79a", undefined, 10);
 }
 
@@ -391,15 +606,23 @@ function dojoHall(inside: Builder, lit: Builder) {
       inside.box([1.12, 0.042, 0.04], [x, G + 0.032, z - 0.9], "#2b3a2a");
       inside.box([1.12, 0.042, 0.04], [x, G + 0.032, z + 0.9], "#2b3a2a");
     }
-  // The rack of practice swords, the makiwara posts, the kamidana shelf, the banner.
+  // The sword rack: its frame, two rails with a notch for each sword (the swords are NishiScene's).
   const r = DOJO.rack;
-  inside.box([r.x1 - r.x0, 1.1, r.z1 - r.z0], [(r.x0 + r.x1) / 2, G + 0.55, (r.z0 + r.z1) / 2], WOOD_DARK);
-  for (let i = 0; i < 6; i++) inside.bar([r.x0 + 0.2 + i * 0.32, G + 0.2, r.z0 - 0.02], [r.x0 + 0.2 + i * 0.32, G + 1.2, r.z0 - 0.02], 0.02, "#d9c3a0");
+  const rx = (r.x0 + r.x1) / 2;
+  const rz = (r.z0 + r.z1) / 2;
+  inside.box([r.x1 - r.x0, 0.08, r.z1 - r.z0], [rx, G + 0.04, rz], WOOD_DARK);
+  for (const x of [r.x0 + 0.04, r.x1 - 0.04]) inside.box([0.06, 1.25, 0.08], [x, G + 0.625, rz], WOOD_DARK);
+  for (const y of [0.45, 1.05]) inside.box([r.x1 - r.x0, 0.06, 0.1], [rx, G + y, rz], WOOD_DARK);
+  // The makiwara: posts wrapped in straw at striking height.
   for (const [x, z] of DOJO.posts) {
     inside.box([0.16, 1.5, 0.16], [x, G + 0.75, z], WOOD);
     inside.box([0.2, 0.4, 0.2], [x, G + 1.2, z], "#d8c58a");
+    for (const y of [1.04, 1.36]) inside.box([0.22, 0.03, 0.22], [x, G + y, z], "#8a6545");
   }
-  inside.box([1.6, 0.1, 0.4], [(s.x0 + s.x1) / 2, G + 2.3, f.z1 - 0.3], WOOD_DARK);
+  // The kamidana, a shelf high on the back wall (in front of it, not in it), and the banner.
+  inside.box([1.6, 0.08, 0.3], [(s.x0 + s.x1) / 2, G + 2.3, f.z1 - 0.36], WOOD_DARK);
+  for (const dx of [-0.6, 0.6]) inside.box([0.06, 0.3, 0.06], [(s.x0 + s.x1) / 2 + dx, G + 2.15, f.z1 - 0.26], WOOD_DARK);
+  inside.box([0.4, 0.3, 0.2], [(s.x0 + s.x1) / 2, G + 2.49, f.z1 - 0.34], "#e8dcc4");
   lit.plane(1.0, 1.6, [(s.x0 + s.x1) / 2 + 2.0, G + 1.6, f.z1 - 0.24], "#f4efe2", [0, Math.PI, 0]);
 }
 
@@ -424,6 +647,9 @@ const BIKE_RETURN_SECONDS = 45;
 
 export function NishiScene({ worldState, getSelfPosition }: { worldState: Record<string, WorldStateValue>; getSelfPosition: () => [number, number, number] }) {
   const geometry = useMemo(buildQuarter, []);
+  // The whole quarter, only when you're anywhere near it.
+  const area = useRef<THREE.Group>(null);
+  useDrawDistance(area, [-46, 55], 70);
   const m = useMemo(
     () => ({
       painted: paint(),
@@ -439,6 +665,8 @@ export function NishiScene({ worldState, getSelfPosition }: { worldState: Record
       tileIn: surfaceMaterial("tile", false),
       plankIn: surfaceMaterial("plank", false),
       books: new THREE.MeshBasicMaterial({ map: spines() }),
+      arch: new THREE.MeshBasicMaterial({ map: archTexture(), toneMapped: false, side: THREE.DoubleSide }),
+      hanging: Object.fromEntries(NISHI_SHOPS.map((s) => [s.id, new THREE.MeshBasicMaterial({ map: hangingTexture(s.sign[0], s.roof), toneMapped: false })])),
       signs: Object.fromEntries(NISHI_SHOPS.map((s) => [s.id, new THREE.MeshBasicMaterial({ map: signTexture(s.sign[0], s.sign[1], s.roof, s.kind === "burger" ? "#c8402f" : "#ffffff"), toneMapped: false })])),
       bike: paint(),
     }),
@@ -446,17 +674,29 @@ export function NishiScene({ worldState, getSelfPosition }: { worldState: Record
   );
   const bike = useMemo(bikeGeometry, []);
   const instruments = useMemo(() => {
-    const worn = MUSIC_WALL.map((w) => {
-      // Built where a player wears it (at the chest, out in front): centred
-      // on itself here, then hung on the wall facing out into the shop.
-      const worn = w.instrument === "violin" ? buildViolin() : buildWorn(w.instrument);
-      const centre = new THREE.Box3().setFromObject(worn).getCenter(new THREE.Vector3());
-      worn.position.sub(centre);
+    // An instrument as a player wears it (at the chest, its neck across them),
+    // turned neck-up and centred on itself, to hang on a hook or stand on a stand.
+    const upright = (kind: "guitar" | "ukulele" | "electric" | "bass" | "violin") => {
+      const model = kind === "violin" ? buildViolin() : buildWorn(kind);
+      const tilt = new THREE.Group();
+      tilt.add(model);
+      if (kind !== "violin") tilt.rotation.z = -NECK_TILT;
+      const centre = new THREE.Box3().setFromObject(tilt).getCenter(new THREE.Vector3());
+      tilt.position.sub(centre);
       const g = new THREE.Group();
-      g.add(worn);
-      g.rotation.set(0, w.facing, 0);
-      g.position.set(w.x - Math.sin(w.facing) * -0.06, G + 1.55, w.z);
+      g.add(tilt);
+      return g;
+    };
+    const worn = MUSIC_WALL.map((w) => {
+      const g = upright(w.instrument);
+      g.rotation.y = w.facing;
+      g.position.set(w.x - Math.sin(w.facing) * 0.06, G + (w.instrument === "violin" ? 1.6 : 1.5), w.z);
       return { g, w };
+    });
+    const stands = MUSIC_STANDS.map(([x, z, kind]) => {
+      const g = upright(kind);
+      g.position.set(x, G + 0.86, z);
+      return { g, x, z, kind };
     });
     const kit = buildKit();
     kit.position.set(MUSIC_KIT[0], G, MUSIC_KIT[1]);
@@ -464,14 +704,29 @@ export function NishiScene({ worldState, getSelfPosition }: { worldState: Record
     const keys = buildKeyboard();
     keys.position.set(MUSIC_KEYS[0], G, MUSIC_KEYS[1]);
     keys.rotation.y = Math.PI / 2;
-    return { worn, kit, keys };
+    return { worn, stands, kit, keys };
   }, []);
+  // The dojo's practice swords, standing in their rack: the katana, without its glow.
+  const swords = useMemo(
+    () =>
+      Array.from({ length: 6 }, (_, i) => {
+        const sword = buildWeapon("katana", "spectro");
+        const glow = sword.userData.glow as THREE.Material | undefined;
+        sword.traverse((o) => {
+          if ((o as THREE.Mesh).material === glow) o.visible = false;
+        });
+        sword.position.set(DOJO.rack.x0 + 0.25 + i * 0.3, G + 0.16, (DOJO.rack.z0 + DOJO.rack.z1) / 2);
+        sword.rotation.set(0.08, 0, 0);
+        return sword;
+      }),
+    []
+  );
   useEffect(
     () => () => {
       for (const g of Object.values(geometry)) g.dispose();
       bike.dispose();
       for (const [key, mat] of Object.entries(m)) {
-        if (key === "signs") for (const s of Object.values(mat as Record<string, THREE.MeshBasicMaterial>)) {
+        if (key === "signs" || key === "hanging") for (const s of Object.values(mat as Record<string, THREE.MeshBasicMaterial>)) {
           s.map?.dispose();
           s.dispose();
         }
@@ -533,10 +788,8 @@ export function NishiScene({ worldState, getSelfPosition }: { worldState: Record
     } else showCaption("稽古中", "The dojo's for fantasy mode: an editor can turn it on", 4);
   };
 
-  const pickBook = () => {
-    const book = BOOKS[Math.floor(Math.random() * BOOKS.length)];
-    showCaption(`『${book.ja}』`, `${book.en}: ${book.line}`, 6);
-  };
+  // A book off the shelf, opened on the screen to read (BookReader.tsx).
+  const pickBook = () => openBook(BOOKS[Math.floor(Math.random() * BOOKS.length)]);
 
   // The bikes: which is out, and when it goes back by itself.
   const [out, setOut] = useState<Record<number, number>>({});
@@ -576,7 +829,7 @@ export function NishiScene({ worldState, getSelfPosition }: { worldState: Record
   const kissaAt: [number, number, number] = [(KISSA.counter.x0 + KISSA.counter.x1) / 2, G + 1.15, (KISSA.counter.z0 + KISSA.counter.z1) / 2];
   const dojo = shopById("dojo");
   return (
-    <group>
+    <group ref={area}>
       <mesh geometry={geometry.painted} material={m.painted} castShadow receiveShadow />
       <mesh geometry={geometry.walls} material={m.walls} castShadow receiveShadow />
       <mesh geometry={geometry.grain} material={m.grain} castShadow receiveShadow />
@@ -597,14 +850,46 @@ export function NishiScene({ worldState, getSelfPosition }: { worldState: Record
           </mesh>
         ))
       )}
+      {/* The arch's sign, both ways. */}
+      <mesh position={[ARCH.x, G + 3.85, (ARCH.z0 + ARCH.z1) / 2]} rotation={[0, Math.PI / 2, 0]} material={m.arch} raycast={noRaycast} userData={{ navIgnore: true }}>
+        <planeGeometry args={[ARCH.z1 - ARCH.z0 + 0.2, 0.74]} />
+      </mesh>
       {/* The shops' signs, over their doors. */}
       {NISHI_SHOPS.map((s) => {
         const f = shopFront(s);
-        const z = s.side === "south" ? f.z1 + 0.12 : f.z0 - 0.12;
+        const face = f.front + f.out * 0.07;
+        const y = G + (s.kind === "burger" ? 4.4 : 3.05);
+        const w = Math.min(4.6, s.x1 - s.x0 - 0.9);
+        const turn = s.side === "south" ? 0 : Math.PI;
+        // The hanging sign at the shop's end, its name downwards, read from along the street.
+        const hx = (s.side === "south" ? s.x1 : s.x0) + (s.side === "south" ? -0.45 : 0.45);
         return (
-          <mesh key={s.id} position={[(s.x0 + s.x1) / 2, G + (s.kind === "burger" ? 4.4 : 2.75), z]} rotation={[0, s.side === "south" ? 0 : Math.PI, 0]} material={m.signs[s.id]} raycast={noRaycast} userData={{ navIgnore: true }}>
-            <planeGeometry args={[Math.min(4.6, s.x1 - s.x0 - 0.6), 0.9]} />
-          </mesh>
+          <group key={s.id}>
+            <mesh position={[(s.x0 + s.x1) / 2, y, f.front + f.out * 0.035]} raycast={noRaycast} userData={{ navIgnore: true }}>
+              <boxGeometry args={[w + 0.14, 1.04, 0.07]} />
+              <meshLambertMaterial color="#1d1d1d" />
+            </mesh>
+            <mesh position={[(s.x0 + s.x1) / 2, y, face + f.out * 0.002]} rotation={[0, turn, 0]} material={m.signs[s.id]} raycast={noRaycast} userData={{ navIgnore: true }}>
+              <planeGeometry args={[w, 0.9]} />
+            </mesh>
+            {s.kind !== "burger" && (
+              <group position={[hx, G + 2.95, f.front + f.out * 0.42]}>
+                <mesh raycast={noRaycast} userData={{ navIgnore: true }}>
+                  <boxGeometry args={[0.1, 1.36, 0.5]} />
+                  <meshLambertMaterial color="#1d1d1d" />
+                </mesh>
+                {[-1, 1].map((side) => (
+                  <mesh key={side} position={[side * 0.052, 0, 0]} rotation={[0, side * (Math.PI / 2), 0]} material={m.hanging[s.id]} raycast={noRaycast} userData={{ navIgnore: true }}>
+                    <planeGeometry args={[0.44, 1.3]} />
+                  </mesh>
+                ))}
+                <mesh position={[0, 0, -f.out * 0.3]} raycast={noRaycast} userData={{ navIgnore: true }}>
+                  <boxGeometry args={[0.04, 0.04, 0.2]} />
+                  <meshLambertMaterial color="#2b2d30" />
+                </mesh>
+              </group>
+            )}
+          </group>
         );
       })}
       {/* The music shop's instruments, to try. */}
@@ -613,6 +898,17 @@ export function NishiScene({ worldState, getSelfPosition }: { worldState: Record
           <primitive object={g} />
           <Spot at={[w.x + Math.sin(w.facing) * 0.15, G + 1.5, w.z + Math.cos(w.facing) * 0.15]} size={[0.4, 1.1, 0.6]} onClick={() => tryInstrument(w.instrument)} label={INSTRUMENT_NAMES[w.instrument]} />
         </group>
+      ))}
+      {instruments.stands.map(({ g, x, z, kind }) => (
+        <group key={`stand-${x}`}>
+          <primitive object={g} />
+          <Spot at={[x, G + 0.85, z]} size={[0.4, 1.2, 0.4]} onClick={() => tryInstrument(kind)} label={INSTRUMENT_NAMES[kind]} />
+        </group>
+      ))}
+      <Register position={[MUSIC_COUNTER.x0 + 0.5, G + 0.99, (MUSIC_COUNTER.z0 + MUSIC_COUNTER.z1) / 2]} />
+      <Register position={[BOOK_COUNTER.x1 - 0.45, G + 1.0, (BOOK_COUNTER.z0 + BOOK_COUNTER.z1) / 2]} />
+      {swords.map((sw, i) => (
+        <primitive key={`sword-${i}`} object={sw} />
       ))}
       <primitive object={instruments.kit} />
       <Spot at={[MUSIC_KIT[0], G + 0.7, MUSIC_KIT[1]]} size={[1.3, 1.2, 1.1]} onClick={() => tryInstrument("kit")} label={["ドラム", "Drum kit: try it"]} />
@@ -658,8 +954,8 @@ export function NishiScene({ worldState, getSelfPosition }: { worldState: Record
           return Math.hypot(x - YOSE.teller[0], z - YOSE.teller[1]);
         }}
       />
-      {/* The dojo's sensei, kneeling at the head of the hall. */}
-      <Sitter avatar={SENSEI} position={[(dojo.x0 + dojo.x1) / 2 - 2.0, G + 0.05, shopFront(dojo).z1 - 0.9]} rotationY={0} kneel chatter={[{ ja: "礼に始まり、礼に終わる。", en: "It starts with a bow, and ends with one." }, { ja: "構えて。", en: "On guard." }]} near={() => Math.hypot(getSelfPosition()[0] - dojo.x0 - 4.7, getSelfPosition()[2] - shopFront(dojo).z1)} />
+      {/* The dojo: its students, and the sensei, who spars if you ask. */}
+      <DojoPractice fantasyOn={modeOn("fantasy")} getSelfPosition={getSelfPosition} />
       {/* The dogs, each with its walker. */}
       {DOG_WALKERS.map((id) => (
         <Dog key={id} owner={id} />
@@ -684,4 +980,192 @@ const look = (spec: Partial<AvatarSpec>) =>
   encodeAvatarSpec({ ...DEFAULT_AVATAR_SPEC, skin: "#eec1a0", accessories: [], ...spec });
 // The teller in a dark montsuki-like top; the sensei in white over dark hakama-ish trousers.
 const TELLER = look({ hairStyle: "short", hairColor: "#1f1a17", top: "longsleeve", topColor: "#1d2433", bottom: "pants", bottomColor: "#2f3b52", shoeColor: "#f2f0eb", height: 0.98 });
+const STUDENTS = [
+  look({ hairStyle: "ponytail", hairColor: "#1f1a17", top: "longsleeve", topColor: "#f2f0eb", bottom: "pants", bottomColor: "#1d2433", shoeColor: "#1d2433", height: 0.95, build: 0.92 }),
+  look({ skin: "#d9a07a", hairStyle: "short", hairColor: "#4a2f22", top: "longsleeve", topColor: "#f2f0eb", bottom: "pants", bottomColor: "#1d2433", shoeColor: "#1d2433", height: 1.02 }),
+];
 const SENSEI = look({ hairStyle: "buzz", hairColor: "#6b6f78", top: "longsleeve", topColor: "#f2f0eb", bottom: "pants", bottomColor: "#1d2433", shoeColor: "#1d2433", build: 1.05 });
+
+// --- the dojo's practice: the sensei and two students --------------------------------------------
+
+const STILL = new THREE.Vector3();
+/** How long a bout with the sensei runs at most, and how often he strikes, and how near. */
+const BOUT = { seconds: 45, every: 3.2, reach: 2.6, wins: 3, damage: 6 };
+
+/** A katana from the fantasy mode's own, its glow off: a practice sword. */
+function practiceSword() {
+  const sword = buildWeapon("katana", "spectro");
+  const glow = sword.userData.glow as THREE.Material | undefined;
+  sword.traverse((o) => {
+    if ((o as THREE.Mesh).material === glow) o.visible = false;
+  });
+  return sword;
+}
+
+/**
+ * Someone to spar with in the dojo: standing, a practice sword in hand,
+ * turned toward you. With `armed`, they can be struck (combat.ts's
+ * practiceTargets, on this screen only), and flinch when they are.
+ * `lunge` (a ref, 0 to 1) plays their strike: a step in and back.
+ */
+function Sparrer({ id, avatar, home, armed, onHit, lunge, getSelfPosition }: { id: string; avatar: string; home: [number, number]; armed: boolean; onHit: (special: boolean) => void; lunge?: React.MutableRefObject<number>; getSelfPosition: () => [number, number, number] }) {
+  const [vrm, setVrm] = useState<VRM | null>(null);
+  const group = useRef<THREE.Group>(null);
+  const recoil = useRef(0);
+  const hit = useRef(onHit);
+  hit.current = onHit;
+  const sword = useMemo(practiceSword, []);
+  // The sword in the right hand, its blade forward and down, held at the side.
+  useEffect(() => {
+    const hand = vrm?.humanoid.getNormalizedBoneNode("rightHand");
+    if (!hand) return;
+    hand.add(sword);
+    sword.position.set(-0.06, -0.02, 0.02);
+    sword.rotation.set(Math.PI / 2 + 0.5, 0, Math.PI / 2);
+    return () => {
+      hand.remove(sword);
+    };
+  }, [vrm, sword]);
+  useEffect(() => {
+    if (!armed) return;
+    practiceTargets.set(id, {
+      feet: { x: home[0], y: G, z: home[1] },
+      eye: 1.5,
+      onHit: (special) => {
+        recoil.current = 1;
+        hit.current(special);
+      },
+    });
+    return () => {
+      practiceTargets.delete(id);
+    };
+  }, [armed, id, home]);
+  const yaw = useRef(0);
+  useFrame((_, delta) => {
+    const g = group.current;
+    if (!g) return;
+    const dt = Math.min(delta, 0.1);
+    // Turned toward you, unhurried.
+    const [sx, , sz] = getSelfPosition();
+    const want = Math.atan2(sx - home[0], sz - home[1]);
+    let turn = want - yaw.current;
+    turn = Math.atan2(Math.sin(turn), Math.cos(turn));
+    yaw.current += turn * Math.min(1, dt * 3);
+    g.rotation.y = yaw.current;
+    // A flinch back when struck; a step in on their own strike.
+    recoil.current = Math.max(0, recoil.current - dt * 3);
+    const step = (lunge ? 0.35 * Math.sin(Math.PI * lunge.current) : 0) - 0.18 * Math.sin(Math.PI * recoil.current);
+    g.position.set(home[0] + Math.sin(yaw.current) * step, G, home[1] + Math.cos(yaw.current) * step);
+  });
+  return (
+    <group ref={group} position={[home[0], G, home[1]]}>
+      <VrmAvatar url={avatar} onLoaded={setVrm} updateEvery={() => 2} />
+      <AvatarAnimator vrm={vrm} updateEvery={() => 2} getPosition={() => STILL} gesture={null} gestureSeq={0} />
+    </group>
+  );
+}
+
+/** The students' calls as they're struck, and when they've had enough. */
+const STUDENT_CALLS: [string, string][] = [
+  ["お願いします!", "Again, please!"],
+  ["まだまだ!", "Not yet!"],
+  ["参りました!", "You got me!"],
+];
+
+/**
+ * The dojo's practice. Two students on the tatami, there to practise on
+ * whenever fantasy mode is on. And the sensei, kneeling at the head of the
+ * hall until you ask him for a bout: then he stands, turns to face you,
+ * and strikes now and then; keep your guard up and turn his blows aside,
+ * and land three clean ones on him to win.
+ */
+function DojoPractice({ fantasyOn, getSelfPosition }: { fantasyOn: boolean; getSelfPosition: () => [number, number, number] }) {
+  const dojo = shopById("dojo");
+  const f = shopFront(dojo);
+  const kneelAt: [number, number, number] = [(dojo.x0 + dojo.x1) / 2 - 2.0, G + 0.05, f.z1 - 0.9];
+  const standAt: [number, number] = [(dojo.x0 + dojo.x1) / 2 - 1.0, f.z0 + 3.4];
+  const students: { id: string; avatar: string; at: [number, number] }[] = [
+    { id: "dojo-student-1", avatar: STUDENTS[0], at: [dojo.x0 + 3.8, f.z0 + 1.9] },
+    { id: "dojo-student-2", avatar: STUDENTS[1], at: [dojo.x0 + 6.6, f.z0 + 1.9] },
+  ];
+  const [bout, setBout] = useState(false);
+  const state = useRef({ hits: 0, started: 0, next: 0, said: new Map<string, number>() });
+  const lunge = useRef(0);
+  const ask = () => {
+    if (!fantasyOn) {
+      showCaption("稽古中", "The dojo's for fantasy mode: an editor can turn it on", 4);
+      return;
+    }
+    if (!fantasy.get().weapon) {
+      showCaption("まず木刀を", "Take a practice sword from the rack first", 4);
+      return;
+    }
+    if (bout) return;
+    state.current.hits = 0;
+    state.current.started = performance.now() / 1000;
+    state.current.next = state.current.started + 2;
+    setBout(true);
+    showCaption("よし、かかってきなさい", "Very well: come at me. Three clean hits, and guard against mine.", 4);
+  };
+  const end = (won: boolean) => {
+    setBout(false);
+    showCaption(won ? "見事!一本!" : "今日はここまで", won ? "Well struck! The bout is yours." : "That's enough for today. Come again.", 4);
+  };
+  const senseiHit = () => {
+    const s = state.current;
+    s.hits++;
+    if (s.hits >= BOUT.wins) end(true);
+    else showCaption(["面!", "小手!"][s.hits % 2], `A clean hit: ${s.hits} of ${BOUT.wins}`, 1.6);
+  };
+  const studentHit = (id: string) => {
+    const s = state.current;
+    const n = (s.said.get(id) ?? 0) + 1;
+    s.said.set(id, n % 3);
+    const [ja, en] = STUDENT_CALLS[(n - 1) % 3];
+    showCaption(ja, en, 1.6);
+  };
+  useFrame((_, delta) => {
+    lunge.current = Math.max(0, lunge.current - Math.min(delta, 0.1) * 2.5);
+    if (!bout) return;
+    const s = state.current;
+    const now = performance.now() / 1000;
+    if (now - s.started > BOUT.seconds || !fantasy.get().weapon || !fantasyOn) {
+      end(false);
+      return;
+    }
+    if (now < s.next) return;
+    s.next = now + BOUT.every;
+    const [x, , z] = getSelfPosition();
+    if (Math.hypot(x - standAt[0], z - standAt[1]) > BOUT.reach) return;
+    // His strike: a step in, and a blow you can turn aside on guard.
+    lunge.current = 1;
+    const result = practiceStrike(BOUT.damage);
+    if (result === "blocked") showCaption("受けた!", "Blocked: well guarded", 1.6);
+    else if (result === "hit") showCaption("面あり!", "He struck you: guard (hold your block) when he steps in", 2.2);
+  });
+  return (
+    <>
+      {bout ? (
+        <Sparrer id="dojo-sensei" avatar={SENSEI} home={standAt} armed onHit={senseiHit} lunge={lunge} getSelfPosition={getSelfPosition} />
+      ) : (
+        <>
+          <Sitter
+            avatar={SENSEI}
+            position={kneelAt}
+            rotationY={0}
+            kneel
+            chatter={[
+              { ja: "礼に始まり、礼に終わる。", en: "It starts with a bow, and ends with one." },
+              { ja: "稽古をつけてほしければ、声をかけなさい。", en: "If you want a bout, just ask." },
+            ]}
+            near={() => Math.hypot(getSelfPosition()[0] - kneelAt[0], getSelfPosition()[2] - kneelAt[2])}
+          />
+          <Spot at={[kneelAt[0], G + 0.7, kneelAt[2]]} size={[0.8, 1.1, 0.8]} onClick={ask} label={["先生に稽古を頼む", "Ask the sensei for a bout"]} />
+        </>
+      )}
+      {students.map((st) => (
+        <Sparrer key={st.id} id={st.id} avatar={st.avatar} home={st.at} armed={fantasyOn} onHit={() => studentHit(st.id)} getSelfPosition={getSelfPosition} />
+      ))}
+    </>
+  );
+}

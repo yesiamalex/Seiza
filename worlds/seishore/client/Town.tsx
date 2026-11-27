@@ -549,7 +549,7 @@ function OfferingBox({ position, facing, geometry, grain, plate }: { position: [
   return (
     <group position={position} rotation={[0, facing, 0]}>
       <mesh geometry={geometry} material={grain} castShadow receiveShadow />
-      <mesh position={[0, 0.4, 0.312]} material={plate}>
+      <mesh position={[0, 0.4, 0.334]} material={plate}>
         <planeGeometry args={[0.5, 0.25]} />
       </mesh>
     </group>
@@ -592,7 +592,8 @@ function addTemple(b: Builder, roofs: Builder) {
   // The main hall: a stone base, a raised floor and verandah, white walls
   // between dark posts, the doors open, a great roof.
   b.box([5.0, 0.6, 5.6], [TEMPLE.hallX - 0.35, base + 0.3, z], "#9d9a92");
-  b.box([4.2, 0.12, 4.8], [TEMPLE.hallX - 0.35, base + 0.66, z], TEMPLE_WOOD);
+  // The verandah, deep enough at the front for the offering box to stand on.
+  b.box([4.6, 0.12, 4.8], [TEMPLE.hallX - 0.25, base + 0.66, z], TEMPLE_WOOD);
   b.box([3.4, 2.4, 4.0], [TEMPLE.hallX - 0.55, base + 1.92, z], TEMPLE_WHITE);
   for (const dz of [-2.0, -0.7, 0.7, 2.0]) b.box([0.16, 2.5, 0.16], [TEMPLE.hallX + 1.2, base + 1.95, z + dz], TEMPLE_WOOD);
   b.box([0.08, 2.0, 1.3], [TEMPLE.hallX + 1.16, base + 1.72, z], "#2a1d15");

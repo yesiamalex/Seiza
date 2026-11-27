@@ -24,6 +24,8 @@ export const RING = { east: -29, west: -66, north: 74, south: 36, half: 3 };
 /** Nishi-dōri: the shōtengai's line, on west from the meadow to the west road. */
 export const NISHI_STREET = { x0: RING.west + RING.half, x1: -24.2, z0: LANE.z0, z1: LANE.z1 };
 /** The path across the meadow from the shōtengai's end to Nishi-dōri. */
+/** The shopping street's arch over its way in, just off the ring road (its posts either side of the street). */
+export const ARCH = { x: RING.east - RING.half - 0.6, z0: LANE.z0 - 0.35, z1: LANE.z1 + 0.35 };
 export const MEADOW_PATH = { x0: -24.2, x1: -7, z0: LANE.z0 + 0.6, z1: LANE.z1 - 0.6 };
 
 export type NishiKind = "music" | "burger" | "books" | "kissa" | "yose" | "dojo";
@@ -70,7 +72,8 @@ const yose = shopById("yose");
 const dojo = shopById("dojo");
 
 /** The music shop: instruments on the walls to try, a drum kit on the floor, the counter. */
-export const MUSIC_COUNTER = { x0: music.x0 + 0.5, x1: music.x0 + 2.6, z0: shopFront(music).z0 + 0.4, z1: shopFront(music).z0 + 1.0 };
+/** Out from the back wall, so the clerk has room behind it. */
+export const MUSIC_COUNTER = { x0: music.x0 + 0.5, x1: music.x0 + 2.6, z0: shopFront(music).z0 + 1.0, z1: shopFront(music).z0 + 1.6 };
 /** The instruments on show, each where it hangs (x, z, which wall it faces out from). */
 export const MUSIC_WALL: { instrument: "guitar" | "ukulele" | "electric" | "bass" | "violin"; x: number; z: number; facing: number }[] = [
   { instrument: "guitar", x: music.x1 - WALL - 0.08, z: shopFront(music).z0 + 1.6, facing: -Math.PI / 2 },
@@ -88,7 +91,8 @@ export const BURGER = (() => {
   const f = shopFront(burger);
   const up = G + 2.4;
   return {
-    counter: { x0: burger.x0 + 0.6, x1: burger.x1 - 0.6, z0: f.z1 - 3.4, z1: f.z1 - 2.8 },
+    // Short of the stairs up the east side (it ran across their foot).
+    counter: { x0: burger.x0 + 0.6, x1: burger.x1 - 1.9, z0: f.z1 - 3.4, z1: f.z1 - 2.8 },
     /** The kitchen behind the counter, under the mezzanine. */
     kitchen: { x0: burger.x0 + WALL, x1: burger.x1 - 2.0, z0: f.z0 + WALL, z1: f.z1 - 3.4 },
     /** The stairs, up the east side from the front to the mezzanine. */
@@ -113,13 +117,22 @@ export const BOOK_COUNTER = { x0: books.x1 - 2.4, x1: books.x1 - 0.6, z0: shopFr
 export const KISSA = (() => {
   const f = shopFront(kissa);
   return {
-    counter: { x0: kissa.x0 + 0.6, x1: kissa.x1 - 0.6, z0: f.z1 - 1.0, z1: f.z1 - 0.45 },
+    // Out from the back wall, the master behind it.
+    counter: { x0: kissa.x0 + 0.6, x1: kissa.x1 - 0.6, z0: f.z1 - 1.5, z1: f.z1 - 0.95 },
     tables: [
       [kissa.x0 + 1.6, f.z0 + 2.0],
       [kissa.x0 + 4.2, f.z0 + 2.0],
     ] as [number, number][],
   };
 })();
+
+/** Who works where: behind each counter, facing the customers. */
+export const STAFF = {
+  music: { at: [MUSIC_COUNTER.x0 + 1.5, shopFront(music).z0 + 0.55] as [number, number], face: [MUSIC_COUNTER.x0 + 1.5, shopFront(music).z1] as [number, number] },
+  burger: { at: [(burger.x0 + 0.6 + burger.x1 - 1.9) / 2 - 1.0, shopFront(burger).z1 - 3.9] as [number, number], face: [(burger.x0 + burger.x1) / 2, shopFront(burger).z1] as [number, number] },
+  books: { at: [books.x1 - 1.5, shopFront(books).z1 - 2.45] as [number, number], face: [books.x1 - 1.5, shopFront(books).z1] as [number, number] },
+  kissa: { at: [kissa.x1 - 1.6, shopFront(kissa).z1 - 0.55] as [number, number], face: [kissa.x1 - 1.6, shopFront(kissa).z0] as [number, number] },
+};
 
 /** The rakugo café: a raised kōza at the back, the teller on his cushion,
  *  rows of zabuton on the tatami before it. */
@@ -182,6 +195,7 @@ export function nishiObstacles(): Obstacle[] {
     list.push(o(s.x0, s.door[0], fz0, fz0 + WALL), o(s.door[1], s.x1, fz0, fz0 + WALL));
   }
   const c = (x: { x0: number; x1: number; z0: number; z1: number }) => o(x.x0, x.x1, x.z0, x.z1);
+  for (const [x, z] of MUSIC_STANDS) list.push(o(x - 0.2, x + 0.2, z - 0.2, z + 0.2));
   list.push(c(MUSIC_COUNTER), o(MUSIC_KIT[0] - 0.7, MUSIC_KIT[0] + 0.7, MUSIC_KIT[1] - 0.6, MUSIC_KIT[1] + 0.6), o(MUSIC_KEYS[0] - 0.55, MUSIC_KEYS[0] + 0.55, MUSIC_KEYS[1] - 0.25, MUSIC_KEYS[1] + 0.25));
   list.push(c(BURGER.counter), c(BURGER.kitchen));
   // The stairs' open side, and the mezzanine's edge rail beside them.
@@ -197,6 +211,8 @@ export function nishiObstacles(): Obstacle[] {
   for (const s of STALLS) list.push(o(s.x0, s.x1, YOKOCHO.z1, YOKOCHO.z1 + YOKOCHO.stallDepth));
   for (const [x, z] of PARK_BENCHES) list.push(o(x - 0.9, x + 0.9, z - 0.2, z + 0.25));
   list.push(o(BIKE_RACK.x - 0.5, BIKE_RACK.x + 0.5, BIKE_RACK.zs[0] - 0.3, BIKE_RACK.zs[2] + 0.3));
+  // The arch's posts.
+  for (const zz of [ARCH.z0, ARCH.z1]) list.push(o(ARCH.x - 0.2, ARCH.x + 0.2, zz - 0.2, zz + 0.2));
   // The bus stops' poles.
   for (const s of LOOP_STOPS) list.push(o(s.pole[0] - 0.08, s.pole[0] + 0.08, s.pole[1] - 0.08, s.pole[1] + 0.08));
   return list;
@@ -240,7 +256,7 @@ export function nishiSeats(): Seat[] {
     for (const s of [-1, 1]) seats.push({ id: `seishore-nishi-park-${i}-${s > 0 ? "r" : "l"}`, position: [x + s * 0.45, G + bench - SEAT_HEIGHT, z - 0.02], rotationY: 0, label: "Park bench" });
   });
   const kf = shopFront(kissa);
-  for (let i = 0; i < 4; i++) seats.push({ id: `seishore-nishi-kissa-stool-${i}`, position: [kissa.x0 + 1.2 + i * 1.2, G + 0.62 - SEAT_HEIGHT, kf.z1 - 1.45], rotationY: Math.PI, label: "Counter stool" });
+  for (let i = 0; i < 4; i++) seats.push({ id: `seishore-nishi-kissa-stool-${i}`, position: [kissa.x0 + 1.2 + i * 1.2, G + 0.62 - SEAT_HEIGHT, KISSA.counter.z0 - 0.45], rotationY: Math.PI, label: "Counter stool" });
   // Four to every table, each facing in (an avatar at yaw y faces (−sin y, −cos y)).
   const around: [string, number, number, number][] = [
     ["e", 1, 0, Math.PI / 2],
@@ -307,3 +323,10 @@ export function loopLegs(): Leg[] {
   corner(E - R, S + R, (3 * Math.PI) / 2);
   return legs;
 }
+
+/** Guitars on stands on the music shop's floor, before the wall ones: [x, z], with what's on each. */
+export const MUSIC_STANDS: [number, number, "guitar" | "electric" | "bass"][] = [
+  [music.x0 + 3.1, shopFront(music).z0 + 2.3, "electric"],
+  [music.x0 + 3.7, shopFront(music).z0 + 2.3, "guitar"],
+  [music.x0 + 4.3, shopFront(music).z0 + 2.3, "bass"],
+];

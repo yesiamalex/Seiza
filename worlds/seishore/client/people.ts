@@ -9,6 +9,7 @@ import type { Chatter } from "../../../src/guides/Guide";
 import type { Stop } from "../../../src/guides/route";
 import { encodeAvatarSpec, type AvatarSpec } from "../../../src/avatar/designer/avatarSpec";
 import { at, G, type Node } from "./plan";
+import { STAFF } from "./nishi";
 
 export interface Townsperson {
   id: string;
@@ -308,3 +309,67 @@ export const NISHI_PEOPLE: Townsperson[] = [
     ],
   },
 ];
+
+/** Someone who works behind a counter: there all day, facing the customers. */
+const behind = (spot: { at: [number, number]; face: [number, number] }): Pick<Townsperson, "stops" | "faceAt" | "speed"> => ({
+  stops: [{ at: [spot.at[0], G, spot.at[1]], wait: 600 }],
+  faceAt: spot.face,
+  speed: 0.6,
+});
+const NISHI_INVITE = "Ask me about Nishi-machi, the shops, or anything you like.";
+const NISHI_INVITE_JA = "西町のこと、お店のこと、何でも聞いてね。";
+
+NISHI_PEOPLE.push(
+  {
+    id: "ren",
+    name: "Ren",
+    role: "SeaBurger crew",
+    persona: { name: "Ren", nameJa: "蓮", self: "Ren, on the counter at SeaBurger. The teriyaki burger's the one everybody comes back for, and the melon soda's the colour of summer.", selfJa: "シーバーガーのレジ担当、蓮です。みんながまた食べに来るのはてりやきバーガー。メロンソーダは夏の色です。", invite: NISHI_INVITE, inviteJa: NISHI_INVITE_JA },
+    avatar: look({ skin: "#d9a07a", hairStyle: "short", hairColor: "#1f1a17", top: "tshirt", topColor: "#c8402f", bottom: "pants", bottomColor: "#1f1f1f", accessories: ["cap"], accessoryColor: "#f2c94c", height: 1.0, build: 0.96 }),
+    ...behind(STAFF.burger),
+    chatter: [
+      { ja: "いらっしゃいませ!店内でお召し上がりですか?", en: "Welcome! Eating in today?" },
+      { ja: "お席までお持ちします!", en: "We'll bring it to your table!" },
+      { ja: "二階の席、海が見えますよ。", en: "You can see the sea from upstairs." },
+    ],
+  },
+  {
+    id: "kenji",
+    name: "Kenji",
+    role: "music shop",
+    persona: { name: "Kenji", nameJa: "健二", self: "Kenji. I run Ongakudō, the music shop. Every instrument on the wall is there to be tried: pick one up, play a chord, nobody minds.", selfJa: "健二です。楽器店「音楽堂」をやっています。壁の楽器は全部試奏OK。手に取って、コードを鳴らしてみて。", invite: NISHI_INVITE, inviteJa: NISHI_INVITE_JA },
+    avatar: look({ hairStyle: "long", hairColor: "#1f1a17", top: "longsleeve", topColor: "#1d2433", bottom: "pants", bottomColor: "#2f3b52", accessories: ["glasses"], accessoryColor: "#1f1f1f", height: 1.03, build: 0.94 }),
+    ...behind(STAFF.music),
+    chatter: [
+      { ja: "試奏どうぞ!", en: "Go ahead, try one!" },
+      { ja: "このウクレレ、いい音でしょう。", en: "That ukulele has a lovely sound, hasn't it?" },
+      { ja: "弦の張り替えもやってますよ。", en: "We restring guitars too." },
+    ],
+  },
+  {
+    id: "fumiko",
+    name: "Fumiko-san",
+    role: "bookseller",
+    persona: { name: "Fumiko-san", nameJa: "文子さん", self: "Fumiko. Hon-no-Mori is a secondhand bookshop: everything here has been read at least once, and most of it more than that. Take one off the shelf and read a page.", selfJa: "文子です。「本の森」は古本屋。ここにある本は、どれも一度は誰かに読まれた本です。棚から一冊取って、読んでみてくださいね。", invite: NISHI_INVITE, inviteJa: NISHI_INVITE_JA },
+    avatar: look({ skin: "#f6d7c3", hairStyle: "bun", hairColor: "#e7e2dc", top: "longsleeve", topColor: "#3f6e4a", bottom: "skirt", bottomColor: "#2f3b52", accessories: ["glasses"], accessoryColor: "#8a5a33", height: 0.93, build: 0.92, waist: 0.95 }),
+    ...behind(STAFF.books),
+    chatter: [
+      { ja: "いらっしゃいませ。ごゆっくりどうぞ。", en: "Welcome. Take your time." },
+      { ja: "その本、いい本ですよ。", en: "That one's a good book." },
+      { ja: "本日も買取やってます。", en: "We're buying books today too." },
+    ],
+  },
+  {
+    id: "masuda",
+    name: "Masuda-san",
+    role: "kissaten master",
+    persona: { name: "Masuda-san", nameJa: "増田さん", self: "Masuda. I've made the coffee at Kissa Namioto for thirty years, by siphon, one cup at a time. The napolitan is my mother's recipe.", selfJa: "増田です。喫茶「波音」で三十年、サイフォンで一杯ずつコーヒーを淹れています。ナポリタンは母のレシピです。", invite: NISHI_INVITE, inviteJa: NISHI_INVITE_JA },
+    avatar: look({ skin: "#e8b590", hairStyle: "short", hairColor: "#6b6f78", top: "blazer", topColor: "#3a2c22", bottom: "pants", bottomColor: "#1f1f1f", accessories: ["tie"], accessoryColor: "#8c2f39", height: 0.98, build: 1.02, waist: 1.0 }),
+    ...behind(STAFF.kissa),
+    chatter: [
+      { ja: "いらっしゃい。", en: "Welcome." },
+      { ja: "今日のブレンドは少し深めです。", en: "Today's blend is a little darker." },
+      { ja: "クリームソーダ、人気ですよ。", en: "The cream soda's popular." },
+    ],
+  }
+);

@@ -424,3 +424,24 @@ export function sinceLastHit(from: string, special: boolean, undead = false) {
 export function recordHit(from: string, special: boolean, undead = false) {
   lastHitFrom.set(`${from}:${hitKind(special, undead)}`, now());
 }
+
+// --- practice partners -----------------------------------------------------------------------
+
+/** Someone to practise on (a dojo's sensei, its students): hit as a fighter
+ *  is, but only on this visitor's own screen, never sent to the room. */
+export interface PracticeTarget {
+  feet: { x: number; y: number; z: number };
+  /** How tall they stand (eye height), for where a blow meets them. */
+  eye: number;
+  onHit: (special: boolean) => void;
+}
+export const practiceTargets = new Map<string, PracticeTarget>();
+
+/** A practice partner's blow at this visitor: turned aside if they're on guard, else a light hit. */
+export function practiceStrike(damage: number): "hit" | "blocked" | "none" {
+  const me = fantasy.get();
+  if (!me.weapon || me.ko || isInvulnerable()) return "none";
+  if (me.guard) return "blocked";
+  takeDamage(damage, () => {});
+  return "hit";
+}

@@ -193,7 +193,7 @@ export const TEMPLE_BENCH = { x: 13.2, z: TEMPLE.z - 2.6 };
 /** Where the hall's steps start and end (from the stone base out), each step's top. */
 export const TEMPLE_STEPS = { x0: TEMPLE.hallX + 2.15, x1: TEMPLE.hallX + 3.05, tops: [0.45, 0.3, 0.15] };
 /** The offering box up on the verandah, before the open doors. */
-export const TEMPLE_OFFERING: [number, number] = [TEMPLE.hallX + 1.6, TEMPLE.z];
+export const TEMPLE_OFFERING: [number, number] = [TEMPLE.hallX + 1.55, TEMPLE.z];
 /** Where you stand to pray: at the foot of the steps. */
 export const TEMPLE_PRAY: [number, number] = [TEMPLE_STEPS.x1 + 0.5, TEMPLE.z];
 /** The café's bench in front of it, the A-frame board beside. */

@@ -41,6 +41,7 @@ import {
   sinceLastHit,
   startAction,
   takeDamage,
+  practiceTargets,
   knockedOut,
   scoreKnockout,
 } from "./combat";
@@ -53,6 +54,9 @@ import { buzz } from "../../xr/controls";
 import { WristStatus } from "./WristStatus";
 import { buildWeapon, ELEMENT_COLORS, elementPulse, isBladed, MAX_HP, SABER_HALO, setBowString, weaponGlow, WEAPON_SPECS, type Element, type Weapon } from "./weapons";
 import { floorHeightAt, getGround } from "../../scene/layout";
+
+/** A practice partner's id among the fighters (combat.ts's practiceTargets). */
+const PRACTICE = "practice:";
 
 /** The ground's height under (x, z), in a built-in world or a model one. */
 const floorAt = (x: number, z: number) => getGround()?.floorAt(x, z) ?? floorHeightAt(x, z);
@@ -264,6 +268,11 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode, selfS
       const body = bodyOf(id);
       if (body) out.push({ id, feet: body.feet, eye: body.eye, chest: body.chest });
     }
+    // Practice partners (a dojo's sensei and students): struck here only.
+    for (const [id, p] of practiceTargets) {
+      const feet = new THREE.Vector3(p.feet.x, p.feet.y, p.feet.z);
+      out.push({ id: PRACTICE + id, feet, eye: p.eye, chest: feet.clone().setY(feet.y + p.eye * 0.78) });
+    }
     return out;
   };
 
@@ -275,14 +284,21 @@ export function FantasyLayer({ selfId, players, getSelfPosition, editMode, selfS
     return isBladed(fighter?.weapon ?? null) && holder?.hasBlade ? holder : null;
   };
 
-  const chestOf = (id: string) => (id === selfIdRef.current ? bodyOf(LOCAL_AVATAR) : bodyOf(id))?.chest ?? null;
+  const chestOf = (id: string) => {
+    const p = id.startsWith(PRACTICE) ? practiceTargets.get(id.slice(PRACTICE.length)) : undefined;
+    if (p) return new THREE.Vector3(p.feet.x, p.feet.y + p.eye * 0.78, p.feet.z);
+    return (id === selfIdRef.current ? bodyOf(LOCAL_AVATAR) : bodyOf(id))?.chest ?? null;
+  };
   const distanceTo = (at: THREE.Vector3) => camera.getWorldPosition(v3).distanceTo(at);
 
   // --- this visitor's attacks ----------------------------------------------------
 
   const hit = (ids: string[], damage: number, special: boolean, weapon: Weapon, at?: THREE.Vector3[]) => {
     if (ids.length === 0) return;
-    sendAddonEvent("fantasy", { k: "hit", t: ids, d: damage, ...(special ? { s: 1 } : {}) });
+    // A practice partner's hit stays on this screen; everyone else's goes to the room.
+    const others = ids.filter((id) => !id.startsWith(PRACTICE));
+    if (others.length) sendAddonEvent("fantasy", { k: "hit", t: others, d: damage, ...(special ? { s: 1 } : {}) });
+    for (const id of ids) if (id.startsWith(PRACTICE)) practiceTargets.get(id.slice(PRACTICE.length))?.onHit(special);
     ids.forEach((id, i) => {
       const point = at?.[i] ?? chestOf(id);
       if (point) effects.sparksAt(point, special ? "#ffffff" : "#ffe3a3");

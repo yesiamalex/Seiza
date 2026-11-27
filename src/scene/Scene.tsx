@@ -313,6 +313,7 @@ export const Scene = memo(function Scene({
             // cost of 2048 on the frames where shadows do get re-rendered.
             shadow-mapSize={[1024, 1024]}
             shadow-bias={-0.0004}
+            shadow-normalBias={0.02}
             shadow-camera-left={-30}
             shadow-camera-right={30}
             shadow-camera-top={30}
