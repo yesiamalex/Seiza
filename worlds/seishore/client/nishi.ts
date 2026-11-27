@@ -290,7 +290,7 @@ const S = RING.south - LANE_OFF;
 const R = 4;
 /** The stops: where its front door stops, the stop's pole on the kerb, and its names. */
 export const LOOP_STOPS = [
-  { id: "nishi-iriguchi", ja: "西通り入口", en: "Nishi-dōri", door: [E, 50] as [number, number], heading: 0, pole: [E + 2.2, 50.4] as [number, number] },
+  { id: "nishi-iriguchi", ja: "西通り入口", en: "Nishi-dōri", door: [E, 46] as [number, number], heading: 0, pole: [E + 2.2, 46.4] as [number, number] },
   { id: "yokocho-mae", ja: "横丁前", en: "Yokochō", door: [-46, N] as [number, number], heading: -Math.PI / 2, pole: [-46.4, N + 2.2] as [number, number] },
   { id: "nishi-machi", ja: "西町", en: "Nishi-machi", door: [W, 58] as [number, number], heading: Math.PI, pole: [W - 2.2, 57.6] as [number, number] },
   { id: "nishi-koen", ja: "西公園", en: "Nishi Park", door: [-46, S] as [number, number], heading: Math.PI / 2, pole: [-45.6, S - 2.2] as [number, number] },

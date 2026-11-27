@@ -30,7 +30,10 @@ import { showCaption } from "./caption";
 import { panelTexture, Register, Spot, useShop } from "./Shops";
 import { SHOPS, yen } from "./shop";
 import { setPlaces } from "./serve";
-import { openBook } from "./BookReader";
+import { openBook, useBookOpen } from "./BookReader";
+import { getAddonAvatar, LOCAL_AVATAR } from "../../../src/addons/avatars";
+import { facing, feetAndEye, newTrackedHand, poseHands, rigFor, toTrackedHand } from "../../../src/addons/rig";
+import { sharedOverlay } from "../../../src/xr/body/bodyIk";
 import { track } from "../../../src/analytics/track";
 import { Sitter } from "./Extras";
 import { G, LANE } from "./plan";
@@ -67,6 +70,8 @@ const WOOD = "#8a6545";
 /** How far a worn instrument's neck leans from upright (BandLayer builds them across the chest). */
 const NECK_TILT = Math.atan2(0.47, -0.88) - Math.PI / 2;
 const WOOD_DARK = "#3a2c22";
+/** Where the lanterns hang over the yokochō's alley, every 1.8 m. */
+const ALLEY_LANTERNS = Array.from({ length: Math.floor((YOKOCHO.x1 - YOKOCHO.x0 - 1) / 1.8) + 1 }, (_, i) => YOKOCHO.x0 + 1 + i * 1.8);
 
 // --- the people who follow someone: a dog on its lead ----------------------------------------
 
@@ -166,6 +171,147 @@ function hangingTexture(name: string, bg: string) {
   });
 }
 
+/** A paper lantern's shape: full in the middle, narrowing to its caps. */
+const LANTERN_PROFILE = Array.from({ length: 11 }, (_, i) => new THREE.Vector2(0.04 + 0.15 * Math.sin((Math.PI * i) / 10), (i / 10) * 0.36));
+
+/** What each stall sells, on its menu board. */
+const STALL_MENUS: Record<string, string[]> = {
+  Yakitori: ["もも 150", "ねぎま 160", "つくね 180", "皮 140"],
+  "Capsule toys": ["1回 200", "2回 300"],
+  Takoyaki: ["6個 400", "8個 500", "ネギ +50"],
+  Karaoke: ["30分 300", "1時間 500"],
+  Sweets: ["団子 120", "大福 180", "わらび餅 350"],
+};
+
+/** A noren: the stall's name across split panels of cloth. */
+function norenTexture(name: string, color: string) {
+  return canvasTexture(512, 160, (ctx, w, h) => {
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = "rgba(0,0,0,0.25)";
+    for (let k = 1; k < 4; k++) ctx.fillRect((k * w) / 4 - 3, 26, 6, h - 26);
+    ctx.fillStyle = "rgba(0,0,0,0.3)";
+    ctx.fillRect(0, 0, w, 16);
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = `800 76px ${FONT}`;
+    ctx.fillText(name, w / 2, h / 2 + 12, w - 40);
+  });
+}
+
+/** A stall's menu board: chalk on black. */
+function menuTexture(name: string, lines: string[]) {
+  return canvasTexture(128, 256, (ctx, w, h) => {
+    ctx.fillStyle = "#1f2a24";
+    ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = "#8a6545";
+    ctx.lineWidth = 8;
+    ctx.strokeRect(4, 4, w - 8, h - 8);
+    ctx.fillStyle = "#f4f2ec";
+    ctx.textAlign = "center";
+    ctx.font = `800 22px ${FONT}`;
+    ctx.fillText(name, w / 2, 36, w - 16);
+    ctx.font = `600 17px ${FONT}`;
+    ctx.fillStyle = "#ffe9a8";
+    lines.forEach((l, i) => ctx.fillText(l, w / 2, 76 + i * 34, w - 16));
+  });
+}
+
+/** A lantern's paper: its colour, the 西 mark on it, and the dark bands of its ribs. */
+function lanternTexture(color: string, ink: string) {
+  return canvasTexture(256, 128, (ctx, w, h) => {
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = "rgba(0,0,0,0.12)";
+    for (let k = 1; k < 8; k++) ctx.fillRect(0, (k * h) / 8, w, 2);
+    ctx.fillStyle = ink;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = `800 64px ${FONT}`;
+    for (const x of [w * 0.25, w * 0.75]) ctx.fillText("西", x, h / 2);
+  });
+}
+
+/** A loop bus stop's sign face: its name, and that it's the loop's. */
+function stopTexture(ja: string, en: string) {
+  return canvasTexture(256, 256, (ctx, w, h) => {
+    ctx.fillStyle = "#fff7ea";
+    ctx.beginPath();
+    ctx.arc(w / 2, h / 2, w / 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#c86a1e";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = `800 46px ${FONT}`;
+    ctx.fillText(ja, w / 2, 100, w - 40);
+    ctx.font = `600 24px ${FONT}`;
+    ctx.fillText(en, w / 2, 146, w - 50);
+    ctx.font = `600 20px ${FONT}`;
+    ctx.fillText("西町循環 · Loop", w / 2, 186, w - 60);
+  });
+}
+
+/** Where each hand holds an open book, before the chest (avatar space, in eye heights). */
+const READ_HANDS = {
+  right: { pos: [0.11, 0.8, -0.3] as [number, number, number], blade: [1, 0, 0] as [number, number, number], fingers: [0, 0.3, -1] as [number, number, number], curl: 0.25 },
+  left: { pos: [-0.11, 0.8, -0.3] as [number, number, number], blade: [-1, 0, 0] as [number, number, number], fingers: [0, 0.3, -1] as [number, number, number], curl: 0.25 },
+};
+
+/** An open book: its cover, and two pages rising a little from the spine. */
+function openBookModel() {
+  const g = new THREE.Group();
+  const cover = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.01, 0.21), new THREE.MeshLambertMaterial({ color: "#7a2f2a" }));
+  g.add(cover);
+  for (const side of [-1, 1]) {
+    const page = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.018, 0.2), new THREE.MeshLambertMaterial({ color: "#f3ead6" }));
+    page.position.set(side * 0.072, 0.012, 0);
+    page.rotation.z = -side * 0.12;
+    g.add(page);
+  }
+  g.traverse((o) => (o.userData.navIgnore = true));
+  return g;
+}
+
+/**
+ * Reading: while a book is open (BookReader), your avatar holds it up
+ * before the chest in both hands, looking down into it, and lowers it as
+ * you put it back. On your own screen (as the book itself is).
+ */
+function ReadingPose() {
+  const open = useBookOpen();
+  const book = useMemo(openBookModel, []);
+  const tracked = useMemo(() => ({ right: newTrackedHand(), left: newTrackedHand() }), []);
+  const weight = useRef(0);
+  const at = useMemo(() => ({ feet: new THREE.Vector3(), ahead: new THREE.Vector3() }), []);
+  useEffect(
+    () => () => {
+      book.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        mesh.geometry?.dispose();
+        (mesh.material as THREE.Material | undefined)?.dispose();
+      });
+    },
+    [book]
+  );
+  useFrame((state, delta) => {
+    weight.current = THREE.MathUtils.damp(weight.current, open ? 1 : 0, 6, Math.min(delta, 0.1));
+    const w = weight.current;
+    const vrm = getAddonAvatar(LOCAL_AVATAR);
+    const rig = vrm ? rigFor(vrm) : null;
+    book.visible = w > 0.35 && !!rig;
+    if (!vrm || !rig || w < 0.01) return;
+    poseHands(rig, sharedOverlay(vrm, state.clock.elapsedTime), toTrackedHand("right", READ_HANDS.right, tracked.right), toTrackedHand("left", READ_HANDS.left, tracked.left), w);
+    // The book between the hands, its pages turned up toward the face.
+    const eye = feetAndEye(rig, at.feet);
+    facing(rig, at.ahead);
+    book.position.copy(at.feet).addScaledVector(at.ahead, eye * 0.3).setY(at.feet.y + eye * 0.82);
+    book.rotation.set(0, Math.atan2(at.ahead.x, at.ahead.z), 0);
+    book.rotateX(-0.8);
+  }, -0.35);
+  return <primitive object={book} />;
+}
+
 /** The arch's sign: the street's name, lit. */
 function archTexture() {
   return canvasTexture(512, 128, (ctx, w, h) => {
@@ -203,6 +349,85 @@ function spines() {
       ctx.fillRect(0, row * 64 + 60, w, 4);
     }
   });
+}
+
+/**
+ * One yokochō stall: a little timber room open to the alley, its posts and
+ * a pent roof with an eave board, a counter with a pale top, a shelf at the
+ * back, a bulb over the counter, and what it sells: the yakitori grill's
+ * coals, the takoyaki plate, the gacha machines, the karaoke booth's door,
+ * the sweets' case.
+ */
+function addStall(st: (typeof STALLS)[number], b: Builder, out: Builder, roofs: Builder, lit: Builder) {
+  const z0 = YOKOCHO.z1;
+  const z1 = z0 + YOKOCHO.stallDepth;
+  const w = st.x1 - st.x0;
+  const xc = (st.x0 + st.x1) / 2;
+  const zc = (z0 + z1) / 2;
+  // The room: back and side walls, posts at the front corners, a floor.
+  out.box([w, 2.5, 0.1], [xc, G + 1.25, z1 - 0.05], WOOD_DARK);
+  for (const x of [st.x0 + 0.05, st.x1 - 0.05]) out.box([0.1, 2.5, z1 - z0], [x, G + 1.25, zc], WOOD_DARK);
+  for (const x of [st.x0 + 0.08, st.x1 - 0.08]) b.box([0.14, 2.6, 0.14], [x, G + 1.3, z0 + 0.07], WOOD);
+  b.box([w - 0.2, 0.03, z1 - z0 - 0.1], [xc, G + 0.015, zc], "#5a4636");
+  // The roof: sloping down to the alley, an eave board along its edge, a ridge at the back.
+  roofs.box([w + 0.3, 0.07, z1 - z0 + 0.7], [xc, G + 2.72, zc - 0.3], "#3f4652", [0.22, 0, 0]);
+  b.box([w + 0.3, 0.14, 0.04], [xc, G + 2.55, z0 - 0.62], WOOD_DARK);
+  b.box([w + 0.3, 0.1, 0.12], [xc, G + 3.0, z1 + 0.02], "#2b2d30");
+  // The counter, its pale top, a footrail; the shelf at the back with bottles and bowls.
+  b.box([w - 0.5, 0.95, 0.45], [xc, G + 0.475, z0 + 0.3], WOOD);
+  b.box([w - 0.4, 0.04, 0.55], [xc, G + 0.97, z0 + 0.28], "#d9c3a0");
+  b.bar([st.x0 + 0.3, G + 0.18, z0 - 0.08], [st.x1 - 0.3, G + 0.18, z0 - 0.08], 0.015, "#9da3a8");
+  b.box([w - 0.4, 0.03, 0.25], [xc, G + 1.55, z1 - 0.25], WOOD);
+  for (let i = 0; i < Math.floor((w - 0.6) / 0.22); i++)
+    b.cylinder(0.04, 0.045, 0.16 + (i % 3) * 0.05, [st.x0 + 0.4 + i * 0.22, G + 1.65 + (i % 3) * 0.025, z1 - 0.25], ["#3f6e4a", "#8a5a33", "#f4f2ec", "#2f5fa8"][i % 4], undefined, 8);
+  // The bulb over the counter, and its glow on the counter's top.
+  b.bar([xc, G + 2.5, z0 + 0.5], [xc, G + 2.15, z0 + 0.5], 0.006, "#222");
+  lit.raw(new THREE.SphereGeometry(0.07, 10, 8).translate(xc, G + 2.1, z0 + 0.5), "#fff3d6");
+  // What it sells.
+  switch (st.en) {
+    case "Yakitori": {
+      b.box([1.2, 0.18, 0.3], [xc, G + 1.08, z0 + 0.55], "#2b2d30");
+      lit.box([1.1, 0.03, 0.22], [xc, G + 1.18, z0 + 0.55], "#ff6a2a");
+      for (let i = 0; i < 9; i++) b.box([0.02, 0.02, 0.36], [xc - 0.48 + i * 0.12, G + 1.22, z0 + 0.55], "#c9a46a");
+      for (let i = 0; i < 9; i++) b.raw(new THREE.SphereGeometry(0.025, 6, 4).translate(xc - 0.48 + i * 0.12, G + 1.23, z0 + 0.5), "#8a4a26");
+      break;
+    }
+    case "Takoyaki": {
+      b.box([0.9, 0.12, 0.45], [xc, G + 1.05, z0 + 0.5], "#1d1d1d");
+      for (let i = 0; i < 6; i++) for (let j = 0; j < 3; j++) b.raw(new THREE.SphereGeometry(0.04, 8, 6).translate(xc - 0.3 + i * 0.12, G + 1.12, z0 + 0.38 + j * 0.12), "#c98a3a");
+      b.box([0.5, 0.02, 0.2], [xc + 0.7, G + 1.0, z0 + 0.4], "#2f6fd0");
+      break;
+    }
+    case "Capsule toys": {
+      // A row of gacha machines along the counter: a body, a clear dome of capsules, a handle.
+      for (let i = 0; i < 4; i++) {
+        const gx = st.x0 + 0.55 + i * ((w - 1.1) / 3);
+        b.box([0.42, 0.55, 0.38], [gx, G + 1.27, z0 + 0.25], ["#e94f3d", "#2f6fd0", "#f2c94c", "#3f8f5a"][i]);
+        b.raw(new THREE.SphereGeometry(0.19, 12, 8).translate(gx, G + 1.72, z0 + 0.25), "#e8f4ff");
+        for (let k = 0; k < 5; k++) b.raw(new THREE.SphereGeometry(0.045, 6, 4).translate(gx - 0.08 + (k % 3) * 0.08, G + 1.62 + Math.floor(k / 3) * 0.08, z0 + 0.2), ["#ff8a9a", "#9fe07a", "#8fd3ff", "#ffd27a", "#c79bff"][k]);
+        b.cylinder(0.05, 0.05, 0.03, [gx, G + 1.2, z0 + 0.06], "#f4f2ec", [Math.PI / 2, 0, 0], 10);
+      }
+      break;
+    }
+    case "Karaoke": {
+      // The booth: its padded door, a porthole window, the neon over it.
+      b.box([1.0, 2.0, 0.08], [xc, G + 1.0, z1 - 0.12], "#2b2140");
+      b.cylinder(0.16, 0.16, 0.02, [xc, G + 1.5, z1 - 0.17], "#9a7fd0", [Math.PI / 2, 0, 0], 16);
+      lit.box([1.3, 0.12, 0.04], [xc, G + 2.15, z1 - 0.14], "#ff4fd0");
+      lit.box([0.04, 0.6, 0.04], [xc - 0.7, G + 1.8, z1 - 0.14], "#4fd8ff");
+      break;
+    }
+    default: {
+      // Sweets: a glass case of dango and wagashi on the counter.
+      b.box([1.4, 0.03, 0.4], [xc, G + 1.0, z0 + 0.28], "#f4f2ec");
+      for (let i = 0; i < 6; i++) {
+        const dx = xc - 0.55 + i * 0.22;
+        b.box([0.008, 0.18, 0.008], [dx, G + 1.1, z0 + 0.28], "#d9c3a0");
+        for (let k = 0; k < 3; k++) b.raw(new THREE.SphereGeometry(0.03, 8, 6).translate(dx, G + 1.08 + k * 0.055, z0 + 0.28), ["#f7c8d6", "#f4f2ec", "#9fd08a"][k]);
+      }
+      lit.box([1.5, 0.3, 0.02], [xc, G + 1.15, z0 + 0.06], "#ffffff");
+    }
+  }
 }
 
 function buildQuarter() {
@@ -263,7 +488,7 @@ function buildQuarter() {
     b.box([0.42, 0.2, 0.42], [ARCH.x, G + 0.1, zz], "#5f6670");
   }
   b.box([0.36, 0.86, ARCH.z1 - ARCH.z0 + 0.3], [ARCH.x, G + 3.85, (ARCH.z0 + ARCH.z1) / 2], "#3a3d42");
-  for (let i = 0; i < 9; i++) lit.cylinder(0.07, 0.07, 0.05, [ARCH.x + 0.19, G + 4.36, ARCH.z0 + 0.2 + i * ((ARCH.z1 - ARCH.z0 - 0.4) / 8)], "#ffd79a", [0, 0, Math.PI / 2], 10);
+  for (let i = 0; i < 9; i++) lit.cylinder(0.07, 0.07, 0.05, [ARCH.x + 0.21, G + 4.36, ARCH.z0 + 0.2 + i * ((ARCH.z1 - ARCH.z0 - 0.4) / 8)], "#ffd79a", [0, 0, Math.PI / 2], 10);
   // Lamps on brackets off the shop fronts, between the shops and at the ends.
   for (const x of [-33.6, -41.4, -50.2, -60.8])
     for (const [zz, out] of [
@@ -297,24 +522,22 @@ function buildQuarter() {
   yoseCafe(inside, lit);
   dojoHall(inside, lit);
 
-  // The yokochō: little stalls with their noren and lanterns, wires of lanterns over the alley.
-  for (const st of STALLS) {
-    const z0 = YOKOCHO.z1;
-    const z1 = z0 + YOKOCHO.stallDepth;
-    const xc = (st.x0 + st.x1) / 2;
-    out.box([st.x1 - st.x0, 2.6, z1 - z0], [xc, G + 1.3, (z0 + z1) / 2], WOOD_DARK);
-    roofs.box([st.x1 - st.x0 + 0.3, 0.08, z1 - z0 + 0.8], [xc, G + 2.65, (z0 + z1) / 2 - 0.3], "#3f4652", [0.12, 0, 0]);
-    b.box([st.x1 - st.x0 - 0.6, 1.0, 0.5], [xc, G + 0.5, z0 - 0.25], WOOD);
-    for (let k = 0; k < 4; k++) b.box([(st.x1 - st.x0 - 0.8) / 4 - 0.04, 0.7, 0.02], [st.x0 + 0.4 + ((k + 0.5) * (st.x1 - st.x0 - 0.8)) / 4, G + 2.1, z0 - 0.02], st.color);
-    lit.box([st.x1 - st.x0 - 0.8, 0.06, 0.06], [xc, G + 2.35, z0 - 0.06], "#ffd79a");
+  // The yokochō: a row of little stalls, each its own (noren, lantern,
+  // menu board and the names are NishiScene's, drawn with their words).
+  for (const st of STALLS) addStall(st, b, out, roofs, lit);
+  // Lanterns on a wire down the alley: their ribs and caps here, the paper (lit, with its mark) in NishiScene.
+  const wireZ = (YOKOCHO.z0 + YOKOCHO.z1) / 2;
+  b.bar([YOKOCHO.x0, G + 3.25, wireZ], [YOKOCHO.x1, G + 3.25, wireZ], 0.008, "#222");
+  for (const x of ALLEY_LANTERNS) {
+    b.bar([x, G + 3.25, wireZ], [x, G + 3.08, wireZ], 0.006, "#222");
+    for (const [y, r] of [
+      [G + 3.06, 0.11],
+      [G + 2.68, 0.11],
+    ] as [number, number][])
+      b.cylinder(r, r, 0.04, [x, y, wireZ], "#1d1d1d", undefined, 12);
+    for (let k = 1; k < 6; k++) b.raw(new THREE.TorusGeometry(0.17 * Math.sin((Math.PI * k) / 6) + 0.02, 0.005, 4, 18).rotateX(Math.PI / 2).translate(x, G + 2.7 + (k / 6) * 0.34, wireZ), "#7a1f16");
+    b.bar([x, G + 2.66, wireZ], [x, G + 2.54, wireZ], 0.012, "#c8302b");
   }
-  for (let x = YOKOCHO.x0 + 1; x < YOKOCHO.x1; x += 1.8) {
-    const z = (YOKOCHO.z0 + YOKOCHO.z1) / 2;
-    lit.cylinder(0.16, 0.16, 0.42, [x, G + 2.9, z], "#ff5a3a", undefined, 10);
-    b.cylinder(0.17, 0.17, 0.04, [x, G + 3.13, z], "#1d1d1d", undefined, 10);
-  }
-  b.bar([YOKOCHO.x0, G + 3.15, (YOKOCHO.z0 + YOKOCHO.z1) / 2], [YOKOCHO.x1, G + 3.15, (YOKOCHO.z0 + YOKOCHO.z1) / 2], 0.01, "#222");
-  lit.plane(3.4, 0.7, [YOKOCHO.x0 + 2.0, G + 3.6, YOKOCHO.z0 - 0.2], "#ffcf5a", [0, 0, 0]);
 
   // Nishi park: grass, a gravel path, trees, lamps, its benches.
   marks.box([PARK.x1 - PARK.x0, 0.02, PARK.z1 - PARK.z0], [(PARK.x0 + PARK.x1) / 2, G + 0.01, (PARK.z0 + PARK.z1) / 2], "#6f8f4a");
@@ -334,10 +557,8 @@ function buildQuarter() {
   }
 
   // The bus stops: a pole and its round sign, a bench by it.
-  for (const st of LOOP_STOPS) {
-    b.cylinder(0.04, 0.04, 2.4, [st.pole[0], G + 1.2, st.pole[1]], "#c9ccd0", undefined, 8);
-    lit.cylinder(0.28, 0.28, 0.04, [st.pole[0], G + 2.45, st.pole[1]], "#f2994a", [Math.PI / 2, st.heading, 0], 16);
-  }
+  // (The round signs on top, with each stop's name, are NishiScene's.)
+  for (const st of LOOP_STOPS) b.cylinder(0.04, 0.04, 2.2, [st.pole[0], G + 1.1, st.pole[1]], "#c9ccd0", undefined, 8);
   // The bike rack, and its canopy.
   b.box([0.08, 0.6, 2.4], [BIKE_RACK.x + 0.35, G + 0.3, (BIKE_RACK.zs[0] + BIKE_RACK.zs[2]) / 2], "#9da3a8");
   roofs.box([1.4, 0.06, 2.8], [BIKE_RACK.x, G + 2.1, (BIKE_RACK.zs[0] + BIKE_RACK.zs[2]) / 2], "#3f4652");
@@ -389,7 +610,7 @@ function shop(s: NishiShop, out: Builder, roofs: Builder, glass: Builder, lit: B
   // ends, a coping along its top, two lamps leaning over the sign.
   const FRONT = s.kind === "burger" ? H : H + 0.85;
   if (FRONT > H) out.box([w, FRONT - H, T], [(s.x0 + s.x1) / 2, G + H + (FRONT - H) / 2, fz], s.wall);
-  for (const x of [s.x0 + 0.09, s.x1 - 0.09]) out.box([0.18, FRONT, T + 0.08], [x, G + FRONT / 2, fz], s.roof);
+  for (const x of [s.x0 + 0.07, s.x1 - 0.07]) out.box([0.18, FRONT, T + 0.08], [x, G + FRONT / 2, fz], s.roof);
   out.box([w + 0.08, 0.12, T + 0.18], [(s.x0 + s.x1) / 2, G + FRONT + 0.06, fz], s.roof);
   const signY = s.kind === "burger" ? 4.4 : 3.05;
   for (const dx of [-1, 1]) {
@@ -398,7 +619,11 @@ function shop(s: NishiShop, out: Builder, roofs: Builder, glass: Builder, lit: B
     lit.box([0.16, 0.05, 0.1], [lx, G + signY + 0.59, fz + f.out * 0.44], "#fff3d6");
   }
   // The roof, behind the front (not over it), out a little at the sides and back.
-  roofs.box([w + 0.2, 0.2, s.depth + 0.15], [(s.x0 + s.x1) / 2, G + H + 0.1, zc - f.out * 0.075], s.roof);
+  {
+    const inner = f.front - f.out * T;
+    const far = f.back - f.out * 0.15;
+    roofs.box([w + 0.2, 0.2, Math.abs(inner - far)], [(s.x0 + s.x1) / 2, G + H + 0.1, (inner + far) / 2], s.roof);
+  }
   // An awning over the windows and the door, below the sign, in the roof's colour.
   roofs.box([w - 0.36, 0.05, 0.62], [(s.x0 + s.x1) / 2, G + 2.32, fz + f.out * 0.31], s.roof, [f.out * 0.3, 0, 0]);
   inside.plane(w - 0.4, s.depth - 0.4, [(s.x0 + s.x1) / 2, G + 0.014, zc], FLOORS[s.kind], [-Math.PI / 2, 0, 0]);
@@ -666,7 +891,12 @@ export function NishiScene({ worldState, getSelfPosition }: { worldState: Record
       tileIn: surfaceMaterial("tile", false),
       plankIn: surfaceMaterial("plank", false),
       books: new THREE.MeshBasicMaterial({ map: spines() }),
-      arch: new THREE.MeshBasicMaterial({ map: archTexture(), toneMapped: false, side: THREE.DoubleSide }),
+      arch: new THREE.MeshBasicMaterial({ map: archTexture(), toneMapped: false }),
+      stops: LOOP_STOPS.map((st) => new THREE.MeshBasicMaterial({ map: stopTexture(st.ja, st.en), toneMapped: false })),
+      yokocho: new THREE.MeshBasicMaterial({ map: panelTexture([["西町横丁", 52], ["NISHI-MACHI YOKOCHŌ", 20]], "#1d1d1d", "#ffcf5a", 512, 110), toneMapped: false }),
+      noren: STALLS.map((st) => new THREE.MeshBasicMaterial({ map: norenTexture(st.ja, st.color), side: THREE.DoubleSide })),
+      menus: STALLS.map((st) => new THREE.MeshBasicMaterial({ map: menuTexture(st.ja, STALL_MENUS[st.en] ?? []), toneMapped: false })),
+      paper: ["#ff5a3a", "#fff1d6"].map((c, i) => new THREE.MeshBasicMaterial({ map: lanternTexture(c, i === 0 ? "#1d1d1d" : "#c8302b"), toneMapped: false })),
       hanging: Object.fromEntries(NISHI_SHOPS.map((s) => [s.id, new THREE.MeshBasicMaterial({ map: hangingTexture(s.sign[0], s.roof), toneMapped: false })])),
       signs: Object.fromEntries(NISHI_SHOPS.map((s) => [s.id, new THREE.MeshBasicMaterial({ map: signTexture(s.sign[0], s.sign[1], s.roof, s.kind === "burger" ? "#c8402f" : "#ffffff"), toneMapped: false })])),
       bike: paint(),
@@ -727,7 +957,7 @@ export function NishiScene({ worldState, getSelfPosition }: { worldState: Record
       for (const g of Object.values(geometry)) g.dispose();
       bike.dispose();
       for (const [key, mat] of Object.entries(m)) {
-        if (key === "signs" || key === "hanging") for (const s of Object.values(mat as Record<string, THREE.MeshBasicMaterial>)) {
+        if (key === "signs" || key === "hanging" || Array.isArray(mat)) for (const s of Object.values(mat as Record<string, THREE.MeshBasicMaterial>)) {
           s.map?.dispose();
           s.dispose();
         }
@@ -857,10 +1087,53 @@ export function NishiScene({ worldState, getSelfPosition }: { worldState: Record
           </mesh>
         ))
       )}
-      {/* The arch's sign, both ways. */}
-      <mesh position={[ARCH.x, G + 3.85, (ARCH.z0 + ARCH.z1) / 2]} rotation={[0, Math.PI / 2, 0]} material={m.arch} raycast={noRaycast} userData={{ navIgnore: true }}>
-        <planeGeometry args={[ARCH.z1 - ARCH.z0 + 0.2, 0.74]} />
+      {/* The arch's sign, on both faces of its beam (it was inside it). */}
+      {[-1, 1].map((side) => (
+        <mesh key={side} position={[ARCH.x + side * 0.185, G + 3.85, (ARCH.z0 + ARCH.z1) / 2]} rotation={[0, (side * Math.PI) / 2, 0]} material={m.arch} raycast={noRaycast} userData={{ navIgnore: true }}>
+          <planeGeometry args={[ARCH.z1 - ARCH.z0 + 0.2, 0.74]} />
+        </mesh>
+      ))}
+      {/* The loop bus's stops: a round sign on each pole, its name both ways. */}
+      {LOOP_STOPS.map((st, i) => (
+        <group key={st.id} position={[st.pole[0], G + 2.45, st.pole[1]]} rotation={[0, st.heading, 0]}>
+          <mesh rotation={[Math.PI / 2, 0, 0]} raycast={noRaycast} userData={{ navIgnore: true }}>
+            <cylinderGeometry args={[0.29, 0.29, 0.04, 24]} />
+            <meshBasicMaterial color="#f2994a" toneMapped={false} />
+          </mesh>
+          {[1, -1].map((face) => (
+            <mesh key={face} position={[0, 0, face * 0.022]} rotation={[0, face > 0 ? 0 : Math.PI, 0]} material={m.stops[i]} raycast={noRaycast} userData={{ navIgnore: true }}>
+              <circleGeometry args={[0.26, 24]} />
+            </mesh>
+          ))}
+        </group>
+      ))}
+      {/* The yokochō: its name over the way in, the stalls' noren, lanterns and menus, the alley's lanterns. */}
+      <mesh position={[YOKOCHO.x0 + 2.0, G + 3.6, YOKOCHO.z0 - 0.21]} material={m.yokocho} raycast={noRaycast} userData={{ navIgnore: true }}>
+        <planeGeometry args={[3.4, 0.7]} />
       </mesh>
+      {STALLS.map((st, i) => {
+        const w = st.x1 - st.x0;
+        const xc = (st.x0 + st.x1) / 2;
+        return (
+          <group key={st.en}>
+            <mesh position={[xc, G + 2.12, YOKOCHO.z1 - 0.02]} rotation={[0, Math.PI, 0]} material={m.noren[i]} raycast={noRaycast} userData={{ navIgnore: true }}>
+              <planeGeometry args={[w - 0.4, 0.62]} />
+            </mesh>
+            <mesh position={[st.x1 - 0.02, G + 1.82, YOKOCHO.z1 - 0.3]} material={m.paper[i % m.paper.length]} raycast={noRaycast} userData={{ navIgnore: true }}>
+              <latheGeometry args={[LANTERN_PROFILE, 16]} />
+            </mesh>
+            <mesh position={[st.x0 + 0.32, G + 1.35, YOKOCHO.z1 - 0.06]} rotation={[0, Math.PI, 0]} material={m.menus[i]} raycast={noRaycast} userData={{ navIgnore: true }}>
+              <planeGeometry args={[0.36, 0.7]} />
+            </mesh>
+          </group>
+        );
+      })}
+      {ALLEY_LANTERNS.map((x, i) => (
+        <mesh key={x} position={[x, G + 2.7, (YOKOCHO.z0 + YOKOCHO.z1) / 2]} material={m.paper[i % m.paper.length]} raycast={noRaycast} userData={{ navIgnore: true }}>
+          <latheGeometry args={[LANTERN_PROFILE, 16]} />
+        </mesh>
+      ))}
+      <ReadingPose />
       {/* The shops' signs, over their doors. */}
       {NISHI_SHOPS.map((s) => {
         const f = shopFront(s);

@@ -534,11 +534,13 @@ function buildBus(seats: RideSeat[], livery: string) {
   // Floor, the step up to the back row, roof and its air conditioner, ceiling.
   // The floor and the chassis between the wheels; out at the sides, the
   // sills only where there's no wheel (they ran straight through them).
-  body.box([1.64, 0.13, L], [0, F - 0.08, 0], DARK);
+  // All of it just inside the body's walls (flush with their faces, the two flickered).
+  const sill = W / 2 - 0.045;
+  body.box([1.64, 0.13, L - 0.1], [0, F - 0.08, 0], DARK);
   body.box([1.5, 0.12, L - 1], [0, 0.2, 0], DARK);
-  const cuts = [-half, ...[...BUS_WHEELS].sort((p, q) => p - q).flatMap((wz) => [wz - 0.56, wz + 0.56]), half];
+  const cuts = [-(half - 0.05), ...[...BUS_WHEELS].sort((p, q) => p - q).flatMap((wz) => [wz - 0.56, wz + 0.56]), half - 0.05];
   for (let i = 0; i < cuts.length; i += 2)
-    for (const sx of [-1, 1]) body.box([W / 2 - 0.82, 0.13, cuts[i + 1] - cuts[i]], [sx * (0.82 + (W / 2 - 0.82) / 2), F - 0.08, (cuts[i] + cuts[i + 1]) / 2], DARK);
+    for (const sx of [-1, 1]) body.box([sill - 0.82, 0.13, cuts[i + 1] - cuts[i]], [sx * (0.82 + (sill - 0.82) / 2), F - 0.08, (cuts[i] + cuts[i + 1]) / 2], DARK);
   inside.box([W - 0.1, 0.02, L - 0.1], [0, F - 0.01, 0], "#6b6f78");
   inside.box([W - 0.12, 0.1, 0.9], [0, F + 0.05, -3.95], "#6b6f78");
   for (const [a, b] of BUS_DOORS) inside.box([0.28, 0.006, b - a], [side - 0.16, F + 0.003, (a + b) / 2], "#f2c42e");

@@ -25,6 +25,17 @@ function turn(by: number) {
   changed();
 }
 
+/** Whether a book is open (the avatar holds it up to read). */
+export function useBookOpen(): boolean {
+  return useSyncExternalStore(
+    (l) => {
+      listeners.add(l);
+      return () => listeners.delete(l);
+    },
+    () => open !== null
+  );
+}
+
 const SPREADS = 6;
 const FONT = "system-ui, 'Hiragino Sans', 'Noto Sans CJK JP', sans-serif";
 
