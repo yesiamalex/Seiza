@@ -1032,6 +1032,41 @@ const GESTURES = [
     ],
   },
   {
+    // Reading: standing, a book held open in both hands before the chest,
+    // palms up under it, the head bowed to the page. Held until the book is
+    // put back (or you walk off). Hidden: a world's book opens it, and the
+    // world draws the book (Seishore's bookshop). Full-body so it's a
+    // posture, which everyone sees, including whoever comes in later; the
+    // legs stay as they stand.
+    name: "read",
+    label: "Read (hold)",
+    fullBody: true,
+    hold: true,
+    hidden: true,
+    ground: "none",
+    keys: (() => {
+      const reading = (bow) => ({
+        spine: { x: 3 },
+        chest: { x: 2 },
+        neck: { x: 10 + bow },
+        head: { x: 12 + bow },
+        ...mirror({
+          // As gasshō's arms, opened a little and lowered: the hands apart by
+          // a book's width, at the lower chest, the forearms near level.
+          leftUpperArm: { x: 4, y: -24, z: -64 },
+          leftLowerArm: { x: 18, y: -96 },
+          // Turned palm-up under the book's edge.
+          leftHand: { x: -6, y: -8, z: 18 },
+        }),
+      });
+      return [
+        { t: 0, pose: {} },
+        { t: 0.6, pose: reading(4) },
+        { t: 1.4, pose: reading(8) },
+      ];
+    })(),
+  },
+  {
     // Sitting on a chair or bench. Triggered by clicking a seat rather
     // than from the gesture menu (hence `hidden`), and held until the
     // player stands up. The 0.40m hips drop clears SEAT_HEIGHT in

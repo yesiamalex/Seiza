@@ -201,7 +201,7 @@ export class RoomStats {
       const [x, y, z] = p.position;
       const media = this.media.get(p.id);
       const talking = !!media?.mic && !media.micMuted;
-      const seated = p.posture !== null && p.posture !== undefined;
+      const seated = p.posture !== null && p.posture !== undefined && p.posture !== "read";
       const together = players.some((o) => o !== p && Math.hypot(o.position[0] - x, o.position[2] - z) < NEAR);
       const last = this.lastAt.get(p.id);
       const moving = !!last && Math.hypot(last[0] - x, last[1] - z) > 0.5;

@@ -1704,7 +1704,8 @@ export default function App() {
             touchInputRef={touchInputRef}
             sitAnchor={seat}
             postureHeld={!!posture}
-            postureEyeHeight={posture?.name === "seiza" ? 0.82 : null}
+            // Seiza kneels; reading stands, the eyes a little down to the page.
+            postureEyeHeight={posture?.name === "seiza" ? 0.82 : posture?.name === "read" ? 1.5 : null}
             onStandUp={standUp}
             // Without these two, admin "teleport to" and "gather everyone"
             // set a warp target nothing ever read, so both did nothing.

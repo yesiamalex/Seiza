@@ -164,6 +164,17 @@ export const BUILTIN_GESTURES: BuiltinGesture[] = [
     "loop": false
   },
   {
+    "name": "read",
+    "label": "Read (hold)",
+    "url": "/gestures/builtin/read.vrma?v=54a3b85e",
+    "duration": 1.68,
+    "fullBody": true,
+    "hold": true,
+    "hidden": true,
+    "ground": "none",
+    "loop": false
+  },
+  {
     "name": "sit",
     "label": "Sit",
     "url": "/gestures/builtin/sit.vrma?v=4855efff",

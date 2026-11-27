@@ -514,7 +514,8 @@ export class SeizaRoom extends DurableObject<Env> {
       }
       case "setPosture": {
         if (!attachment.player) return;
-        if (message.posture) this.stats?.did(attachment.connId, "sit");
+        // Reading (Seishore's books) is its own; any other held posture is sitting or kneeling.
+        if (message.posture) this.stats?.did(attachment.connId, message.posture === "read" ? "read" : "sit");
         // Same shape rule as a gesture name, since a posture *is* the name
         // of a clip. null means standing.
         const raw = message.posture;

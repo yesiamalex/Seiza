@@ -977,7 +977,7 @@ export function PlayerRig({
           ? sitAnchorRef.current.pose === "lie"
             ? ORBIT_PIVOT_LYING
             : ORBIT_PIVOT_SEATED
-          : postureHeldRef.current
+          : postureHeldRef.current && (postureEyeHeightRef.current ?? SEIZA_EYE_HEIGHT) < 1.2
             ? ORBIT_PIVOT_KNEELING
             : ORBIT_PIVOT_HEIGHT;
         orbitPivotHeightRef.current = THREE.MathUtils.damp(orbitPivotHeightRef.current, pivotTarget, 4, delta);

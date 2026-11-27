@@ -31,10 +31,8 @@ import { panelTexture, Register, Spot, useShop } from "./Shops";
 import { SHOPS, yen } from "./shop";
 import { setPlaces } from "./serve";
 import { openBook, useBookOpen } from "./BookReader";
-import { onWorldMessage } from "../../../src/worlds/WorldExtension";
 import { getAddonAvatar, LOCAL_AVATAR } from "../../../src/addons/avatars";
-import { facing, feetAndEye, newTrackedHand, poseHands, rigFor, toTrackedHand } from "../../../src/addons/rig";
-import { sharedOverlay } from "../../../src/xr/body/bodyIk";
+import { facing, feetAndEye, rigFor } from "../../../src/addons/rig";
 import { track } from "../../../src/analytics/track";
 import { Sitter } from "./Extras";
 import { G, LANE } from "./plan";
@@ -253,12 +251,6 @@ function stopTexture(ja: string, en: string) {
   });
 }
 
-/** Where each hand holds an open book, before the chest (avatar space, in eye heights). */
-const READ_HANDS = {
-  right: { pos: [0.11, 0.8, -0.3] as [number, number, number], blade: [1, 0, 0] as [number, number, number], fingers: [0, 0.3, -1] as [number, number, number], curl: 0.25 },
-  left: { pos: [-0.11, 0.8, -0.3] as [number, number, number], blade: [-1, 0, 0] as [number, number, number], fingers: [0, 0.3, -1] as [number, number, number], curl: 0.25 },
-};
-
 /** An open book: its cover, and two pages rising a little from the spine. */
 function openBookModel() {
   const g = new THREE.Group();
@@ -275,15 +267,14 @@ function openBookModel() {
 }
 
 /**
- * Someone reading: their avatar holds an open book up before the chest in
- * both hands, looking down into it, and lowers it as they put it back.
- * `id` is whose avatar (LOCAL_AVATAR for yours, else their player id).
+ * The book in a reader's hands: held open before them where the reading
+ * pose ("read", a built-in gesture) puts their hands, tipped up to the face,
+ * growing in as the pose comes on. `id` is whose avatar (LOCAL_AVATAR for
+ * yours, else their player id).
  */
-function ReaderPose({ id, reading }: { id: string; reading: boolean }) {
-  const open = reading;
+function HeldBook({ id }: { id: string }) {
   const book = useMemo(openBookModel, []);
-  const tracked = useMemo(() => ({ right: newTrackedHand(), left: newTrackedHand() }), []);
-  const weight = useRef(0);
+  const grow = useRef(0);
   const at = useMemo(() => ({ feet: new THREE.Vector3(), ahead: new THREE.Vector3() }), []);
   useEffect(
     () => () => {
@@ -295,85 +286,55 @@ function ReaderPose({ id, reading }: { id: string; reading: boolean }) {
     },
     [book]
   );
-  useFrame((state, delta) => {
-    weight.current = THREE.MathUtils.damp(weight.current, open ? 1 : 0, 6, Math.min(delta, 0.1));
-    const w = weight.current;
+  useFrame((_, delta) => {
     const vrm = getAddonAvatar(id);
     const rig = vrm ? rigFor(vrm) : null;
-    book.visible = w > 0.35 && !!rig;
-    if (!vrm || !rig || w < 0.01) return;
-    poseHands(rig, sharedOverlay(vrm, state.clock.elapsedTime), toTrackedHand("right", READ_HANDS.right, tracked.right), toTrackedHand("left", READ_HANDS.left, tracked.left), w);
-    // The book between the hands, its pages turned up toward the face.
+    // In after the pose has raised the hands (about half a second).
+    grow.current = Math.min(1, grow.current + Math.min(delta, 0.1) * 1.6);
+    const k = Math.max(0, (grow.current - 0.35) / 0.65);
+    book.visible = !!rig && k > 0;
+    if (!rig) return;
     const eye = feetAndEye(rig, at.feet);
     facing(rig, at.ahead);
-    book.position.copy(at.feet).addScaledVector(at.ahead, eye * 0.3).setY(at.feet.y + eye * 0.82);
+    book.position.copy(at.feet).addScaledVector(at.ahead, eye * 0.27).setY(at.feet.y + eye * 0.66);
     book.rotation.set(0, Math.atan2(at.ahead.x, at.ahead.z), 0);
-    book.rotateX(-0.8);
-  }, -0.35);
+    book.rotateX(-0.55);
+    book.scale.setScalar(Math.max(0.001, k));
+  });
   return <primitive object={book} />;
 }
 
-/** One of the room's world messages, about reading: whether they've a book open. */
-const isReadingMessage = (data: unknown): data is { reading: boolean } => typeof data === "object" && data !== null && typeof (data as { reading?: unknown }).reading === "boolean";
-
 /**
- * Reading, for everyone: you with a book open, and whoever else in the
- * room has one. When you open or put back a book, everyone else is told
- * (a world message each, a few a second at most, as the room allows); so
- * is anyone who comes in while you're reading. Their screens pose you, and
- * yours poses them.
+ * Reading, for everyone. Opening a book in the bookshop puts you into the
+ * reading pose: a posture, like kneeling, so everyone in the room sees it,
+ * and anyone who comes in later. Putting the book back stands you up again;
+ * walking off puts the book back. And whoever is in the pose, you included,
+ * holds a book in their hands on every screen.
  */
-function Readers({ players, selfId, sendWorldMessage }: { players: Record<string, unknown>; selfId: string | null; sendWorldMessage: (to: string, data: unknown) => void }) {
+function Readers({ players, selfId, playGesture }: { players: Record<string, { posture?: string | null }>; selfId: string | null; playGesture: (name: string) => void }) {
   const open = useBookOpen();
-  const [others, setOthers] = useState<Set<string>>(() => new Set());
-  const queue = useRef<{ to: string; reading: boolean }[]>([]);
-  const told = useRef(new Map<string, boolean>());
-  const send = useRef(sendWorldMessage);
-  send.current = sendWorldMessage;
-  // Tell each other person what they don't know yet: your book open, or put back.
-  const ids = Object.keys(players).filter((id) => id !== selfId);
+  const mine = selfId ? (players[selfId]?.posture ?? null) : null;
+  const wasOpen = useRef(false);
   useEffect(() => {
-    for (const id of ids) {
-      if ((told.current.get(id) ?? false) === open) continue;
-      told.current.set(id, open);
-      queue.current = queue.current.filter((q) => q.to !== id);
-      queue.current.push({ to: id, reading: open });
-    }
-    for (const id of [...told.current.keys()]) if (!players[id]) told.current.delete(id);
-  });
-  // Sent a few at a time, as the room allows (4 a second, after a first 20).
+    if (open && mine !== "read") playGesture("read");
+    // The pose toggles: asked again while in it, it ends.
+    if (!open && wasOpen.current && mine === "read") playGesture("read");
+    wasOpen.current = open;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+  // Walked off (which ends a posture): the book goes back on the shelf too.
+  const wasMine = useRef(mine);
   useEffect(() => {
-    let sent = 0;
-    const timer = window.setInterval(() => {
-      const batch = queue.current.splice(0, sent < 16 ? 16 : 1);
-      for (const q of batch) send.current(q.to, { reading: q.reading });
-      sent += batch.length;
-      if (!queue.current.length) sent = Math.max(0, sent - 2);
-    }, 300);
-    return () => window.clearInterval(timer);
-  }, []);
-  // What they tell you, about themselves.
-  useEffect(
-    () =>
-      onWorldMessage((from, data) => {
-        if (!isReadingMessage(data)) return;
-        setOthers((now) => {
-          if (data.reading === now.has(from)) return now;
-          const next = new Set(now);
-          if (data.reading) next.add(from);
-          else next.delete(from);
-          return next;
-        });
-      }),
-    []
-  );
-  // Gone from the room, gone from the readers.
-  const present = [...others].filter((id) => players[id]);
+    if (wasMine.current === "read" && mine !== "read" && open) openBook(null);
+    wasMine.current = mine;
+  }, [mine, open]);
+  const readers = Object.entries(players)
+    .filter(([, p]) => p?.posture === "read")
+    .map(([id]) => id);
   return (
     <>
-      <ReaderPose id={LOCAL_AVATAR} reading={open} />
-      {present.map((id) => (
-        <ReaderPose key={id} id={id} reading />
+      {readers.map((id) => (
+        <HeldBook key={id} id={id === selfId ? LOCAL_AVATAR : id} />
       ))}
     </>
   );
@@ -943,13 +904,13 @@ export function NishiScene({
   getSelfPosition,
   players,
   selfId,
-  sendWorldMessage,
+  playGesture,
 }: {
   worldState: Record<string, WorldStateValue>;
   getSelfPosition: () => [number, number, number];
-  players: Record<string, unknown>;
+  players: Record<string, { posture?: string | null }>;
   selfId: string | null;
-  sendWorldMessage: (to: string, data: unknown) => void;
+  playGesture: (name: string) => void;
 }) {
   const geometry = useMemo(buildQuarter, []);
   // The whole quarter, only when you're anywhere near it.
@@ -1212,7 +1173,7 @@ export function NishiScene({
           <latheGeometry args={[LANTERN_PROFILE, 16]} />
         </mesh>
       ))}
-      <Readers players={players} selfId={selfId} sendWorldMessage={sendWorldMessage} />
+      <Readers players={players} selfId={selfId} playGesture={playGesture} />
       {/* The shops' signs, over their doors. */}
       {NISHI_SHOPS.map((s) => {
         const f = shopFront(s);
