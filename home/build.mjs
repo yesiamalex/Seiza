@@ -25,12 +25,14 @@ const portals = seiza.portals ?? { worlds: [] };
 const worlds = [
   {
     name: "Seiza",
+    nameJa: "星座",
     url: "https://seiza.cc",
     color: "#e8c37a",
     blurb: "The home world: a hall, a classroom, a pond, a meadow with a campsite, and the beach.",
   },
   ...portals.worlds.map((w) => ({
     name: w.label,
+    nameJa: w.labelJa ?? w.label,
     url: w.url ?? portals.urlPattern.replace("{id}", w.id),
     color: w.color,
     blurb: w.blurb,
@@ -85,8 +87,12 @@ const TAGS = { new: "New", world: "World", better: "Better" };
 
 const worldCards = worlds
   .map(
-    (w) => `      <a class="world" href="${esc(w.url)}" style="--c: ${esc(w.color)}" aria-label="${esc(`${w.name}: ${w.blurb}`)}">
-        <span class="board"><span class="line" aria-hidden="true">星環線 · SEIKANSEN</span><h3>${esc(w.name)}</h3><span class="stripe" aria-hidden="true"></span></span>
+    (w, i) => `      <a class="world" href="${esc(w.url)}" style="--c: ${esc(w.color)}" aria-label="${esc(`${w.name}: ${w.blurb}`)}">
+        <span class="board">
+          <span class="head" aria-hidden="true"><span class="ja">星環線 発車案内</span><span class="en">Seikansen departures</span><span class="clock" data-in="0">--:--</span></span>
+          <span class="row"><span class="time" data-in="${(i + 1) * 3}" aria-hidden="true">--:--</span><span class="kind" aria-hidden="true">星環線</span><h3><span class="ja" aria-hidden="true">${esc(w.nameJa)} 行き</span><span class="en">${esc(w.name)}</span></h3><span class="plat" aria-hidden="true">${i + 1}</span></span>
+          <span class="stripe" aria-hidden="true"></span>
+        </span>
         <p>${esc(w.blurb)}</p>
         <span class="go">${esc(w.url.replace("https://", ""))}</span>
       </a>`
@@ -95,28 +101,37 @@ const worldCards = worlds
 
 /**
  * The Seikansen's line map: every world a station on one line, in order,
- * each a link; and the train, running the line inside the map's own box,
- * stopping a moment at each station. Its stops are worked out here, so the
+ * each a link; and the train, three cars long, coming in from the left,
+ * stopping with its nose at each station in turn, and running off the far
+ * end before it comes round again. Its stops are worked out here, so the
  * page needs no script for it.
  */
-const TRAIN_W = 74;
+const TRAIN_W = 168;
 const n = worlds.length;
-const run = 26; // seconds, end to end and round again
-const stops = worlds
-  .map((_, i) => {
-    const arrive = (i / n) * 100;
-    const leave = arrive + (100 / n) * 0.35;
-    const at = n > 1 ? i / (n - 1) : 0;
-    const left = `calc(${at.toFixed(4)} * (100% - ${TRAIN_W}px))`;
-    return `${arrive.toFixed(2)}% { left: ${left}; } ${leave.toFixed(2)}% { left: ${left}; }`;
-  })
-  .join(" ");
+// Each station sits in the middle of its share of the line (the stations
+// are a row of equal cells, inside the map's 22px padding).
+const PAD = 22;
+const noseAt = (i) => `calc(${PAD}px + ${((i + 0.5) / n).toFixed(4)} * (100% - ${2 * PAD}px) - ${TRAIN_W}px)`;
+const MOVE = 1;
+const DWELL = 0.7;
+const units = (n + 1) * MOVE + n * DWELL;
+const run = Math.round(units * 1.6); // seconds round the whole line
+let clock = 0;
+const frames = [`0% { left: -${TRAIN_W + 10}px; }`];
+for (let i = 0; i < n; i++) {
+  clock += MOVE;
+  const arrive = (clock / units) * 100;
+  clock += DWELL;
+  const leave = (clock / units) * 100;
+  frames.push(`${arrive.toFixed(2)}% { left: ${noseAt(i)}; animation-timing-function: ease-in; }`, `${leave.toFixed(2)}% { left: ${noseAt(i)}; animation-timing-function: ease-in-out; }`);
+}
+frames.push("100% { left: calc(100% + 10px); }");
 const lineMap = `    <figure class="linemap" aria-label="The Seikansen line, through every world">
-      <style>@keyframes linemap-run { ${stops} 100% { left: calc(100% - ${TRAIN_W}px); } }</style>
+      <style>@keyframes linemap-run { ${frames.join(" ")} } .linemap-train { width: ${TRAIN_W}px; animation-duration: ${run}s; } @media (prefers-reduced-motion: reduce) { .linemap-train { left: ${noseAt(0)}; } }</style>
       <div class="linemap-scroll">
         <div class="linemap-inner" style="--n: ${n}">
           <div class="linemap-rail" aria-hidden="true" style="background: linear-gradient(90deg, ${worlds.map((w, i) => `${esc(w.color)} ${((i / Math.max(1, n - 1)) * 100).toFixed(1)}%`).join(", ")})"></div>
-          <svg class="linemap-train" viewBox="0 0 74 20" aria-hidden="true"><path d="M2,4 H52 C64,4 71,10 73,15 V17 H2 Z" fill="#f4f5f2"/><rect x="2" y="12" width="70" height="2" fill="#e8c37a"/><rect x="6" y="7" width="40" height="3.5" rx="1" fill="#1b2340"/><path d="M56,6 C63,7 67,10 69,12 H58 Z" fill="#1b2340"/></svg>
+          <div class="linemap-track" aria-hidden="true"><svg class="linemap-train" viewBox="0 0 168 20"><path d="M7,4 H52 V17 H2 V10 C2,6.5 4,4 7,4 Z" fill="#f4f5f2"/><rect x="54" y="4" width="50" height="13" fill="#f4f5f2"/><path d="M106,4 H146 C158,4 165,10 167,15 V17 H106 Z" fill="#f4f5f2"/><rect x="2" y="12" width="164" height="2" fill="#e8c37a"/><g fill="#1b2340"><rect x="8" y="7" width="40" height="3.5" rx="1"/><rect x="58" y="7" width="42" height="3.5" rx="1"/><rect x="110" y="7" width="26" height="3.5" rx="1"/><path d="M148,6 C155,7 159,10 161,12 H150 Z"/></g><g fill="#c9ccd0"><rect x="52" y="6" width="2" height="9"/><rect x="104" y="6" width="2" height="9"/></g></svg></div>
           <ol class="linemap-stations">
 ${worlds.map((w) => `            <li style="--c: ${esc(w.color)}"><a href="${esc(w.url)}"><span class="stop" aria-hidden="true"></span><span class="name">${esc(w.name)}</span></a></li>`).join("\n")}
           </ol>

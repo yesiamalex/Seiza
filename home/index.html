@@ -96,14 +96,9 @@
   .button.small { padding: 8px 14px; font-size: 14px; }
 
   /* --- the hero: the name, what it means, and a look through the window --- */
-  /* The hero's sky is the rooms' sky right now: it follows Manila's hour
-     (the script sets data-phase), as the worlds do. */
+  /* The hero's sky is always the starry night Seiza is named for (the
+     time in the rooms is the little label in the bar, not the sky). */
   html { --sky-a: #0b1029; --sky-b: #171a4a; --sky-c: #2f2152; --stars: 1; }
-  html[data-phase="dawn"] { --sky-a: #1a2350; --sky-b: #6a4a8a; --sky-c: #f08a6a; --stars: 0.45; }
-  html[data-phase="morning"] { --sky-a: #2a5a9a; --sky-b: #5d8fcf; --sky-c: #f2c98a; --stars: 0.08; }
-  html[data-phase="midday"] { --sky-a: #2d6ab8; --sky-b: #5b96d8; --sky-c: #a9cdea; --stars: 0; }
-  html[data-phase="afternoon"] { --sky-a: #2b5fa6; --sky-b: #5a86c6; --sky-c: #f0b878; --stars: 0.05; }
-  html[data-phase="dusk"] { --sky-a: #141a46; --sky-b: #4b2a66; --sky-c: #e8823f; --stars: 0.6; }
   header.hero { position: relative; overflow: hidden; min-height: min(860px, 100svh); display: grid; align-content: center; background: linear-gradient(180deg, var(--sky-a) 0%, var(--sky-b) 52%, var(--sky-c) 92%, var(--night) 100%); transition: background 1.2s ease; }
   header.hero::after { content: ""; position: absolute; inset: auto 0 0 0; height: 120px; background: linear-gradient(180deg, transparent, var(--night)); pointer-events: none; }
   /* The EcoSeiztem, under the name. */
@@ -126,8 +121,6 @@
   .poster span { background: linear-gradient(180deg, #fff1cf 0%, var(--lantern) 40%, var(--dawn) 100%); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 6px 24px rgba(11, 16, 41, 0.35)); }
   .poster span:last-child { opacity: 0.82; }
   /* By day, against a blue sky: white to pale gold, like clouds lit low. */
-  html[data-phase="morning"] .poster span, html[data-phase="midday"] .poster span, html[data-phase="afternoon"] .poster span { background-image: linear-gradient(180deg, #ffffff 0%, #fff1cf 55%, #ffd6a0 100%); filter: drop-shadow(0 6px 18px rgba(11, 16, 41, 0.45)); }
-  html[data-phase="morning"] .hero, html[data-phase="midday"] .hero, html[data-phase="afternoon"] .hero { text-shadow: 0 1px 14px rgba(11, 16, 41, 0.45); }
   @media (max-width: 1100px) { .poster { display: none; } }
   #sky { position: absolute; inset: 0; width: 100%; height: 100%; }
   .hero .stage { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.95fr) auto; gap: 44px; align-items: center; padding: 64px 0 40px; }
@@ -217,13 +210,32 @@
   .worlds { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px 28px; }
   @media (max-width: 900px) { .worlds { grid-template-columns: repeat(2, 1fr); } }
   @media (max-width: 560px) { .worlds { grid-template-columns: 1fr; } }
-  /* Each world a station's name board, as in the worlds: the line along the
-     top, the name large, its colour along the foot; what it is, under. */
-  a.world { --c: var(--lantern); display: flex; flex-direction: column; gap: 10px; padding: 0; text-decoration: none; }
-  a.world .board { display: block; border-radius: 6px; overflow: hidden; background: #f7f7f2; box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35); transition: transform 200ms, box-shadow 200ms; }
-  a.world .board .line { display: block; background: #1d2433; color: #fff; font: 700 11px var(--text); letter-spacing: 0.14em; text-align: center; padding: 5px 0; }
-  a.world .board h3 { margin: 0; padding: 14px 10px 10px; text-align: center; color: #1d2433; font-size: 26px; }
-  a.world .board .stripe { display: block; height: 10px; background: var(--c); }
+  /* Each world a departure board, as on the platforms in the worlds: the
+     board's head and the time; the train, in amber, its line in the world's
+     colour, Japanese then English; what it is, under. */
+  a.world { --c: var(--lantern); --led: #ffb347; --led-dim: rgba(255, 179, 71, 0.55); display: flex; flex-direction: column; gap: 10px; padding: 0; text-decoration: none; }
+  a.world .board { display: block; border-radius: 8px; overflow: hidden; background: #0b0c10; border: 1px solid #2a2d36; box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4); transition: transform 200ms, box-shadow 200ms; }
+  a.world .board .head { display: flex; align-items: center; gap: 8px; padding: 7px 12px; background: #1d2433; color: #fff; font: 700 12px var(--text); letter-spacing: 0.06em; }
+  a.world .board .head .ja, a.world .board .head .en { flex: 1; }
+  a.world .board .clock, a.world .board .time, a.world .board .plat { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; color: var(--led); text-shadow: 0 0 6px var(--led-dim); }
+  a.world .board .clock { font-size: 15px; }
+  a.world .board .row { display: grid; grid-template-columns: 46px 52px minmax(0, 1fr) 18px; gap: 8px; align-items: center; padding: 12px 12px 11px; }
+  a.world .board .time { font-size: 15px; }
+  a.world .board .kind { font: 700 11px var(--text); color: #10131a; background: var(--c); border-radius: 3px; padding: 2px 0; text-align: center; }
+  a.world .board h3 { position: relative; margin: 0; min-width: 0; height: 1.3em; font: 700 19px/1.3 ui-monospace, "SF Mono", Menlo, Consolas, "Hiragino Sans", "Noto Sans CJK JP", monospace; color: var(--led); text-shadow: 0 0 6px var(--led-dim); }
+  a.world .board h3 span { position: absolute; inset: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  a.world .board .plat { text-align: right; font-size: 15px; }
+  a.world .board .stripe { display: block; height: 4px; background: var(--c); }
+  /* Japanese, then English, every few seconds, as the boards do. */
+  a.world .board .ja { animation: board-ja 8s steps(1) infinite; }
+  a.world .board .en { animation: board-en 8s steps(1) infinite; }
+  @keyframes board-ja { 0% { opacity: 1; } 50% { opacity: 0; } }
+  @keyframes board-en { 0% { opacity: 0; } 50% { opacity: 1; } }
+  .no-js a.world .board .clock, .no-js a.world .board .time { visibility: hidden; }
+  @media (prefers-reduced-motion: reduce) {
+    a.world .board .ja { display: none; animation: none; }
+    a.world .board .en { opacity: 1; animation: none; }
+  }
   a.world:hover .board, a.world:focus-visible .board { transform: translateY(-3px); box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45), 0 0 0 2px var(--c); }
   /* Each world a station: a white stop ringed in its line's colour. */
   a.world .ring { grid-row: span 3; width: 9px; height: 9px; margin: 7px 0 0 3px; border-radius: 50%; background: #f7f7f2; border: 3px solid var(--c); box-shadow: 0 0 14px color-mix(in srgb, var(--c) 60%, transparent); }
@@ -233,7 +245,10 @@
   .linemap-scroll { overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; }
   .linemap-inner { position: relative; min-width: max(100%, calc(var(--n) * 92px)); box-sizing: border-box; padding: 34px 22px 16px; }
   .linemap-rail { position: absolute; left: 34px; right: 34px; top: 48px; height: 4px; border-radius: 2px; }
-  .linemap-train { position: absolute; top: 24px; left: 0; width: 74px; height: 20px; margin-left: 22px; max-width: calc(100% - 44px); animation: linemap-run 26s linear infinite; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.4)); }
+  /* The train runs in its own clipped track, so coming in and going off the
+     ends never widens the map. */
+  .linemap-track { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+  .linemap-train { position: absolute; top: 24px; left: 0; height: 20px; animation: linemap-run 26s linear infinite; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.4)); }
   .linemap-stations { list-style: none; margin: 0; padding: 0; display: flex; justify-content: space-between; position: relative; }
   .linemap-stations li { flex: 1 1 0; min-width: 0; display: flex; justify-content: center; }
   .linemap-stations a { display: grid; justify-items: center; gap: 8px; text-decoration: none; color: var(--ink); font-size: 13px; }
@@ -245,7 +260,6 @@
   a.world h3 { margin: 0; font-size: 19px; }
   a.world p { margin: 2px 0 6px; color: var(--muted); font-size: 15px; }
   a.world .go { font-size: 14px; color: var(--c); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: color-mix(in srgb, var(--c) 45%, transparent); }
-  a.world:hover .board h3 { color: #1d2433; }
 
   /* --- what's new: a timeline, each month a star on one thread --- */
   .changes { display: grid; gap: 32px; position: relative; padding-left: 26px; }
@@ -535,6 +549,16 @@
 
 <script>
   document.documentElement.classList.remove("no-js");
+  // The departure boards' clocks: now, and each world's train a few minutes on.
+  (() => {
+    const hm = (d) => d.toTimeString().slice(0, 5);
+    const tick = () => {
+      const now = Date.now();
+      for (const el of document.querySelectorAll("a.world [data-in]")) el.textContent = hm(new Date(now + Number(el.dataset.in) * 60000));
+    };
+    tick();
+    setInterval(tick, 15000);
+  })();
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   // The sky in the rooms right now: they follow Philippine time.
@@ -608,7 +632,7 @@
       // distance, and the box's edges push in. Started from a gentle wave and
       // the same seed every time, so the map is the same each visit and, with
       // a world added, simply makes room.
-      const names = cards.map((card) => card.querySelector("h3")?.textContent ?? "");
+      const names = cards.map((card) => (card.querySelector("h3 .en") ?? card.querySelector("h3"))?.textContent ?? "");
       const size = names.map((nm) => ({ w: 46 + nm.length * (tall ? 13 : 9.5), h: tall ? 54 : 70 }));
       const at = cards.map((_, i) =>
         tall
@@ -658,7 +682,7 @@
       stars = cards.map((card, i) => {
         const { x, y } = at[i];
         const c = getComputedStyle(card).getPropertyValue("--c").trim() || "#f2b84b";
-        const name = card.querySelector("h3")?.textContent ?? "";
+        const name = (card.querySelector("h3 .en") ?? card.querySelector("h3"))?.textContent ?? "";
         const link = el("a", { href: card.getAttribute("href") });
         link.append(el("title", {}));
         link.lastChild.textContent = card.getAttribute("aria-label") ?? name;
