@@ -96,10 +96,11 @@
   .button.small { padding: 8px 14px; font-size: 14px; }
 
   /* --- the hero: the name, what it means, and a look through the window --- */
-  /* The hero's sky is always the starry night Seiza is named for (the
-     time in the rooms is the little label in the bar, not the sky). */
-  html { --sky-a: #0b1029; --sky-b: #171a4a; --sky-c: #2f2152; --stars: 1; }
-  header.hero { position: relative; overflow: hidden; min-height: min(860px, 100svh); display: grid; align-content: center; background: linear-gradient(180deg, var(--sky-a) 0%, var(--sky-b) 52%, var(--sky-c) 92%, var(--night) 100%); transition: background 1.2s ease; }
+  /* The hero's sky: the starry night Seiza is named for, over the last of
+     a sunset along the bottom, the same twilight as the icon and the rooms'
+     own sky (the time in the rooms is the little label in the bar). */
+  html { --sky-a: #070c26; --sky-b: #1b1546; --sky-c: #4b2a66; --sky-d: #a85570; --sky-e: #e8823f; --stars: 1; }
+  header.hero { position: relative; overflow: hidden; min-height: min(860px, 100svh); display: grid; align-content: center; background: linear-gradient(180deg, var(--sky-a) 0%, var(--sky-b) 40%, var(--sky-c) 66%, var(--sky-d) 84%, var(--sky-e) 95%, var(--night) 100%); }
   header.hero::after { content: ""; position: absolute; inset: auto 0 0 0; height: 120px; background: linear-gradient(180deg, transparent, var(--night)); pointer-events: none; }
   /* The EcoSeiztem, under the name. */
   .hero .eco { margin: 2px 0 14px; font-size: 15px; letter-spacing: 0.03em; opacity: 0.88; }
