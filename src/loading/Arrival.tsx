@@ -499,15 +499,26 @@ export function Arrival({
     const leafMaterial = lambert("#c9ccd0");
     const leaves = [-1, 1].map((s) => box([0.6, 2.05, 0.04], [DOOR_X + s * 0.3, 1.025, WALL_Z + 0.03], leafMaterial));
     for (const leaf of leaves) box([0.36, 0.7, 0.01], [0, 0.35, 0.025], basic("#1a2140"), leaf);
-    // The long seat under the windows, and its back.
-    const seatMaterial = lambert("#2f6fd0");
-    for (const [a, b] of [
-      [-8, DOOR_X - 0.75],
-      [DOOR_X + 0.75, 8],
-    ]) {
-      box([b - a, 0.42, 0.46], [(a + b) / 2, 0.21, WALL_Z + 0.27], lambert("#5f6670"));
-      box([b - a, 0.1, 0.5], [(a + b) / 2, 0.45, WALL_Z + 0.27], seatMaterial);
-      box([b - a, 0.42, 0.08], [(a + b) / 2, 0.72, WALL_Z + 0.08], seatMaterial);
+    // Seats like a Gran Class car's: one each under the windows, a big
+    // single wing-back in cream leather in its walnut shell, wooden
+    // armrests, a footrest; turned to the aisle here, so you face the room.
+    // Yours is the middle one. The cushion is 0.5 m up, as the long seat's was.
+    const leather = lambert("#e6d8bd");
+    const shell = lambert("#5a3a22");
+    const trim = lambert("#8a5c36");
+    const base = lambert("#3a3d42");
+    const zc = WALL_Z + 0.27;
+    for (const sx of [-3.6, KNEEL[0], 4.8]) {
+      box([0.36, 0.3, 0.36], [sx, 0.15, zc], base);
+      box([0.6, 0.15, 0.56], [sx, 0.43, zc + 0.02], leather);
+      box([0.58, 0.92, 0.12], [sx, 0.96, zc - 0.24], leather);
+      for (const side of [-1, 1]) {
+        box([0.08, 0.38, 0.16], [sx + side * 0.25, 1.24, zc - 0.16], leather);
+        box([0.05, 1.0, 0.5], [sx + side * 0.35, 0.82, zc - 0.07], shell);
+        box([0.1, 0.06, 0.48], [sx + side * 0.3, 0.66, zc + 0.03], trim);
+      }
+      box([0.72, 1.24, 0.05], [sx, 0.84, zc - 0.31], shell);
+      box([0.48, 0.04, 0.22], [sx, 0.12, zc + 0.42], base);
     }
     // Straps on a rail over the aisle, rocking with the train.
     box([16, 0.03, 0.03], [0, 2.08, 0.15], lambert("#c9ccd0"));
