@@ -17,6 +17,8 @@ interface ParticipantRosterProps {
   onMute: (targetId: string, muted: boolean) => void;
   onKick: (targetId: string) => void;
   onTeleportTo: (targetId: string) => void;
+  /** Brings this person to you (as "gather everyone", for one). */
+  onBring?: (targetId: string) => void;
   onGatherAll: () => void;
 }
 
@@ -61,6 +63,7 @@ export function ParticipantRoster({
   onMute,
   onKick,
   onTeleportTo,
+  onBring,
   onGatherAll,
 }: ParticipantRosterProps) {
   useLang();
@@ -239,6 +242,17 @@ export function ParticipantRoster({
                         >
                           <LocationIcon size={13} />
                         </button>
+                        {onBring && (
+                          <button
+                            type="button"
+                            onClick={() => onBring(player.id)}
+                            style={{ ...pillButtonStyle, padding: "4px 8px", fontSize: 11 }}
+                            title={L("Bring this person to you", "この人を自分のところへ呼ぶ")}
+                            aria-label={L(`Bring ${player.displayName} to you`, `${player.displayName}さんを呼ぶ`)}
+                          >
+                            {L("Bring", "呼ぶ")}
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => {

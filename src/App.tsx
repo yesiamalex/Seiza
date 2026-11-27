@@ -429,6 +429,7 @@ export default function App() {
     adminKick,
     adminSetMute,
     adminGatherAll,
+    adminBring,
     roomPasswordSet,
     passwordRequired,
     joinWithPassword,
@@ -1816,6 +1817,7 @@ export default function App() {
             onMute={(targetId, muted) => adminSetMute(targetId, muted)}
             onKick={(targetId) => adminKick(targetId)}
             onTeleportTo={teleportToPlayer}
+            onBring={adminBring}
             onGatherAll={adminGatherAll}
           />
         )}

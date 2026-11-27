@@ -259,6 +259,9 @@ export type ClientMessage =
   // knows every other player's position from ordinary `state` sync (see
   // App.tsx's teleportToPlayer).
   | { type: "adminGatherAll" }
+  // The same for one person: brings `targetId` to this admin (the server
+  // sends just them a gatherRequest with this connection's position).
+  | { type: "adminBring"; targetId: string }
   // Sets or clears (password: null) a password required to join this
   // room at all — see ADMIN.md's "room entry password" section for why
   // this is deliberately a *third*, separate secret from the editor

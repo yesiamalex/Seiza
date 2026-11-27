@@ -84,7 +84,8 @@ export function AdminButton({ isAdmin, authPending, authFailed, onSubmit, roomPa
               maxHeight: "calc(100svh - 96px)",
               overflowY: "auto",
               boxSizing: "border-box",
-              zIndex: 21,
+              // Over the status dock (a fighter's health, a ride's speed), which sits just under the top bar.
+              zIndex: 32,
               padding: 12,
               display: "flex",
               flexDirection: "column",

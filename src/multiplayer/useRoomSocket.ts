@@ -117,6 +117,8 @@ export interface MultiplayerState {
   adminKick: (targetId: string) => void;
   adminSetMute: (targetId: string, muted: boolean) => void;
   adminGatherAll: () => void;
+  /** Brings one person to you (admin only; the server checks). */
+  adminBring: (targetId: string) => void;
   /** Whether this room currently requires an entry password — visible
    *  even to a non-admin so a "this room is locked" indicator can show
    *  without exposing the password itself. */
@@ -314,6 +316,7 @@ export function useRoomSocket(
     [send]
   );
   const adminGatherAll = useCallback(() => send({ type: "adminGatherAll" }), [send]);
+  const adminBring = useCallback((targetId: string) => send({ type: "adminBring", targetId }), [send]);
   const adminSetRoomPassword = useCallback(
     (password: string | null) => send({ type: "adminSetRoomPassword", password }),
     [send]
@@ -647,6 +650,7 @@ export function useRoomSocket(
     adminKick,
     adminSetMute,
     adminGatherAll,
+    adminBring,
     roomPasswordSet,
     passwordRequired,
     joinWithPassword,

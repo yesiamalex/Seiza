@@ -1079,6 +1079,19 @@ export class SeizaRoom extends DurableObject<Env> {
         this.broadcast({ type: "gatherRequest", position: attachment.player.position }, attachment.connId);
         break;
       }
+      case "adminBring": {
+        // One person brought to the admin, as gathering everyone brings them all.
+        if (!attachment.isAdmin || !attachment.player) return;
+        if (typeof message.targetId !== "string" || message.targetId === attachment.connId) return;
+        const target = this.findConnection(message.targetId);
+        if (!target || !this.att(target)?.player) return;
+        try {
+          target.send(JSON.stringify({ type: "gatherRequest", position: attachment.player.position } satisfies ServerMessage));
+        } catch {
+          // The target is closing.
+        }
+        break;
+      }
       case "adminSetRoomPassword": {
         if (!attachment.isAdmin) return;
         const password = typeof message.password === "string" ? message.password.slice(0, 200) : null;
