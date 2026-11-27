@@ -164,3 +164,35 @@ export function onOpenShop(l: () => void): () => void {
   shopListeners.add(l);
   return () => shopListeners.delete(l);
 }
+
+// --- the konbini's basket: what you've taken off a shelf, to pay for at the register ----------
+
+let basket: Ware | null = null;
+const basketListeners = new Set<() => void>();
+export const getBasket = () => basket;
+/** Takes something off a konbini shelf (one thing at a time: it replaces what you had). */
+export function setBasket(ware: Ware | null): void {
+  basket = ware;
+  for (const l of basketListeners) l();
+}
+export function onBasket(l: () => void): () => void {
+  basketListeners.add(l);
+  return () => basketListeners.delete(l);
+}
+/** A konbini ware by its id. */
+export const konbiniWare = (id: string): Ware => SHOPS.konbini.wares.find((w) => w.id === id) ?? SHOPS.konbini.wares[0];
+
+// --- how you pay: cash or card (both from the same wallet) ------------------------------------
+
+export type PayBy = "cash" | "card";
+let payBy: PayBy = "cash";
+const payListeners = new Set<() => void>();
+export const getPayBy = () => payBy;
+export function setPayBy(next: PayBy): void {
+  payBy = next;
+  for (const l of payListeners) l();
+}
+export function onPayBy(l: () => void): () => void {
+  payListeners.add(l);
+  return () => payListeners.delete(l);
+}

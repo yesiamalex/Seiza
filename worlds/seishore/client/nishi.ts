@@ -189,7 +189,7 @@ export function nishiObstacles(): Obstacle[] {
   for (const s of BOOK_SHELVES) list.push(o(s.minX, s.maxX, s.minZ, s.maxZ));
   list.push(c(BOOK_COUNTER));
   list.push(c(KISSA.counter));
-  for (const [x, z] of KISSA.tables) list.push(o(x - 0.32, x + 0.32, z - 0.32, z + 0.32));
+  for (const [x, z] of KISSA.tables) list.push(o(x - 0.38, x + 0.38, z - 0.38, z + 0.38));
   list.push(c(YOSE.stage));
   list.push(c(DOJO.rack));
   for (const [x, z] of DOJO.posts) list.push(o(x - 0.14, x + 0.14, z - 0.14, z + 0.14));
@@ -241,11 +241,18 @@ export function nishiSeats(): Seat[] {
   });
   const kf = shopFront(kissa);
   for (let i = 0; i < 4; i++) seats.push({ id: `seishore-nishi-kissa-stool-${i}`, position: [kissa.x0 + 1.2 + i * 1.2, G + 0.62 - SEAT_HEIGHT, kf.z1 - 1.45], rotationY: Math.PI, label: "Counter stool" });
+  // Four to every table, each facing in (an avatar at yaw y faces (−sin y, −cos y)).
+  const around: [string, number, number, number][] = [
+    ["e", 1, 0, Math.PI / 2],
+    ["w", -1, 0, -Math.PI / 2],
+    ["n", 0, 1, 0],
+    ["s", 0, -1, Math.PI],
+  ];
   KISSA.tables.forEach(([x, z], i) => {
-    for (const s of [-1, 1]) seats.push({ id: `seishore-nishi-kissa-${i}-${s > 0 ? "e" : "w"}`, position: [x + s * 0.6, G + bench - SEAT_HEIGHT, z], rotationY: s > 0 ? Math.PI / 2 : -Math.PI / 2, label: "Kissaten seat" });
+    for (const [k, ax, az, yaw] of around) seats.push({ id: `seishore-nishi-kissa-${i}-${k}`, position: [x + ax * 0.62, G + bench - SEAT_HEIGHT, z + az * 0.62], rotationY: yaw, label: "Kissaten seat" });
   });
   BURGER.tables.forEach(([x, z], i) => {
-    for (const s of [-1, 1]) seats.push({ id: `seishore-nishi-burger-${i}-${s > 0 ? "n" : "s"}`, position: [x, BURGER.up + bench - SEAT_HEIGHT, z + s * 0.6], rotationY: s > 0 ? 0 : Math.PI, label: "Table upstairs" });
+    for (const [k, ax, az, yaw] of around) seats.push({ id: `seishore-nishi-burger-${i}-${k}`, position: [x + ax * 0.6, BURGER.up + bench - SEAT_HEIGHT, z + az * 0.6], rotationY: yaw, label: "Table upstairs" });
   });
   // Low benches in rows before the stage, facing it (north, +z).
   YOSE.rows.forEach((z, row) =>

@@ -118,7 +118,7 @@ export const MAGAZINES = { x0: 15.0, x1: 17.6, z0: 52.95, z1: 53.3 };
 /** The konbini's ATM, in the back corner by the end of the fridges. */
 export const ATM = { x0: 19.4, x1: 19.95, z0: 46.6, z1: 47.15 };
 
-/** The café: its counter along the back, Mio behind it, two tables for two. */
+/** The café: its counter along the back, Mio behind it, two round tables for four. */
 export const CAFE_COUNTER = { x0: 0.1, x1: 3.6, z0: 49.15, z1: 49.75 };
 export const BARISTA_AT: [number, number] = [1.6, 48.7];
 export const CAFE_TABLES: [number, number][] = [
@@ -260,15 +260,20 @@ export function allSeats(): Seat[] {
   pair("bus", "Bus stop", BUS_BENCH.x, BUS_BENCH.z, "z", FACING.nx, BENCH_SEAT + up);
   PROMENADE_BENCHES.forEach(([x, z], i) => pair(`prom-${i}`, "Bench by the sea", x + 0.08, z, "z", FACING.px, BENCH_SEAT + up));
   pair("shrine", "Shrine bench", SHRINE_BENCH.x, SHRINE_BENCH.z, "z", FACING.px);
-  // The café's tables: a chair each side, facing across.
+  // The café's tables: a chair on every side, facing in.
   CAFE_TABLES.forEach(([x, z], i) => {
-    seats.push({ id: `seishore-cafe-${i}-w`, position: [x - 0.55, Y + BENCH_SEAT - SEAT_HEIGHT, z], rotationY: FACING.px, label: "Café table" });
-    seats.push({ id: `seishore-cafe-${i}-e`, position: [x + 0.55, Y + BENCH_SEAT - SEAT_HEIGHT, z], rotationY: FACING.nx, label: "Café table" });
+    const chair = (id: string, dx: number, dz: number, yaw: number) => seats.push({ id: `seishore-cafe-${i}-${id}`, position: [x + dx, Y + BENCH_SEAT - SEAT_HEIGHT, z + dz], rotationY: yaw, label: "Café table" });
+    chair("w", -0.58, 0, FACING.px);
+    chair("e", 0.58, 0, FACING.nx);
+    chair("s", 0, -0.58, FACING.pz);
+    chair("n", 0, 0.58, FACING.nz);
   });
-  // The family restaurant's tables: bench seats either side.
+  // The family restaurant's tables for four: two to each bench.
   DINER_TABLES.forEach(([x, z], i) => {
-    seats.push({ id: `seishore-diner-${i}-s`, position: [x, Y + BENCH_SEAT - SEAT_HEIGHT, z - 0.62], rotationY: FACING.pz, label: "Table" });
-    seats.push({ id: `seishore-diner-${i}-n`, position: [x, Y + BENCH_SEAT - SEAT_HEIGHT, z + 0.62], rotationY: FACING.nz, label: "Table" });
+    for (const [k, dx] of [["", -0.3], ["2", 0.3]] as [string, number][]) {
+      seats.push({ id: `seishore-diner-${i}-s${k}`, position: [x + dx, Y + BENCH_SEAT - SEAT_HEIGHT, z - 0.62], rotationY: FACING.pz, label: "Table" });
+      seats.push({ id: `seishore-diner-${i}-n${k}`, position: [x + dx, Y + BENCH_SEAT - SEAT_HEIGHT, z + 0.62], rotationY: FACING.nz, label: "Table" });
+    }
   });
   // The stations' benches, under their shelters, facing the track.
   STATIONS.forEach((s, i) => pair(`station-${s.id}`, `${s.name} station`, PLATFORM.x0 + 0.3, SHELTER_Z[i], "z", FACING.px, BENCH_SEAT + up));
@@ -314,7 +319,7 @@ export function seishoreObstacles(): Obstacle[] {
   list.push(o(ATM.x0, ATM.x1, ATM.z0, ATM.z1));
   // Inside the café and the family restaurant.
   list.push(o(CAFE_COUNTER.x0, CAFE_COUNTER.x1, CAFE_COUNTER.z0, CAFE_COUNTER.z1));
-  for (const [x, z] of CAFE_TABLES) list.push(o(x - 0.3, x + 0.3, z - 0.3, z + 0.3));
+  for (const [x, z] of CAFE_TABLES) list.push(o(x - 0.36, x + 0.36, z - 0.36, z + 0.36));
   for (const [x, z] of DINER_TABLES) list.push(o(x - 0.55, x + 0.55, z - 0.32, z + 0.32));
   list.push(o(PASS.x0, PASS.x1, PASS.z0, PASS.z1), o(DRINK_BAR.x0, DRINK_BAR.x1, DRINK_BAR.z0, DRINK_BAR.z1));
   // The street.

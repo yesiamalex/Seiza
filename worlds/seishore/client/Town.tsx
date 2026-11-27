@@ -268,15 +268,17 @@ function addCafe(h: Building, b: Builder, panes: Builder, inside: Builder, lit: 
   // Shelves of beans and cups on the back wall.
   for (const y of [1.45, 1.85]) inside.box([3.0, 0.04, 0.24], [(c.x0 + c.x1) / 2, Y + y, c.z0 - 0.72], "#8a6545");
   for (let i = 0; i < 9; i++) inside.cylinder(0.05, 0.05, 0.1, [c.x0 + 0.3 + i * 0.33, Y + 1.52, c.z0 - 0.72], i % 2 ? "#f4f2ec" : "#5a7d6e", undefined, 8);
-  // Tables for two, round, with a chair each side; coffee on them.
+  // Tables for four, round, a chair on every side (the cups are Shops.tsx's, to drink).
   for (const [x, z] of CAFE_TABLES) {
-    inside.cylinder(0.32, 0.32, 0.04, [x, Y + 0.74, z], "#c49a6c", undefined, 16);
+    inside.cylinder(0.38, 0.38, 0.04, [x, Y + 0.74, z], "#c49a6c", undefined, 18);
     inside.cylinder(0.04, 0.05, 0.72, [x, Y + 0.36, z], "#2b2522", undefined, 8);
-    for (const s of [-1, 1]) {
-      inside.box([0.4, 0.05, 0.4], [x + s * 0.55, Y + 0.44, z], "#8a6545");
-      inside.box([0.05, 0.45, 0.38], [x + s * 0.76, Y + 0.68, z], "#8a6545");
-      for (const [lx, lz] of [[-0.16, -0.16], [0.16, -0.16], [-0.16, 0.16], [0.16, 0.16]]) inside.box([0.03, 0.42, 0.03], [x + s * 0.55 + lx, Y + 0.21, z + lz], "#2b2522");
-      inside.cylinder(0.045, 0.035, 0.08, [x + s * 0.14, Y + 0.8, z], "#f4f2ec", undefined, 10);
+    for (const [ax, az] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const cx = x + ax * 0.58;
+      const cz = z + az * 0.58;
+      inside.box([0.4, 0.05, 0.4], [cx, Y + 0.44, cz], "#8a6545");
+      // Its back, on the side away from the table.
+      inside.box(ax ? [0.05, 0.45, 0.38] : [0.38, 0.45, 0.05], [x + ax * 0.79, Y + 0.68, z + az * 0.79], "#8a6545");
+      for (const [lx, lz] of [[-0.16, -0.16], [0.16, -0.16], [-0.16, 0.16], [0.16, 0.16]]) inside.box([0.03, 0.42, 0.03], [cx + lx, Y + 0.21, cz + lz], "#2b2522");
     }
   }
   // Warm pendant lamps over the tables.
@@ -707,7 +709,6 @@ function addKonbini(h: Building, b: Builder, glass: Builder, inside: Builder, li
   // The counter, its register, the hot case.
   inside.box([COUNTER.x1 - COUNTER.x0, 1.0, COUNTER.z1 - COUNTER.z0], [(COUNTER.x0 + COUNTER.x1) / 2, Y + 0.5, (COUNTER.z0 + COUNTER.z1) / 2], "#f3f1ec");
   inside.box([COUNTER.x1 - COUNTER.x0 + 0.06, 0.05, COUNTER.z1 - COUNTER.z0 + 0.06], [(COUNTER.x0 + COUNTER.x1) / 2, Y + 1.02, (COUNTER.z0 + COUNTER.z1) / 2], "#b88c5d");
-  inside.box([0.34, 0.3, 0.4], [COUNTER.x0 + 0.3, Y + 1.2, COUNTER.z1 - 0.6], "#2c2f33");
   glass.box([0.5, 0.32, 0.6], [COUNTER.x0 + 0.3, Y + 1.21, COUNTER.z0 + 0.7], "#ffffff");
   // Magazines by the window, the way every konbini has them.
   inside.box([MAGAZINES.x1 - MAGAZINES.x0, 1.0, MAGAZINES.z1 - MAGAZINES.z0], [(MAGAZINES.x0 + MAGAZINES.x1) / 2, Y + 0.5, (MAGAZINES.z0 + MAGAZINES.z1) / 2], "#e7e8e5");

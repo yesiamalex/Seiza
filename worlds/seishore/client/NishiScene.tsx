@@ -23,7 +23,9 @@ import { Builder, canvasTexture, FONT, noRaycast, ON_TOP, paint } from "../../se
 import { RoutedBuilder, surfaceMaterial } from "./surfaces";
 import { DEFAULT_AVATAR_SPEC, encodeAvatarSpec, type AvatarSpec } from "../../../src/avatar/designer/avatarSpec";
 import { showCaption } from "./caption";
-import { Spot, useShop } from "./Shops";
+import { panelTexture, Register, Spot, useShop } from "./Shops";
+import { SHOPS, yen } from "./shop";
+import { setPlaces } from "./serve";
 import { Sitter } from "./Extras";
 import { G, LANE } from "./plan";
 import {
@@ -321,8 +323,7 @@ function musicShop(inside: Builder, lit: Builder) {
 function burgerShop(inside: Builder, lit: Builder, b: Builder) {
   const c = BURGER.counter;
   inside.box([c.x1 - c.x0, 1.05, c.z1 - c.z0], [(c.x0 + c.x1) / 2, G + 0.52, (c.z0 + c.z1) / 2], "#c8402f");
-  // The menu boards over the counter, lit.
-  for (let i = 0; i < 3; i++) lit.plane(1.3, 0.7, [c.x0 + 0.9 + i * 1.5, G + 2.0, c.z0 - 0.02], ["#ffcf5a", "#ffe9a8", "#ffcf5a"][i], [0, 0, 0]);
+  // (The menu boards over the counter are NishiScene's, with the menu on them.)
   const k = BURGER.kitchen;
   inside.box([k.x1 - k.x0, 0.95, 0.7], [(k.x0 + k.x1) / 2, G + 0.48, k.z0 + 0.5], "#b9bec2");
   // The mezzanine: its slab, the rail along its open edge, the tables by the window.
@@ -332,7 +333,8 @@ function burgerShop(inside: Builder, lit: Builder, b: Builder) {
   for (const [x, z] of BURGER.tables) {
     inside.box([0.7, 0.04, 0.7], [x, BURGER.up + 0.74, z], "#f2efe6");
     inside.box([0.08, 0.72, 0.08], [x, BURGER.up + 0.36, z], "#55504a");
-    for (const s of [-1, 1]) inside.box([0.42, 0.45, 0.42], [x, BURGER.up + 0.225, z + s * 0.6], "#c8402f");
+    // Four to a table.
+    for (const [ax, az] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as [number, number][]) inside.box([0.42, 0.45, 0.42], [x + ax * 0.6, BURGER.up + 0.225, z + az * 0.6], "#c8402f");
   }
   // The stairs: a step every 20 cm up to the mezzanine.
   const st = BURGER.stairs;
@@ -357,9 +359,9 @@ function kissaten(inside: Builder, lit: Builder) {
   inside.box([c.x1 - c.x0 + 0.08, 0.05, c.z1 - c.z0 + 0.08], [(c.x0 + c.x1) / 2, G + 1.02, (c.z0 + c.z1) / 2], "#d9c3a0");
   for (let i = 0; i < 4; i++) inside.cylinder(0.18, 0.18, 0.06, [shopById("kissa").x0 + 1.2 + i * 1.2, G + 0.62, c.z0 - 0.45], "#8a2f2a", undefined, 14);
   for (const [x, z] of KISSA.tables) {
-    inside.cylinder(0.34, 0.34, 0.04, [x, G + 0.72, z], WOOD, undefined, 16);
+    inside.cylinder(0.4, 0.4, 0.04, [x, G + 0.72, z], WOOD, undefined, 18);
     inside.cylinder(0.05, 0.05, 0.7, [x, G + 0.35, z], WOOD_DARK, undefined, 8);
-    for (const s of [-1, 1]) inside.box([0.44, 0.45, 0.44], [x + s * 0.6, G + 0.225, z], "#8a2f2a");
+    for (const [ax, az] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as [number, number][]) inside.box([0.44, 0.45, 0.44], [x + ax * 0.62, G + 0.225, z + az * 0.62], "#8a2f2a");
   }
   // Glass pendant lamps, and the jukebox's glow in the corner.
   for (const [x, z] of KISSA.tables) lit.cylinder(0.12, 0.2, 0.18, [x, G + 2.3, z], "#ffcf7a", undefined, 12);
@@ -483,7 +485,30 @@ export function NishiScene({ worldState, getSelfPosition }: { worldState: Record
   );
 
   const shop = useShop();
+  // Its boards: the burgers, the sides, the drinks.
+  const menuBoards = useMemo(() => {
+    const w = SHOPS.burger.wares;
+    const board = (title: string, items: typeof w, bg: string) =>
+      new THREE.MeshBasicMaterial({ map: panelTexture([[title, 30], ...items.map((x): [string, number] => [`${x.ja} ${yen(x.price)}`, 24])], bg, "#7a1f16", 320, 172), toneMapped: false });
+    return [board("バーガー BURGERS", w.filter((x) => x.item === "sandwich"), "#ffcf5a"), board("サイド SIDES", w.filter((x) => x.item === "meal"), "#ffe9a8"), board("ドリンク DRINKS", w.filter((x) => x.item === "cup"), "#ffcf5a")];
+  }, []);
+  useEffect(
+    () => () => {
+      for (const m of menuBoards) {
+        m.map?.dispose();
+        m.dispose();
+      }
+    },
+    [menuBoards]
+  );
   const modeOn = (mode: string) => worldState[`mode.${mode}`] === true;
+  // The tables an order here can be brought to: four places at each.
+  useEffect(() => {
+    const at = (x: number, y: number, z: number, i: number, key: string) =>
+      ([[1, 0], [-1, 0], [0, 1], [0, -1]] as [number, number][]).map(([ax, az], k) => ({ id: `${key}-${i}-${k}`, at: [x + ax * 0.19, y, z + az * 0.19] as [number, number, number] }));
+    setPlaces("nishi", [...KISSA.tables.flatMap(([x, z], i) => at(x, G + 0.745, z, i, "kissa")), ...BURGER.tables.flatMap(([x, z], i) => at(x, BURGER.up + 0.76, z, i, "burger"))]);
+    return () => setPlaces("nishi", null);
+  }, []);
 
   // Trying an instrument: a strum, a chord, a beat, and (band mode on) it's yours.
   const tryInstrument = (instrument: Instrument) => {
@@ -586,26 +611,37 @@ export function NishiScene({ worldState, getSelfPosition }: { worldState: Record
       {instruments.worn.map(({ g, w }) => (
         <group key={w.instrument}>
           <primitive object={g} />
-          <Spot at={[w.x + Math.sin(w.facing) * 0.15, G + 1.5, w.z + Math.cos(w.facing) * 0.15]} size={[0.4, 1.1, 0.6]} onClick={() => tryInstrument(w.instrument)} />
+          <Spot at={[w.x + Math.sin(w.facing) * 0.15, G + 1.5, w.z + Math.cos(w.facing) * 0.15]} size={[0.4, 1.1, 0.6]} onClick={() => tryInstrument(w.instrument)} label={INSTRUMENT_NAMES[w.instrument]} />
         </group>
       ))}
       <primitive object={instruments.kit} />
-      <Spot at={[MUSIC_KIT[0], G + 0.7, MUSIC_KIT[1]]} size={[1.3, 1.2, 1.1]} onClick={() => tryInstrument("kit")} />
+      <Spot at={[MUSIC_KIT[0], G + 0.7, MUSIC_KIT[1]]} size={[1.3, 1.2, 1.1]} onClick={() => tryInstrument("kit")} label={["ドラム", "Drum kit: try it"]} />
       <primitive object={instruments.keys} />
-      <Spot at={[MUSIC_KEYS[0], G + 0.9, MUSIC_KEYS[1]]} size={[1.1, 0.4, 0.5]} onClick={() => tryInstrument("keys")} />
+      <Spot at={[MUSIC_KEYS[0], G + 0.9, MUSIC_KEYS[1]]} size={[1.1, 0.4, 0.5]} onClick={() => tryInstrument("keys")} label={["キーボード", "Keyboard: try it"]} />
       {/* SeaBurger's counter, the kissaten's, a book off the shelf, the dojo's rack. */}
-      <Spot at={burgerAt} size={[BURGER.counter.x1 - BURGER.counter.x0, 0.3, 0.7]} onClick={() => shop("burger")} />
-      <Spot at={kissaAt} size={[KISSA.counter.x1 - KISSA.counter.x0, 0.3, 0.7]} onClick={() => shop("kissa")} />
-      {BOOK_SHELVES.map((sh, i) => (
-        <Spot key={i} at={[(sh.minX + sh.maxX) / 2, G + 1.2, (sh.minZ + sh.maxZ) / 2]} size={[sh.maxX - sh.minX + 0.2, 1.6, sh.maxZ - sh.minZ]} onClick={pickBook} />
+      {/* SeaBurger's menu, lit over its counter. */}
+      {menuBoards.map((mat, i) => (
+        <mesh key={i} position={[BURGER.counter.x0 + 0.9 + i * 1.5, G + 2.0, BURGER.counter.z0 - 0.02]} material={mat}>
+          <planeGeometry args={[1.3, 0.7]} />
+        </mesh>
       ))}
-      <Spot at={[(DOJO.rack.x0 + DOJO.rack.x1) / 2, G + 0.9, (DOJO.rack.z0 + DOJO.rack.z1) / 2]} size={[DOJO.rack.x1 - DOJO.rack.x0, 1.2, 0.7]} onClick={takeSword} />
+      {/* The counters' registers: SeaBurger's two, facing the door; the kissaten's, its master's. */}
+      {[-1, 1].map((s) => (
+        <Register key={s} position={[burgerAt[0] + s * 1.3, G + 1.05, burgerAt[2] + 0.05]} />
+      ))}
+      <Register position={[KISSA.counter.x1 - 0.7, G + 1.045, kissaAt[2]]} facing={Math.PI} />
+      <Spot at={burgerAt} size={[BURGER.counter.x1 - BURGER.counter.x0, 0.4, 0.7]} onClick={() => shop("burger")} label={["ご注文はこちら", "Order here: it's brought to your table"]} />
+      <Spot at={kissaAt} size={[KISSA.counter.x1 - KISSA.counter.x0, 0.4, 0.7]} onClick={() => shop("kissa")} label={["ご注文", "Order: it's brought to your table"]} />
+      {BOOK_SHELVES.map((sh, i) => (
+        <Spot key={i} at={[(sh.minX + sh.maxX) / 2, G + 1.2, (sh.minZ + sh.maxZ) / 2]} size={[sh.maxX - sh.minX + 0.2, 1.6, sh.maxZ - sh.minZ]} onClick={pickBook} label={["本棚", "Take a book off the shelf"]} />
+      ))}
+      <Spot at={[(DOJO.rack.x0 + DOJO.rack.x1) / 2, G + 0.9, (DOJO.rack.z0 + DOJO.rack.z1) / 2]} size={[DOJO.rack.x1 - DOJO.rack.x0, 1.2, 0.7]} onClick={takeSword} label={["木刀", "Practice swords"]} />
       {/* The bikes in the rack (one out is gone from it until it's back). */}
       {BIKE_RACK.zs.map((z, i) =>
         out[i] === undefined ? (
           <group key={i}>
             <mesh geometry={bike} material={m.bike} position={[BIKE_RACK.x, G, z]} rotation={[0, Math.PI / 2, 0]} castShadow raycast={noRaycast} />
-            <Spot at={[BIKE_RACK.x, G + 0.6, z]} size={[1.2, 1.1, 0.5]} onClick={() => takeBike(i)} />
+            <Spot at={[BIKE_RACK.x, G + 0.6, z]} size={[1.2, 1.1, 0.5]} onClick={() => takeBike(i)} label={["レンタサイクル", "Free bike: ride it"]} />
           </group>
         ) : null
       )}
@@ -631,6 +667,15 @@ export function NishiScene({ worldState, getSelfPosition }: { worldState: Record
     </group>
   );
 }
+
+/** Each instrument's name, over it on the wall. */
+const INSTRUMENT_NAMES: Record<string, [string, string]> = {
+  guitar: ["アコースティックギター", "Acoustic guitar: try it"],
+  ukulele: ["ウクレレ", "Ukulele: try it"],
+  electric: ["エレキギター", "Electric guitar: try it"],
+  bass: ["ベース", "Bass: try it"],
+  violin: ["バイオリン", "Violin: try it"],
+};
 
 /** Who walks a dog round Nishi park (people.ts's NISHI_PEOPLE). */
 export const DOG_WALKERS = ["mika"];

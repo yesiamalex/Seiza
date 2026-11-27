@@ -102,6 +102,16 @@ export function gull(distance = 25) {
   }
 }
 
+/** Coins put down on the register's tray, and a note or two smoothed flat. */
+export function coinClink(distance?: number) {
+  const v = voice(0.8, distance, 8, 0.9);
+  if (!v) return;
+  bell(v, 5200, 0, 0.025, 0.08);
+  bell(v, 4700, 0.08, 0.022, 0.08);
+  bell(v, 5600, 0.14, 0.018, 0.07);
+  noiseHit(v, { frequency: 3000, duration: 0.12, gain: 0.02, q: 0.8, delay: 0.3 });
+}
+
 // --- the shrine and the temple ---------------------------------------------------------
 
 /** A coin into the offering box: its clink off the slats, and the thud inside. */
@@ -318,6 +328,14 @@ export function register(distance?: number) {
   bell(v, 4100, 0.45, 0.03, 0.12);
   bell(v, 3700, 0.55, 0.025, 0.12);
   noiseHit(v, { frequency: 2600, duration: 0.05, gain: 0.04, q: 1.5, delay: 0.62 });
+}
+
+/** A card touched on the reader: its two-note "pi-pi". */
+export function cardBeep(distance?: number) {
+  const v = voice(0.8, distance, 10, 0.6);
+  if (!v) return;
+  toneHit(v, { frequency: 2200, duration: 0.08, gain: 0.05, type: "sine", attack: 0.004 });
+  toneHit(v, { frequency: 2900, duration: 0.12, gain: 0.05, type: "sine", attack: 0.004, delay: 0.11 });
 }
 
 /** The ATM: its keys, a whir, and the notes counted out. */
